@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { investorApi } from '@/lib/api';
+import { investorApi, paymentApi } from '@/lib/api';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface Payment {
@@ -15,6 +15,9 @@ interface Payment {
   payment_date: string;
   status: string;
   email_sent: boolean;
+  investor_name?: string;
+  investor_email?: string;
+  token_description?: string;
 }
 
 export function Payments() {
@@ -22,35 +25,35 @@ export function Payments() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [preview, setPreview] = useState<any>(null);
+  const [statistics, setStatistics] = useState<any>(null);
 
   useEffect(() => {
     loadPayments();
+    loadStatistics();
   }, []);
 
   const loadPayments = async () => {
     try {
       setLoading(true);
-      const investors = await investorApi.getAll();
-      const allPayments: Payment[] = [];
-      
-      for (const investor of investors.data || []) {
-        try {
-          const response = await investorApi.getPayments(investor.id);
-          if (response.data?.payments) {
-            allPayments.push(...response.data.payments);
-          }
-        } catch (error) {
-          console.error(`Error loading payments for investor ${investor.id}:`, error);
-        }
+      const response = await paymentApi.getHistory({ limit: 100 });
+      if (response.success && response.data?.payments) {
+        setPayments(response.data.payments);
       }
-      
-      setPayments(allPayments.sort((a, b) => 
-        new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()
-      ));
     } catch (error) {
       console.error('Error loading payments:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadStatistics = async () => {
+    try {
+      const response = await paymentApi.getStatistics();
+      if (response.success && response.data) {
+        setStatistics(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading statistics:', error);
     }
   };
 
@@ -74,20 +77,21 @@ export function Payments() {
   };
 
   const handleProcessMonthly = async () => {
-    if (!confirm('Tem certeza que deseja executar o pagamento mensal de juros?')) {
+    if (!confirm('Tem certeza que deseja executar o pagamento mensal de juros? Esta ação processará pagamentos para todos os investidores elegíveis.')) {
       return;
     }
 
     try {
       setProcessing(true);
-      // Note: This endpoint needs to be created in the backend
-      // For now, we'll show an alert
-      alert('Funcionalidade de pagamento mensal será implementada no backend. Use o serviço PaymentService.processMonthlyInterestPayments()');
+      const response = await paymentApi.processMonthly();
       
-      // Uncomment when backend endpoint is ready:
-      // const response = await paymentApi.processMonthly();
-      // alert(`Pagamento processado com sucesso! ${response.data.paymentsProcessed} pagamentos realizados.`);
-      // await loadPayments();
+      if (response.success) {
+        alert(`Pagamento processado com sucesso!\n\n${response.data.paymentsProcessed} pagamentos realizados\nTotal: ${response.data.totalInterestAmount} USDC\nEmails enviados: ${response.data.emailsSent}`);
+        await loadPayments();
+        await loadStatistics();
+      } else {
+        alert(`Erro ao processar pagamento: ${response.error || 'Erro desconhecido'}`);
+      }
     } catch (error: any) {
       alert(`Erro ao processar pagamento: ${error.response?.data?.error || error.message}`);
     } finally {
@@ -147,7 +151,13 @@ export function Payments() {
               <div className="flex justify-between">
                 <span>Total Pago:</span>
                 <span className="font-bold">
-                  {payments.reduce((sum, p) => sum + parseFloat(p.usdc_amount || '0'), 0).toFixed(2)} USDC
+                  {payments.reduce((sum, p) => sum + parseFloat(p.usdc_amount || '0'), 0).toFixed(7)} USDC
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Investidores Únicos:</span>
+                <span className="font-bold">
+                  {new Set(payments.map(p => p.investor_id)).size}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -182,12 +192,15 @@ export function Payments() {
                         <AlertCircle className="h-5 w-5 text-yellow-500" />
                       )}
                       <div>
-                        <h3 className="font-semibold">Investidor #{payment.investor_id}</h3>
+                        <h3 className="font-semibold">
+                          {payment.investor_name || `Investidor #${payment.investor_id}`}
+                        </h3>
                         <p className="text-sm text-muted-foreground">
+                          {payment.investor_email && `${payment.investor_email} • `}
                           Data: {new Date(payment.payment_date).toLocaleDateString('pt-BR')}
                         </p>
                         <p className="text-xs text-muted-foreground font-mono">
-                          {payment.transaction_hash}
+                          {payment.transaction_hash?.substring(0, 20)}...
                         </p>
                       </div>
                     </div>

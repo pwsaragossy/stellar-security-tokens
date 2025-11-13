@@ -83,11 +83,15 @@ export const tokenApi = {
 
 export const paymentApi = {
   processMonthly: async (assetCode?: string) => {
-    const response = await api.post('/payments/process-monthly', { assetCode });
+    const response = await api.post('/payments/process', { assetCode });
     return response.data;
   },
-  getHistory: async () => {
-    const response = await api.get('/payments/history');
+  getHistory: async (params?: { assetCode?: string; investorId?: number; limit?: number; offset?: number }) => {
+    const response = await api.get('/payments/history', { params });
+    return response.data;
+  },
+  getStatistics: async (params?: { assetCode?: string; startDate?: string; endDate?: string }) => {
+    const response = await api.get('/payments/statistics', { params });
     return response.data;
   },
 };
