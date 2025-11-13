@@ -21,10 +21,25 @@ const createTransporter = () => {
 
   if (!smtpConfig.auth.user || !smtpConfig.auth.pass) {
     console.warn('SMTP credentials not configured. Email sending will be disabled.');
+    console.warn('To configure email, set SMTP_USER and SMTP_PASSWORD in your .env file.');
+    console.warn('See EMAIL_SETUP.md for detailed instructions.');
     return null;
   }
 
-  return nodemailer.createTransport(smtpConfig);
+  const transporter = nodemailer.createTransport(smtpConfig);
+  
+  // Verificar conexão ao inicializar (assíncrono, não bloqueia)
+  transporter.verify().then(() => {
+    console.log('✅ Email service configured successfully');
+    console.log(`   SMTP Host: ${smtpConfig.host}:${smtpConfig.port}`);
+    console.log(`   From: ${process.env.SMTP_FROM || smtpConfig.auth.user}`);
+  }).catch((error) => {
+    console.warn('⚠️  SMTP connection verification failed:', error.message);
+    console.warn('   Email sending may not work. Please check your SMTP configuration.');
+    console.warn('   Run "npm run test:email" to diagnose the issue.');
+  });
+
+  return transporter;
 };
 
 const transporter = createTransporter();

@@ -51,7 +51,14 @@ cp .env.example .env
 # Edite o arquivo .env com suas configurações
 ```
 
-4. Configure o banco de dados:
+4. Configure o envio de emails (opcional mas recomendado):
+```bash
+# Veja EMAIL_SETUP.md para instruções detalhadas
+# Teste a configuração:
+npm run test:email
+```
+
+5. Configure o banco de dados:
 ```bash
 # Crie o banco de dados PostgreSQL
 createdb stellar_tokens
@@ -151,7 +158,8 @@ stellar-security-tokens/
 - `npm run migrate` - Executa as migrations do banco de dados
 - `npm run seed` - Popula o banco com dados de exemplo
 - `npm run setup` - Setup inicial completo (cria contas, emite tokens, configura .env)
-- `npm test` - Executa os testes (quando implementados)
+- `npm test` - Executa os testes automatizados
+- `npm run test:email` - Testa configuração de email
 
 ### Setup Inicial Automatizado
 
@@ -259,6 +267,16 @@ npm run test:watch
 - **Integration Tests**: Testam fluxos completos da API com banco de dados real
 
 Veja [TESTING.md](./TESTING.md) para documentação completa sobre testes.
+
+## Configuração de Email
+
+O sistema envia emails automáticos de confirmação quando pagamentos de juros são processados. Veja [EMAIL_SETUP.md](./EMAIL_SETUP.md) para instruções detalhadas de configuração.
+
+### Teste Rápido
+
+```bash
+npm run test:email
+```
 
 ## Licença
 
