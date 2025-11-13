@@ -13,7 +13,8 @@
     "test": "node --test",
     "test:unit": "node --test backend/tests/unit/**/*.test.js",
     "test:integration": "node --test backend/tests/integration/**/*.test.js",
-    "test:watch": "node --watch --test"
+    "test:watch": "node --watch --test",
+    "test:email": "node scripts/test-email.js"
   },
   "keywords": [
     "stellar",
