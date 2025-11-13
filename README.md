@@ -142,6 +142,8 @@ stellar-security-tokens/
 - `GET /api/payments/history` - Obter histórico completo de pagamentos
 - `GET /api/payments/statistics` - Obter estatísticas de pagamentos por período
 
+**Nota:** Os pagamentos de juros são processados automaticamente no dia 1º de cada mês às 00:00 UTC quando `ENABLE_AUTO_PAYMENTS=true`. Você pode desabilitar isso definindo `ENABLE_AUTO_PAYMENTS=false` e processar pagamentos manualmente via API.
+
 ## Scripts Disponíveis
 
 - `npm start` - Inicia o servidor em modo produção
@@ -205,6 +207,9 @@ ASSET_SUPPLY=1000
 
 # USDC Contract
 USDC_ISSUER=GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN
+
+# Payment Scheduler
+ENABLE_AUTO_PAYMENTS=true
 ```
 
 Para obter chaves Stellar para teste:

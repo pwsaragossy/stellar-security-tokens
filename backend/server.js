@@ -9,6 +9,7 @@ import investmentRoutes from './routes/investmentRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { startPaymentScheduler } from './services/paymentScheduler.js';
 
 dotenv.config();
 
@@ -42,6 +43,23 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
+
+  // Iniciar agendamento automático de pagamentos
+  const enableAutoPayments = process.env.ENABLE_AUTO_PAYMENTS !== 'false';
+  if (enableAutoPayments) {
+    try {
+      const assetCode = process.env.ASSET_CODE || 'SIN01';
+      startPaymentScheduler(assetCode);
+      console.log(`Automatic payment scheduler enabled for asset: ${assetCode}`);
+      console.log('Payments will be processed automatically on the 1st of each month at 00:00 UTC');
+    } catch (error) {
+      console.error('Failed to start payment scheduler:', error.message);
+      console.warn('Automatic payments will not be scheduled. You can process payments manually via POST /api/payments/process');
+    }
+  } else {
+    console.log('Automatic payment scheduler is disabled (ENABLE_AUTO_PAYMENTS=false)');
+    console.log('You can process payments manually via POST /api/payments/process');
+  }
 });
 
 export default app;
