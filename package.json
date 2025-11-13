@@ -1,0 +1,46 @@
+{
+  "name": "stellar-security-tokens",
+  "version": "1.0.0",
+  "description": "API REST para tokenização de security tokens no Stellar",
+  "main": "backend/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "node --watch backend/server.js",
+    "migrate": "node backend/database/migrate.js",
+    "seed": "node backend/database/seed.js",
+    "setup": "node scripts/setup.js",
+    "test": "node --test",
+    "test:unit": "node --test backend/tests/unit/**/*.test.js",
+    "test:integration": "node --test backend/tests/integration/**/*.test.js",
+    "test:watch": "node --watch --test"
+  },
+  "keywords": [
+    "stellar",
+    "security-tokens",
+    "blockchain",
+    "tokenization"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@stellar/stellar-sdk": "^11.2.2",
+    "express": "^4.18.2",
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-validator": "^7.0.1",
+    "morgan": "^1.10.0",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^7.0.10",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+

@@ -1,0 +1,364 @@
+import { Investor } from '../models/Investor.js';
+import { StellarService } from '../services/stellar.service.js';
+import { PaymentService } from '../services/payment.service.js';
+import { query } from '../config/database.js';
+
+export const createInvestor = async (req, res, next) => {
+  try {
+    const { name, email, document, stellarPublicKey, kycStatus } = req.body;
+
+    const existingEmail = await Investor.findByEmail(email);
+    if (existingEmail) {
+      return res.status(409).json({
+        success: false,
+        error: 'Investor with this email already exists',
+      });
+    }
+
+    const existingDocument = await Investor.findByDocument(document);
+    if (existingDocument) {
+      return res.status(409).json({
+        success: false,
+        error: 'Investor with this document already exists',
+      });
+    }
+
+    if (stellarPublicKey) {
+      const existingStellar = await Investor.findByStellarPublicKey(stellarPublicKey);
+      if (existingStellar) {
+        return res.status(409).json({
+          success: false,
+          error: 'Investor with this Stellar public key already exists',
+        });
+      }
+    }
+
+    const investor = await Investor.create({
+      name,
+      email,
+      document,
+      stellarPublicKey,
+      kycStatus,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: investor,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const registerInvestor = async (req, res, next) => {
+  try {
+    const { name, email, document } = req.body;
+
+    const existingEmail = await Investor.findByEmail(email);
+    if (existingEmail) {
+      return res.status(409).json({
+        success: false,
+        error: 'Investor with this email already exists',
+      });
+    }
+
+    const existingDocument = await Investor.findByDocument(document);
+    if (existingDocument) {
+      return res.status(409).json({
+        success: false,
+        error: 'Investor with this document already exists',
+      });
+    }
+
+    const stellarAccount = await StellarService.createInvestorAccount();
+
+    const investor = await Investor.create({
+      name,
+      email,
+      document,
+      stellarPublicKey: stellarAccount.publicKey,
+      kycStatus: 'pending',
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: investor.id,
+        name: investor.name,
+        email: investor.email,
+        document: investor.document,
+        stellarPublicKey: investor.stellar_public_key,
+        kycStatus: investor.kyc_status,
+        createdAt: investor.created_at,
+      },
+      stellarAccount: {
+        publicKey: stellarAccount.publicKey,
+        note: 'Keep your secret key secure. It will not be shown again.',
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const whitelistInvestor = async (req, res, next) => {
+  try {
+    const { investorId } = req.params;
+    const { assetCode = 'SIN01' } = req.body;
+
+    const investor = await Investor.findById(investorId);
+    if (!investor) {
+      return res.status(404).json({
+        success: false,
+        error: 'Investor not found',
+      });
+    }
+
+    if (!investor.stellar_public_key) {
+      return res.status(400).json({
+        success: false,
+        error: 'Investor does not have a Stellar public key',
+      });
+    }
+
+    const result = await StellarService.whitelistInvestor(
+      investor.stellar_public_key,
+      assetCode
+    );
+
+    const updatedInvestor = await Investor.update(investorId, {
+      kycStatus: 'approved',
+    });
+
+    res.json({
+      success: true,
+      message: 'Investor whitelisted successfully',
+      data: {
+        investor: updatedInvestor,
+        stellarTransaction: {
+          transactionHash: result.transactionHash,
+          ledger: result.ledger,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getInvestors = async (req, res, next) => {
+  try {
+    const limit = parseInt(req.query.limit || '100', 10);
+    const offset = parseInt(req.query.offset || '0', 10);
+
+    const investors = await Investor.findAll(limit, offset);
+
+    res.json({
+      success: true,
+      data: investors,
+      pagination: {
+        limit,
+        offset,
+        count: investors.length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getInvestorById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const investor = await Investor.findById(id);
+
+    if (!investor) {
+      return res.status(404).json({
+        success: false,
+        error: 'Investor not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: investor,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getInvestorBalance = async (req, res, next) => {
+  try {
+    const { investorId } = req.params;
+    const { assetCode = 'SIN01' } = req.query;
+
+    const investor = await Investor.findById(investorId);
+    if (!investor) {
+      return res.status(404).json({
+        success: false,
+        error: 'Investor not found',
+      });
+    }
+
+    if (!investor.stellar_public_key) {
+      return res.status(400).json({
+        success: false,
+        error: 'Investor does not have a Stellar public key',
+      });
+    }
+
+    const balance = await StellarService.getTokenBalance(
+      assetCode,
+      investor.stellar_public_key
+    );
+
+    const distributions = await query(
+      `SELECT td.*, t.description 
+       FROM token_distributions td
+       JOIN tokens t ON td.asset_code = t.asset_code
+       WHERE td.investor_id = $1 AND td.asset_code = $2
+       ORDER BY td.created_at DESC`,
+      [investorId, assetCode]
+    );
+
+    const interestPayments = await query(
+      `SELECT * FROM interest_payments 
+       WHERE investor_id = $1 AND asset_code = $2
+       ORDER BY payment_date DESC, created_at DESC`,
+      [investorId, assetCode]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        investor: {
+          id: investor.id,
+          name: investor.name,
+          email: investor.email,
+          stellarPublicKey: investor.stellar_public_key,
+          kycStatus: investor.kyc_status,
+        },
+        balance: {
+          assetCode: balance.assetCode,
+          balance: balance.balance,
+          isAuthorized: balance.isAuthorized,
+        },
+        tokenDistributions: distributions.rows,
+        interestPayments: interestPayments.rows,
+        summary: {
+          totalTokensReceived: distributions.rows.reduce(
+            (sum, d) => sum + parseFloat(d.amount),
+            0
+          ),
+          totalInterestReceived: interestPayments.rows.reduce(
+            (sum, p) => sum + parseFloat(p.usdc_amount),
+            0
+          ),
+          distributionCount: distributions.rows.length,
+          interestPaymentCount: interestPayments.rows.length,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getInvestorPayments = async (req, res, next) => {
+  try {
+    const { investorId } = req.params;
+    const { assetCode, limit = 100, offset = 0 } = req.query;
+
+    const investor = await Investor.findById(investorId);
+    if (!investor) {
+      return res.status(404).json({
+        success: false,
+        error: 'Investor not found',
+      });
+    }
+
+    let queryText = `
+      SELECT * FROM interest_payments 
+      WHERE investor_id = $1
+    `;
+    const queryParams = [investorId];
+
+    if (assetCode) {
+      queryText += ` AND asset_code = $2`;
+      queryParams.push(assetCode);
+    }
+
+    queryText += ` ORDER BY payment_date DESC, created_at DESC LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
+    queryParams.push(parseInt(limit, 10), parseInt(offset, 10));
+
+    const result = await query(queryText, queryParams);
+
+    const totalResult = await query(
+      `SELECT COUNT(*) as total FROM interest_payments WHERE investor_id = $1${assetCode ? ' AND asset_code = $2' : ''}`,
+      assetCode ? [investorId, assetCode] : [investorId]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        investor: {
+          id: investor.id,
+          name: investor.name,
+          email: investor.email,
+        },
+        payments: result.rows,
+        pagination: {
+          total: parseInt(totalResult.rows[0].total, 10),
+          limit: parseInt(limit, 10),
+          offset: parseInt(offset, 10),
+          count: result.rows.length,
+        },
+        summary: {
+          totalInterestReceived: result.rows.reduce(
+            (sum, p) => sum + parseFloat(p.usdc_amount || 0),
+            0
+          ),
+          totalPayments: parseInt(totalResult.rows[0].total, 10),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateInvestor = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const investor = await Investor.findById(id);
+    if (!investor) {
+      return res.status(404).json({
+        success: false,
+        error: 'Investor not found',
+      });
+    }
+
+    if (updateData.email) {
+      const existingEmail = await Investor.findByEmail(updateData.email);
+      if (existingEmail && existingEmail.id !== parseInt(id, 10)) {
+        return res.status(409).json({
+          success: false,
+          error: 'Investor with this email already exists',
+        });
+      }
+    }
+
+    const updatedInvestor = await Investor.update(id, updateData);
+
+    res.json({
+      success: true,
+      data: updatedInvestor,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
