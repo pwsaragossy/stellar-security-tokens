@@ -61,17 +61,18 @@ export class Token {
    * @param {string} distributionData.assetCode - Código do asset distribuído
    * @param {number|string} distributionData.amount - Quantidade distribuída
    * @param {string} distributionData.transactionHash - Hash da transação Stellar
+   * @param {string} [distributionData.usdcPaymentHash] - Hash da transação USDC (opcional)
    * @returns {Promise<Object>} Distribuição registrada com todos os campos
    * @throws {Error} Se investorId ou assetCode não existirem (violação de foreign key)
    */
   static async createDistribution(distributionData) {
-    const { investorId, assetCode, amount, transactionHash } = distributionData;
+    const { investorId, assetCode, amount, transactionHash, usdcPaymentHash } = distributionData;
     
     const result = await query(
-      `INSERT INTO token_distributions (investor_id, asset_code, amount, transaction_hash, created_at)
-       VALUES ($1, $2, $3, $4, NOW())
+      `INSERT INTO token_distributions (investor_id, asset_code, amount, transaction_hash, usdc_payment_hash, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
        RETURNING *`,
-      [investorId, assetCode, amount, transactionHash]
+      [investorId, assetCode, amount, transactionHash, usdcPaymentHash || null]
     );
     
     return result.rows[0];

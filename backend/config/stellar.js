@@ -92,6 +92,73 @@ export const buildTransaction = async (sourceKeypair, operations) => {
 };
 
 /**
+ * Parse Stellar error codes into user-friendly messages
+ * @param {Object} codes - Result codes from Stellar error response
+ * @returns {Object} Parsed error information
+ * @returns {string} returns.transactionError - User-friendly transaction error message
+ * @returns {Array} returns.operationErrors - Array of user-friendly operation error messages
+ * @returns {string} returns.userFriendlyMessage - Complete formatted error message
+ */
+const parseStellarErrorCodes = (codes) => {
+  if (!codes) {
+    return {
+      transactionError: null,
+      operationErrors: [],
+      userFriendlyMessage: 'Unknown error',
+    };
+  }
+
+  const errorMap = {
+    // Transaction codes
+    'tx_failed': 'Transaction failed',
+    'tx_bad_seq': 'Sequence number mismatch - please retry',
+    'tx_too_early': 'Transaction submitted too early',
+    'tx_too_late': 'Transaction submitted too late',
+    'tx_missing_operation': 'Transaction missing required operation',
+    'tx_bad_auth': 'Transaction authorization failed',
+    'tx_insufficient_fee': 'Transaction fee too low',
+    'tx_no_source_account': 'Source account does not exist',
+    
+    // Operation codes
+    'op_underfunded': 'Insufficient balance for operation',
+    'op_no_trust': 'Trustline not established',
+    'op_not_authorized': 'Account not authorized for this asset',
+    'op_line_full': 'Trustline limit exceeded',
+    'op_no_issuer': 'Asset issuer account does not exist',
+    'op_bad_auth': 'Operation authorization failed',
+    'op_success': 'Operation succeeded',
+  };
+
+  const txCode = codes.transaction || codes.transaction_code;
+  const opCodes = codes.operations || codes.operation_codes || [];
+
+  const transactionError = txCode ? (errorMap[txCode] || txCode) : null;
+  const operationErrors = opCodes.map((code, i) => {
+    const friendlyMsg = errorMap[code] || code;
+    return `Operation ${i + 1}: ${friendlyMsg}`;
+  });
+
+  let userFriendlyMessage = '';
+  if (transactionError) {
+    userFriendlyMessage = `Stellar transaction error: ${transactionError}`;
+  }
+  if (operationErrors.length > 0) {
+    userFriendlyMessage += operationErrors.length > 0 
+      ? `. ${operationErrors.join('. ')}`
+      : '';
+  }
+  if (!userFriendlyMessage) {
+    userFriendlyMessage = 'Unknown Stellar error';
+  }
+
+  return {
+    transactionError,
+    operationErrors,
+    userFriendlyMessage,
+  };
+};
+
+/**
  * Assina e submete uma transação Stellar para a rede
  * @param {Transaction} transaction - Transação a ser assinada e submetida
  * @param {Keypair} keypair - Keypair para assinar a transação
@@ -100,6 +167,7 @@ export const buildTransaction = async (sourceKeypair, operations) => {
  * @returns {string} returns.hash - Hash da transação (se sucesso)
  * @returns {number} returns.ledger - Número do ledger (se sucesso)
  * @returns {string} returns.error - Mensagem de erro (se falhou)
+ * @returns {string} returns.userFriendlyError - Mensagem de erro amigável (se falhou)
  * @returns {Object} returns.resultCodes - Códigos de erro detalhados (se falhou)
  */
 export const signAndSubmitTransaction = async (transaction, keypair) => {
@@ -118,10 +186,15 @@ export const signAndSubmitTransaction = async (transaction, keypair) => {
     if (error.response && error.response.data) {
       const errorResult = error.response.data.extras?.result_codes;
       const errorMessage = error.response.data.detail || error.message;
+      const parsedCodes = parseStellarErrorCodes(errorResult);
+      
       return {
         success: false,
         error: errorMessage,
+        userFriendlyError: parsedCodes.userFriendlyMessage,
         resultCodes: errorResult,
+        transactionError: parsedCodes.transactionError,
+        operationErrors: parsedCodes.operationErrors,
       };
     }
     throw error;
