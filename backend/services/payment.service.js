@@ -9,7 +9,10 @@ import {
   buildTransaction,
   signAndSubmitTransaction,
 } from '../config/stellar.js';
-import { Operation, Asset } from '@stellar/stellar-sdk';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const StellarSDK = require('@stellar/stellar-sdk');
+const { Operation, Asset } = StellarSDK;
 import cron from 'node-cron';
 
 const USDC_ISSUER = process.env.USDC_ISSUER || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';

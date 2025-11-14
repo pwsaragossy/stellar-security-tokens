@@ -7,7 +7,10 @@ import {
   signAndSubmitTransaction,
   getNetworkPassphrase,
 } from '../config/stellar.js';
-import {
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const StellarSDK = require('@stellar/stellar-sdk');
+const {
   Operation,
   Keypair,
   Asset,
@@ -16,7 +19,7 @@ import {
   AuthClawbackEnabledFlag,
   TransactionBuilder,
   BASE_FEE,
-} from '@stellar/stellar-sdk';
+} = StellarSDK;
 
 export class StellarService {
   /**

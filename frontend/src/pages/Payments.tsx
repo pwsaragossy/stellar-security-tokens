@@ -25,11 +25,9 @@ export function Payments() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [preview, setPreview] = useState<any>(null);
-  const [statistics, setStatistics] = useState<any>(null);
 
   useEffect(() => {
     loadPayments();
-    loadStatistics();
   }, []);
 
   const loadPayments = async () => {
@@ -43,17 +41,6 @@ export function Payments() {
       console.error('Error loading payments:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadStatistics = async () => {
-    try {
-      const response = await paymentApi.getStatistics();
-      if (response.success && response.data) {
-        setStatistics(response.data);
-      }
-    } catch (error) {
-      console.error('Error loading statistics:', error);
     }
   };
 
@@ -88,7 +75,6 @@ export function Payments() {
       if (response.success) {
         alert(`Pagamento processado com sucesso!\n\n${response.data.paymentsProcessed} pagamentos realizados\nTotal: ${response.data.totalInterestAmount} USDC\nEmails enviados: ${response.data.emailsSent}`);
         await loadPayments();
-        await loadStatistics();
       } else {
         alert(`Erro ao processar pagamento: ${response.error || 'Erro desconhecido'}`);
       }

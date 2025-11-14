@@ -1,0 +1,101 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: stellar_postgres
+    environment:
+      POSTGRES_DB: stellar_tokens
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - stellar_network
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stellar_backend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: stellar_tokens
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/stellar_tokens
+      # Stellar Network
+      STELLAR_NETWORK: ${STELLAR_NETWORK:-testnet}
+      STELLAR_HORIZON_URL: ${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
+      HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
+      # Stellar Accounts (configure no .env ou passe via variáveis)
+      ISSUER_SECRET_KEY: ${ISSUER_SECRET_KEY}
+      ISSUER_PUBLIC_KEY: ${ISSUER_PUBLIC_KEY}
+      DISTRIBUTOR_SECRET_KEY: ${DISTRIBUTOR_SECRET_KEY}
+      DISTRIBUTOR_PUBLIC_KEY: ${DISTRIBUTOR_PUBLIC_KEY}
+      DISTRIBUTION_SECRET_KEY: ${DISTRIBUTION_SECRET_KEY}
+      DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
+      TREASURY_SECRET_KEY: ${TREASURY_SECRET_KEY}
+      TREASURY_PUBLIC_KEY: ${TREASURY_PUBLIC_KEY}
+      # Token Details
+      ASSET_CODE: ${ASSET_CODE:-SIN01}
+      ASSET_SUPPLY: ${ASSET_SUPPLY:-1000}
+      USDC_ISSUER: ${USDC_ISSUER:-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN}
+      # Security
+      JWT_SECRET: ${JWT_SECRET:-change_this_in_production}
+      API_KEY: ${API_KEY}
+      # Email (opcional)
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
+      # Payment Scheduler
+      ENABLE_AUTO_PAYMENTS: ${ENABLE_AUTO_PAYMENTS:-true}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - stellar_network
+    volumes:
+      - ./backend:/app/backend
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        sleep 5 &&
+        node backend/database/migrate.js &&
+        node backend/server.js
+      "
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_URL: /api
+    container_name: stellar_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - stellar_network
+
+volumes:
+  postgres_data:
+
+networks:
+  stellar_network:
+    driver: bridge
+

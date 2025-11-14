@@ -1,4 +1,7 @@
-import { Server, Networks, Keypair, Asset, Operation, TransactionBuilder, BASE_FEE } from '@stellar/stellar-sdk';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const StellarSDK = require('@stellar/stellar-sdk');
+const { Horizon, Networks, Keypair, Asset, Operation, TransactionBuilder, BASE_FEE } = StellarSDK;
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -6,7 +9,7 @@ dotenv.config();
 const network = process.env.STELLAR_NETWORK || 'testnet';
 const horizonUrl = process.env.STELLAR_HORIZON_URL || process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org';
 
-export const stellarServer = new Server(horizonUrl);
+export const stellarServer = new Horizon.Server(horizonUrl);
 
 /**
  * Obtém o passphrase da rede Stellar baseado na configuração
