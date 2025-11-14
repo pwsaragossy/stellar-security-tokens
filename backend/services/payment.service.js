@@ -19,6 +19,7 @@ const USDC_ISSUER = process.env.USDC_ISSUER || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335
 const USDC_ASSET_CODE = 'USDC';
 const ANNUAL_INTEREST_RATE = 10.0;
 const MONTHLY_INTEREST_RATE = ANNUAL_INTEREST_RATE / 12 / 100;
+const MAX_OPERATIONS_PER_TX = 95; // Buffer de segurança (Stellar limit is 100)
 
 const logger = {
   info: (message, data = {}) => {
@@ -158,9 +159,35 @@ export class PaymentService {
       const distributorKeypair = getDistributorKeypair();
       const distributorAccount = await stellarServer.loadAccount(distributorKeypair.publicKey());
       
+      // Verificar liquidez USDC antes de criar operações
+      const usdcBalance = distributorAccount.balances.find(
+        b => b.asset_code === USDC_ASSET_CODE && b.asset_issuer === USDC_ISSUER
+      );
+      
+      const totalNeeded = payments.reduce((sum, p) => sum + parseFloat(p.usdcAmount), 0);
+      
+      if (!usdcBalance || parseFloat(usdcBalance.balance) < totalNeeded) {
+        const available = usdcBalance ? parseFloat(usdcBalance.balance) : 0;
+        logger.error('Insufficient USDC liquidity', {
+          required: totalNeeded,
+          available: available,
+          shortfall: totalNeeded - available
+        });
+        throw new Error(
+          `Insufficient USDC liquidity. Required: ${totalNeeded}, Available: ${available}`
+        );
+      }
+      
+      logger.info('USDC liquidity verified', {
+        available: parseFloat(usdcBalance.balance),
+        required: totalNeeded,
+        remaining: parseFloat(usdcBalance.balance) - totalNeeded
+      });
+      
       const usdcAsset = new Asset(USDC_ASSET_CODE, USDC_ISSUER);
-      const operations = [];
-
+      
+      // Preparar operações válidas
+      const validPayments = [];
       for (const payment of payments) {
         const investor = investors.find(inv => inv.id === payment.investorId);
         if (!investor || !investor.stellar_public_key) {
@@ -169,8 +196,32 @@ export class PaymentService {
           });
           continue;
         }
+        validPayments.push({ payment, investor });
+      }
 
-        operations.push(
+      if (validPayments.length === 0) {
+        throw new Error('No valid operations to execute');
+      }
+
+      // Dividir em batches se necessário
+      const batches = [];
+      for (let i = 0; i < validPayments.length; i += MAX_OPERATIONS_PER_TX) {
+        batches.push(validPayments.slice(i, i + MAX_OPERATIONS_PER_TX));
+      }
+
+      logger.info(`Processing ${validPayments.length} payments in ${batches.length} batch(es)`, {
+        totalPayments: validPayments.length,
+        batchCount: batches.length,
+        maxOperationsPerBatch: MAX_OPERATIONS_PER_TX
+      });
+
+      const results = [];
+      
+      // Processar batches sequencialmente
+      for (const [index, batch] of batches.entries()) {
+        logger.info(`Processing batch ${index + 1}/${batches.length} with ${batch.length} operations`);
+        
+        const operations = batch.map(({ payment, investor }) =>
           Operation.payment({
             destination: investor.stellar_public_key,
             asset: usdcAsset,
@@ -178,32 +229,40 @@ export class PaymentService {
             source: distributorKeypair.publicKey(),
           })
         );
+
+        const transaction = await buildTransaction(distributorKeypair, operations);
+        const result = await signAndSubmitTransaction(transaction, distributorKeypair);
+
+        if (!result.success) {
+          throw new Error(`Batch ${index + 1} payment failed: ${result.error}`);
+        }
+
+        logger.info(`Batch ${index + 1} payment transaction submitted successfully`, {
+          batchIndex: index,
+          transactionHash: result.hash,
+          ledger: result.ledger,
+          operationCount: operations.length,
+        });
+
+        results.push({
+          batchIndex: index,
+          transactionHash: result.hash,
+          ledger: result.ledger,
+          operationsCount: operations.length,
+        });
+
+        // Pequeno delay entre batches para evitar problemas de sequence number
+        if (index < batches.length - 1) {
+          await sleep(500);
+        }
       }
-
-      if (operations.length === 0) {
-        throw new Error('No valid operations to execute');
-      }
-
-      logger.info(`Building transaction with ${operations.length} operations`);
-
-      const transaction = await buildTransaction(distributorKeypair, operations);
-      const result = await signAndSubmitTransaction(transaction, distributorKeypair);
-
-      if (!result.success) {
-        throw new Error(`Batch payment failed: ${result.error}`);
-      }
-
-      logger.info('Batch payment transaction submitted successfully', {
-        transactionHash: result.hash,
-        ledger: result.ledger,
-        operationCount: operations.length,
-      });
 
       return {
         success: true,
-        transactionHash: result.hash,
-        ledger: result.ledger,
-        operationCount: operations.length,
+        transactionHash: results[0].transactionHash, // Primeira transação para compatibilidade
+        ledger: results[0].ledger,
+        operationCount: validPayments.length,
+        batches: results,
       };
     } catch (error) {
       logger.error('Error creating batch USDC payment', error);
@@ -428,15 +487,33 @@ export class PaymentService {
         2000
       );
 
-      await retryOperation(
-        () => this.recordInterestPayments(payments, batchResult.transactionHash, paymentDate),
-        3
-      );
+      // Registrar pagamentos - se houver múltiplas transações (batches), registrar todas
+      if (batchResult.batches && batchResult.batches.length > 1) {
+        // Dividir payments por batch para registrar com hash correto
+        let paymentIndex = 0;
+        for (const batch of batchResult.batches) {
+          const batchPayments = payments.slice(
+            paymentIndex,
+            paymentIndex + batch.operationsCount
+          );
+          await retryOperation(
+            () => this.recordInterestPayments(batchPayments, batch.transactionHash, paymentDate),
+            3
+          );
+          paymentIndex += batch.operationsCount;
+        }
+      } else {
+        // Caso único batch (compatibilidade)
+        await retryOperation(
+          () => this.recordInterestPayments(payments, batchResult.transactionHash, paymentDate),
+          3
+        );
+      }
 
       const emailResults = await this.sendConfirmationEmails(
         investors,
         payments,
-        batchResult.transactionHash,
+        batchResult.transactionHash, // Usar primeira transação para emails
         paymentDate
       );
 

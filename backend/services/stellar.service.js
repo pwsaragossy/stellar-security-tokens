@@ -280,13 +280,51 @@ export class StellarService {
         throw new Error('Invalid investor public key');
       }
 
+      let account;
       try {
-        await stellarServer.loadAccount(investorPublicKey);
+        account = await stellarServer.loadAccount(investorPublicKey);
       } catch (error) {
         if (error.status === 404) {
           throw new Error('Investor account does not exist');
         }
         throw error;
+      }
+
+      // Verificar reserva XLM antes de criar trustline
+      const xlmBalance = account.balances.find(b => b.asset_type === 'native');
+      if (!xlmBalance) {
+        throw new Error('Investor account has no XLM balance');
+      }
+
+      const currentXLM = parseFloat(xlmBalance.balance);
+      const baseReserve = 1; // Base reserve per account (XLM)
+      const numSubentries = account.subentry_count || 0;
+      const newSubentries = numSubentries + 1; // Adicionando uma trustline
+      const requiredReserve = baseReserve * (2 + newSubentries);
+      const minRequired = requiredReserve + 0.5; // Buffer para fees
+
+      if (currentXLM < minRequired) {
+        const shortfall = (minRequired - currentXLM).toFixed(2);
+        throw new Error(
+          `Insufficient XLM for trustline. Required: ${minRequired} XLM (including reserves), ` +
+          `Available: ${currentXLM} XLM. Please fund the account with at least ${shortfall} more XLM.`
+        );
+      }
+
+      // Verificar se trustline já existe
+      const existingTrust = account.balances.find(
+        b => b.asset_code === assetCode && b.asset_issuer === issuerKeypair.publicKey()
+      );
+
+      if (existingTrust) {
+        console.log(`Trustline already exists for ${investorPublicKey}`);
+        return {
+          success: true,
+          investorPublicKey,
+          assetCode,
+          alreadyExists: true,
+          message: 'Trustline already exists',
+        };
       }
 
       const asset = createAsset(assetCode, issuerKeypair.publicKey());
@@ -303,6 +341,11 @@ export class StellarService {
       const result = await signAndSubmitTransaction(transaction, issuerKeypair);
 
       if (!result.success) {
+        // Usar mensagem amigável se disponível
+        if (result.userFriendlyError) {
+          throw new Error(result.userFriendlyError);
+        }
+        // Fallback para casos específicos conhecidos
         if (result.resultCodes && result.resultCodes.operation === 'op_no_trust') {
           throw new Error('Investor must establish trustline first before whitelisting');
         }
@@ -375,11 +418,19 @@ export class StellarService {
       const result = await signAndSubmitTransaction(transaction, distributorKeypair);
       
       if (!result.success) {
+        // Usar mensagem amigável se disponível
+        if (result.userFriendlyError) {
+          throw new Error(result.userFriendlyError);
+        }
+        // Fallback para casos específicos conhecidos
         if (result.resultCodes && result.resultCodes.operation === 'op_no_trust') {
           throw new Error('Investor must establish and be whitelisted for this asset trustline first');
         }
         if (result.resultCodes && result.resultCodes.operation === 'op_not_authorized') {
           throw new Error('Investor trustline is not authorized (not whitelisted)');
+        }
+        if (result.resultCodes && result.resultCodes.operation === 'op_underfunded') {
+          throw new Error('Insufficient balance in distribution account');
         }
         throw new Error(`Failed to distribute tokens: ${result.error}`);
       }
@@ -537,6 +588,11 @@ export class StellarService {
       const result = await signAndSubmitTransaction(transaction, issuerKeypair);
 
       if (!result.success) {
+        // Usar mensagem amigável se disponível
+        if (result.userFriendlyError) {
+          throw new Error(result.userFriendlyError);
+        }
+        // Fallback para casos específicos conhecidos
         if (result.resultCodes && result.resultCodes.operation === 'op_no_trust') {
           throw new Error('Investor does not have a trustline for this asset');
         }
@@ -627,6 +683,88 @@ export class StellarService {
     } catch (error) {
       console.error('Error getting account info:', error);
       throw new Error(`Failed to get account info: ${error.message}`);
+    }
+  }
+
+  /**
+   * Verifica se um pagamento USDC foi recebido na Treasury Account
+   * Busca pagamentos recentes (últimos 10 minutos por padrão) e valida correspondência
+   * @param {string} investorPublicKey - Chave pública do investidor que enviou o pagamento
+   * @param {number|string} expectedAmount - Valor esperado em USDC
+   * @param {string} [treasuryPublicKey] - Chave pública da Treasury Account (opcional, usa env var se não fornecido)
+   * @param {number} [windowMinutes=10] - Janela de tempo em minutos para buscar pagamentos
+   * @returns {Promise<Object|null>} Objeto com detalhes do pagamento encontrado ou null
+   * @returns {string} returns.transactionHash - Hash da transação USDC
+   * @returns {string} returns.amount - Valor do pagamento
+   * @returns {string} returns.createdAt - Data de criação da transação
+   * @returns {number} returns.ledger - Número do ledger
+   * @throws {Error} Se houver erro ao buscar pagamentos
+   */
+  static async verifyUSDCPayment(investorPublicKey, expectedAmount, treasuryPublicKey = null, windowMinutes = 10) {
+    try {
+      const treasuryKey = treasuryPublicKey || process.env.TREASURY_PUBLIC_KEY;
+      if (!treasuryKey) {
+        throw new Error('TREASURY_PUBLIC_KEY not configured');
+      }
+
+      const USDC_ISSUER = process.env.USDC_ISSUER || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
+      const USDC_ASSET_CODE = 'USDC';
+
+      // Buscar pagamentos recentes na Treasury Account
+      const payments = await stellarServer
+        .payments()
+        .forAccount(treasuryKey)
+        .order('desc')
+        .limit(50)
+        .call();
+
+      const expectedAmountFloat = parseFloat(expectedAmount);
+      const windowStartTime = new Date(Date.now() - windowMinutes * 60 * 1000);
+
+      // Procurar pagamento correspondente
+      const matchingPayment = payments.records.find(payment => {
+        if (payment.type !== 'payment') {
+          return false;
+        }
+
+        // Verificar asset
+        if (payment.asset_code !== USDC_ASSET_CODE || payment.asset_issuer !== USDC_ISSUER) {
+          return false;
+        }
+
+        // Verificar origem e destino
+        if (payment.from !== investorPublicKey || payment.to !== treasuryKey) {
+          return false;
+        }
+
+        // Verificar amount (permite pequena diferença por arredondamento)
+        const paymentAmount = parseFloat(payment.amount);
+        if (paymentAmount < expectedAmountFloat * 0.9999) { // 0.01% de tolerância
+          return false;
+        }
+
+        // Verificar janela de tempo
+        const paymentTime = new Date(payment.created_at);
+        if (paymentTime < windowStartTime) {
+          return false;
+        }
+
+        return true;
+      });
+
+      if (!matchingPayment) {
+        return null;
+      }
+
+      return {
+        transactionHash: matchingPayment.transaction_hash,
+        amount: matchingPayment.amount,
+        createdAt: matchingPayment.created_at,
+        ledger: matchingPayment.ledger,
+      };
+    } catch (error) {
+      console.error('Error verifying USDC payment:', error);
+      throw new Error(`Failed to verify USDC payment: ${error.message}`);
     }
   }
 }

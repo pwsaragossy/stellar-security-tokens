@@ -2,7 +2,10 @@ import { Investor } from '../models/Investor.js';
 import { Token } from '../models/Token.js';
 import { StellarService } from '../services/stellar.service.js';
 import { PaymentService } from '../services/payment.service.js';
+import { getTreasuryKeypair } from '../config/stellar.js';
+
 const SIN01_ASSET_CODE = 'SIN01';
+const USDC_PAYMENT_WINDOW_MINUTES = parseInt(process.env.USDC_PAYMENT_WINDOW_MINUTES || '10', 10);
 
 export const purchaseInvestment = async (req, res, next) => {
   try {
@@ -45,6 +48,26 @@ export const purchaseInvestment = async (req, res, next) => {
       });
     }
 
+    // Verificar se pagamento USDC foi recebido antes de distribuir tokens
+    const treasuryKeypair = getTreasuryKeypair();
+    const usdcPayment = await StellarService.verifyUSDCPayment(
+      investor.stellar_public_key,
+      usdcAmount,
+      treasuryKeypair.publicKey(),
+      USDC_PAYMENT_WINDOW_MINUTES
+    );
+
+    if (!usdcPayment) {
+      return res.status(400).json({
+        success: false,
+        error: 'USDC payment not found',
+        message: `Please send ${usdcAmount} USDC to ${treasuryKeypair.publicKey()} first. ` +
+                 `Payment must be sent within the last ${USDC_PAYMENT_WINDOW_MINUTES} minutes.`,
+        treasuryAddress: treasuryKeypair.publicKey(),
+        requiredAmount: usdcAmount,
+      });
+    }
+
     const tokenAmount = parseFloat(usdcAmount);
 
     const stellarResult = await StellarService.distributeTokens(
@@ -58,6 +81,7 @@ export const purchaseInvestment = async (req, res, next) => {
       assetCode,
       amount: tokenAmount,
       transactionHash: stellarResult.transactionHash,
+      usdcPaymentHash: usdcPayment.transactionHash,
     });
 
     res.status(201).json({
@@ -85,7 +109,11 @@ export const purchaseInvestment = async (req, res, next) => {
           hash: stellarResult.transactionHash,
           ledger: stellarResult.ledger,
         },
-        note: 'USDC payment should be sent separately. Tokens have been distributed.',
+        usdcPayment: {
+          transactionHash: usdcPayment.transactionHash,
+          ledger: usdcPayment.ledger,
+          verifiedAt: usdcPayment.createdAt,
+        },
       },
     });
   } catch (error) {

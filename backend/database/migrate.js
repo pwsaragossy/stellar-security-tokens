@@ -80,6 +80,15 @@ const migrations = [
       CREATE INDEX IF NOT EXISTS idx_interest_payments_status ON interest_payments(status);
     `,
   },
+  {
+    name: 'add_usdc_payment_hash_to_token_distributions',
+    sql: `
+      ALTER TABLE token_distributions 
+      ADD COLUMN IF NOT EXISTS usdc_payment_hash VARCHAR(64) NULL;
+      
+      CREATE INDEX IF NOT EXISTS idx_distributions_usdc_hash ON token_distributions(usdc_payment_hash);
+    `,
+  },
 ];
 
 const runMigrations = async () => {
