@@ -1,7 +1,12 @@
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const StellarSDK = require('@stellar/stellar-sdk');
-const { Horizon, Networks, Keypair, Asset, Operation, TransactionBuilder, BASE_FEE } = StellarSDK;
+import {
+  Horizon,
+  Networks,
+  Keypair,
+  Asset,
+  Operation,
+  TransactionBuilder,
+  BASE_FEE,
+} from '@stellar/stellar-sdk';
 import dotenv from 'dotenv';
 
 dotenv.config();

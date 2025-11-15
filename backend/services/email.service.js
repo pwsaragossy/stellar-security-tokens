@@ -20,9 +20,10 @@ const createTransporter = () => {
   };
 
   if (!smtpConfig.auth.user || !smtpConfig.auth.pass) {
-    console.warn('SMTP credentials not configured. Email sending will be disabled.');
-    console.warn('To configure email, set SMTP_USER and SMTP_PASSWORD in your .env file.');
-    console.warn('See EMAIL_SETUP.md for detailed instructions.');
+    console.log('ℹ️  Email service: Not configured (SMTP credentials not set)');
+    console.log('   Email notifications will be skipped. System will continue to work normally.');
+    console.log('   To enable emails, configure SMTP_USER and SMTP_PASSWORD in .env');
+    console.log('   See EMAIL_SETUP.md for instructions.');
     return null;
   }
 
@@ -37,6 +38,7 @@ const createTransporter = () => {
     console.warn('⚠️  SMTP connection verification failed:', error.message);
     console.warn('   Email sending may not work. Please check your SMTP configuration.');
     console.warn('   Run "npm run test:email" to diagnose the issue.');
+    console.warn('   System will continue to work, but emails will be skipped.');
   });
 
   return transporter;
@@ -63,7 +65,7 @@ export class EmailService {
    */
   static async sendInterestPaymentConfirmation(investorEmail, investorName, amount, transactionHash, paymentDate) {
     if (!transporter) {
-      console.warn('Email service not configured. Skipping email send.');
+      // Email não configurado - retornar silenciosamente (já foi logado na inicialização)
       return { success: false, message: 'Email service not configured' };
     }
 

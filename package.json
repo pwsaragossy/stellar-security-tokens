@@ -10,7 +10,7 @@
     "migrate": "node backend/database/migrate.js",
     "seed": "node backend/database/seed.js",
     "setup": "node scripts/setup.js",
-    "test": "node --test",
+    "test": "node --test backend/tests/**/*.test.js",
     "test:unit": "node --test backend/tests/unit/**/*.test.js",
     "test:integration": "node --test backend/tests/integration/**/*.test.js",
     "test:watch": "node --watch --test",
@@ -25,7 +25,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@stellar/stellar-sdk": "^11.2.2",
+    "@stellar/stellar-sdk": "^14.3.2",
     "express": "^4.18.2",
     "pg": "^8.11.3",
     "dotenv": "^16.3.1",

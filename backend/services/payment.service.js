@@ -9,16 +9,12 @@ import {
   buildTransaction,
   signAndSubmitTransaction,
 } from '../config/stellar.js';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const StellarSDK = require('@stellar/stellar-sdk');
-const { Operation, Asset } = StellarSDK;
+import { Operation, Asset } from '@stellar/stellar-sdk';
 import cron from 'node-cron';
 
 const USDC_ISSUER = process.env.USDC_ISSUER || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
 const USDC_ASSET_CODE = 'USDC';
-const ANNUAL_INTEREST_RATE = 10.0;
-const MONTHLY_INTEREST_RATE = ANNUAL_INTEREST_RATE / 12 / 100;
+const DEFAULT_ANNUAL_INTEREST_RATE = 10.0; // Fallback se não encontrar no banco
 const MAX_OPERATIONS_PER_TX = 95; // Buffer de segurança (Stellar limit is 100)
 
 const logger = {
@@ -80,19 +76,34 @@ export class PaymentService {
   /**
    * Busca lista de investidores aprovados com saldos de tokens do banco de dados
    * @param {string} [assetCode='SIN01'] - Código do asset a consultar
-   * @returns {Promise<Array>} Array de investidores com saldos, ordenados por ID
-   * @returns {number} returns[].id - ID do investidor
-   * @returns {string} returns[].name - Nome do investidor
-   * @returns {string} returns[].email - Email do investidor
-   * @returns {string} returns[].stellar_public_key - Chave pública Stellar
-   * @returns {string} returns[].kyc_status - Status KYC (deve ser 'approved')
-   * @returns {string} returns[].token_balance - Saldo de tokens (soma de distribuições)
+   * @returns {Promise<Object>} Objeto com investidores e taxa de juros
+   * @returns {Array} returns.investors - Array de investidores com saldos
+   * @returns {number} returns.annualInterestRate - Taxa de juros anual do token
+   * @returns {number} returns.investors[].id - ID do investidor
+   * @returns {string} returns.investors[].name - Nome do investidor
+   * @returns {string} returns.investors[].email - Email do investidor
+   * @returns {string} returns.investors[].stellar_public_key - Chave pública Stellar
+   * @returns {string} returns.investors[].kyc_status - Status KYC (deve ser 'approved')
+   * @returns {string} returns.investors[].token_balance - Saldo de tokens (soma de distribuições)
    * @throws {Error} Se houver erro ao consultar o banco de dados
    */
   static async getInvestorsWithBalances(assetCode = 'SIN01') {
     try {
       logger.info('Fetching investors with balances', { assetCode });
 
+      // Buscar taxa de juros do token
+      const tokenResult = await query(
+        'SELECT annual_interest_rate FROM tokens WHERE asset_code = $1',
+        [assetCode]
+      );
+      
+      const annualInterestRate = tokenResult.rows[0]?.annual_interest_rate 
+        ? parseFloat(tokenResult.rows[0].annual_interest_rate) 
+        : DEFAULT_ANNUAL_INTEREST_RATE;
+
+      logger.info(`Token interest rate: ${annualInterestRate}%`, { assetCode });
+
+      // Buscar investidores com saldos
       const result = await query(
         `SELECT 
           i.id,
@@ -112,7 +123,10 @@ export class PaymentService {
       );
 
       logger.info(`Found ${result.rows.length} investors with balances`);
-      return result.rows;
+      return {
+        investors: result.rows,
+        annualInterestRate
+      };
     } catch (error) {
       logger.error('Error fetching investors with balances', error);
       throw new Error(`Failed to fetch investors: ${error.message}`);
@@ -120,18 +134,20 @@ export class PaymentService {
   }
 
   /**
-   * Calcula juros mensais proporcionais baseado na taxa anual de 10%
-   * Taxa mensal = (10% / 12) / 100 = 0.8333...%
+   * Calcula juros mensais proporcionais baseado na taxa anual configurada
+   * Taxa mensal = (taxa_anual% / 12) / 100
    * @param {number|string} tokenBalance - Saldo de tokens do investidor
+   * @param {number} [annualInterestRate=DEFAULT_ANNUAL_INTEREST_RATE] - Taxa de juros anual (padrão: 10%)
    * @returns {number} Valor do juro mensal calculado (7 casas decimais) ou 0 se saldo <= 0
    */
-  static calculateMonthlyInterest(tokenBalance) {
+  static calculateMonthlyInterest(tokenBalance, annualInterestRate = DEFAULT_ANNUAL_INTEREST_RATE) {
     const balance = parseFloat(tokenBalance);
     if (balance <= 0) {
       return 0;
     }
     
-    const monthlyInterest = balance * MONTHLY_INTEREST_RATE;
+    const monthlyInterestRate = annualInterestRate / 12 / 100;
+    const monthlyInterest = balance * monthlyInterestRate;
     return parseFloat(monthlyInterest.toFixed(7));
   }
 
@@ -304,7 +320,7 @@ export class PaymentService {
               payment.investorId,
               payment.assetCode,
               payment.tokenBalance,
-              ANNUAL_INTEREST_RATE,
+              payment.interestRate || DEFAULT_ANNUAL_INTEREST_RATE,
               payment.interestAmount,
               payment.usdcAmount,
               transactionHash,
@@ -435,10 +451,12 @@ export class PaymentService {
     logger.info('Starting monthly interest payment process', { assetCode, paymentDate });
 
     try {
-      const investors = await retryOperation(
+      const result = await retryOperation(
         () => this.getInvestorsWithBalances(assetCode),
         3
       );
+
+      const { investors, annualInterestRate } = result;
 
       if (investors.length === 0) {
         logger.warn('No investors found with balances');
@@ -449,12 +467,12 @@ export class PaymentService {
         };
       }
 
-      logger.info(`Processing payments for ${investors.length} investors`);
+      logger.info(`Processing payments for ${investors.length} investors with ${annualInterestRate}% annual rate`);
 
       const payments = [];
       for (const investor of investors) {
         const tokenBalance = parseFloat(investor.token_balance);
-        const interestAmount = this.calculateMonthlyInterest(tokenBalance);
+        const interestAmount = this.calculateMonthlyInterest(tokenBalance, annualInterestRate);
         
         if (interestAmount <= 0) {
           logger.warn('Skipping investor - zero interest', { investorId: investor.id });
@@ -465,6 +483,7 @@ export class PaymentService {
           investorId: investor.id,
           assetCode,
           tokenBalance: tokenBalance.toString(),
+          interestRate: annualInterestRate.toString(),
           interestAmount: interestAmount.toString(),
           usdcAmount: interestAmount.toString(),
         });

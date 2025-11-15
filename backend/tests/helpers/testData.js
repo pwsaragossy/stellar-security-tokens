@@ -7,7 +7,7 @@ export const mockInvestor = {
   name: 'João Silva',
   email: 'joao@example.com',
   document: '12345678900',
-  stellar_public_key: 'GABC123456789012345678901234567890123456789012345678901234567',
+  stellar_public_key: 'GABC1234567890123456789012345678901234567890123456',
   kyc_status: 'approved',
   created_at: new Date('2024-01-15T10:30:00.000Z'),
   updated_at: new Date('2024-01-15T10:30:00.000Z'),
@@ -18,7 +18,7 @@ export const mockInvestorPending = {
   name: 'Maria Santos',
   email: 'maria@example.com',
   document: '98765432100',
-  stellar_public_key: 'GDEF9876543210987654321098765432109876543210987654321098765432',
+  stellar_public_key: 'GDEF9876543210987654321098765432109876543210987654',
   kyc_status: 'pending',
   created_at: new Date('2024-01-16T10:30:00.000Z'),
   updated_at: new Date('2024-01-16T10:30:00.000Z'),
@@ -27,7 +27,7 @@ export const mockInvestorPending = {
 export const mockToken = {
   id: 1,
   asset_code: 'SIN01',
-  issuer_public_key: 'GXYZ7890123456789012345678901234567890123456789012345678901234',
+  issuer_public_key: 'GXYZ7890123456789012345678901234567890123456789012',
   total_supply: '1000.0000000',
   description: 'Sunset Income Note - Security token backed by rental income',
   created_at: new Date('2024-01-15T10:30:00.000Z'),
@@ -62,7 +62,7 @@ export const mockInterestPayment = {
 };
 
 export const mockStellarAccount = {
-  accountId: () => 'GABC123456789012345678901234567890123456789012345678901234567',
+  accountId: () => 'GABC1234567890123456789012345678901234567890123456',
   sequenceNumber: () => '123456789',
   balances: [
     {
@@ -72,7 +72,7 @@ export const mockStellarAccount = {
     {
       asset_type: 'credit_alphanum4',
       asset_code: 'SIN01',
-      asset_issuer: 'GXYZ7890123456789012345678901234567890123456789012345678901234',
+      asset_issuer: 'GXYZ7890123456789012345678901234567890123456789012',
       balance: '100.0000000',
       is_authorized: true,
       is_authorized_to_maintain_liabilities: false,
@@ -95,7 +95,7 @@ export const mockStellarTransaction = {
 };
 
 export const mockKeypair = {
-  publicKey: () => 'GABC123456789012345678901234567890123456789012345678901234567',
+  publicKey: () => 'GABC1234567890123456789012345678901234567890123456',
   secret: () => 'SABC123456789012345678901234567890123456789012345678901234567',
 };
 

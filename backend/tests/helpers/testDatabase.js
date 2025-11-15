@@ -9,12 +9,31 @@ import { query } from '../../config/database.js';
  */
 export const cleanDatabase = async () => {
   try {
-    await query('TRUNCATE TABLE interest_payments CASCADE');
-    await query('TRUNCATE TABLE token_distributions CASCADE');
-    await query('TRUNCATE TABLE tokens CASCADE');
-    await query('TRUNCATE TABLE investors CASCADE');
+    // Desabilitar temporariamente as constraints para limpeza completa
+    await query('SET session_replication_role = replica');
+    
+    // Limpar todas as tabelas
+    await query('DELETE FROM interest_payments');
+    await query('DELETE FROM token_distributions');
+    await query('DELETE FROM tokens');
+    await query('DELETE FROM investors');
+    
+    // Reabilitar constraints
+    await query('SET session_replication_role = DEFAULT');
+    
+    // Resetar sequences
+    await query('ALTER SEQUENCE IF EXISTS investors_id_seq RESTART WITH 1');
+    await query('ALTER SEQUENCE IF EXISTS tokens_id_seq RESTART WITH 1');
+    await query('ALTER SEQUENCE IF EXISTS token_distributions_id_seq RESTART WITH 1');
+    await query('ALTER SEQUENCE IF EXISTS interest_payments_id_seq RESTART WITH 1');
   } catch (error) {
     console.error('Error cleaning database:', error);
+    // Tentar reabilitar constraints mesmo em caso de erro
+    try {
+      await query('SET session_replication_role = DEFAULT');
+    } catch (e) {
+      // Ignorar erro ao reabilitar
+    }
     throw error;
   }
 };
@@ -28,14 +47,14 @@ export const seedTestData = async () => {
       `INSERT INTO investors (name, email, document, stellar_public_key, kyc_status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
        RETURNING *`,
-      ['Test Investor', 'test@example.com', '12345678900', 'GTEST123456789012345678901234567890123456789012345678901234567', 'approved']
+      ['Test Investor', 'test@example.com', '12345678900', 'GTEST1234567890123456789012345678901234567890123456', 'approved']
     );
 
     const tokenResult = await query(
       `INSERT INTO tokens (asset_code, issuer_public_key, total_supply, description, created_at, updated_at)
        VALUES ($1, $2, $3, $4, NOW(), NOW())
        RETURNING *`,
-      ['SIN01', 'GISSUER123456789012345678901234567890123456789012345678901234567', 1000, 'Test Token']
+      ['SIN01', 'GISSUER1234567890123456789012345678901234567890123456', 1000, 'Test Token']
     );
 
     return {

@@ -1,7 +1,16 @@
 import { query } from '../config/database.js';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { readdir } from 'fs/promises';
 
-const migrations = [
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Legacy inline migrations (for backward compatibility)
+const legacyMigrations = [
   {
+    version: '001',
     name: 'create_investors_table',
     sql: `
       CREATE TABLE IF NOT EXISTS investors (
@@ -21,6 +30,7 @@ const migrations = [
     `,
   },
   {
+    version: '002',
     name: 'create_tokens_table',
     sql: `
       CREATE TABLE IF NOT EXISTS tokens (
@@ -37,6 +47,7 @@ const migrations = [
     `,
   },
   {
+    version: '003',
     name: 'create_token_distributions_table',
     sql: `
       CREATE TABLE IF NOT EXISTS token_distributions (
@@ -54,6 +65,7 @@ const migrations = [
     `,
   },
   {
+    version: '004',
     name: 'create_interest_payments_table',
     sql: `
       CREATE TABLE IF NOT EXISTS interest_payments (
@@ -81,6 +93,7 @@ const migrations = [
     `,
   },
   {
+    version: '005',
     name: 'add_usdc_payment_hash_to_token_distributions',
     sql: `
       ALTER TABLE token_distributions 
@@ -91,20 +104,145 @@ const migrations = [
   },
 ];
 
+/**
+ * Initialize schema_migrations table if it doesn't exist
+ */
+const initSchemaMigrations = async () => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        executed_at TIMESTAMP DEFAULT NOW(),
+        execution_time_ms INTEGER
+      );
+      
+      CREATE INDEX IF NOT EXISTS idx_migrations_executed_at 
+        ON schema_migrations(executed_at DESC);
+    `);
+  } catch (error) {
+    // Table might already exist, ignore error
+    if (!error.message.includes('already exists')) {
+      throw error;
+    }
+  }
+};
+
+/**
+ * Get list of executed migrations
+ */
+const getExecutedMigrations = async () => {
+  try {
+    const result = await query('SELECT version FROM schema_migrations ORDER BY version');
+    return new Set(result.rows.map(row => row.version));
+  } catch (error) {
+    // Table doesn't exist yet, return empty set
+    return new Set();
+  }
+};
+
+/**
+ * Record migration execution
+ */
+const recordMigration = async (version, name, executionTime) => {
+  await query(
+    'INSERT INTO schema_migrations (version, name, executed_at, execution_time_ms) VALUES ($1, $2, NOW(), $3)',
+    [version, name, executionTime]
+  );
+};
+
+/**
+ * Load SQL migrations from files
+ */
+const loadSqlMigrations = async () => {
+  const migrationsDir = join(__dirname, 'migrations');
+  const files = await readdir(migrationsDir);
+  const sqlFiles = files
+    .filter(file => file.endsWith('.sql'))
+    .sort(); // Sort alphabetically to maintain order
+
+  const migrations = [];
+  for (const file of sqlFiles) {
+    const version = file.split('_')[0]; // Extract version from filename (e.g., "001" from "001_create_...")
+    const name = file.replace('.sql', '').replace(/^\d+_/, ''); // Remove version prefix and extension
+    const sql = readFileSync(join(migrationsDir, file), 'utf8');
+    
+    migrations.push({ version, name, sql });
+  }
+
+  return migrations;
+};
+
+/**
+ * Run a single migration
+ */
+const runMigration = async (migration) => {
+  const startTime = Date.now();
+  console.log(`Running migration: ${migration.version} - ${migration.name}`);
+  
+  try {
+    await query(migration.sql);
+    const executionTime = Date.now() - startTime;
+    await recordMigration(migration.version, migration.name, executionTime);
+    console.log(`✓ Migration ${migration.version} - ${migration.name} completed (${executionTime}ms)`);
+    return true;
+  } catch (error) {
+    console.error(`✗ Migration ${migration.version} - ${migration.name} failed:`, error.message);
+    throw error;
+  }
+};
+
+/**
+ * Main migration runner
+ */
 const runMigrations = async () => {
   try {
-    console.log('Starting database migrations...');
+    console.log('Starting database migrations...\n');
 
-    for (const migration of migrations) {
-      console.log(`Running migration: ${migration.name}`);
-      await query(migration.sql);
-      console.log(`✓ Migration ${migration.name} completed`);
+    // Initialize schema_migrations table
+    await initSchemaMigrations();
+
+    // Get executed migrations
+    const executedMigrations = await getExecutedMigrations();
+
+    // Load all migrations (legacy + SQL files)
+    const allMigrations = [...legacyMigrations];
+    
+    try {
+      const sqlMigrations = await loadSqlMigrations();
+      allMigrations.push(...sqlMigrations);
+    } catch (error) {
+      // Migrations directory might not exist, continue with legacy only
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+      console.warn('⚠️  Migrations directory not found, using legacy migrations only');
     }
 
-    console.log('All migrations completed successfully!');
+    // Sort migrations by version
+    allMigrations.sort((a, b) => a.version.localeCompare(b.version));
+
+    // Filter out already executed migrations
+    const pendingMigrations = allMigrations.filter(
+      migration => !executedMigrations.has(migration.version)
+    );
+
+    if (pendingMigrations.length === 0) {
+      console.log('✓ All migrations are up to date!');
+      process.exit(0);
+    }
+
+    console.log(`Found ${pendingMigrations.length} pending migration(s)\n`);
+
+    // Run pending migrations
+    for (const migration of pendingMigrations) {
+      await runMigration(migration);
+    }
+
+    console.log('\n✓ All migrations completed successfully!');
     process.exit(0);
   } catch (error) {
-    console.error('Migration error:', error);
+    console.error('\n✗ Migration error:', error);
     process.exit(1);
   }
 };
