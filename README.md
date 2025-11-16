@@ -5,7 +5,7 @@ API REST para tokenização de security tokens na rede Stellar.
 ## Características
 
 - Express.js para API REST
-- Stellar SDK v11 para operações blockchain
+- Stellar SDK v14.3.2 para operações blockchain
 - PostgreSQL para armazenamento de dados
 - Estrutura modular (services/routes/controllers)
 - Suporte a variáveis de ambiente
@@ -20,6 +20,18 @@ API REST para tokenização de security tokens na rede Stellar.
 - Conta Stellar (testnet ou mainnet)
 
 ## Instalação
+
+### Método Docker (Recomendado)
+
+Para executar o projeto usando Docker, veja [DOCKER.md](./DOCKER.md) para instruções completas.
+
+```bash
+# Desenvolvimento
+docker-compose up -d
+
+# Produção
+docker-compose -f docker-compose.prod.yml up -d
+```
 
 ### Método Rápido (Script de Inicialização)
 
@@ -70,14 +82,14 @@ npm run migrate
 npm run seed
 ```
 
-5. Configure as chaves Stellar no arquivo `.env`:
+6. Configure as chaves Stellar no arquivo `.env`:
    - `ISSUER_SECRET_KEY`: Chave secreta da conta emissora
    - `DISTRIBUTOR_SECRET_KEY`: Chave secreta da conta distribuidora
    - `TREASURY_SECRET_KEY`: Chave secreta da conta treasury (recebe USDC)
 
    **Importante**: As contas Stellar devem existir e ter fundos antes de usar a API.
 
-6. Inicie o servidor:
+7. Inicie o servidor:
 ```bash
 # Backend - Desenvolvimento (com watch mode)
 npm run dev
@@ -112,8 +124,19 @@ stellar-security-tokens/
 │   │   └── payment.service.js    # Distribuição de juros
 │   └── server.js      # Ponto de entrada
 ├── scripts/           # Scripts de setup inicial
+├── docker-compose.yml # Configuração Docker para desenvolvimento
+├── docker-compose.prod.yml # Configuração Docker para produção
+├── Dockerfile         # Imagem Docker do backend
+├── API.md            # Documentação completa da API
+├── DOCKER.md         # Guia de uso do Docker
+├── TESTING.md        # Documentação de testes
+├── EMAIL_SETUP.md    # Configuração de email
 └── .env              # Variáveis de ambiente
 ```
+
+## Documentação da API
+
+Para documentação completa e detalhada de todos os endpoints, veja [API.md](./API.md).
 
 ## Endpoints da API
 
