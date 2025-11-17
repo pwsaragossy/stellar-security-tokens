@@ -2,7 +2,7 @@ import { Investor } from '../models/Investor.js';
 import { StellarService } from '../services/stellar.service.js';
 import { PaymentService } from '../services/payment.service.js';
 import { generateToken } from '../middleware/auth.js';
-import { query } from '../config/database.js';
+import prisma from '../config/prisma.js';
 import bcrypt from 'bcrypt';
 
 export const createInvestor = async (req, res, next) => {
@@ -92,10 +92,7 @@ export const registerInvestor = async (req, res, next) => {
     });
 
     // Atualizar com password_hash
-    await query(
-      'UPDATE investors SET password_hash = $1 WHERE id = $2',
-      [passwordHash, investor.id]
-    );
+    await Investor.updatePassword(investor.id, password);
 
     res.status(201).json({
       success: true,
@@ -278,21 +275,31 @@ export const getInvestorBalance = async (req, res, next) => {
       investor.stellar_public_key
     );
 
-    const distributions = await query(
-      `SELECT td.*, t.description 
-       FROM token_distributions td
-       JOIN tokens t ON td.asset_code = t.asset_code
-       WHERE td.investor_id = $1 AND td.asset_code = $2
-       ORDER BY td.created_at DESC`,
-      [investorId, assetCode]
-    );
+    const distributions = await prisma.tokenDistribution.findMany({
+      where: {
+        investorId: parseInt(investorId, 10),
+        assetCode,
+      },
+      include: {
+        token: {
+          select: {
+            description: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
-    const interestPayments = await query(
-      `SELECT * FROM interest_payments 
-       WHERE investor_id = $1 AND asset_code = $2
-       ORDER BY payment_date DESC, created_at DESC`,
-      [investorId, assetCode]
-    );
+    const interestPayments = await prisma.interestPayment.findMany({
+      where: {
+        investorId: parseInt(investorId, 10),
+        assetCode,
+      },
+      orderBy: [
+        { paymentDate: 'desc' },
+        { createdAt: 'desc' },
+      ],
+    });
 
     res.json({
       success: true,
@@ -309,19 +316,19 @@ export const getInvestorBalance = async (req, res, next) => {
           balance: balance.balance,
           isAuthorized: balance.isAuthorized,
         },
-        tokenDistributions: distributions.rows,
-        interestPayments: interestPayments.rows,
+        tokenDistributions: distributions,
+        interestPayments,
         summary: {
-          totalTokensReceived: distributions.rows.reduce(
+          totalTokensReceived: distributions.reduce(
             (sum, d) => sum + parseFloat(d.amount),
             0
           ),
-          totalInterestReceived: interestPayments.rows.reduce(
-            (sum, p) => sum + parseFloat(p.usdc_amount),
+          totalInterestReceived: interestPayments.reduce(
+            (sum, p) => sum + parseFloat(p.usdcAmount),
             0
           ),
-          distributionCount: distributions.rows.length,
-          interestPaymentCount: interestPayments.rows.length,
+          distributionCount: distributions.length,
+          interestPaymentCount: interestPayments.length,
         },
       },
     });
@@ -343,26 +350,21 @@ export const getInvestorPayments = async (req, res, next) => {
       });
     }
 
-    let queryText = `
-      SELECT * FROM interest_payments 
-      WHERE investor_id = $1
-    `;
-    const queryParams = [investorId];
+    const where = { investorId: parseInt(investorId, 10) };
+    if (assetCode) where.assetCode = assetCode;
 
-    if (assetCode) {
-      queryText += ` AND asset_code = $2`;
-      queryParams.push(assetCode);
-    }
-
-    queryText += ` ORDER BY payment_date DESC, created_at DESC LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
-    queryParams.push(parseInt(limit, 10), parseInt(offset, 10));
-
-    const result = await query(queryText, queryParams);
-
-    const totalResult = await query(
-      `SELECT COUNT(*) as total FROM interest_payments WHERE investor_id = $1${assetCode ? ' AND asset_code = $2' : ''}`,
-      assetCode ? [investorId, assetCode] : [investorId]
-    );
+    const [payments, total] = await Promise.all([
+      prisma.interestPayment.findMany({
+        where,
+        take: parseInt(limit, 10),
+        skip: parseInt(offset, 10),
+        orderBy: [
+          { paymentDate: 'desc' },
+          { createdAt: 'desc' },
+        ],
+      }),
+      prisma.interestPayment.count({ where }),
+    ]);
 
     res.json({
       success: true,
@@ -372,19 +374,19 @@ export const getInvestorPayments = async (req, res, next) => {
           name: investor.name,
           email: investor.email,
         },
-        payments: result.rows,
+        payments,
         pagination: {
-          total: parseInt(totalResult.rows[0].total, 10),
+          total,
           limit: parseInt(limit, 10),
           offset: parseInt(offset, 10),
-          count: result.rows.length,
+          count: payments.length,
         },
         summary: {
-          totalInterestReceived: result.rows.reduce(
-            (sum, p) => sum + parseFloat(p.usdc_amount || 0),
+          totalInterestReceived: payments.reduce(
+            (sum, p) => sum + parseFloat(p.usdcAmount || 0),
             0
           ),
-          totalPayments: parseInt(totalResult.rows[0].total, 10),
+          totalPayments: total,
         },
       },
     });

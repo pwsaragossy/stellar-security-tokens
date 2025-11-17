@@ -4,7 +4,6 @@ import { Company } from '../models/Company.js';
 import { CompanyUser } from '../models/CompanyUser.js';
 import { PlatformAdmin } from '../models/PlatformAdmin.js';
 import { generateToken } from '../middleware/auth.js';
-import { query } from '../config/database.js';
 
 // Armazenar challenges temporariamente (em produção, usar Redis)
 const challenges = new Map();

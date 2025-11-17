@@ -1,4 +1,4 @@
-import { query, getClient } from '../config/database.js';
+import prisma from '../config/prisma.js';
 import { Investor } from '../models/Investor.js';
 import { Token } from '../models/Token.js';
 import { Offer } from '../models/Offer.js';
@@ -93,68 +93,67 @@ export class PaymentService {
       logger.info('Fetching investors with balances', { assetCode, offerId });
 
       // Buscar taxa de juros do token
-      let tokenQuery = 'SELECT annual_interest_rate FROM tokens WHERE asset_code = $1';
-      const tokenParams = [assetCode];
-      
+      const where = { assetCode };
       if (offerId) {
-        tokenQuery += ' AND offer_id = $2';
-        tokenParams.push(offerId);
+        where.offerId = offerId;
       }
       
-      const tokenResult = await query(tokenQuery, tokenParams);
+      const token = await prisma.token.findFirst({ where });
       
-      const annualInterestRate = tokenResult.rows[0]?.annual_interest_rate 
-        ? parseFloat(tokenResult.rows[0].annual_interest_rate) 
+      const annualInterestRate = token?.annualInterestRate 
+        ? parseFloat(token.annualInterestRate) 
         : DEFAULT_ANNUAL_INTEREST_RATE;
 
       logger.info(`Token interest rate: ${annualInterestRate}%`, { assetCode });
 
-      // Buscar investidores com saldos
-      let investorQuery;
-      const investorParams = [assetCode];
-      
+      // Buscar investidores com saldos usando Prisma
+      const distributionWhere = { assetCode };
       if (offerId) {
-        investorQuery = `
-          SELECT 
-            i.id,
-            i.name,
-            i.email,
-            i.stellar_public_key,
-            i.kyc_status,
-            COALESCE(SUM(td.amount), 0) as token_balance
-          FROM investors i
-          LEFT JOIN token_distributions td ON td.investor_id = i.id AND td.asset_code = $1 AND td.offer_id = $2
-          WHERE i.kyc_status = 'approved' 
-            AND i.stellar_public_key IS NOT NULL
-          GROUP BY i.id, i.name, i.email, i.stellar_public_key, i.kyc_status
-          HAVING COALESCE(SUM(td.amount), 0) > 0
-          ORDER BY i.id
-        `;
-        investorParams.push(offerId);
-      } else {
-        investorQuery = `
-          SELECT 
-            i.id,
-            i.name,
-            i.email,
-            i.stellar_public_key,
-            i.kyc_status,
-            COALESCE(SUM(td.amount), 0) as token_balance
-          FROM investors i
-          LEFT JOIN token_distributions td ON td.investor_id = i.id AND td.asset_code = $1
-          WHERE i.kyc_status = 'approved' 
-            AND i.stellar_public_key IS NOT NULL
-          GROUP BY i.id, i.name, i.email, i.stellar_public_key, i.kyc_status
-          HAVING COALESCE(SUM(td.amount), 0) > 0
-          ORDER BY i.id
-        `;
+        distributionWhere.offerId = offerId;
       }
-      
-      const result = await query(investorQuery, investorParams);
 
-      logger.info(`Found ${result.rows.length} investors with balances`);
+      const distributions = await prisma.tokenDistribution.groupBy({
+        by: ['investorId'],
+        where: distributionWhere,
+        _sum: {
+          amount: true,
+        },
+      });
+
+      const investorIds = distributions
+        .filter(d => Number(d._sum.amount) > 0)
+        .map(d => d.investorId);
+
+      const investors = await prisma.investor.findMany({
+        where: {
+          id: { in: investorIds },
+          kycStatus: 'approved',
+          stellarPublicKey: { not: null },
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          stellarPublicKey: true,
+          kycStatus: true,
+        },
+        orderBy: { id: 'asc' },
+      });
+
+      // Adicionar saldos aos investidores
+      const investorsWithBalances = investors.map(investor => {
+        const distribution = distributions.find(d => d.investorId === investor.id);
+        return {
+          ...investor,
+          stellar_public_key: investor.stellarPublicKey,
+          kyc_status: investor.kycStatus,
+          token_balance: distribution ? distribution._sum.amount.toString() : '0',
+        };
+      });
+
+      logger.info(`Found ${investorsWithBalances.length} investors with balances`);
       return {
-        investors: result.rows,
+        investors: investorsWithBalances,
         annualInterestRate
       };
     } catch (error) {
@@ -334,43 +333,28 @@ export class PaymentService {
         transactionHash 
       });
 
-      const client = await getClient();
-      
-      try {
-        await client.query('BEGIN');
-        
+      // Use Prisma transaction for atomicity
+      await prisma.$transaction(async (tx) => {
         for (const payment of payments) {
-          await client.query(
-            `INSERT INTO interest_payments (
-              investor_id, asset_code, token_balance, interest_rate, 
-              interest_amount, usdc_amount, transaction_hash, payment_date, 
-              status, offer_id, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
-            [
-              payment.investorId,
-              payment.assetCode,
-              payment.tokenBalance,
-              payment.interestRate || DEFAULT_ANNUAL_INTEREST_RATE,
-              payment.interestAmount,
-              payment.usdcAmount,
+          await tx.interestPayment.create({
+            data: {
+              investorId: payment.investorId,
+              assetCode: payment.assetCode,
+              tokenBalance: payment.tokenBalance,
+              interestRate: payment.interestRate || DEFAULT_ANNUAL_INTEREST_RATE,
+              interestAmount: payment.interestAmount,
+              usdcAmount: payment.usdcAmount,
               transactionHash,
-              paymentDate,
-              'completed',
-              payment.offerId || null,
-            ]
-          );
+              paymentDate: new Date(paymentDate),
+              status: 'completed',
+              offerId: payment.offerId || null,
+            },
+          });
         }
+      });
 
-        await client.query('COMMIT');
-        logger.info('Interest payments recorded successfully');
-        
-        return { success: true, recorded: payments.length };
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
-      }
+      logger.info('Interest payments recorded successfully');
+      return { success: true, recorded: payments.length };
     } catch (error) {
       logger.error('Error recording interest payments', error);
       throw new Error(`Failed to record payments: ${error.message}`);
@@ -417,12 +401,16 @@ export class PaymentService {
           2000
         );
 
-        await query(
-          `UPDATE interest_payments 
-           SET email_sent = TRUE, email_sent_at = NOW() 
-           WHERE investor_id = $1 AND transaction_hash = $2`,
-          [payment.investorId, transactionHash]
-        );
+        await prisma.interestPayment.updateMany({
+          where: {
+            investorId: payment.investorId,
+            transactionHash,
+          },
+          data: {
+            emailSent: true,
+            emailSentAt: new Date(),
+          },
+        });
 
         emailResults.push({
           investorId: payment.investorId,
@@ -440,12 +428,16 @@ export class PaymentService {
           error: error.message,
         });
 
-        await query(
-          `UPDATE interest_payments 
-           SET error_message = $1, retry_count = retry_count + 1
-           WHERE investor_id = $2 AND transaction_hash = $3`,
-          [error.message, payment.investorId, transactionHash]
-        );
+        await prisma.interestPayment.updateMany({
+          where: {
+            investorId: payment.investorId,
+            transactionHash,
+          },
+          data: {
+            errorMessage: error.message,
+            retryCount: { increment: 1 },
+          },
+        });
 
         emailResults.push({
           investorId: payment.investorId,
@@ -599,12 +591,21 @@ export class PaymentService {
     } catch (error) {
       logger.error('Monthly interest payment process failed', error);
       
-      await query(
-        `INSERT INTO interest_payments (
-          investor_id, asset_code, payment_date, status, error_message, created_at
-        ) VALUES (NULL, $1, $2, 'failed', $3, NOW())`,
-        [assetCode, paymentDate, error.message]
-      );
+      // Log error payment record (investor_id can be null for system errors)
+      await prisma.interestPayment.create({
+        data: {
+          investorId: 0, // Placeholder for system errors
+          assetCode,
+          tokenBalance: 0,
+          interestRate: 0,
+          interestAmount: 0,
+          usdcAmount: 0,
+          transactionHash: `error-${Date.now()}`,
+          paymentDate: new Date(paymentDate),
+          status: 'failed',
+          errorMessage: error.message,
+        },
+      });
 
       throw new Error(`Monthly interest payment process failed: ${error.message}`);
     }
@@ -712,18 +713,19 @@ export class PaymentService {
   static async getPaymentHistory(investorId) {
     try {
       const distributions = await Token.getDistributionsByInvestor(investorId);
-      const interestPayments = await query(
-        `SELECT * FROM interest_payments 
-         WHERE investor_id = $1 
-         ORDER BY payment_date DESC, created_at DESC`,
-        [investorId]
-      );
+      const interestPayments = await prisma.interestPayment.findMany({
+        where: { investorId },
+        orderBy: [
+          { paymentDate: 'desc' },
+          { createdAt: 'desc' },
+        ],
+      });
       
       return {
         investorId,
         tokenDistributions: distributions,
-        interestPayments: interestPayments.rows,
-        totalPayments: distributions.length + interestPayments.rows.length,
+        interestPayments,
+        totalPayments: distributions.length + interestPayments.length,
       };
     } catch (error) {
       logger.error('Error getting payment history', error);

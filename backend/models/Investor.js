@@ -1,8 +1,8 @@
-import { query } from '../config/database.js';
+import prisma from '../config/prisma.js';
 import bcrypt from 'bcrypt';
 
 /**
- * Modelo para gerenciar investidores no banco de dados
+ * Modelo para gerenciar investidores no banco de dados usando Prisma
  */
 export class Investor {
   /**
@@ -28,14 +28,15 @@ export class Investor {
       throw new Error('stellarPublicKey deve ter 56 caracteres e começar com G');
     }
     
-    const result = await query(
-      `INSERT INTO investors (name, email, document, stellar_public_key, kyc_status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-       RETURNING *`,
-      [name, email, document, stellarPublicKey, kycStatus]
-    );
-    
-    return result.rows[0];
+    return await prisma.investor.create({
+      data: {
+        name,
+        email,
+        document,
+        stellarPublicKey,
+        kycStatus: kycStatus.toLowerCase(),
+      },
+    });
   }
 
   /**
@@ -44,11 +45,9 @@ export class Investor {
    * @returns {Promise<Object|null>} Investidor encontrado ou null
    */
   static async findById(id) {
-    const result = await query(
-      'SELECT * FROM investors WHERE id = $1',
-      [id]
-    );
-    return result.rows[0] || null;
+    return await prisma.investor.findUnique({
+      where: { id },
+    });
   }
 
   /**
@@ -57,11 +56,9 @@ export class Investor {
    * @returns {Promise<Object|null>} Investidor encontrado ou null
    */
   static async findByEmail(email) {
-    const result = await query(
-      'SELECT * FROM investors WHERE email = $1',
-      [email]
-    );
-    return result.rows[0] || null;
+    return await prisma.investor.findUnique({
+      where: { email },
+    });
   }
 
   /**
@@ -70,11 +67,9 @@ export class Investor {
    * @returns {Promise<Object|null>} Investidor encontrado ou null
    */
   static async findByDocument(document) {
-    const result = await query(
-      'SELECT * FROM investors WHERE document = $1',
-      [document]
-    );
-    return result.rows[0] || null;
+    return await prisma.investor.findUnique({
+      where: { document },
+    });
   }
 
   /**
@@ -83,11 +78,9 @@ export class Investor {
    * @returns {Promise<Object|null>} Investidor encontrado ou null
    */
   static async findByStellarPublicKey(stellarPublicKey) {
-    const result = await query(
-      'SELECT * FROM investors WHERE stellar_public_key = $1',
-      [stellarPublicKey]
-    );
-    return result.rows[0] || null;
+    return await prisma.investor.findFirst({
+      where: { stellarPublicKey },
+    });
   }
 
   /**
@@ -97,11 +90,11 @@ export class Investor {
    * @returns {Promise<Array>} Array de investidores ordenados por data de criação (mais recentes primeiro)
    */
   static async findAll(limit = 100, offset = 0) {
-    const result = await query(
-      'SELECT * FROM investors ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
-    );
-    return result.rows;
+    return await prisma.investor.findMany({
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -119,44 +112,29 @@ export class Investor {
   static async update(id, investorData) {
     const { name, email, document, stellarPublicKey, kycStatus } = investorData;
     
-    const fields = [];
-    const values = [];
-    let paramCount = 1;
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (email !== undefined) updateData.email = email;
+    if (document !== undefined) updateData.document = document;
+    if (stellarPublicKey !== undefined) updateData.stellarPublicKey = stellarPublicKey;
+    if (kycStatus !== undefined) updateData.kycStatus = kycStatus.toLowerCase();
 
-    if (name !== undefined) {
-      fields.push(`name = $${paramCount++}`);
-      values.push(name);
-    }
-    if (email !== undefined) {
-      fields.push(`email = $${paramCount++}`);
-      values.push(email);
-    }
-    if (document !== undefined) {
-      fields.push(`document = $${paramCount++}`);
-      values.push(document);
-    }
-    if (stellarPublicKey !== undefined) {
-      fields.push(`stellar_public_key = $${paramCount++}`);
-      values.push(stellarPublicKey);
-    }
-    if (kycStatus !== undefined) {
-      fields.push(`kyc_status = $${paramCount++}`);
-      values.push(kycStatus);
-    }
-
-    if (fields.length === 0) {
+    if (Object.keys(updateData).length === 0) {
       return await this.findById(id);
     }
 
-    fields.push(`updated_at = NOW()`);
-    values.push(id);
-
-    const result = await query(
-      `UPDATE investors SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
-      values
-    );
-
-    return result.rows[0] || null;
+    try {
+      return await prisma.investor.update({
+        where: { id },
+        data: updateData,
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        // Record not found
+        return null;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -165,11 +143,17 @@ export class Investor {
    * @returns {Promise<Object|null>} Investidor removido ou null se não encontrado
    */
   static async delete(id) {
-    const result = await query(
-      'DELETE FROM investors WHERE id = $1 RETURNING *',
-      [id]
-    );
-    return result.rows[0] || null;
+    try {
+      return await prisma.investor.delete({
+        where: { id },
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        // Record not found
+        return null;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -180,23 +164,23 @@ export class Investor {
    */
   static async authenticate(email, password) {
     const investor = await this.findByEmail(email);
-    if (!investor || !investor.password_hash) {
+    if (!investor || !investor.passwordHash) {
       return null;
     }
 
-    const isValid = await bcrypt.compare(password, investor.password_hash);
+    const isValid = await bcrypt.compare(password, investor.passwordHash);
     if (!isValid) {
       return null;
     }
 
     // Atualizar last_login
-    await query(
-      'UPDATE investors SET last_login = NOW() WHERE id = $1',
-      [investor.id]
-    );
+    await prisma.investor.update({
+      where: { id: investor.id },
+      data: { lastLogin: new Date() },
+    });
 
     // Retornar sem password_hash
-    const { password_hash, ...investorWithoutPassword } = investor;
+    const { passwordHash, ...investorWithoutPassword } = investor;
     return investorWithoutPassword;
   }
 
@@ -208,11 +192,18 @@ export class Investor {
    */
   static async updatePassword(id, newPassword) {
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    const result = await query(
-      'UPDATE investors SET password_hash = $1, updated_at = NOW() WHERE id = $2',
-      [passwordHash, id]
-    );
-    return result.rowCount > 0;
+    try {
+      await prisma.investor.update({
+        where: { id },
+        data: { passwordHash },
+      });
+      return true;
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return false;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -221,24 +212,42 @@ export class Investor {
    * @returns {Promise<Array>} Array com tokens e ofertas relacionadas
    */
   static async getPortfolio(investorId) {
-    const result = await query(
-      `SELECT 
-        t.id, t.asset_code, t.total_supply, t.issued_at,
-        o.id as offer_id, o.offer_name, o.description, o.offer_type,
-        o.annual_interest_rate, o.status as offer_status,
-        COALESCE(SUM(td.amount), 0) as total_distributed
-      FROM tokens t
-      LEFT JOIN offers o ON t.offer_id = o.id
-      LEFT JOIN token_distributions td ON t.asset_code = td.asset_code AND td.investor_id = $1
-      WHERE EXISTS (
-        SELECT 1 FROM token_distributions 
-        WHERE investor_id = $1 AND asset_code = t.asset_code
-      )
-      GROUP BY t.id, o.id
-      ORDER BY t.issued_at DESC`,
-      [investorId]
-    );
-    return result.rows;
+    const distributions = await prisma.tokenDistribution.findMany({
+      where: { investorId },
+      include: {
+        token: {
+          include: {
+            offer: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Group by asset and calculate totals
+    const portfolioMap = new Map();
+    for (const dist of distributions) {
+      const assetCode = dist.assetCode;
+      if (!portfolioMap.has(assetCode)) {
+        portfolioMap.set(assetCode, {
+          id: dist.token.id,
+          assetCode: dist.token.assetCode,
+          totalSupply: dist.token.totalSupply,
+          issuedAt: dist.token.createdAt,
+          offerId: dist.token.offer?.id || null,
+          offerName: dist.token.offer?.offerName || null,
+          description: dist.token.offer?.description || null,
+          offerType: dist.token.offer?.offerType || null,
+          annualInterestRate: dist.token.offer?.annualInterestRate || dist.token.annualInterestRate,
+          offerStatus: dist.token.offer?.status || null,
+          totalDistributed: 0,
+        });
+      }
+      const entry = portfolioMap.get(assetCode);
+      entry.totalDistributed = Number(entry.totalDistributed) + Number(dist.amount);
+    }
+
+    return Array.from(portfolioMap.values());
   }
 
   /**
@@ -247,22 +256,29 @@ export class Investor {
    * @returns {Promise<Object>} Métricas consolidadas
    */
   static async getConsolidatedMetrics(investorId) {
-    const result = await query(
-      `SELECT 
-        COUNT(DISTINCT td.asset_code) as total_offers,
-        COALESCE(SUM(td.amount), 0) as total_invested,
-        COALESCE(SUM(ip.usdc_amount), 0) as total_interest_received,
-        COUNT(DISTINCT ip.id) as total_payments
-      FROM token_distributions td
-      LEFT JOIN interest_payments ip ON td.investor_id = ip.investor_id AND td.asset_code = ip.asset_code
-      WHERE td.investor_id = $1`,
-      [investorId]
-    );
-    return result.rows[0] || {
-      total_offers: 0,
-      total_invested: 0,
-      total_interest_received: 0,
-      total_payments: 0,
+    const [distributions, payments] = await Promise.all([
+      prisma.tokenDistribution.findMany({
+        where: { investorId },
+        select: { assetCode: true, amount: true },
+      }),
+      prisma.interestPayment.findMany({
+        where: {
+          investorId,
+          status: 'completed',
+        },
+        select: { usdcAmount: true },
+      }),
+    ]);
+
+    const totalOffers = new Set(distributions.map(d => d.assetCode)).size;
+    const totalInvested = distributions.reduce((sum, d) => sum + Number(d.amount), 0);
+    const totalInterestReceived = payments.reduce((sum, p) => sum + Number(p.usdcAmount), 0);
+
+    return {
+      totalOffers,
+      totalInvested,
+      totalInterestReceived,
+      totalPayments: payments.length,
     };
   }
 }

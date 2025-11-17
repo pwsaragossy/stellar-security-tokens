@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,4 +8,382 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// Enums
+enum KYCStatus {
+  pending
+  approved
+  rejected
+}
+
+enum CompanyStatus {
+  pending
+  approved
+  suspended
+  rejected
+}
+
+enum OfferStatus {
+  pending_review
+  under_review
+  approved
+  rejected
+  active
+  closed
+}
+
+enum OfferType {
+  collateral
+  sale
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+}
+
+enum InvestmentStatus {
+  pending_payment
+  payment_received
+  distributed
+  failed
+  cancelled
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+enum CompanyUserRole {
+  user
+  admin
+}
+
+enum PlatformAdminRole {
+  admin
+  manager
+  super_admin
+}
+
+// Models
+model Investor {
+  id                Int       @id @default(autoincrement())
+  name              String    @db.VarChar(255)
+  email             String    @unique @db.VarChar(255)
+  document          String    @unique @db.VarChar(100)
+  stellarPublicKey  String?   @map("stellar_public_key") @db.VarChar(56)
+  kycStatus         KYCStatus @default(pending) @map("kyc_status")
+  passwordHash      String?   @map("password_hash") @db.VarChar(255)
+  lastLogin         DateTime? @map("last_login") @db.Timestamp
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+
+  // Relations
+  tokenDistributions    TokenDistribution[]
+  interestPayments      InterestPayment[]
+  investments           Investment[]
+  webauthnCredentials   InvestorWebauthnCredential[]
+
+  @@index([email])
+  @@index([document])
+  @@index([stellarPublicKey])
+  @@index([kycStatus, createdAt(sort: Desc)])
+  @@map("investors")
+}
+
+model Token {
+  id                  Int       @id @default(autoincrement())
+  assetCode           String    @unique @map("asset_code") @db.VarChar(12)
+  issuerPublicKey     String    @map("issuer_public_key") @db.VarChar(56)
+  totalSupply         Decimal   @map("total_supply") @db.Decimal(20, 7)
+  description         String?   @db.Text
+  annualInterestRate  Decimal?  @default(10.0) @map("annual_interest_rate") @db.Decimal(10, 7)
+  offerId             Int?      @map("offer_id")
+  issuedBy            Int?      @map("issued_by")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+
+  // Relations
+  offer                Offer?              @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  issuer                PlatformAdmin?     @relation(fields: [issuedBy], references: [id], onDelete: SetNull)
+  distributions        TokenDistribution[]
+  interestPayments     InterestPayment[]
+  investments          Investment[]
+
+  @@index([assetCode])
+  @@index([offerId])
+  @@index([issuedBy])
+  @@map("tokens")
+}
+
+model TokenDistribution {
+  id              Int            @id @default(autoincrement())
+  investorId      Int            @map("investor_id")
+  assetCode       String         @map("asset_code") @db.VarChar(12)
+  amount          Decimal        @db.Decimal(20, 7)
+  transactionHash String         @map("transaction_hash") @db.VarChar(64)
+  usdcPaymentHash String?        @map("usdc_payment_hash") @db.VarChar(64)
+  offerId         Int?           @map("offer_id")
+  memo            String?       @db.VarChar(28)
+  approvalStatus  ApprovalStatus @default(pending) @map("approval_status")
+  approvedBy      Int?           @map("approved_by")
+  approvedAt      DateTime?      @map("approved_at") @db.Timestamp
+  approvalNotes   String?        @map("approval_notes") @db.Text
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamp
+
+  // Relations
+  investor        Investor       @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  token           Token          @relation(fields: [assetCode], references: [assetCode], onDelete: Cascade)
+  offer           Offer?         @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  approver        PlatformAdmin? @relation(fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@unique([transactionHash])
+  @@unique([investorId, assetCode, usdcPaymentHash])
+  @@index([investorId])
+  @@index([assetCode])
+  @@index([transactionHash])
+  @@index([usdcPaymentHash])
+  @@index([offerId])
+  @@index([investorId, assetCode, createdAt(sort: Desc)])
+  @@index([approvalStatus])
+  @@index([approvedBy])
+  @@map("token_distributions")
+}
+
+model InterestPayment {
+  id              Int           @id @default(autoincrement())
+  investorId      Int           @map("investor_id")
+  assetCode       String        @map("asset_code") @db.VarChar(12)
+  tokenBalance    Decimal       @map("token_balance") @db.Decimal(20, 7)
+  interestRate    Decimal       @map("interest_rate") @db.Decimal(10, 7)
+  interestAmount  Decimal       @map("interest_amount") @db.Decimal(20, 7)
+  usdcAmount      Decimal       @map("usdc_amount") @db.Decimal(20, 7)
+  transactionHash String         @map("transaction_hash") @db.VarChar(64)
+  paymentDate     DateTime       @map("payment_date") @db.Date
+  emailSent       Boolean        @default(false) @map("email_sent")
+  emailSentAt     DateTime?      @map("email_sent_at") @db.Timestamp
+  retryCount      Int            @default(0) @map("retry_count")
+  status          PaymentStatus  @default(pending)
+  errorMessage    String?        @map("error_message") @db.Text
+  offerId         Int?           @map("offer_id")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamp
+
+  // Relations
+  investor        Investor       @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  token           Token          @relation(fields: [assetCode], references: [assetCode], onDelete: Cascade)
+  offer           Offer?         @relation(fields: [offerId], references: [id], onDelete: SetNull)
+
+  @@unique([investorId, assetCode, paymentDate, transactionHash])
+  @@index([investorId])
+  @@index([assetCode])
+  @@index([paymentDate])
+  @@index([status])
+  @@index([offerId])
+  @@index([investorId, assetCode, paymentDate(sort: Desc)])
+  @@index([investorId, paymentDate])
+  @@index([paymentDate(sort: Desc), assetCode])
+  @@map("interest_payments")
+}
+
+model Company {
+  id                  Int            @id @default(autoincrement())
+  name                String         @db.VarChar(255)
+  cnpj                String         @unique @db.VarChar(18)
+  email               String         @unique @db.VarChar(255)
+  legalRepresentative String         @map("legal_representative") @db.VarChar(255)
+  address             String?        @db.Text
+  phone               String?         @db.VarChar(20)
+  status              CompanyStatus  @default(pending)
+  kycStatus           KYCStatus      @default(pending) @map("kyc_status")
+  kycDocuments        Json           @default("{}") @map("kyc_documents")
+  stellarPublicKey    String?        @map("stellar_public_key") @db.VarChar(56)
+  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamp
+  updatedAt           DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+
+  // Relations
+  users                CompanyUser[]
+  offers               Offer[]
+
+  @@index([email])
+  @@index([cnpj])
+  @@index([status])
+  @@index([kycStatus])
+  @@index([stellarPublicKey])
+  @@map("companies")
+}
+
+model CompanyUser {
+  id                Int       @id @default(autoincrement())
+  companyId        Int       @map("company_id")
+  email            String    @unique @db.VarChar(255)
+  passwordHash     String    @map("password_hash") @db.VarChar(255)
+  name             String    @db.VarChar(255)
+  role             CompanyUserRole @default(user)
+  isActive         Boolean   @default(true) @map("is_active")
+  stellarPublicKey String?   @map("stellar_public_key") @db.VarChar(56)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp
+
+  // Relations
+  company              Company                        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  webauthnCredentials  CompanyUserWebauthnCredential[]
+  offers               Offer[]
+
+  @@index([email])
+  @@index([companyId])
+  @@index([isActive])
+  @@index([stellarPublicKey])
+  @@map("company_users")
+}
+
+model PlatformAdmin {
+  id                Int                @id @default(autoincrement())
+  email             String             @unique @db.VarChar(255)
+  passwordHash      String             @map("password_hash") @db.VarChar(255)
+  name              String             @db.VarChar(255)
+  role              PlatformAdminRole  @default(admin)
+  isActive          Boolean            @default(true) @map("is_active")
+  stellarPublicKey  String?           @map("stellar_public_key") @db.VarChar(56)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamp
+  updatedAt         DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+
+  // Relations
+  webauthnCredentials  PlatformAdminWebauthnCredential[]
+  issuedTokens          Token[]
+  reviewedOffers        Offer[]
+  approvedDistributions  TokenDistribution[]
+
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+  @@index([stellarPublicKey])
+  @@map("platform_admins")
+}
+
+model Offer {
+  id                  Int            @id @default(autoincrement())
+  companyId           Int            @map("company_id")
+  requestedBy         Int            @map("requested_by")
+  assetCode           String         @unique @map("asset_code") @db.VarChar(12)
+  offerName           String         @map("offer_name") @db.VarChar(255)
+  description         String         @db.Text
+  totalSupply         Decimal        @map("total_supply") @db.Decimal(20, 7)
+  annualInterestRate  Decimal?       @map("annual_interest_rate") @db.Decimal(10, 7)
+  offerType           OfferType      @map("offer_type")
+  offerRules          Json           @default("{}") @map("offer_rules")
+  status              OfferStatus    @default(pending_review)
+  rejectionReason     String?        @map("rejection_reason") @db.Text
+  reviewedBy          Int?           @map("reviewed_by")
+  reviewedAt          DateTime?      @map("reviewed_at") @db.Timestamp
+  legalDocuments      Json           @default("{}") @map("legal_documents")
+  dueDiligenceNotes   String?        @map("due_diligence_notes") @db.Text
+  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamp
+  updatedAt           DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+
+  // Relations
+  company             Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requester           CompanyUser        @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
+  reviewer            PlatformAdmin?     @relation(fields: [reviewedBy], references: [id], onDelete: SetNull)
+  tokens              Token[]
+  distributions       TokenDistribution[]
+  interestPayments    InterestPayment[]
+  investments         Investment[]
+
+  @@index([companyId])
+  @@index([status])
+  @@index([assetCode])
+  @@index([offerType])
+  @@index([reviewedBy])
+  @@map("offers")
+}
+
+model Investment {
+  id                Int             @id @default(autoincrement())
+  investorId        Int             @map("investor_id")
+  offerId           Int?            @map("offer_id")
+  assetCode         String          @map("asset_code") @db.VarChar(12)
+  usdcAmount        Decimal         @map("usdc_amount") @db.Decimal(20, 7)
+  tokenAmount       Decimal         @map("token_amount") @db.Decimal(20, 7)
+  status            InvestmentStatus @default(pending_payment)
+  usdcPaymentHash   String?         @map("usdc_payment_hash") @db.VarChar(64)
+  distributionTxHash String?        @map("distribution_tx_hash") @db.VarChar(64)
+  memo              String?        @db.VarChar(28)
+  errorMessage      String?         @map("error_message") @db.Text
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamp
+  updatedAt         DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+
+  // Relations
+  investor          Investor        @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  offer             Offer?          @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  token             Token           @relation(fields: [assetCode], references: [assetCode], onDelete: Restrict)
+
+  @@unique([investorId, offerId, usdcPaymentHash])
+  @@index([investorId])
+  @@index([offerId])
+  @@index([status])
+  @@index([assetCode])
+  @@index([usdcPaymentHash])
+  @@index([distributionTxHash])
+  @@index([createdAt(sort: Desc)])
+  @@map("investments")
+}
+
+model InvestorWebauthnCredential {
+  id            Int       @id @default(autoincrement())
+  investorId    Int       @map("investor_id")
+  credentialId  String    @unique @map("credential_id") @db.Text
+  publicKey    Bytes     @map("public_key")
+  counter      BigInt    @default(0)
+  deviceName   String?   @map("device_name") @db.VarChar(255)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp
+  lastUsedAt   DateTime? @map("last_used_at") @db.Timestamp
+
+  // Relations
+  investor     Investor  @relation(fields: [investorId], references: [id], onDelete: Cascade)
+
+  @@unique([investorId, credentialId])
+  @@index([investorId])
+  @@index([credentialId])
+  @@map("investor_webauthn_credentials")
+}
+
+model CompanyUserWebauthnCredential {
+  id            Int          @id @default(autoincrement())
+  companyUserId Int          @map("company_user_id")
+  credentialId  String       @unique @map("credential_id") @db.Text
+  publicKey    Bytes         @map("public_key")
+  counter      BigInt        @default(0)
+  deviceName   String?       @map("device_name") @db.VarChar(255)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamp
+  lastUsedAt   DateTime?     @map("last_used_at") @db.Timestamp
+
+  // Relations
+  companyUser  CompanyUser   @relation(fields: [companyUserId], references: [id], onDelete: Cascade)
+
+  @@unique([companyUserId, credentialId])
+  @@index([companyUserId])
+  @@index([credentialId])
+  @@map("company_user_webauthn_credentials")
+}
+
+model PlatformAdminWebauthnCredential {
+  id            Int            @id @default(autoincrement())
+  platformAdminId Int          @map("platform_admin_id")
+  credentialId  String         @unique @map("credential_id") @db.Text
+  publicKey    Bytes           @map("public_key")
+  counter      BigInt          @default(0)
+  deviceName   String?         @map("device_name") @db.VarChar(255)
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamp
+  lastUsedAt   DateTime?       @map("last_used_at") @db.Timestamp
+
+  // Relations
+  platformAdmin PlatformAdmin  @relation(fields: [platformAdminId], references: [id], onDelete: Cascade)
+
+  @@unique([platformAdminId, credentialId])
+  @@index([platformAdminId])
+  @@index([credentialId])
+  @@map("platform_admin_webauthn_credentials")
 }
