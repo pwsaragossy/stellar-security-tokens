@@ -1,8 +1,8 @@
-import { query } from '../config/database.js';
+import prisma from '../config/prisma.js';
 import bcrypt from 'bcrypt';
 
 /**
- * Modelo para gerenciar administradores da plataforma
+ * Modelo para gerenciar administradores da plataforma usando Prisma
  */
 export class PlatformAdmin {
   /**
@@ -32,14 +32,26 @@ export class PlatformAdmin {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const result = await query(
-      `INSERT INTO platform_admins (email, password_hash, name, stellar_public_key, role, is_active, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), NOW())
-       RETURNING id, email, name, stellar_public_key, role, is_active, created_at, updated_at`,
-      [email, passwordHash, name, stellarPublicKey || null, role]
-    );
-
-    return result.rows[0];
+    return await prisma.platformAdmin.create({
+      data: {
+        email,
+        passwordHash,
+        name,
+        stellarPublicKey: stellarPublicKey || null,
+        role: role.toLowerCase(),
+        isActive: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        stellarPublicKey: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
   }
 
   /**
@@ -48,11 +60,19 @@ export class PlatformAdmin {
    * @returns {Promise<Object|null>} Admin encontrado ou null
    */
   static async findById(id) {
-    const result = await query(
-      'SELECT id, email, name, stellar_public_key, role, is_active, created_at, updated_at FROM platform_admins WHERE id = $1',
-      [id]
-    );
-    return result.rows[0] || null;
+    return await prisma.platformAdmin.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        stellarPublicKey: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
   }
 
   /**
@@ -61,11 +81,9 @@ export class PlatformAdmin {
    * @returns {Promise<Object|null>} Admin encontrado (inclui password_hash) ou null
    */
   static async findByEmail(email) {
-    const result = await query(
-      'SELECT * FROM platform_admins WHERE email = $1',
-      [email]
-    );
-    return result.rows[0] || null;
+    return await prisma.platformAdmin.findUnique({
+      where: { email },
+    });
   }
 
   /**
@@ -75,11 +93,21 @@ export class PlatformAdmin {
    * @returns {Promise<Array>} Array de administradores
    */
   static async findAll(limit = 100, offset = 0) {
-    const result = await query(
-      'SELECT id, email, name, stellar_public_key, role, is_active, created_at, updated_at FROM platform_admins ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
-    );
-    return result.rows;
+    return await prisma.platformAdmin.findMany({
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        stellarPublicKey: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
   }
 
   /**
@@ -90,22 +118,21 @@ export class PlatformAdmin {
    */
   static async authenticate(email, password) {
     const admin = await this.findByEmail(email);
-    if (!admin || !admin.password_hash) {
+    if (!admin || !admin.passwordHash) {
       return null;
     }
 
-    const isValid = await bcrypt.compare(password, admin.password_hash);
+    const isValid = await bcrypt.compare(password, admin.passwordHash);
     if (!isValid) {
       return null;
     }
 
-    if (!admin.is_active) {
+    if (!admin.isActive) {
       return null;
     }
 
-    // Atualizar last_login seria aqui, mas não temos esse campo ainda
     // Retornar sem password_hash
-    const { password_hash, ...adminWithoutPassword } = admin;
+    const { passwordHash, ...adminWithoutPassword } = admin;
     return adminWithoutPassword;
   }
 
@@ -117,11 +144,18 @@ export class PlatformAdmin {
    */
   static async updatePassword(id, newPassword) {
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    const result = await query(
-      'UPDATE platform_admins SET password_hash = $1, updated_at = NOW() WHERE id = $2',
-      [passwordHash, id]
-    );
-    return result.rowCount > 0;
+    try {
+      await prisma.platformAdmin.update({
+        where: { id },
+        data: { passwordHash },
+      });
+      return true;
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return false;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -133,37 +167,35 @@ export class PlatformAdmin {
   static async update(id, adminData) {
     const { name, role, is_active } = adminData;
 
-    const fields = [];
-    const values = [];
-    let paramCount = 1;
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (role !== undefined) updateData.role = role.toLowerCase();
+    if (is_active !== undefined) updateData.isActive = is_active;
 
-    if (name !== undefined) {
-      fields.push(`name = $${paramCount++}`);
-      values.push(name);
-    }
-    if (role !== undefined) {
-      fields.push(`role = $${paramCount++}`);
-      values.push(role);
-    }
-    if (is_active !== undefined) {
-      fields.push(`is_active = $${paramCount++}`);
-      values.push(is_active);
-    }
-
-    if (fields.length === 0) {
+    if (Object.keys(updateData).length === 0) {
       return await this.findById(id);
     }
 
-    fields.push(`updated_at = NOW()`);
-    values.push(id);
-
-    const result = await query(
-      `UPDATE platform_admins SET ${fields.join(', ')} WHERE id = $${paramCount} 
-       RETURNING id, email, name, stellar_public_key, role, is_active, created_at, updated_at`,
-      values
-    );
-
-    return result.rows[0] || null;
+    try {
+      return await prisma.platformAdmin.update({
+        where: { id },
+        data: updateData,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          stellarPublicKey: true,
+          role: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return null;
+      }
+      throw error;
+    }
   }
 }
-

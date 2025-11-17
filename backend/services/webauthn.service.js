@@ -4,7 +4,7 @@ import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
 } from '@simplewebauthn/server';
-import { query } from '../config/database.js';
+import prisma from '../config/prisma.js';
 
 const rpName = 'Stellar Security Tokens';
 const rpID = process.env.WEBAUTHN_RP_ID || 'localhost';
@@ -38,7 +38,7 @@ export class WebAuthnService {
       timeout: 60000,
       attestationType: 'none',
       excludeCredentials: existingCredentials.map(cred => ({
-        id: Buffer.from(cred.credential_id, 'base64url'),
+        id: Buffer.from(cred.credentialId, 'base64url'),
         type: 'public-key',
         transports: ['internal'],
       })),
@@ -108,7 +108,7 @@ export class WebAuthnService {
       rpID,
       timeout: 60000,
       allowCredentials: credentials.map(cred => ({
-        id: Buffer.from(cred.credential_id, 'base64url'),
+        id: Buffer.from(cred.credentialId, 'base64url'),
         type: 'public-key',
         transports: ['internal'],
       })),
@@ -146,7 +146,7 @@ export class WebAuthnService {
       expectedRPID: rpID,
       credential: {
         id: credentialIdBuffer,
-        publicKey: Buffer.from(credential.public_key),
+        publicKey: Buffer.from(credential.publicKey),
         counter: credential.counter,
       },
       requireUserVerification: true,
@@ -155,10 +155,10 @@ export class WebAuthnService {
     if (verification.verified) {
       await this.updateCredentialCounter(
         userType,
-        credential.id,
+        credential.credentialId,
         verification.authenticationInfo.newCounter
       );
-      await this.updateCredentialLastUsed(userType, credential.id);
+      await this.updateCredentialLastUsed(userType, credential.credentialId);
     }
 
     return verification;
@@ -169,17 +169,27 @@ export class WebAuthnService {
    * @private
    */
   static async getUserCredentials(userType, userId) {
-    const tableName = this.getCredentialsTableName(userType);
-    const userIdColumn = this.getUserIdColumnName(userType);
-
-    const result = await query(
-      `SELECT id, credential_id, public_key, counter, device_name, last_used_at
-       FROM ${tableName}
-       WHERE ${userIdColumn} = $1`,
-      [userId]
-    );
-
-    return result.rows;
+    const model = this.getPrismaModel(userType);
+    const credentials = await prisma[model].findMany({
+      where: { [this.getUserIdFieldName(userType)]: userId },
+      select: {
+        id: true,
+        credentialId: true,
+        publicKey: true,
+        counter: true,
+        deviceName: true,
+        lastUsedAt: true,
+      },
+    });
+    
+    // Convert to legacy format for compatibility
+    return credentials.map(cred => ({
+      ...cred,
+      credential_id: cred.credentialId,
+      public_key: cred.publicKey,
+      device_name: cred.deviceName,
+      last_used_at: cred.lastUsedAt,
+    }));
   }
 
   /**
@@ -187,16 +197,27 @@ export class WebAuthnService {
    * @private
    */
   static async getCredentialById(userType, credentialId) {
-    const tableName = this.getCredentialsTableName(userType);
-
-    const result = await query(
-      `SELECT id, credential_id, public_key, counter, device_name
-       FROM ${tableName}
-       WHERE credential_id = $1`,
-      [credentialId]
-    );
-
-    return result.rows[0] || null;
+    const model = this.getPrismaModel(userType);
+    const credential = await prisma[model].findUnique({
+      where: { credentialId },
+      select: {
+        id: true,
+        credentialId: true,
+        publicKey: true,
+        counter: true,
+        deviceName: true,
+      },
+    });
+    
+    if (!credential) return null;
+    
+    // Convert to legacy format for compatibility
+    return {
+      ...credential,
+      credential_id: credential.credentialId,
+      public_key: credential.publicKey,
+      device_name: credential.deviceName,
+    };
   }
 
   /**
@@ -204,18 +225,38 @@ export class WebAuthnService {
    * @private
    */
   static async saveCredential(userType, userId, credentialId, publicKey, counter, deviceName) {
-    const tableName = this.getCredentialsTableName(userType);
-    const userIdColumn = this.getUserIdColumnName(userType);
+    const model = this.getPrismaModel(userType);
+    const userIdField = this.getUserIdFieldName(userType);
 
-    await query(
-      `INSERT INTO ${tableName} (${userIdColumn}, credential_id, public_key, counter, device_name, created_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
-       ON CONFLICT (${userIdColumn}, credential_id) DO UPDATE
-       SET public_key = EXCLUDED.public_key,
-           counter = EXCLUDED.counter,
-           device_name = COALESCE(EXCLUDED.device_name, ${tableName}.device_name)`,
-      [userId, credentialId, publicKey, counter, deviceName]
-    );
+    // Prisma doesn't support composite unique keys in upsert where clause directly
+    // So we try to find first, then update or create
+    const existing = await prisma[model].findFirst({
+      where: {
+        [userIdField]: userId,
+        credentialId,
+      },
+    });
+
+    if (existing) {
+      await prisma[model].update({
+        where: { id: existing.id },
+        data: {
+          publicKey,
+          counter,
+          deviceName: deviceName || existing.deviceName,
+        },
+      });
+    } else {
+      await prisma[model].create({
+        data: {
+          [userIdField]: userId,
+          credentialId,
+          publicKey,
+          counter,
+          deviceName: deviceName || null,
+        },
+      });
+    }
   }
 
   /**
@@ -223,14 +264,11 @@ export class WebAuthnService {
    * @private
    */
   static async updateCredentialCounter(userType, credentialId, newCounter) {
-    const tableName = this.getCredentialsTableName(userType);
-
-    await query(
-      `UPDATE ${tableName}
-       SET counter = $1, updated_at = NOW()
-       WHERE credential_id = $2`,
-      [newCounter, credentialId]
-    );
+    const model = this.getPrismaModel(userType);
+    await prisma[model].update({
+      where: { credentialId },
+      data: { counter: newCounter },
+    });
   }
 
   /**
@@ -238,18 +276,42 @@ export class WebAuthnService {
    * @private
    */
   static async updateCredentialLastUsed(userType, credentialId) {
-    const tableName = this.getCredentialsTableName(userType);
-
-    await query(
-      `UPDATE ${tableName}
-       SET last_used_at = NOW()
-       WHERE credential_id = $1`,
-      [credentialId]
-    );
+    const model = this.getPrismaModel(userType);
+    await prisma[model].update({
+      where: { credentialId },
+      data: { lastUsedAt: new Date() },
+    });
   }
 
   /**
-   * Obtém nome da tabela de credenciais
+   * Obtém nome do modelo Prisma
+   * @private
+   */
+  static getPrismaModel(userType) {
+    const models = {
+      investor: 'investorWebauthnCredential',
+      company_user: 'companyUserWebauthnCredential',
+      platform_admin: 'platformAdminWebauthnCredential',
+    };
+    return models[userType];
+  }
+
+  /**
+   * Obtém nome do campo de ID do usuário no Prisma
+   * @private
+   */
+  static getUserIdFieldName(userType) {
+    const fields = {
+      investor: 'investorId',
+      company_user: 'companyUserId',
+      platform_admin: 'platformAdminId',
+    };
+    return fields[userType];
+  }
+
+
+  /**
+   * Obtém nome da tabela de credenciais (legacy, mantido para compatibilidade)
    * @private
    */
   static getCredentialsTableName(userType) {
@@ -262,7 +324,7 @@ export class WebAuthnService {
   }
 
   /**
-   * Obtém nome da coluna de ID do usuário
+   * Obtém nome da coluna de ID do usuário (legacy, mantido para compatibilidade)
    * @private
    */
   static getUserIdColumnName(userType) {

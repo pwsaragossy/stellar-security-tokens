@@ -4,7 +4,7 @@ import { CompanyUser } from '../models/CompanyUser.js';
 import { PlatformAdmin } from '../models/PlatformAdmin.js';
 import { StellarService } from '../services/stellar.service.js';
 import { generateToken } from '../middleware/auth.js';
-import { query } from '../config/database.js';
+import prisma from '../config/prisma.js';
 import bcrypt from 'bcrypt';
 
 /**
@@ -39,11 +39,7 @@ export class DevController {
         });
 
         // Adicionar senha
-        const passwordHash = await bcrypt.hash(MOCK_PASSWORD, 10);
-        await query(
-          'UPDATE investors SET password_hash = $1 WHERE id = $2',
-          [passwordHash, investor.id]
-        );
+        await Investor.updatePassword(investor.id, MOCK_PASSWORD);
       }
 
       // Gerar token

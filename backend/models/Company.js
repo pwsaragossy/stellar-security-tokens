@@ -1,7 +1,7 @@
-import { query } from '../config/database.js';
+import prisma from '../config/prisma.js';
 
 /**
- * Modelo para gerenciar empresas no banco de dados
+ * Modelo para gerenciar empresas no banco de dados usando Prisma
  */
 export class Company {
   /**
@@ -43,16 +43,20 @@ export class Company {
       throw new Error('stellarPublicKey deve ter 56 caracteres e começar com G');
     }
 
-    const result = await query(
-      `INSERT INTO companies (
-        name, cnpj, email, legal_representative, stellar_public_key, address, phone,
-        status, kyc_status, kyc_documents, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
-      RETURNING *`,
-      [name, cnpj, email, legal_representative, stellarPublicKey, address || null, phone || null, status, kyc_status, JSON.stringify(kyc_documents)]
-    );
-
-    return result.rows[0];
+    return await prisma.company.create({
+      data: {
+        name,
+        cnpj,
+        email,
+        legalRepresentative: legal_representative,
+        stellarPublicKey,
+        address: address || null,
+        phone: phone || null,
+        status: status.toLowerCase(),
+        kycStatus: kyc_status.toLowerCase(),
+        kycDocuments: kyc_documents,
+      },
+    });
   }
 
   /**
@@ -61,8 +65,9 @@ export class Company {
    * @returns {Promise<Object|null>} Empresa encontrada ou null
    */
   static async findById(id) {
-    const result = await query('SELECT * FROM companies WHERE id = $1', [id]);
-    return result.rows[0] || null;
+    return await prisma.company.findUnique({
+      where: { id },
+    });
   }
 
   /**
@@ -71,8 +76,9 @@ export class Company {
    * @returns {Promise<Object|null>} Empresa encontrada ou null
    */
   static async findByEmail(email) {
-    const result = await query('SELECT * FROM companies WHERE email = $1', [email]);
-    return result.rows[0] || null;
+    return await prisma.company.findUnique({
+      where: { email },
+    });
   }
 
   /**
@@ -81,8 +87,9 @@ export class Company {
    * @returns {Promise<Object|null>} Empresa encontrada ou null
    */
   static async findByCnpj(cnpj) {
-    const result = await query('SELECT * FROM companies WHERE cnpj = $1', [cnpj]);
-    return result.rows[0] || null;
+    return await prisma.company.findUnique({
+      where: { cnpj },
+    });
   }
 
   /**
@@ -93,19 +100,14 @@ export class Company {
    * @returns {Promise<Array>} Array de empresas
    */
   static async findAll(limit = 100, offset = 0, status = null) {
-    if (status) {
-      const result = await query(
-        'SELECT * FROM companies WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
-        [status, limit, offset]
-      );
-      return result.rows;
-    }
-
-    const result = await query(
-      'SELECT * FROM companies ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
-    );
-    return result.rows;
+    const where = status ? { status: status.toLowerCase() } : {};
+    
+    return await prisma.company.findMany({
+      where,
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -126,56 +128,31 @@ export class Company {
       kyc_documents,
     } = companyData;
 
-    const fields = [];
-    const values = [];
-    let paramCount = 1;
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (email !== undefined) updateData.email = email;
+    if (legal_representative !== undefined) updateData.legalRepresentative = legal_representative;
+    if (address !== undefined) updateData.address = address;
+    if (phone !== undefined) updateData.phone = phone;
+    if (status !== undefined) updateData.status = status.toLowerCase();
+    if (kyc_status !== undefined) updateData.kycStatus = kyc_status.toLowerCase();
+    if (kyc_documents !== undefined) updateData.kycDocuments = kyc_documents;
 
-    if (name !== undefined) {
-      fields.push(`name = $${paramCount++}`);
-      values.push(name);
-    }
-    if (email !== undefined) {
-      fields.push(`email = $${paramCount++}`);
-      values.push(email);
-    }
-    if (legal_representative !== undefined) {
-      fields.push(`legal_representative = $${paramCount++}`);
-      values.push(legal_representative);
-    }
-    if (address !== undefined) {
-      fields.push(`address = $${paramCount++}`);
-      values.push(address);
-    }
-    if (phone !== undefined) {
-      fields.push(`phone = $${paramCount++}`);
-      values.push(phone);
-    }
-    if (status !== undefined) {
-      fields.push(`status = $${paramCount++}`);
-      values.push(status);
-    }
-    if (kyc_status !== undefined) {
-      fields.push(`kyc_status = $${paramCount++}`);
-      values.push(kyc_status);
-    }
-    if (kyc_documents !== undefined) {
-      fields.push(`kyc_documents = $${paramCount++}`);
-      values.push(JSON.stringify(kyc_documents));
-    }
-
-    if (fields.length === 0) {
+    if (Object.keys(updateData).length === 0) {
       return await this.findById(id);
     }
 
-    fields.push(`updated_at = NOW()`);
-    values.push(id);
-
-    const result = await query(
-      `UPDATE companies SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
-      values
-    );
-
-    return result.rows[0] || null;
+    try {
+      return await prisma.company.update({
+        where: { id },
+        data: updateData,
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return null;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -185,11 +162,16 @@ export class Company {
    * @returns {Promise<Object|null>} Empresa atualizada ou null
    */
   static async updateStatus(id, status) {
-    const result = await query(
-      'UPDATE companies SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-      [status, id]
-    );
-    return result.rows[0] || null;
+    try {
+      return await prisma.company.update({
+        where: { id },
+        data: { status: status.toLowerCase() },
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return null;
+      }
+      throw error;
+    }
   }
 }
-

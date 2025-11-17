@@ -1,5 +1,5 @@
 import { PaymentService } from '../services/payment.service.js';
-import { query } from '../config/database.js';
+import prisma from '../config/prisma.js';
 
 /**
  * Processa pagamentos de juros mensais manualmente
@@ -29,93 +29,66 @@ export const getPaymentHistory = async (req, res, next) => {
   try {
     const { assetCode, limit = 100, offset = 0, investorId } = req.query;
 
-    let queryText = `
-      SELECT 
-        ip.*,
-        i.name as investor_name,
-        i.email as investor_email,
-        t.asset_code,
-        t.description as token_description
-      FROM interest_payments ip
-      JOIN investors i ON ip.investor_id = i.id
-      JOIN tokens t ON ip.asset_code = t.asset_code
-      WHERE 1=1
-    `;
-    const queryParams = [];
-    let paramCount = 1;
+    const where = {};
+    if (assetCode) where.assetCode = assetCode;
+    if (investorId) where.investorId = parseInt(investorId, 10);
 
-    if (assetCode) {
-      queryText += ` AND ip.asset_code = $${paramCount++}`;
-      queryParams.push(assetCode);
-    }
+    const [payments, total, summaryData] = await Promise.all([
+      prisma.interestPayment.findMany({
+        where,
+        include: {
+          investor: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+          token: {
+            select: {
+              assetCode: true,
+              description: true,
+            },
+          },
+        },
+        take: parseInt(limit, 10),
+        skip: parseInt(offset, 10),
+        orderBy: [
+          { paymentDate: 'desc' },
+          { createdAt: 'desc' },
+        ],
+      }),
+      prisma.interestPayment.count({ where }),
+      prisma.interestPayment.findMany({
+        where,
+        select: {
+          investorId: true,
+          usdcAmount: true,
+        },
+      }),
+    ]);
 
-    if (investorId) {
-      queryText += ` AND ip.investor_id = $${paramCount++}`;
-      queryParams.push(parseInt(investorId, 10));
-    }
+    const uniqueInvestors = new Set(summaryData.map(p => p.investorId)).size;
+    const totalUsdcPaid = summaryData.reduce((sum, p) => sum + Number(p.usdcAmount), 0);
+    const averagePayment = summaryData.length > 0 ? totalUsdcPaid / summaryData.length : 0;
 
-    queryText += ` ORDER BY ip.payment_date DESC, ip.created_at DESC LIMIT $${paramCount++} OFFSET $${paramCount++}`;
-    queryParams.push(parseInt(limit, 10), parseInt(offset, 10));
-
-    const result = await query(queryText, queryParams);
-
-    // Query para contar total (sem LIMIT/OFFSET)
-    let countQueryText = `
-      SELECT COUNT(*) as total 
-      FROM interest_payments ip
-      WHERE 1=1
-    `;
-    const countQueryParams = [];
-    let countParamCount = 1;
-
-    if (assetCode) {
-      countQueryText += ` AND ip.asset_code = $${countParamCount++}`;
-      countQueryParams.push(assetCode);
-    }
-
-    if (investorId) {
-      countQueryText += ` AND ip.investor_id = $${countParamCount++}`;
-      countQueryParams.push(parseInt(investorId, 10));
-    }
-
-    const totalResult = await query(countQueryText, countQueryParams);
-
-    // Query para estatísticas resumidas
-    let summaryQueryText = `
-      SELECT 
-        COUNT(DISTINCT ip.investor_id) as unique_investors,
-        COUNT(*) as total_payments,
-        SUM(ip.usdc_amount) as total_usdc_paid,
-        AVG(ip.usdc_amount) as average_payment
-      FROM interest_payments ip
-      WHERE 1=1
-    `;
-    const summaryQueryParams = [];
-    let summaryParamCount = 1;
-
-    if (assetCode) {
-      summaryQueryText += ` AND ip.asset_code = $${summaryParamCount++}`;
-      summaryQueryParams.push(assetCode);
-    }
-
-    if (investorId) {
-      summaryQueryText += ` AND ip.investor_id = $${summaryParamCount++}`;
-      summaryQueryParams.push(parseInt(investorId, 10));
-    }
-
-    const summaryResult = await query(summaryQueryText, summaryQueryParams);
+    const summary = {
+      unique_investors: uniqueInvestors,
+      total_payments: summaryData.length,
+      total_usdc_paid: totalUsdcPaid,
+      average_payment: averagePayment,
+    };
 
     res.json({
       success: true,
       data: {
-        payments: result.rows,
+        payments,
         pagination: {
-          total: parseInt(totalResult.rows[0].total, 10),
+          total,
           limit: parseInt(limit, 10),
           offset: parseInt(offset, 10),
-          count: result.rows.length,
+          count: payments.length,
         },
-        summary: summaryResult.rows[0],
+        summary,
       },
     });
   } catch (error) {
@@ -130,44 +103,53 @@ export const getPaymentStatistics = async (req, res, next) => {
   try {
     const { assetCode, startDate, endDate } = req.query;
 
-    let queryText = `
-      SELECT 
-        ip.payment_date,
-        COUNT(*) as payment_count,
-        COUNT(DISTINCT ip.investor_id) as unique_investors,
-        SUM(ip.usdc_amount) as total_usdc,
-        AVG(ip.usdc_amount) as average_usdc,
-        MIN(ip.usdc_amount) as min_usdc,
-        MAX(ip.usdc_amount) as max_usdc
-      FROM interest_payments ip
-      WHERE ip.status = 'completed'
-    `;
-    const queryParams = [];
-    let paramCount = 1;
+    const where = { status: 'completed' };
+    if (assetCode) where.assetCode = assetCode;
+    if (startDate) where.paymentDate = { ...where.paymentDate, gte: new Date(startDate) };
+    if (endDate) where.paymentDate = { ...where.paymentDate, lte: new Date(endDate) };
 
-    if (assetCode) {
-      queryText += ` AND ip.asset_code = $${paramCount++}`;
-      queryParams.push(assetCode);
+    const payments = await prisma.interestPayment.findMany({
+      where,
+      select: {
+        paymentDate: true,
+        usdcAmount: true,
+        investorId: true,
+      },
+    });
+
+    // Group by date
+    const byDate = {};
+    for (const payment of payments) {
+      const dateKey = payment.paymentDate.toISOString().split('T')[0];
+      if (!byDate[dateKey]) {
+        byDate[dateKey] = {
+          payment_date: dateKey,
+          payment_count: 0,
+          unique_investors: new Set(),
+          total_usdc: 0,
+          amounts: [],
+        };
+      }
+      byDate[dateKey].payment_count++;
+      byDate[dateKey].unique_investors.add(payment.investorId);
+      byDate[dateKey].total_usdc += Number(payment.usdcAmount);
+      byDate[dateKey].amounts.push(Number(payment.usdcAmount));
     }
 
-    if (startDate) {
-      queryText += ` AND ip.payment_date >= $${paramCount++}`;
-      queryParams.push(startDate);
-    }
-
-    if (endDate) {
-      queryText += ` AND ip.payment_date <= $${paramCount++}`;
-      queryParams.push(endDate);
-    }
-
-    queryText += ` GROUP BY ip.payment_date ORDER BY ip.payment_date DESC`;
-
-    const result = await query(queryText, queryParams);
+    const statistics = Object.values(byDate).map(stat => ({
+      payment_date: stat.payment_date,
+      payment_count: stat.payment_count,
+      unique_investors: stat.unique_investors.size,
+      total_usdc: stat.total_usdc,
+      average_usdc: stat.total_usdc / stat.payment_count,
+      min_usdc: Math.min(...stat.amounts),
+      max_usdc: Math.max(...stat.amounts),
+    })).sort((a, b) => b.payment_date.localeCompare(a.payment_date));
 
     res.json({
       success: true,
       data: {
-        statistics: result.rows,
+        statistics,
         period: {
           startDate: startDate || null,
           endDate: endDate || null,

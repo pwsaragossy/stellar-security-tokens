@@ -1,7 +1,7 @@
-import { query } from '../config/database.js';
+import prisma from '../config/prisma.js';
 
 /**
- * Modelo para gerenciar ofertas de tokenização
+ * Modelo para gerenciar ofertas de tokenização usando Prisma
  */
 export class Offer {
   /**
@@ -34,28 +34,21 @@ export class Offer {
       legal_documents = {},
     } = offerData;
 
-    const result = await query(
-      `INSERT INTO offers (
-        company_id, requested_by, asset_code, offer_name, description,
-        total_supply, annual_interest_rate, offer_type, offer_rules,
-        legal_documents, status, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending_review', NOW(), NOW())
-      RETURNING *`,
-      [
-        company_id,
-        requested_by,
-        asset_code,
-        offer_name,
+    return await prisma.offer.create({
+      data: {
+        companyId: company_id,
+        requestedBy: requested_by,
+        assetCode: asset_code,
+        offerName: offer_name,
         description,
-        total_supply,
-        annual_interest_rate || null,
-        offer_type,
-        JSON.stringify(offer_rules),
-        JSON.stringify(legal_documents),
-      ]
-    );
-
-    return result.rows[0];
+        totalSupply: total_supply,
+        annualInterestRate: annual_interest_rate || null,
+        offerType: offer_type.toLowerCase(),
+        offerRules: offer_rules,
+        legalDocuments: legal_documents,
+        status: 'pending_review',
+      },
+    });
   }
 
   /**
@@ -64,8 +57,9 @@ export class Offer {
    * @returns {Promise<Object|null>} Oferta encontrada ou null
    */
   static async findById(id) {
-    const result = await query('SELECT * FROM offers WHERE id = $1', [id]);
-    return result.rows[0] || null;
+    return await prisma.offer.findUnique({
+      where: { id },
+    });
   }
 
   /**
@@ -74,8 +68,9 @@ export class Offer {
    * @returns {Promise<Object|null>} Oferta encontrada ou null
    */
   static async findByAssetCode(assetCode) {
-    const result = await query('SELECT * FROM offers WHERE asset_code = $1', [assetCode]);
-    return result.rows[0] || null;
+    return await prisma.offer.findUnique({
+      where: { assetCode },
+    });
   }
 
   /**
@@ -86,11 +81,12 @@ export class Offer {
    * @returns {Promise<Array>} Array de ofertas
    */
   static async findByCompany(companyId, limit = 100, offset = 0) {
-    const result = await query(
-      'SELECT * FROM offers WHERE company_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
-      [companyId, limit, offset]
-    );
-    return result.rows;
+    return await prisma.offer.findMany({
+      where: { companyId },
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -101,19 +97,14 @@ export class Offer {
    * @returns {Promise<Array>} Array de ofertas
    */
   static async findAll(limit = 100, offset = 0, status = null) {
-    if (status) {
-      const result = await query(
-        'SELECT * FROM offers WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
-        [status, limit, offset]
-      );
-      return result.rows;
-    }
-
-    const result = await query(
-      'SELECT * FROM offers ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
-    );
-    return result.rows;
+    const where = status ? { status: status.toLowerCase() } : {};
+    
+    return await prisma.offer.findMany({
+      where,
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -124,23 +115,17 @@ export class Offer {
    * @returns {Promise<Array>} Array de ofertas ativas
    */
   static async findAllActive(limit = 100, offset = 0, offerType = null) {
+    const where = { status: 'active' };
     if (offerType) {
-      const result = await query(
-        `SELECT * FROM offers 
-         WHERE status = 'active' AND offer_type = $1 
-         ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-        [offerType, limit, offset]
-      );
-      return result.rows;
+      where.offerType = offerType.toLowerCase();
     }
-
-    const result = await query(
-      `SELECT * FROM offers 
-       WHERE status = 'active' 
-       ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
-    return result.rows;
+    
+    return await prisma.offer.findMany({
+      where,
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -151,11 +136,12 @@ export class Offer {
    * @returns {Promise<Array>} Array de ofertas
    */
   static async getOffersByType(offerType, limit = 100, offset = 0) {
-    const result = await query(
-      'SELECT * FROM offers WHERE offer_type = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
-      [offerType, limit, offset]
-    );
-    return result.rows;
+    return await prisma.offer.findMany({
+      where: { offerType: offerType.toLowerCase() },
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -167,29 +153,30 @@ export class Offer {
    * @returns {Promise<Object|null>} Oferta atualizada ou null
    */
   static async updateStatus(id, status, reviewedBy = null, rejectionReason = null) {
-    const fields = ['status = $1', 'updated_at = NOW()'];
-    const values = [status];
-    let paramCount = 2;
+    const updateData = {
+      status: status.toLowerCase(),
+    };
 
     if (reviewedBy) {
-      fields.push(`reviewed_by = $${paramCount++}`);
-      fields.push(`reviewed_at = NOW()`);
-      values.push(reviewedBy);
+      updateData.reviewedBy = reviewedBy;
+      updateData.reviewedAt = new Date();
     }
 
     if (rejectionReason !== null) {
-      fields.push(`rejection_reason = $${paramCount++}`);
-      values.push(rejectionReason);
+      updateData.rejectionReason = rejectionReason;
     }
 
-    values.push(id);
-
-    const result = await query(
-      `UPDATE offers SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
-      values
-    );
-
-    return result.rows[0] || null;
+    try {
+      return await prisma.offer.update({
+        where: { id },
+        data: updateData,
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return null;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -199,11 +186,17 @@ export class Offer {
    * @returns {Promise<Object|null>} Oferta atualizada ou null
    */
   static async addDueDiligenceNotes(id, notes) {
-    const result = await query(
-      'UPDATE offers SET due_diligence_notes = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-      [notes, id]
-    );
-    return result.rows[0] || null;
+    try {
+      return await prisma.offer.update({
+        where: { id },
+        data: { dueDiligenceNotes: notes },
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return null;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -213,11 +206,17 @@ export class Offer {
    * @returns {Promise<Object|null>} Oferta atualizada ou null
    */
   static async addLegalDocuments(id, legalDocuments) {
-    const result = await query(
-      'UPDATE offers SET legal_documents = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-      [JSON.stringify(legalDocuments), id]
-    );
-    return result.rows[0] || null;
+    try {
+      return await prisma.offer.update({
+        where: { id },
+        data: { legalDocuments },
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return null;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -227,11 +226,17 @@ export class Offer {
    * @returns {Promise<Object|null>} Oferta atualizada ou null
    */
   static async updateOfferRules(id, offerRules) {
-    const result = await query(
-      'UPDATE offers SET offer_rules = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-      [JSON.stringify(offerRules), id]
-    );
-    return result.rows[0] || null;
+    try {
+      return await prisma.offer.update({
+        where: { id },
+        data: { offerRules },
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return null;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -249,44 +254,27 @@ export class Offer {
       offer_rules,
     } = offerData;
 
-    const fields = [];
-    const values = [];
-    let paramCount = 1;
+    const updateData = {};
+    if (offer_name !== undefined) updateData.offerName = offer_name;
+    if (description !== undefined) updateData.description = description;
+    if (total_supply !== undefined) updateData.totalSupply = total_supply;
+    if (annual_interest_rate !== undefined) updateData.annualInterestRate = annual_interest_rate;
+    if (offer_rules !== undefined) updateData.offerRules = offer_rules;
 
-    if (offer_name !== undefined) {
-      fields.push(`offer_name = $${paramCount++}`);
-      values.push(offer_name);
-    }
-    if (description !== undefined) {
-      fields.push(`description = $${paramCount++}`);
-      values.push(description);
-    }
-    if (total_supply !== undefined) {
-      fields.push(`total_supply = $${paramCount++}`);
-      values.push(total_supply);
-    }
-    if (annual_interest_rate !== undefined) {
-      fields.push(`annual_interest_rate = $${paramCount++}`);
-      values.push(annual_interest_rate);
-    }
-    if (offer_rules !== undefined) {
-      fields.push(`offer_rules = $${paramCount++}`);
-      values.push(JSON.stringify(offer_rules));
-    }
-
-    if (fields.length === 0) {
+    if (Object.keys(updateData).length === 0) {
       return await this.findById(id);
     }
 
-    fields.push(`updated_at = NOW()`);
-    values.push(id);
-
-    const result = await query(
-      `UPDATE offers SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
-      values
-    );
-
-    return result.rows[0] || null;
+    try {
+      return await prisma.offer.update({
+        where: { id },
+        data: updateData,
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return null;
+      }
+      throw error;
+    }
   }
 }
-

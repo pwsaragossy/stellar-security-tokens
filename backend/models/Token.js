@@ -1,7 +1,7 @@
-import { query } from '../config/database.js';
+import prisma from '../config/prisma.js';
 
 /**
- * Modelo para gerenciar tokens e distribuições no banco de dados
+ * Modelo para gerenciar tokens e distribuições no banco de dados usando Prisma
  */
 export class Token {
   /**
@@ -19,14 +19,16 @@ export class Token {
   static async create(tokenData) {
     const { assetCode, issuerPublicKey, totalSupply, description, offerId, issuedBy } = tokenData;
     
-    const result = await query(
-      `INSERT INTO tokens (asset_code, issuer_public_key, total_supply, description, offer_id, issued_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-       RETURNING *`,
-      [assetCode, issuerPublicKey, totalSupply, description, offerId || null, issuedBy || null]
-    );
-    
-    return result.rows[0];
+    return await prisma.token.create({
+      data: {
+        assetCode,
+        issuerPublicKey,
+        totalSupply,
+        description,
+        offerId: offerId || null,
+        issuedBy: issuedBy || null,
+      },
+    });
   }
 
   /**
@@ -35,11 +37,9 @@ export class Token {
    * @returns {Promise<Object|null>} Token encontrado ou null
    */
   static async findByAssetCode(assetCode) {
-    const result = await query(
-      'SELECT * FROM tokens WHERE asset_code = $1',
-      [assetCode]
-    );
-    return result.rows[0] || null;
+    return await prisma.token.findUnique({
+      where: { assetCode },
+    });
   }
 
   /**
@@ -50,19 +50,14 @@ export class Token {
    * @returns {Promise<Array>} Array de tokens ordenados por data de criação (mais recentes primeiro)
    */
   static async findAll(limit = 100, offset = 0, offerId = null) {
-    if (offerId) {
-      const result = await query(
-        'SELECT * FROM tokens WHERE offer_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
-        [offerId, limit, offset]
-      );
-      return result.rows;
-    }
-
-    const result = await query(
-      'SELECT * FROM tokens ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
-    );
-    return result.rows;
+    const where = offerId ? { offerId } : {};
+    
+    return await prisma.token.findMany({
+      where,
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -71,11 +66,10 @@ export class Token {
    * @returns {Promise<Array>} Array de tokens relacionados à oferta
    */
   static async findByOffer(offerId) {
-    const result = await query(
-      'SELECT * FROM tokens WHERE offer_id = $1 ORDER BY created_at DESC',
-      [offerId]
-    );
-    return result.rows;
+    return await prisma.token.findMany({
+      where: { offerId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -85,15 +79,16 @@ export class Token {
    * @returns {Promise<Array>} Array de tokens com ofertas ativas
    */
   static async findActiveTokens(limit = 100, offset = 0) {
-    const result = await query(
-      `SELECT t.* FROM tokens t
-       INNER JOIN offers o ON t.offer_id = o.id
-       WHERE o.status = 'active'
-       ORDER BY t.created_at DESC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
-    return result.rows;
+    return await prisma.token.findMany({
+      where: {
+        offer: {
+          status: 'active',
+        },
+      },
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -102,11 +97,9 @@ export class Token {
    * @returns {Promise<Object|null>} Distribuição encontrada ou null
    */
   static async findDistributionByUSDC(usdcPaymentHash) {
-    const result = await query(
-      'SELECT * FROM token_distributions WHERE usdc_payment_hash = $1 LIMIT 1',
-      [usdcPaymentHash]
-    );
-    return result.rows[0] || null;
+    return await prisma.tokenDistribution.findFirst({
+      where: { usdcPaymentHash },
+    });
   }
 
   /**
@@ -115,11 +108,9 @@ export class Token {
    * @returns {Promise<Object|null>} Distribuição encontrada ou null
    */
   static async findDistributionByMemo(memo) {
-    const result = await query(
-      'SELECT * FROM token_distributions WHERE memo = $1 LIMIT 1',
-      [memo]
-    );
-    return result.rows[0] || null;
+    return await prisma.tokenDistribution.findFirst({
+      where: { memo },
+    });
   }
 
   /**
@@ -132,12 +123,11 @@ export class Token {
 
     // Verificar por transaction_hash primeiro (mais confiável)
     if (transactionHash) {
-      const byTxHash = await query(
-        'SELECT * FROM token_distributions WHERE transaction_hash = $1 LIMIT 1',
-        [transactionHash]
-      );
-      if (byTxHash.rows[0]) {
-        return byTxHash.rows[0];
+      const byTxHash = await prisma.tokenDistribution.findUnique({
+        where: { transactionHash },
+      });
+      if (byTxHash) {
+        return byTxHash;
       }
     }
 
@@ -189,24 +179,17 @@ export class Token {
       return existing;
     }
     
-    const result = await query(
-      `INSERT INTO token_distributions (
-        investor_id, asset_code, amount, transaction_hash, 
-        usdc_payment_hash, offer_id, memo, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-      RETURNING *`,
-      [
-        investorId, 
-        assetCode, 
-        amount, 
-        transactionHash, 
-        usdcPaymentHash || null, 
-        offerId || null,
-        memo || null,
-      ]
-    );
-    
-    return result.rows[0];
+    return await prisma.tokenDistribution.create({
+      data: {
+        investorId,
+        assetCode,
+        amount,
+        transactionHash,
+        usdcPaymentHash: usdcPaymentHash || null,
+        offerId: offerId || null,
+        memo: memo || null,
+      },
+    });
   }
 
   /**
@@ -215,15 +198,18 @@ export class Token {
    * @returns {Promise<Array>} Array de distribuições com informações do token, ordenadas por data (mais recentes primeiro)
    */
   static async getDistributionsByInvestor(investorId) {
-    const result = await query(
-      `SELECT td.*, t.asset_code, t.description 
-       FROM token_distributions td
-       JOIN tokens t ON td.asset_code = t.asset_code
-       WHERE td.investor_id = $1
-       ORDER BY td.created_at DESC`,
-      [investorId]
-    );
-    return result.rows;
+    return await prisma.tokenDistribution.findMany({
+      where: { investorId },
+      include: {
+        token: {
+          select: {
+            assetCode: true,
+            description: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -232,14 +218,17 @@ export class Token {
    * @returns {Promise<Array>} Array de distribuições com informações dos investidores, ordenadas por data (mais recentes primeiro)
    */
   static async getDistributionsByAsset(assetCode) {
-    const result = await query(
-      `SELECT td.*, i.name as investor_name, i.email as investor_email
-       FROM token_distributions td
-       JOIN investors i ON td.investor_id = i.id
-       WHERE td.asset_code = $1
-       ORDER BY td.created_at DESC`,
-      [assetCode]
-    );
-    return result.rows;
+    return await prisma.tokenDistribution.findMany({
+      where: { assetCode },
+      include: {
+        investor: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }

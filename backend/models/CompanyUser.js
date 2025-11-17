@@ -1,8 +1,8 @@
-import { query } from '../config/database.js';
+import prisma from '../config/prisma.js';
 import bcrypt from 'bcrypt';
 
 /**
- * Modelo para gerenciar usuários das empresas
+ * Modelo para gerenciar usuários das empresas usando Prisma
  */
 export class CompanyUser {
   /**
@@ -38,14 +38,27 @@ export class CompanyUser {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const result = await query(
-      `INSERT INTO company_users (company_id, email, password_hash, name, stellar_public_key, role, is_active, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
-       RETURNING id, company_id, email, name, stellar_public_key, role, is_active, created_at`,
-      [company_id, email, passwordHash, name, stellarPublicKey, role]
-    );
-
-    return result.rows[0];
+    return await prisma.companyUser.create({
+      data: {
+        companyId: company_id,
+        email,
+        passwordHash,
+        name,
+        stellarPublicKey,
+        role: role.toLowerCase(),
+        isActive: true,
+      },
+      select: {
+        id: true,
+        companyId: true,
+        email: true,
+        name: true,
+        stellarPublicKey: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
   }
 
   /**
@@ -54,11 +67,19 @@ export class CompanyUser {
    * @returns {Promise<Object|null>} Usuário encontrado ou null
    */
   static async findById(id) {
-    const result = await query(
-      'SELECT id, company_id, email, name, stellar_public_key, role, is_active, created_at FROM company_users WHERE id = $1',
-      [id]
-    );
-    return result.rows[0] || null;
+    return await prisma.companyUser.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        companyId: true,
+        email: true,
+        name: true,
+        stellarPublicKey: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
   }
 
   /**
@@ -67,11 +88,9 @@ export class CompanyUser {
    * @returns {Promise<Object|null>} Usuário encontrado (inclui password_hash) ou null
    */
   static async findByEmail(email) {
-    const result = await query(
-      'SELECT * FROM company_users WHERE email = $1',
-      [email]
-    );
-    return result.rows[0] || null;
+    return await prisma.companyUser.findUnique({
+      where: { email },
+    });
   }
 
   /**
@@ -80,11 +99,20 @@ export class CompanyUser {
    * @returns {Promise<Array>} Array de usuários
    */
   static async findByCompany(companyId) {
-    const result = await query(
-      'SELECT id, company_id, email, name, stellar_public_key, role, is_active, created_at FROM company_users WHERE company_id = $1 ORDER BY created_at DESC',
-      [companyId]
-    );
-    return result.rows;
+    return await prisma.companyUser.findMany({
+      where: { companyId },
+      select: {
+        id: true,
+        companyId: true,
+        email: true,
+        name: true,
+        stellarPublicKey: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -95,21 +123,21 @@ export class CompanyUser {
    */
   static async authenticate(email, password) {
     const user = await this.findByEmail(email);
-    if (!user || !user.password_hash) {
+    if (!user || !user.passwordHash) {
       return null;
     }
 
-    const isValid = await bcrypt.compare(password, user.password_hash);
+    const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) {
       return null;
     }
 
-    if (!user.is_active) {
+    if (!user.isActive) {
       return null;
     }
 
     // Retornar sem password_hash
-    const { password_hash, ...userWithoutPassword } = user;
+    const { passwordHash, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }
 
@@ -121,11 +149,18 @@ export class CompanyUser {
    */
   static async updatePassword(id, newPassword) {
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    const result = await query(
-      'UPDATE company_users SET password_hash = $1 WHERE id = $2',
-      [passwordHash, id]
-    );
-    return result.rowCount > 0;
+    try {
+      await prisma.companyUser.update({
+        where: { id },
+        data: { passwordHash },
+      });
+      return true;
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return false;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -137,36 +172,35 @@ export class CompanyUser {
   static async update(id, userData) {
     const { name, role, is_active } = userData;
 
-    const fields = [];
-    const values = [];
-    let paramCount = 1;
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (role !== undefined) updateData.role = role.toLowerCase();
+    if (is_active !== undefined) updateData.isActive = is_active;
 
-    if (name !== undefined) {
-      fields.push(`name = $${paramCount++}`);
-      values.push(name);
-    }
-    if (role !== undefined) {
-      fields.push(`role = $${paramCount++}`);
-      values.push(role);
-    }
-    if (is_active !== undefined) {
-      fields.push(`is_active = $${paramCount++}`);
-      values.push(is_active);
-    }
-
-    if (fields.length === 0) {
+    if (Object.keys(updateData).length === 0) {
       return await this.findById(id);
     }
 
-    values.push(id);
-
-    const result = await query(
-      `UPDATE company_users SET ${fields.join(', ')} WHERE id = $${paramCount} 
-       RETURNING id, company_id, email, name, stellar_public_key, role, is_active, created_at`,
-      values
-    );
-
-    return result.rows[0] || null;
+    try {
+      return await prisma.companyUser.update({
+        where: { id },
+        data: updateData,
+        select: {
+          id: true,
+          companyId: true,
+          email: true,
+          name: true,
+          stellarPublicKey: true,
+          role: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return null;
+      }
+      throw error;
+    }
   }
 }
-

@@ -1,4 +1,4 @@
-import { query } from '../config/database.js';
+import prisma from '../config/prisma.js';
 import { Investment } from '../models/Investment.js';
 
 /**
@@ -16,66 +16,76 @@ export class InvestmentMetricsService {
   static async getMetrics(filters = {}) {
     const { offerId, startDate, endDate } = filters;
 
-    let whereClause = '1=1';
-    const params = [];
-    let paramIndex = 1;
-
-    if (offerId) {
-      whereClause += ` AND offer_id = $${paramIndex++}`;
-      params.push(offerId);
-    }
-
-    if (startDate) {
-      whereClause += ` AND created_at >= $${paramIndex++}`;
-      params.push(startDate);
-    }
-
+    const where = {};
+    if (offerId) where.offerId = offerId;
+    if (startDate) where.createdAt = { ...where.createdAt, gte: new Date(startDate) };
     if (endDate) {
-      whereClause += ` AND created_at <= $${paramIndex++}`;
-      params.push(endDate + ' 23:59:59');
+      const endDateTime = new Date(endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+      where.createdAt = { ...where.createdAt, lte: endDateTime };
     }
 
-    const result = await query(
-      `SELECT 
-        COUNT(*) as total_investments,
-        COUNT(*) FILTER (WHERE status = 'pending_payment') as pending_payment,
-        COUNT(*) FILTER (WHERE status = 'payment_received') as payment_received,
-        COUNT(*) FILTER (WHERE status = 'distributed') as distributed,
-        COUNT(*) FILTER (WHERE status = 'failed') as failed,
-        COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled,
-        COALESCE(SUM(usdc_amount) FILTER (WHERE status = 'distributed'), 0) as total_usdc_invested,
-        COALESCE(SUM(token_amount) FILTER (WHERE status = 'distributed'), 0) as total_tokens_distributed,
-        COALESCE(AVG(EXTRACT(EPOCH FROM (updated_at - created_at))) FILTER (WHERE status = 'distributed'), 0) as avg_processing_time_seconds,
-        COUNT(DISTINCT investor_id) FILTER (WHERE status = 'distributed') as unique_investors
-      FROM investments
-      WHERE ${whereClause}`,
-      params
-    );
+    const [
+      total,
+      pendingPayment,
+      paymentReceived,
+      distributed,
+      failed,
+      cancelled,
+      distributedInvestments,
+      uniqueInvestors,
+    ] = await Promise.all([
+      prisma.investment.count({ where }),
+      prisma.investment.count({ where: { ...where, status: 'pending_payment' } }),
+      prisma.investment.count({ where: { ...where, status: 'payment_received' } }),
+      prisma.investment.count({ where: { ...where, status: 'distributed' } }),
+      prisma.investment.count({ where: { ...where, status: 'failed' } }),
+      prisma.investment.count({ where: { ...where, status: 'cancelled' } }),
+      prisma.investment.findMany({
+        where: { ...where, status: 'distributed' },
+        select: {
+          usdcAmount: true,
+          tokenAmount: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.investment.findMany({
+        where: { ...where, status: 'distributed' },
+        select: { investorId: true },
+        distinct: ['investorId'],
+      }),
+    ]);
 
-    const metrics = result.rows[0];
-
-    // Calcular taxa de sucesso
-    const successRate = metrics.total_investments > 0
-      ? (parseFloat(metrics.distributed) / parseFloat(metrics.total_investments)) * 100
+    const totalUsdcInvested = distributedInvestments.reduce((sum, inv) => sum + Number(inv.usdcAmount), 0);
+    const totalTokensDistributed = distributedInvestments.reduce((sum, inv) => sum + Number(inv.tokenAmount), 0);
+    
+    const avgProcessingTime = distributedInvestments.length > 0
+      ? distributedInvestments.reduce((sum, inv) => {
+          const processingTime = (inv.updatedAt - inv.createdAt) / 1000; // seconds
+          return sum + processingTime;
+        }, 0) / distributedInvestments.length
       : 0;
 
+    const successRate = total > 0 ? (distributed / total) * 100 : 0;
+
     return {
-      total: parseInt(metrics.total_investments, 10),
+      total,
       byStatus: {
-        pending_payment: parseInt(metrics.pending_payment, 10),
-        payment_received: parseInt(metrics.payment_received, 10),
-        distributed: parseInt(metrics.distributed, 10),
-        failed: parseInt(metrics.failed, 10),
-        cancelled: parseInt(metrics.cancelled, 10),
+        pending_payment: pendingPayment,
+        payment_received: paymentReceived,
+        distributed,
+        failed,
+        cancelled,
       },
       totals: {
-        usdcInvested: parseFloat(metrics.total_usdc_invested),
-        tokensDistributed: parseFloat(metrics.total_tokens_distributed),
+        usdcInvested: totalUsdcInvested,
+        tokensDistributed: totalTokensDistributed,
       },
       performance: {
         successRate: parseFloat(successRate.toFixed(2)),
-        avgProcessingTimeSeconds: parseFloat(metrics.avg_processing_time_seconds),
-        uniqueInvestors: parseInt(metrics.unique_investors, 10),
+        avgProcessingTimeSeconds: parseFloat(avgProcessingTime.toFixed(2)),
+        uniqueInvestors: uniqueInvestors.length,
       },
     };
   }
@@ -88,39 +98,66 @@ export class InvestmentMetricsService {
    * @returns {Promise<Array>} Estatísticas por dia
    */
   static async getStatisticsByPeriod(startDate, endDate, offerId = null) {
-    let whereClause = 'created_at >= $1 AND created_at <= $2';
-    const params = [startDate, endDate + ' 23:59:59'];
+    const endDateTime = new Date(endDate);
+    endDateTime.setHours(23, 59, 59, 999);
 
-    if (offerId) {
-      whereClause += ' AND offer_id = $3';
-      params.push(offerId);
+    const where = {
+      createdAt: {
+        gte: new Date(startDate),
+        lte: endDateTime,
+      },
+    };
+    if (offerId) where.offerId = offerId;
+
+    const investments = await prisma.investment.findMany({
+      where,
+      select: {
+        createdAt: true,
+        status: true,
+        usdcAmount: true,
+        tokenAmount: true,
+        investorId: true,
+      },
+    });
+
+    // Group by date
+    const byDate = {};
+    for (const inv of investments) {
+      const dateKey = inv.createdAt.toISOString().split('T')[0];
+      if (!byDate[dateKey]) {
+        byDate[dateKey] = {
+          date: dateKey,
+          totalInvestments: 0,
+          successful: 0,
+          failed: 0,
+          totalUSDC: 0,
+          totalTokens: 0,
+          uniqueInvestors: new Set(),
+        };
+      }
+      
+      byDate[dateKey].totalInvestments++;
+      if (inv.status === 'distributed') {
+        byDate[dateKey].successful++;
+        byDate[dateKey].totalUSDC += Number(inv.usdcAmount);
+        byDate[dateKey].totalTokens += Number(inv.tokenAmount);
+        byDate[dateKey].uniqueInvestors.add(inv.investorId);
+      } else if (inv.status === 'failed') {
+        byDate[dateKey].failed++;
+      }
     }
 
-    const result = await query(
-      `SELECT 
-        DATE(created_at) as date,
-        COUNT(*) as total_investments,
-        COUNT(*) FILTER (WHERE status = 'distributed') as successful,
-        COUNT(*) FILTER (WHERE status = 'failed') as failed,
-        COALESCE(SUM(usdc_amount) FILTER (WHERE status = 'distributed'), 0) as total_usdc,
-        COALESCE(SUM(token_amount) FILTER (WHERE status = 'distributed'), 0) as total_tokens,
-        COUNT(DISTINCT investor_id) as unique_investors
-      FROM investments
-      WHERE ${whereClause}
-      GROUP BY DATE(created_at)
-      ORDER BY date DESC`,
-      params
-    );
-
-    return result.rows.map(row => ({
-      date: row.date.toISOString().split('T')[0],
-      totalInvestments: parseInt(row.total_investments, 10),
-      successful: parseInt(row.successful, 10),
-      failed: parseInt(row.failed, 10),
-      totalUSDC: parseFloat(row.total_usdc),
-      totalTokens: parseFloat(row.total_tokens),
-      uniqueInvestors: parseInt(row.unique_investors, 10),
-    }));
+    return Object.values(byDate)
+      .map(stat => ({
+        date: stat.date,
+        totalInvestments: stat.totalInvestments,
+        successful: stat.successful,
+        failed: stat.failed,
+        totalUSDC: stat.totalUSDC,
+        totalTokens: stat.totalTokens,
+        uniqueInvestors: stat.uniqueInvestors.size,
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
   }
 
   /**
@@ -129,18 +166,25 @@ export class InvestmentMetricsService {
    * @returns {Promise<Array>} Investimentos pendentes
    */
   static async getPendingInvestments(limit = 50) {
-    const result = await query(
-      `SELECT i.*, inv.name as investor_name, inv.email as investor_email, inv.stellar_public_key
-       FROM investments i
-       JOIN investors inv ON i.investor_id = inv.id
-       WHERE i.status IN ('pending_payment', 'payment_received')
-         AND i.created_at < NOW() - INTERVAL '5 minutes'
-       ORDER BY i.created_at ASC
-       LIMIT $1`,
-      [limit]
-    );
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
-    return result.rows;
+    return await prisma.investment.findMany({
+      where: {
+        status: { in: ['pending_payment', 'payment_received'] },
+        createdAt: { lt: fiveMinutesAgo },
+      },
+      include: {
+        investor: {
+          select: {
+            name: true,
+            email: true,
+            stellarPublicKey: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    });
   }
 }
 

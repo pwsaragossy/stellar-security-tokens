@@ -7,6 +7,7 @@ API REST para tokenização de security tokens na rede Stellar.
 - Express.js para API REST
 - Stellar SDK v14.3.2 para operações blockchain
 - PostgreSQL para armazenamento de dados
+- Prisma ORM para acesso ao banco de dados e migrations
 - Estrutura modular (services/routes/controllers)
 - Suporte a variáveis de ambiente
 - Validação de inputs
@@ -45,7 +46,7 @@ O script irá:
 - Criar arquivo .env a partir do .env.example
 - Instalar dependências npm
 - Criar banco de dados (se não existir)
-- Executar migrations
+- Executar migrations do Prisma
 
 ### Método Manual
 
@@ -75,7 +76,10 @@ npm run test:email
 # Crie o banco de dados PostgreSQL
 createdb stellar_tokens
 
-# Execute as migrations
+# Execute as migrations do Prisma
+npm run prisma:migrate
+
+# Ou em produção:
 npm run migrate
 
 # (Opcional) Execute o seed para dados de exemplo
@@ -178,7 +182,11 @@ Para documentação completa e detalhada de todos os endpoints, veja [API.md](./
 
 - `npm start` - Inicia o servidor em modo produção
 - `npm run dev` - Inicia o servidor em modo desenvolvimento (com watch)
-- `npm run migrate` - Executa as migrations do banco de dados
+- `npm run migrate` - Executa as migrations do Prisma em produção (`prisma migrate deploy`)
+- `npm run migrate:dev` - Executa as migrations do Prisma em desenvolvimento (`prisma migrate dev`)
+- `npm run prisma:migrate` - Alias para `prisma migrate dev`
+- `npm run prisma:generate` - Gera o Prisma Client
+- `npm run prisma:studio` - Abre o Prisma Studio (interface visual do banco)
 - `npm run seed` - Popula o banco com dados de exemplo
 - `npm run setup` - Setup inicial completo (cria contas, emite tokens, configura .env)
 - `npm test` - Executa os testes automatizados

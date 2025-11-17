@@ -1,7 +1,7 @@
-import { query } from '../config/database.js';
+import prisma from '../config/prisma.js';
 
 /**
- * Modelo para gerenciar investimentos no banco de dados
+ * Modelo para gerenciar investimentos no banco de dados usando Prisma
  */
 export class Investment {
   /**
@@ -25,16 +25,17 @@ export class Investment {
       memo,
     } = investmentData;
 
-    const result = await query(
-      `INSERT INTO investments (
-        investor_id, offer_id, asset_code, usdc_amount, token_amount, 
-        status, memo, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, 'pending_payment', $6, NOW(), NOW())
-      RETURNING *`,
-      [investor_id, offer_id || null, asset_code, usdc_amount, token_amount, memo || null]
-    );
-
-    return result.rows[0];
+    return await prisma.investment.create({
+      data: {
+        investorId: investor_id,
+        offerId: offer_id || null,
+        assetCode: asset_code,
+        usdcAmount: usdc_amount,
+        tokenAmount: token_amount,
+        status: 'pending_payment',
+        memo: memo || null,
+      },
+    });
   }
 
   /**
@@ -43,11 +44,9 @@ export class Investment {
    * @returns {Promise<Object|null>} Investimento encontrado ou null
    */
   static async findById(id) {
-    const result = await query(
-      'SELECT * FROM investments WHERE id = $1',
-      [id]
-    );
-    return result.rows[0] || null;
+    return await prisma.investment.findUnique({
+      where: { id },
+    });
   }
 
   /**
@@ -56,11 +55,10 @@ export class Investment {
    * @returns {Promise<Object|null>} Investimento encontrado ou null
    */
   static async findByUSDC(usdcPaymentHash) {
-    const result = await query(
-      'SELECT * FROM investments WHERE usdc_payment_hash = $1 ORDER BY created_at DESC LIMIT 1',
-      [usdcPaymentHash]
-    );
-    return result.rows[0] || null;
+    return await prisma.investment.findFirst({
+      where: { usdcPaymentHash },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -71,11 +69,12 @@ export class Investment {
    * @returns {Promise<Array>} Array de investimentos
    */
   static async findByStatus(status, limit = 100, offset = 0) {
-    const result = await query(
-      'SELECT * FROM investments WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
-      [status, limit, offset]
-    );
-    return result.rows;
+    return await prisma.investment.findMany({
+      where: { status: status.toLowerCase() },
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -88,20 +87,32 @@ export class Investment {
   static async findPendingByInvestor(investorPublicKey, expectedAmount, windowMinutes = 2) {
     const windowStartTime = new Date(Date.now() - windowMinutes * 60 * 1000);
     const expectedAmountFloat = parseFloat(expectedAmount);
+    const tolerance = expectedAmountFloat * 0.0001; // 0.01% tolerance
     
-    const result = await query(
-      `SELECT i.*, inv.stellar_public_key 
-       FROM investments i
-       JOIN investors inv ON i.investor_id = inv.id
-       WHERE inv.stellar_public_key = $1
-         AND i.status = 'pending_payment'
-         AND i.usdc_amount BETWEEN $2 * 0.9999 AND $2 * 1.0001
-         AND i.created_at >= $3
-       ORDER BY i.created_at DESC
-       LIMIT 10`,
-      [investorPublicKey, expectedAmountFloat, windowStartTime]
-    );
-    return result.rows;
+    return await prisma.investment.findMany({
+      where: {
+        investor: {
+          stellarPublicKey: investorPublicKey,
+        },
+        status: 'pending_payment',
+        usdcAmount: {
+          gte: expectedAmountFloat - tolerance,
+          lte: expectedAmountFloat + tolerance,
+        },
+        createdAt: {
+          gte: windowStartTime,
+        },
+      },
+      include: {
+        investor: {
+          select: {
+            stellarPublicKey: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
   }
 
   /**
@@ -122,46 +133,27 @@ export class Investment {
       error_message,
     } = updateData;
 
-    const updates = [];
-    const values = [];
-    let paramIndex = 1;
+    const updateFields = {};
+    if (status) updateFields.status = status.toLowerCase();
+    if (usdc_payment_hash !== undefined) updateFields.usdcPaymentHash = usdc_payment_hash;
+    if (distribution_tx_hash !== undefined) updateFields.distributionTxHash = distribution_tx_hash;
+    if (error_message !== undefined) updateFields.errorMessage = error_message;
 
-    if (status) {
-      updates.push(`status = $${paramIndex++}`);
-      values.push(status);
-    }
-
-    if (usdc_payment_hash !== undefined) {
-      updates.push(`usdc_payment_hash = $${paramIndex++}`);
-      values.push(usdc_payment_hash);
-    }
-
-    if (distribution_tx_hash !== undefined) {
-      updates.push(`distribution_tx_hash = $${paramIndex++}`);
-      values.push(distribution_tx_hash);
-    }
-
-    if (error_message !== undefined) {
-      updates.push(`error_message = $${paramIndex++}`);
-      values.push(error_message);
-    }
-
-    if (updates.length === 0) {
+    if (Object.keys(updateFields).length === 0) {
       return await this.findById(id);
     }
 
-    updates.push(`updated_at = NOW()`);
-    values.push(id);
-
-    const result = await query(
-      `UPDATE investments 
-       SET ${updates.join(', ')}
-       WHERE id = $${paramIndex}
-       RETURNING *`,
-      values
-    );
-
-    return result.rows[0] || null;
+    try {
+      return await prisma.investment.update({
+        where: { id },
+        data: updateFields,
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return null;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -172,16 +164,20 @@ export class Investment {
    * @returns {Promise<Array>} Array de investimentos
    */
   static async findByInvestor(investorId, limit = 100, offset = 0) {
-    const result = await query(
-      `SELECT i.*, o.offer_name, o.description as offer_description
-       FROM investments i
-       LEFT JOIN offers o ON i.offer_id = o.id
-       WHERE i.investor_id = $1
-       ORDER BY i.created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [investorId, limit, offset]
-    );
-    return result.rows;
+    return await prisma.investment.findMany({
+      where: { investorId },
+      include: {
+        offer: {
+          select: {
+            offerName: true,
+            description: true,
+          },
+        },
+      },
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
@@ -192,16 +188,19 @@ export class Investment {
    * @returns {Promise<Array>} Array de investimentos
    */
   static async findByOffer(offerId, limit = 100, offset = 0) {
-    const result = await query(
-      `SELECT i.*, inv.name as investor_name, inv.email as investor_email
-       FROM investments i
-       JOIN investors inv ON i.investor_id = inv.id
-       WHERE i.offer_id = $1
-       ORDER BY i.created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [offerId, limit, offset]
-    );
-    return result.rows;
+    return await prisma.investment.findMany({
+      where: { offerId },
+      include: {
+        investor: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }
-
