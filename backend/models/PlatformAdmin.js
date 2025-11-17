@@ -11,7 +11,7 @@ export class PlatformAdmin {
    * @param {string} adminData.email - Email do admin (único)
    * @param {string} adminData.password - Senha do admin (será hasheada)
    * @param {string} adminData.name - Nome do admin
-   * @param {string} adminData.stellarPublicKey - Chave pública Stellar (obrigatória, 56 caracteres)
+   * @param {string} [adminData.stellarPublicKey] - Chave pública Stellar (opcional, 56 caracteres)
    * @param {string} [adminData.role='admin'] - Role do admin
    * @returns {Promise<Object>} Admin criado (sem password_hash)
    * @throws {Error} Se email já existir ou stellarPublicKey inválido
@@ -25,12 +25,8 @@ export class PlatformAdmin {
       role = 'admin',
     } = adminData;
 
-    if (!stellarPublicKey) {
-      throw new Error('stellarPublicKey é obrigatório para criar um administrador');
-    }
-    
-    // Validar formato da chave Stellar (56 caracteres, começando com G)
-    if (!/^G[A-Z0-9]{55}$/.test(stellarPublicKey)) {
+    // Validar formato da chave Stellar (56 caracteres, começando com G) apenas se fornecida
+    if (stellarPublicKey && !/^G[A-Z0-9]{55}$/.test(stellarPublicKey)) {
       throw new Error('stellarPublicKey deve ter 56 caracteres e começar com G');
     }
 
@@ -40,7 +36,7 @@ export class PlatformAdmin {
       `INSERT INTO platform_admins (email, password_hash, name, stellar_public_key, role, is_active, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), NOW())
        RETURNING id, email, name, stellar_public_key, role, is_active, created_at, updated_at`,
-      [email, passwordHash, name, stellarPublicKey, role]
+      [email, passwordHash, name, stellarPublicKey || null, role]
     );
 
     return result.rows[0];

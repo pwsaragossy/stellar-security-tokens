@@ -1,5 +1,5 @@
 -- Migration: Add stellar_public_key to all user types
--- Todos os usuários (investors, company_users, platform_admins, companies) precisam ter wallet Stellar
+-- Investidores e empresas precisam ter wallet Stellar para transações on-chain. Administradores não precisam.
 
 -- Adicionar stellar_public_key a company_users (primeiro como nullable)
 -- Verificar se a tabela existe antes
@@ -111,7 +111,7 @@ COMMENT ON COLUMN company_users.stellar_public_key IS 'Chave pública Stellar (w
   END IF;
   
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'platform_admins') THEN
-COMMENT ON COLUMN platform_admins.stellar_public_key IS 'Chave pública Stellar (wallet) do administrador - obrigatória';
+COMMENT ON COLUMN platform_admins.stellar_public_key IS 'Chave pública Stellar (opcional para administradores, obrigatória para investidores/empresas)';
   END IF;
   
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'companies') THEN
