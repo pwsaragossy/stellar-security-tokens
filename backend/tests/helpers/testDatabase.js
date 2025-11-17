@@ -39,10 +39,28 @@ export const cleanDatabase = async () => {
     // Isso garante que mesmo se TRUNCATE falhar, os dados serão limpos
     
     // Passo 1: DELETE de todas as tabelas (mais seguro, funciona mesmo com foreign keys se session_replication_role = replica)
+    // Ordem específica para garantir que dependências são removidas primeiro
     if (isTestEnv) {
       console.log('[testDatabase] Step 1: Deleting all data from tables...');
     }
-    for (const table of tablesToClean) {
+    
+    // Delete in dependency order to avoid foreign key violations
+    const deleteOrder = [
+      'interest_payments',
+      'token_distributions',
+      'investments',  // References tokens, must be deleted first
+      'offers',       // May reference tokens
+      'company_user_webauthn_credentials',
+      'platform_admin_webauthn_credentials',
+      'investor_webauthn_credentials',
+      'company_users',
+      'platform_admins',
+      'companies',
+      'tokens',       // Delete after dependencies
+      'investors'
+    ];
+    
+    for (const table of deleteOrder) {
       try {
         const result = await query(`DELETE FROM ${table}`);
         if (isTestEnv && result.rowCount > 0) {
@@ -55,6 +73,13 @@ export const cleanDatabase = async () => {
           }
         }
       }
+    }
+    
+    // Extra cleanup: explicitly delete tokens by asset_code to ensure they're gone
+    try {
+      await query(`DELETE FROM tokens WHERE asset_code = 'SIN01'`);
+    } catch (e) {
+      // Ignore if table doesn't exist or already deleted
     }
     
     // Passo 2: TRUNCATE para resetar sequences (mais eficiente)
@@ -196,9 +221,17 @@ export const seedTestData = async () => {
       ['Test Investor', uniqueEmail, uniqueDocument, investorStellarKey, 'approved']
     );
 
+    // Use INSERT ... ON CONFLICT to handle existing token
+    // This prevents duplicate key errors if cleanup didn't fully remove the token
     const tokenResult = await query(
       `INSERT INTO tokens (asset_code, issuer_public_key, total_supply, description, created_at, updated_at)
        VALUES ($1, $2, $3, $4, NOW(), NOW())
+       ON CONFLICT (asset_code) 
+       DO UPDATE SET 
+         issuer_public_key = EXCLUDED.issuer_public_key,
+         total_supply = EXCLUDED.total_supply,
+         description = EXCLUDED.description,
+         updated_at = NOW()
        RETURNING *`,
       ['SIN01', issuerStellarKey, 1000, 'Test Token']
     );
