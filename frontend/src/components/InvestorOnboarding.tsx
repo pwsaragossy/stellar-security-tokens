@@ -124,7 +124,7 @@ export function InvestorOnboarding() {
   };
 
   return (
-    <Card className="w-full max-w-3xl mx-auto">
+    <Card className="max-w-3xl mx-auto">
       <CardHeader>
         <div className="flex items-center gap-2">
           <UserPlus className="h-5 w-5" />
@@ -182,7 +182,7 @@ export function InvestorOnboarding() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-md"
+                  className="px-4 py-2 border border-input bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 />
               </div>
 
@@ -196,7 +196,7 @@ export function InvestorOnboarding() {
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-md"
+                  className="px-4 py-2 border border-input bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 />
               </div>
 
@@ -210,11 +210,11 @@ export function InvestorOnboarding() {
                   required
                   value={formData.document}
                   onChange={(e) => setFormData({ ...formData, document: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-md"
+                  className="px-4 py-2 border border-input bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 />
               </div>
 
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" disabled={loading}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -246,14 +246,14 @@ export function InvestorOnboarding() {
                 <Button
                   onClick={handleConnectWallet}
                   variant="outline"
-                  className="w-full"
+                  className=""
                 >
                   <Wallet className="mr-2 h-4 w-4" />
                   Conectar Freighter Wallet
                 </Button>
               </div>
 
-              <Button onClick={() => setStep(3)} className="w-full">
+              <Button onClick={() => setStep(3)}>
                 Continuar sem Freighter
               </Button>
             </div>
@@ -272,7 +272,6 @@ export function InvestorOnboarding() {
 
               <Button
                 onClick={handleApproveTrustline}
-                className="w-full"
                 disabled={loading}
               >
                 {loading ? (
@@ -300,7 +299,6 @@ export function InvestorOnboarding() {
 
               <Button
                 onClick={handlePurchaseTokens}
-                className="w-full"
                 disabled={loading}
               >
                 {loading ? (

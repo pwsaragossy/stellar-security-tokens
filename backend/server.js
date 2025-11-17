@@ -12,6 +12,8 @@ import companyRoutes from './routes/companyRoutes.js';
 import companyUserRoutes from './routes/companyUserRoutes.js';
 import platformAdminRoutes from './routes/platformAdminRoutes.js';
 import offerRoutes from './routes/offerRoutes.js';
+import webauthnRoutes from './routes/webauthnRoutes.js';
+import devRoutes from './routes/devRoutes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { startPaymentScheduler } from './services/paymentScheduler.js';
 import { getPaymentMonitor } from './services/paymentMonitor.service.js';
@@ -44,10 +46,72 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/company-users', companyUserRoutes);
 app.use('/api/platform-admins', platformAdminRoutes);
+app.use('/api/webauthn', webauthnRoutes);
+app.use('/api/dev', devRoutes);
 app.use('/api', offerRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
+
+// Process-level error handlers to prevent crashes from unhandled errors
+process.on('unhandledRejection', (reason, promise) => {
+  // Suppress specific Redis/Bull initialization errors that are expected
+  let shouldSuppress = false;
+  
+  if (reason instanceof Error) {
+    const errorMessage = reason.message || '';
+    const errorCode = reason.code || '';
+    
+    // Check for AggregateError (common with Redis connection errors)
+    if (reason.constructor.name === 'AggregateError' || reason.name === 'AggregateError') {
+      // Check if any error in the errors array has ECONNREFUSED
+      if (reason.errors && Array.isArray(reason.errors)) {
+        const hasECONNREFUSED = reason.errors.some(err => 
+          err && (err.code === 'ECONNREFUSED' || err.message?.includes('ECONNREFUSED'))
+        );
+        if (hasECONNREFUSED) {
+          shouldSuppress = true;
+        }
+      }
+      // Also check the main error code
+      if (errorCode === 'ECONNREFUSED') {
+        shouldSuppress = true;
+      }
+    }
+    
+    // These errors occur during Bull initialization when Redis isn't ready yet
+    // They're handled by Bull's error handlers, so we can suppress them here
+    if (errorMessage.includes('enableOfflineQueue') || 
+        errorMessage.includes('Stream isn\'t writeable') ||
+        errorMessage.includes('ECONNREFUSED') ||
+        errorCode === 'ECONNREFUSED') {
+      shouldSuppress = true;
+    }
+  }
+  
+  if (shouldSuppress) {
+    // These are expected during initialization and handled by Bull's error handlers
+    return;
+  }
+  
+  console.error('[UNHANDLED REJECTION] Unhandled Promise Rejection:', reason);
+  console.error('Promise:', promise);
+  // Log error details for debugging
+  if (reason instanceof Error) {
+    console.error('Error stack:', reason.stack);
+  }
+  // Don't exit - allow server to continue running
+  // In production, you might want to log to an error tracking service
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('[UNCAUGHT EXCEPTION] Uncaught Exception:', error);
+  console.error('Error stack:', error.stack);
+  // For uncaught exceptions, we should exit gracefully
+  // But log first to help with debugging
+  // In production, you might want to log to an error tracking service before exiting
+  process.exit(1);
+});
 
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);

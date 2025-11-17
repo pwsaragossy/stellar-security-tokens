@@ -146,6 +146,7 @@ export class IPFSService {
       } catch (error) {
         console.warn(`Failed to fetch from gateway ${gw}:`, error.message);
         continue;
+      }
     }
 
     throw new Error(`Failed to fetch IPFS file ${hash} from all gateways`);
@@ -161,9 +162,10 @@ export class IPFSService {
       return false;
     }
     // IPFS CID v0 (Qm...) ou CID v1 (bafy...)
-    return /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/.test(hash) || 
-           /^b[a-z0-9]{58,}$/.test(hash) ||
-           /^z[a-z0-9]{58,}$/.test(hash);
+    const cidV0Pattern = /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/;
+    const cidV1Pattern = /^b[a-z0-9]{58,}$/;
+    const cidV1ZPattern = /^z[a-z0-9]{58,}$/;
+    return cidV0Pattern.test(hash) || cidV1Pattern.test(hash) || cidV1ZPattern.test(hash);
   }
 
   /**

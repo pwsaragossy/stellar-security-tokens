@@ -18,6 +18,22 @@ services:
     networks:
       - stellar_network
 
+  redis:
+    image: redis:7-alpine
+    container_name: stellar_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - stellar_network
+    command: redis-server --appendonly yes
+
   backend:
     build:
       context: .
@@ -61,10 +77,18 @@ services:
       SMTP_FROM: ${SMTP_FROM}
       # Payment Scheduler
       ENABLE_AUTO_PAYMENTS: ${ENABLE_AUTO_PAYMENTS:-true}
+      # Redis Configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # Dev Routes (habilitar rotas de desenvolvimento)
+      ENABLE_DEV_ROUTES: ${ENABLE_DEV_ROUTES:-false}
     ports:
       - "3000:3000"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - stellar_network
@@ -94,6 +118,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
 
 networks:
   stellar_network:

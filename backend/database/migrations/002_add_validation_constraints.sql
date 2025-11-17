@@ -86,16 +86,17 @@ BEGIN
   END IF;
 END $$;
 
--- Validate usdc_payment_hash format if present
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint 
-    WHERE conname = 'chk_usdc_payment_hash_format'
-  ) THEN
-    ALTER TABLE token_distributions 
-      ADD CONSTRAINT chk_usdc_payment_hash_format 
-      CHECK (usdc_payment_hash IS NULL OR usdc_payment_hash ~ '^[a-f0-9]{64}$');
-  END IF;
-END $$;
+-- Validate usdc_payment_hash format if present (coluna será adicionada na migration 005)
+-- Esta validação será movida para depois da migration que adiciona a coluna
+-- DO $$
+-- BEGIN
+--   IF NOT EXISTS (
+--     SELECT 1 FROM pg_constraint 
+--     WHERE conname = 'chk_usdc_payment_hash_format'
+--   ) THEN
+--     ALTER TABLE token_distributions 
+--       ADD CONSTRAINT chk_usdc_payment_hash_format 
+--       CHECK (usdc_payment_hash IS NULL OR usdc_payment_hash ~ '^[a-f0-9]{64}$');
+--   END IF;
+-- END $$;
 

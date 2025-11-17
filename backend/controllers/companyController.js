@@ -261,5 +261,36 @@ export class CompanyController {
       });
     }
   }
+
+  /**
+   * Endpoint de debug para aprovar empresa sem autenticação (apenas em desenvolvimento)
+   * PUT /api/companies/debug/:id/approve
+   */
+  static async debugApproveCompany(req, res) {
+    try {
+      const { id } = req.params;
+
+      const updatedCompany = await Company.updateStatus(parseInt(id), 'approved');
+
+      if (!updatedCompany) {
+        return res.status(404).json({
+          success: false,
+          error: 'Company not found',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: updatedCompany,
+      });
+    } catch (error) {
+      console.error('Error approving company (debug):', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to approve company',
+        details: error.message,
+      });
+    }
+  }
 }
 

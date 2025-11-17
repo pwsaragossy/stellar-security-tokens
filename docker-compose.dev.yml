@@ -1,0 +1,26 @@
+# Docker Compose para desenvolvimento
+# Este arquivo sobrescreve configurações do docker-compose.yml para desenvolvimento
+#
+# Como usar:
+#   docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   ou
+#   docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# Para parar:
+#   docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
+
+services:
+  backend:
+    environment:
+      # Habilitar rotas de desenvolvimento
+      ENABLE_DEV_ROUTES: 'true'
+      # Ambiente de desenvolvimento
+      NODE_ENV: development
+    # O volume ./backend já está mapeado no docker-compose.yml principal
+    # Isso permite hot-reload automático quando você edita arquivos
+
+  frontend:
+    environment:
+      NODE_ENV: development
+    # Se quiser hot-reload do frontend também, pode adicionar volumes aqui
+

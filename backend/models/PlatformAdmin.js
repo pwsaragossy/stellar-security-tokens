@@ -11,25 +11,36 @@ export class PlatformAdmin {
    * @param {string} adminData.email - Email do admin (único)
    * @param {string} adminData.password - Senha do admin (será hasheada)
    * @param {string} adminData.name - Nome do admin
+   * @param {string} adminData.stellarPublicKey - Chave pública Stellar (obrigatória, 56 caracteres)
    * @param {string} [adminData.role='admin'] - Role do admin
    * @returns {Promise<Object>} Admin criado (sem password_hash)
-   * @throws {Error} Se email já existir
+   * @throws {Error} Se email já existir ou stellarPublicKey inválido
    */
   static async create(adminData) {
     const {
       email,
       password,
       name,
+      stellarPublicKey,
       role = 'admin',
     } = adminData;
+
+    if (!stellarPublicKey) {
+      throw new Error('stellarPublicKey é obrigatório para criar um administrador');
+    }
+    
+    // Validar formato da chave Stellar (56 caracteres, começando com G)
+    if (!/^G[A-Z0-9]{55}$/.test(stellarPublicKey)) {
+      throw new Error('stellarPublicKey deve ter 56 caracteres e começar com G');
+    }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
     const result = await query(
-      `INSERT INTO platform_admins (email, password_hash, name, role, is_active, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, TRUE, NOW(), NOW())
-       RETURNING id, email, name, role, is_active, created_at, updated_at`,
-      [email, passwordHash, name, role]
+      `INSERT INTO platform_admins (email, password_hash, name, stellar_public_key, role, is_active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), NOW())
+       RETURNING id, email, name, stellar_public_key, role, is_active, created_at, updated_at`,
+      [email, passwordHash, name, stellarPublicKey, role]
     );
 
     return result.rows[0];
@@ -42,7 +53,7 @@ export class PlatformAdmin {
    */
   static async findById(id) {
     const result = await query(
-      'SELECT id, email, name, role, is_active, created_at, updated_at FROM platform_admins WHERE id = $1',
+      'SELECT id, email, name, stellar_public_key, role, is_active, created_at, updated_at FROM platform_admins WHERE id = $1',
       [id]
     );
     return result.rows[0] || null;
@@ -69,7 +80,7 @@ export class PlatformAdmin {
    */
   static async findAll(limit = 100, offset = 0) {
     const result = await query(
-      'SELECT id, email, name, role, is_active, created_at, updated_at FROM platform_admins ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      'SELECT id, email, name, stellar_public_key, role, is_active, created_at, updated_at FROM platform_admins ORDER BY created_at DESC LIMIT $1 OFFSET $2',
       [limit, offset]
     );
     return result.rows;
@@ -152,7 +163,7 @@ export class PlatformAdmin {
 
     const result = await query(
       `UPDATE platform_admins SET ${fields.join(', ')} WHERE id = $${paramCount} 
-       RETURNING id, email, name, role, is_active, created_at, updated_at`,
+       RETURNING id, email, name, stellar_public_key, role, is_active, created_at, updated_at`,
       values
     );
 

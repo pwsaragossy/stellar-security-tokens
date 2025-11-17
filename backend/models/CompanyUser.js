@@ -12,9 +12,10 @@ export class CompanyUser {
    * @param {string} userData.email - Email do usuário (único)
    * @param {string} userData.password - Senha do usuário (será hasheada)
    * @param {string} userData.name - Nome do usuário
+   * @param {string} userData.stellarPublicKey - Chave pública Stellar (obrigatória, 56 caracteres)
    * @param {string} [userData.role='user'] - Role do usuário
    * @returns {Promise<Object>} Usuário criado (sem password_hash)
-   * @throws {Error} Se email já existir
+   * @throws {Error} Se email já existir ou stellarPublicKey inválido
    */
   static async create(userData) {
     const {
@@ -22,16 +23,26 @@ export class CompanyUser {
       email,
       password,
       name,
+      stellarPublicKey,
       role = 'user',
     } = userData;
+
+    if (!stellarPublicKey) {
+      throw new Error('stellarPublicKey é obrigatório para criar um usuário da empresa');
+    }
+    
+    // Validar formato da chave Stellar (56 caracteres, começando com G)
+    if (!/^G[A-Z0-9]{55}$/.test(stellarPublicKey)) {
+      throw new Error('stellarPublicKey deve ter 56 caracteres e começar com G');
+    }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
     const result = await query(
-      `INSERT INTO company_users (company_id, email, password_hash, name, role, is_active, created_at)
-       VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
-       RETURNING id, company_id, email, name, role, is_active, created_at`,
-      [company_id, email, passwordHash, name, role]
+      `INSERT INTO company_users (company_id, email, password_hash, name, stellar_public_key, role, is_active, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
+       RETURNING id, company_id, email, name, stellar_public_key, role, is_active, created_at`,
+      [company_id, email, passwordHash, name, stellarPublicKey, role]
     );
 
     return result.rows[0];
@@ -44,7 +55,7 @@ export class CompanyUser {
    */
   static async findById(id) {
     const result = await query(
-      'SELECT id, company_id, email, name, role, is_active, created_at FROM company_users WHERE id = $1',
+      'SELECT id, company_id, email, name, stellar_public_key, role, is_active, created_at FROM company_users WHERE id = $1',
       [id]
     );
     return result.rows[0] || null;
@@ -70,7 +81,7 @@ export class CompanyUser {
    */
   static async findByCompany(companyId) {
     const result = await query(
-      'SELECT id, company_id, email, name, role, is_active, created_at FROM company_users WHERE company_id = $1 ORDER BY created_at DESC',
+      'SELECT id, company_id, email, name, stellar_public_key, role, is_active, created_at FROM company_users WHERE company_id = $1 ORDER BY created_at DESC',
       [companyId]
     );
     return result.rows;
@@ -151,7 +162,7 @@ export class CompanyUser {
 
     const result = await query(
       `UPDATE company_users SET ${fields.join(', ')} WHERE id = $${paramCount} 
-       RETURNING id, company_id, email, name, role, is_active, created_at`,
+       RETURNING id, company_id, email, name, stellar_public_key, role, is_active, created_at`,
       values
     );
 

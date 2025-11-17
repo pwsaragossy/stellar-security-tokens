@@ -39,7 +39,6 @@ const whitelistValidation = [
 
 import { loginInvestor, getInvestorPortfolio, getInvestorMetrics } from '../controllers/investorController.js';
 import { requireInvestor, requireOwnData } from '../middleware/authorize.js';
-import { body } from 'express-validator';
 
 router.post('/', investorValidation, authenticateToken, createInvestor);
 router.post('/register', registerValidation, registerInvestor);

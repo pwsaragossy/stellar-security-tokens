@@ -33,7 +33,7 @@ export function InvestmentCalculator() {
   const results = calculateResults();
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
+    <Card className="max-w-2xl mx-auto">
       <CardHeader>
         <div className="flex items-center gap-2">
           <Calculator className="h-5 w-5" />
@@ -57,7 +57,7 @@ export function InvestmentCalculator() {
               value={investmentAmount}
               onChange={(e) => setInvestmentAmount(e.target.value)}
               placeholder="Ex: 1000"
-              className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              className="px-4 py-2 border border-input bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             />
           </div>
 
@@ -69,7 +69,7 @@ export function InvestmentCalculator() {
               id="period"
               value={investmentPeriod}
               onChange={(e) => setInvestmentPeriod(parseInt(e.target.value))}
-              className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              className="px-4 py-2 border border-input bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             >
               <option value={6}>6 meses</option>
               <option value={12}>12 meses</option>

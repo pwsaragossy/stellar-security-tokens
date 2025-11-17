@@ -11,13 +11,22 @@ export class Investor {
    * @param {string} investorData.name - Nome completo do investidor
    * @param {string} investorData.email - Email do investidor (único)
    * @param {string} investorData.document - CPF/CNPJ do investidor (único)
-   * @param {string} [investorData.stellarPublicKey] - Chave pública Stellar (opcional)
+   * @param {string} investorData.stellarPublicKey - Chave pública Stellar (obrigatória, 56 caracteres)
    * @param {string} [investorData.kycStatus='pending'] - Status KYC (pending/approved/rejected)
    * @returns {Promise<Object>} Investidor criado com todos os campos
    * @throws {Error} Se houver violação de constraint (email/document duplicado)
    */
   static async create(investorData) {
     const { name, email, document, stellarPublicKey, kycStatus = 'pending' } = investorData;
+    
+    if (!stellarPublicKey) {
+      throw new Error('stellarPublicKey é obrigatório para criar um investidor');
+    }
+    
+    // Validar formato da chave Stellar (56 caracteres, começando com G)
+    if (!/^G[A-Z0-9]{55}$/.test(stellarPublicKey)) {
+      throw new Error('stellarPublicKey deve ter 56 caracteres e começar com G');
+    }
     
     const result = await query(
       `INSERT INTO investors (name, email, document, stellar_public_key, kyc_status, created_at, updated_at)

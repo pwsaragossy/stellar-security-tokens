@@ -95,7 +95,7 @@ export function InvestorPortal() {
 
   if (!connected) {
     return (
-      <Card className="w-full max-w-2xl mx-auto">
+      <Card className="max-w-2xl mx-auto">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Wallet className="h-5 w-5" />
@@ -113,13 +113,13 @@ export function InvestorPortal() {
               </p>
               <Button
                 onClick={() => window.open('https://freighter.app', '_blank')}
-                className="w-full"
+                className=""
               >
                 Instalar Freighter Wallet
               </Button>
             </div>
           ) : (
-            <Button onClick={handleConnect} className="w-full">
+            <Button onClick={handleConnect}>
               <Wallet className="mr-2 h-4 w-4" />
               Conectar Freighter Wallet
             </Button>
@@ -130,7 +130,7 @@ export function InvestorPortal() {
   }
 
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto">
+    <div className="space-y-6 max-w-6xl mx-auto">
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -277,7 +277,7 @@ export function InvestorPortal() {
               <CardDescription>Venda seus tokens SIN01</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button onClick={handleSellTokens} variant="outline" className="w-full">
+              <Button onClick={handleSellTokens} variant="outline">
                 Vender Tokens SIN01
               </Button>
               <p className="text-xs text-muted-foreground mt-2">

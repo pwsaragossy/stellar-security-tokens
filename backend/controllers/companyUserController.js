@@ -120,13 +120,19 @@ export class CompanyUserController {
         success: true,
         data: {
           token,
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role,
-            company_id: user.company_id,
-            company_name: company.name,
+          company: {
+            id: company.id,
+            name: company.name,
+            cnpj: company.cnpj,
+            email: company.email,
+            legal_representative: company.legal_representative,
+            address: company.address,
+            phone: company.phone,
+            status: company.status,
+            kyc_status: company.kyc_status,
+            kyc_documents: company.kyc_documents,
+            created_at: company.created_at,
+            updated_at: company.updated_at,
           },
         },
       });

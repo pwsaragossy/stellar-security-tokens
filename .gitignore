@@ -9,3 +9,5 @@ build/
 coverage/
 .nyc_output/
 
+
+/generated/prisma

@@ -5,12 +5,16 @@ WORKDIR /app
 # Copiar arquivos de dependências
 COPY package*.json ./
 
-# Instalar dependências
-RUN npm ci --only=production
+# Instalar dependências (incluindo devDependencies para build)
+RUN npm ci
 
 # Copiar código do backend
 COPY backend/ ./backend/
 COPY scripts/ ./scripts/
+COPY prisma/ ./prisma/
+
+# Gerar Prisma Client
+RUN npx prisma generate
 
 # Criar diretório para logs
 RUN mkdir -p /app/logs

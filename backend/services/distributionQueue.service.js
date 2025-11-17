@@ -43,8 +43,8 @@ const redisConfig = {
     return delay;
   },
   maxRetriesPerRequest: 3,
-  enableOfflineQueue: false, // Não enfileirar comandos quando offline
-  lazyConnect: false, // Conectar imediatamente para detectar problemas cedo
+  enableOfflineQueue: true, // Enfileirar comandos quando offline até conexão ser estabelecida
+  lazyConnect: true, // Conectar sob demanda para permitir degradação graciosa
 };
 
 /**
@@ -74,6 +74,134 @@ export function initDistributionQueue() {
           age: 86400, // Manter jobs falhados por 24 horas
         },
       },
+    });
+
+    // Set up error handler FIRST to catch connection errors
+    // Also handle client connection errors directly to prevent unhandled rejections
+    const handleRedisError = (error) => {
+      // Suppress the error to prevent unhandled rejection
+      // The error event handler below will log it properly
+      if (error?.code === 'ECONNREFUSED' || error?.errors?.some?.(e => e?.code === 'ECONNREFUSED')) {
+        // Connection errors are expected and handled by the error event handler
+        return;
+      }
+    };
+
+    // Access the underlying Redis clients and add error handlers
+    // This prevents unhandled promise rejections from connection attempts
+    // Note: With lazyConnect: true, clients may not exist immediately
+    // Set up handlers when clients become available
+    const setupClientErrorHandlers = () => {
+      if (distributionQueue?.client) {
+        distributionQueue.client.on('error', handleRedisError);
+        distributionQueue.client.on('close', () => {
+          // Connection closed - this is handled by retry strategy
+        });
+      }
+      // Bull uses separate clients for pub/sub
+      if (distributionQueue?.clients && Array.isArray(distributionQueue.clients)) {
+        distributionQueue.clients.forEach(client => {
+          if (client) {
+            client.on('error', handleRedisError);
+          }
+        });
+      }
+    };
+
+    // Try to set up handlers immediately (may not work with lazyConnect)
+    setupClientErrorHandlers();
+
+    // Also set up handlers after a short delay to catch clients created later
+    setTimeout(setupClientErrorHandlers, 100);
+    // Rate limiting para evitar múltiplos alertas e logs do mesmo erro
+    let lastErrorTime = 0;
+    let lastErrorMessage = '';
+    let errorCount = 0;
+    const ERROR_ALERT_COOLDOWN = 60000; // 1 minuto entre alertas do mesmo tipo
+    const ERROR_LOG_COOLDOWN = 5000; // 5 segundos entre logs do mesmo erro
+
+    distributionQueue.on('error', async (error) => {
+      // Catch all errors including AggregateErrors to prevent unhandled rejections
+      try {
+        // Extrair mensagem de erro útil
+        let errorMessage = 'Unknown error';
+        
+        // Handle specific ioredis offline queue errors
+        if (error?.message?.includes('enableOfflineQueue') || error?.message?.includes('Stream isn\'t writeable')) {
+          // This error occurs when commands are sent before connection is ready
+          // With enableOfflineQueue: true, this shouldn't happen, but catch it anyway
+          errorMessage = 'Redis connection not ready - commands will be queued';
+          // Don't log this as an error since it's expected during initialization
+          return;
+        }
+        
+        if (error?.message && error.message !== 'AggregateError') {
+          errorMessage = error.message;
+        } else if (error?.code) {
+          // Construir mensagem a partir do código e detalhes
+          const parts = [error.code];
+          if (error.syscall) parts.push(error.syscall);
+          if (error.address) parts.push(error.address);
+          if (error.port) parts.push(`port ${error.port}`);
+          errorMessage = parts.filter(p => p).join(' ') || `${error.code}: Connection failed`;
+        } else if (error?.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+          // AggregateError - pegar primeiro erro útil
+          const firstError = error.errors[0];
+          // Priorizar mensagem do primeiro erro se for útil
+          if (firstError?.message && 
+              firstError.message !== 'AggregateError' && 
+              firstError.message.length > 0 &&
+              !firstError.message.match(/^Error:\s*$/)) {
+            errorMessage = firstError.message;
+          } else if (firstError?.code) {
+            // Construir mensagem a partir do código e detalhes do primeiro erro
+            const parts = [firstError.code];
+            if (firstError.syscall) parts.push(firstError.syscall);
+            if (firstError.address) parts.push(firstError.address);
+            if (firstError.port) parts.push(`port ${firstError.port}`);
+            const constructed = parts.filter(p => p && p.trim()).join(' ');
+            errorMessage = constructed || `${firstError.code}: Redis connection failed (port ${firstError.port || 6379})`;
+          } else {
+            // Fallback: construir mensagem básica
+            const port = firstError?.port || error.port || 6379;
+            errorMessage = `${error.code || 'ECONNREFUSED'}: Redis connection failed (port ${port})`;
+          }
+        } else {
+          errorMessage = error?.toString() || 'Unknown error';
+        }
+        
+        // Limpar mensagem vazia ou apenas espaços e garantir que não está vazia
+        errorMessage = (errorMessage.trim() || 'Unknown error').replace(/\s+/g, ' ');
+
+        const now = Date.now();
+        const isNewError = errorMessage !== lastErrorMessage;
+        const shouldLog = isNewError || (now - lastErrorTime) > ERROR_LOG_COOLDOWN;
+        const shouldAlert = isNewError || (now - lastErrorTime) > ERROR_ALERT_COOLDOWN;
+
+        if (shouldLog) {
+          if (isNewError) {
+            errorCount = 1;
+            console.error(`[DistributionQueue] Queue error: ${errorMessage}`);
+          } else {
+            errorCount++;
+            console.warn(`[DistributionQueue] Queue error (${errorCount}x): ${errorMessage} - Redis connection failed, queue disabled`);
+          }
+          lastErrorMessage = errorMessage;
+          lastErrorTime = now;
+        } else {
+          errorCount++;
+        }
+
+        // Rate limiting: só alertar se for erro diferente ou passou o cooldown
+        if (shouldAlert) {
+          await AlertService.distributionQueueFailed(errorMessage).catch(() => {
+            // Ignore alert errors to prevent cascading failures
+          });
+        }
+      } catch (handlerError) {
+        // Catch any errors in the error handler itself to prevent unhandled rejections
+        console.error('[DistributionQueue] Error in error handler:', handlerError.message);
+      }
     });
 
     // Processador de jobs
@@ -195,79 +323,6 @@ export function initDistributionQueue() {
       console.warn(`[DistributionQueue] Job ${job.id} stalled`);
     });
 
-    // Rate limiting para evitar múltiplos alertas e logs do mesmo erro
-    let lastErrorTime = 0;
-    let lastErrorMessage = '';
-    let errorCount = 0;
-    const ERROR_ALERT_COOLDOWN = 60000; // 1 minuto entre alertas do mesmo tipo
-    const ERROR_LOG_COOLDOWN = 5000; // 5 segundos entre logs do mesmo erro
-
-    distributionQueue.on('error', async (error) => {
-      // Extrair mensagem de erro útil
-      let errorMessage = 'Unknown error';
-      if (error?.message && error.message !== 'AggregateError') {
-        errorMessage = error.message;
-      } else if (error?.code) {
-        // Construir mensagem a partir do código e detalhes
-        const parts = [error.code];
-        if (error.syscall) parts.push(error.syscall);
-        if (error.address) parts.push(error.address);
-        if (error.port) parts.push(`port ${error.port}`);
-        errorMessage = parts.filter(p => p).join(' ') || `${error.code}: Connection failed`;
-      } else if (error?.errors && Array.isArray(error.errors) && error.errors.length > 0) {
-        // AggregateError - pegar primeiro erro útil
-        const firstError = error.errors[0];
-        // Priorizar mensagem do primeiro erro se for útil
-        if (firstError?.message && 
-            firstError.message !== 'AggregateError' && 
-            firstError.message.length > 0 &&
-            !firstError.message.match(/^Error:\s*$/)) {
-          errorMessage = firstError.message;
-        } else if (firstError?.code) {
-          // Construir mensagem a partir do código e detalhes do primeiro erro
-          const parts = [firstError.code];
-          if (firstError.syscall) parts.push(firstError.syscall);
-          if (firstError.address) parts.push(firstError.address);
-          if (firstError.port) parts.push(`port ${firstError.port}`);
-          const constructed = parts.filter(p => p && p.trim()).join(' ');
-          errorMessage = constructed || `${firstError.code}: Redis connection failed (port ${firstError.port || 6379})`;
-        } else {
-          // Fallback: construir mensagem básica
-          const port = firstError?.port || error.port || 6379;
-          errorMessage = `${error.code || 'ECONNREFUSED'}: Redis connection failed (port ${port})`;
-        }
-      } else {
-        errorMessage = error?.toString() || 'Unknown error';
-      }
-      
-      // Limpar mensagem vazia ou apenas espaços e garantir que não está vazia
-      errorMessage = (errorMessage.trim() || 'Unknown error').replace(/\s+/g, ' ');
-
-      const now = Date.now();
-      const isNewError = errorMessage !== lastErrorMessage;
-      const shouldLog = isNewError || (now - lastErrorTime) > ERROR_LOG_COOLDOWN;
-      const shouldAlert = isNewError || (now - lastErrorTime) > ERROR_ALERT_COOLDOWN;
-
-      if (shouldLog) {
-        if (isNewError) {
-          errorCount = 1;
-          console.error(`[DistributionQueue] Queue error: ${errorMessage}`);
-        } else {
-          errorCount++;
-          console.warn(`[DistributionQueue] Queue error (${errorCount}x): ${errorMessage} - Redis connection failed, queue disabled`);
-        }
-        lastErrorMessage = errorMessage;
-        lastErrorTime = now;
-      } else {
-        errorCount++;
-      }
-
-      // Rate limiting: só alertar se for erro diferente ou passou o cooldown
-      if (shouldAlert) {
-        await AlertService.distributionQueueFailed(errorMessage);
-      }
-    });
-
     console.log('[DistributionQueue] Initialized successfully');
     return distributionQueue;
   } catch (error) {
@@ -337,20 +392,41 @@ export async function closeDistributionQueue() {
       queue.removeAllListeners('error');
       queue.removeAllListeners();
       
-      // Fechar conexões Redis
+      // Fechar conexões Redis de forma mais robusta
       if (queue.client) {
         try {
+          // Remover listeners do cliente também
+          queue.client.removeAllListeners();
           await queue.client.quit();
         } catch (e) {
           // Ignorar erros ao fechar cliente
         }
       }
       
-      // Fechar a fila
-      await queue.close();
+      // Fechar subscribers também se existirem
+      if (queue.clients && Array.isArray(queue.clients)) {
+        for (const client of queue.clients) {
+          try {
+            if (client && client.removeAllListeners) {
+              client.removeAllListeners();
+            }
+            if (client && client.quit) {
+              await client.quit();
+            }
+          } catch (e) {
+            // Ignorar erros
+          }
+        }
+      }
+      
+      // Fechar a fila com timeout
+      await Promise.race([
+        queue.close(),
+        new Promise((resolve) => setTimeout(resolve, 1000)) // Timeout de 1s
+      ]);
       
       // Aguardar um pouco para garantir que todas as operações assíncronas sejam concluídas
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 300));
     } catch (error) {
       // Ignorar erros ao fechar (pode já estar fechada)
       // Não logar em testes para evitar poluição

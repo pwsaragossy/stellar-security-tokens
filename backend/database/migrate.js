@@ -183,10 +183,27 @@ const runMigration = async (migration) => {
   try {
     await query(migration.sql);
     const executionTime = Date.now() - startTime;
+    
+    // Verificar se já foi registrada antes de tentar inserir
+    const existing = await query(
+      'SELECT version FROM schema_migrations WHERE version = $1',
+      [migration.version]
+    );
+    
+    if (existing.rows.length === 0) {
     await recordMigration(migration.version, migration.name, executionTime);
+    } else {
+      console.log(`⚠️  Migration ${migration.version} já estava registrada, pulando registro`);
+    }
+    
     console.log(`✓ Migration ${migration.version} - ${migration.name} completed (${executionTime}ms)`);
     return true;
   } catch (error) {
+    // Se o erro for de chave duplicada na tabela de migrations, apenas logar e continuar
+    if (error.code === '23505' && error.constraint === 'schema_migrations_pkey') {
+      console.warn(`⚠️  Migration ${migration.version} já estava registrada, continuando...`);
+      return true;
+    }
     console.error(`✗ Migration ${migration.version} - ${migration.name} failed:`, error.message);
     throw error;
   }
@@ -219,11 +236,23 @@ const runMigrations = async () => {
       console.warn('⚠️  Migrations directory not found, using legacy migrations only');
     }
 
+    // Detectar e remover duplicatas (mesma versão)
+    const seenVersions = new Set();
+    const uniqueMigrations = [];
+    for (const migration of allMigrations) {
+      if (!seenVersions.has(migration.version)) {
+        seenVersions.add(migration.version);
+        uniqueMigrations.push(migration);
+      } else {
+        console.warn(`⚠️  Migration duplicada ignorada: ${migration.version} - ${migration.name}`);
+      }
+    }
+
     // Sort migrations by version
-    allMigrations.sort((a, b) => a.version.localeCompare(b.version));
+    uniqueMigrations.sort((a, b) => a.version.localeCompare(b.version));
 
     // Filter out already executed migrations
-    const pendingMigrations = allMigrations.filter(
+    const pendingMigrations = uniqueMigrations.filter(
       migration => !executedMigrations.has(migration.version)
     );
 

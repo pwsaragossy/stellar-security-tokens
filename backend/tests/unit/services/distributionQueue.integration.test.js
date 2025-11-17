@@ -14,6 +14,9 @@ describe('DistributionQueue - Integration Style Tests', () => {
     // Limpar fila existente se houver
     await closeDistributionQueue();
     
+    // Aguardar um pouco para garantir que a fila anterior foi completamente fechada
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     // Deve retornar null ou objeto (dependendo se Redis está disponível)
     const queue = initDistributionQueue();
     
@@ -24,10 +27,19 @@ describe('DistributionQueue - Integration Style Tests', () => {
     );
     
     // Se a fila foi criada, aguardar um pouco para que erros de conexão sejam processados
-    // mas não fechar aqui (será fechado no after hook)
+    // e garantir que todas as operações assíncronas sejam concluídas
     if (queue) {
-      await new Promise(resolve => setTimeout(resolve, 150));
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Remover todos os listeners para evitar atividade assíncrona após o teste
+      queue.removeAllListeners();
     }
+    
+    // Fechar a fila imediatamente após o teste para evitar atividade assíncrona
+    await closeDistributionQueue();
+    
+    // Aguardar um pouco mais para garantir que tudo foi limpo
+    await new Promise(resolve => setTimeout(resolve, 100));
   });
 
   test('isQueueAvailable returns correct state', async () => {

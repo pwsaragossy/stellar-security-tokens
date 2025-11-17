@@ -14,7 +14,7 @@ export function Sidebar() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    window.location.href = '/login';
+    window.location.href = '/admin/login';
   };
 
   return (
@@ -45,7 +45,7 @@ export function Sidebar() {
       <div className="border-t p-4">
         <Button
           variant="ghost"
-          className="w-full justify-start"
+          className="justify-start"
           onClick={handleLogout}
         >
           <LogOut className="mr-2 h-4 w-4" />

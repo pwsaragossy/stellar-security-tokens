@@ -11,13 +11,14 @@ export class Company {
    * @param {string} companyData.cnpj - CNPJ da empresa (único)
    * @param {string} companyData.email - Email da empresa (único)
    * @param {string} companyData.legal_representative - Representante legal
+   * @param {string} companyData.stellarPublicKey - Chave pública Stellar (obrigatória, 56 caracteres)
    * @param {string} [companyData.address] - Endereço
    * @param {string} [companyData.phone] - Telefone
    * @param {string} [companyData.status='pending'] - Status da empresa
    * @param {string} [companyData.kyc_status='pending'] - Status KYC
    * @param {Object} [companyData.kyc_documents] - Documentos KYC (JSONB)
    * @returns {Promise<Object>} Empresa criada
-   * @throws {Error} Se houver violação de constraint (email/cnpj duplicado)
+   * @throws {Error} Se houver violação de constraint (email/cnpj duplicado) ou stellarPublicKey inválido
    */
   static async create(companyData) {
     const {
@@ -25,6 +26,7 @@ export class Company {
       cnpj,
       email,
       legal_representative,
+      stellarPublicKey,
       address,
       phone,
       status = 'pending',
@@ -32,13 +34,22 @@ export class Company {
       kyc_documents = {},
     } = companyData;
 
+    if (!stellarPublicKey) {
+      throw new Error('stellarPublicKey é obrigatório para criar uma empresa');
+    }
+    
+    // Validar formato da chave Stellar (56 caracteres, começando com G)
+    if (!/^G[A-Z0-9]{55}$/.test(stellarPublicKey)) {
+      throw new Error('stellarPublicKey deve ter 56 caracteres e começar com G');
+    }
+
     const result = await query(
       `INSERT INTO companies (
-        name, cnpj, email, legal_representative, address, phone,
+        name, cnpj, email, legal_representative, stellar_public_key, address, phone,
         status, kyc_status, kyc_documents, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
       RETURNING *`,
-      [name, cnpj, email, legal_representative, address || null, phone || null, status, kyc_status, JSON.stringify(kyc_documents)]
+      [name, cnpj, email, legal_representative, stellarPublicKey, address || null, phone || null, status, kyc_status, JSON.stringify(kyc_documents)]
     );
 
     return result.rows[0];

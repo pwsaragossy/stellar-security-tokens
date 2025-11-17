@@ -152,8 +152,11 @@ export const loginInvestor = async (req, res, next) => {
           id: investor.id,
           email: investor.email,
           name: investor.name,
-          stellarPublicKey: investor.stellar_public_key,
-          kycStatus: investor.kyc_status,
+          document: investor.document,
+          stellar_public_key: investor.stellar_public_key,
+          kyc_status: investor.kyc_status,
+          created_at: investor.created_at,
+          updated_at: investor.updated_at,
         },
       },
     });

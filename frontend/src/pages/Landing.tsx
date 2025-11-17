@@ -1,128 +1,98 @@
-import { InvestmentCalculator } from '@/components/InvestmentCalculator';
-import { InvestorOnboarding } from '@/components/InvestorOnboarding';
-import { InvestorPortal } from '@/components/InvestorPortal';
-import { useState } from 'react';
-import { Calculator, UserPlus, Wallet } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Building2, User, Shield } from 'lucide-react';
 
 export function Landing() {
-  const [activeSection, setActiveSection] = useState<'calculator' | 'onboarding' | 'portal'>('calculator');
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted">
+    <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">Stellar Security Tokens</h1>
-            <nav className="flex gap-4">
-              <button
-                onClick={() => setActiveSection('calculator')}
-                className={`px-4 py-2 rounded-md transition-colors ${
-                  activeSection === 'calculator'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-accent'
-                }`}
-              >
-                <Calculator className="h-4 w-4 inline mr-2" />
-                Calculadora
-              </button>
-              <button
-                onClick={() => setActiveSection('onboarding')}
-                className={`px-4 py-2 rounded-md transition-colors ${
-                  activeSection === 'onboarding'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-accent'
-                }`}
-              >
-                <UserPlus className="h-4 w-4 inline mr-2" />
-                Investir
-              </button>
-              <button
-                onClick={() => setActiveSection('portal')}
-                className={`px-4 py-2 rounded-md transition-colors ${
-                  activeSection === 'portal'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-accent'
-                }`}
-              >
-                <Wallet className="h-4 w-4 inline mr-2" />
-                Portal
-              </button>
-            </nav>
-          </div>
+          <h1 className="text-2xl font-bold">Stellar Security Tokens</h1>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="container mx-auto px-6 py-12">
+      <section className="container mx-auto px-6 py-16">
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold mb-4">
-            Tokenização de Security Tokens no Stellar
+            RWA Tokenization Platform
           </h2>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Invista em tokens SIN01 e receba juros mensais de 10% a.a. com segurança blockchain
-          </p>
         </div>
 
-        {/* Active Section */}
-        <div className="max-w-6xl mx-auto">
-          {activeSection === 'calculator' && (
-            <div>
-              <h3 className="text-2xl font-semibold mb-6 text-center">
-                Calcule seus Retornos Potenciais
-              </h3>
-              <InvestmentCalculator />
-            </div>
-          )}
-
-          {activeSection === 'onboarding' && (
-            <div>
-              <h3 className="text-2xl font-semibold mb-6 text-center">
-                Comece a Investir Agora
-              </h3>
-              <InvestorOnboarding />
-            </div>
-          )}
-
-          {activeSection === 'portal' && (
-            <div>
-              <h3 className="text-2xl font-semibold mb-6 text-center">
-                Acesse seu Portal de Investidor
-              </h3>
-              <InvestorPortal />
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="container mx-auto px-6 py-12 bg-card">
-        <h3 className="text-2xl font-semibold mb-8 text-center">Por que investir em SIN01?</h3>
+        {/* Portal Cards */}
         <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-          <div className="text-center p-6">
-            <div className="text-3xl font-bold text-primary mb-2">10% a.a.</div>
-            <p className="text-muted-foreground">Taxa de juros anual garantida</p>
-          </div>
-          <div className="text-center p-6">
-            <div className="text-3xl font-bold text-primary mb-2">Mensal</div>
-            <p className="text-muted-foreground">Pagamentos de juros mensais</p>
-          </div>
-          <div className="text-center p-6">
-            <div className="text-3xl font-bold text-primary mb-2">Blockchain</div>
-            <p className="text-muted-foreground">Segurança e transparência do Stellar</p>
-          </div>
+          {/* Investor Portal */}
+          <Card className="text-center">
+            <CardHeader>
+              <div className="mx-auto mb-4 p-3 bg-blue-100 dark:bg-blue-900/20 rounded-full w-fit">
+                <User className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+              </div>
+              <CardTitle>Investor Portal</CardTitle>
+              <CardDescription>
+                Portfolio management, investments, interest payments
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="flex flex-col items-center gap-3">
+                <Link to="/dev/login">
+                  <Button>Login</Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Company Portal */}
+          <Card className="text-center">
+            <CardHeader>
+              <div className="mx-auto mb-4 p-3 bg-purple-100 dark:bg-purple-900/20 rounded-full w-fit">
+                <Building2 className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+              </div>
+              <CardTitle>Company Portal</CardTitle>
+              <CardDescription>
+                Create offers, manage tokens, track investments
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="flex flex-col items-center gap-3">
+                <Link to="/dev/login">
+                  <Button>Login</Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Admin Portal */}
+          <Card className="text-center">
+            <CardHeader>
+              <div className="mx-auto mb-4 p-3 bg-red-100 dark:bg-red-900/20 rounded-full w-fit">
+                <Shield className="h-8 w-8 text-red-600 dark:text-red-400" />
+              </div>
+              <CardTitle>Admin Portal</CardTitle>
+              <CardDescription>
+                Platform management, offer review, payment processing
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="flex justify-center">
+                <Link to="/dev/login">
+                  <Button>Login</Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t bg-card mt-12">
+      <footer className="border-t bg-card mt-16">
         <div className="container mx-auto px-6 py-8">
           <p className="text-center text-muted-foreground">
-            © 2024 Stellar Security Tokens. Todos os direitos reservados.
+            Stellar Security Tokens - Dev Environment
           </p>
         </div>
       </footer>
     </div>
   );
 }
-

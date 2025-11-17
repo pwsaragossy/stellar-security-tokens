@@ -25,6 +25,11 @@ const loginValidation = [
 // Rotas públicas
 router.post('/login', loginValidation, PlatformAdminController.loginPlatformAdmin);
 
+// Rota de debug para criar admin sem autenticação (apenas em desenvolvimento)
+if (process.env.NODE_ENV !== 'production') {
+  router.post('/debug/create', createValidation, PlatformAdminController.createPlatformAdmin);
+}
+
 // Rotas para platform_admins (apenas super_admin pode criar)
 router.post('/', requireAdminRole('super_admin'), createValidation, PlatformAdminController.createPlatformAdmin);
 router.get('/', requirePlatformAdmin, PlatformAdminController.getPlatformAdmins);

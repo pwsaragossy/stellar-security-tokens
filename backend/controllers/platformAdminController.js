@@ -102,6 +102,9 @@ export class PlatformAdminController {
             email: admin.email,
             name: admin.name,
             role: admin.role,
+            is_active: admin.is_active,
+            created_at: admin.created_at,
+            updated_at: admin.updated_at,
           },
         },
       });
