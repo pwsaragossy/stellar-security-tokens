@@ -38,7 +38,7 @@ router.post('/login', loginValidation, async (req, res, next) => {
           id: investor.id,
           name: investor.name,
           email: investor.email,
-          kycStatus: investor.kyc_status,
+          kycStatus: investor.kycStatus,
         },
       },
     });

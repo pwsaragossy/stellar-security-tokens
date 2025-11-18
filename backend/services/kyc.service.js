@@ -123,7 +123,7 @@ export class KYCService {
 
       return {
         investorId,
-        kycStatus: investor.kyc_status,
+        kycStatus: investor.kycStatus,
         updatedAt: investor.updated_at,
       };
     } catch (error) {

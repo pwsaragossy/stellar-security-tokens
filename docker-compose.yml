@@ -66,7 +66,7 @@ services:
       ASSET_SUPPLY: ${ASSET_SUPPLY:-1000}
       USDC_ISSUER: ${USDC_ISSUER:-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN}
       # Security
-      JWT_SECRET: ${JWT_SECRET:-change_this_in_production}
+      JWT_SECRET: ${JWT_SECRET:-test_jwt_secret_key_for_testing_only}
       API_KEY: ${API_KEY}
       # Email (opcional)
       SMTP_HOST: ${SMTP_HOST}

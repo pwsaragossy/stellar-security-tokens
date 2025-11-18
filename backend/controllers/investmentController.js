@@ -46,14 +46,14 @@ export const purchaseInvestment = async (req, res, next) => {
       });
     }
 
-    if (!investor.stellar_public_key) {
+    if (!investor.stellarPublicKey) {
       return res.status(400).json({
         success: false,
         error: 'Investor does not have a Stellar public key configured',
       });
     }
 
-    if (investor.kyc_status !== 'approved') {
+    if (investor.kycStatus !== 'approved') {
       return res.status(403).json({
         success: false,
         error: 'Investor KYC status must be approved to purchase tokens',
@@ -83,7 +83,7 @@ export const purchaseInvestment = async (req, res, next) => {
 
     // Verificar se pagamento USDC já foi recebido
     const usdcPayment = await StellarService.verifyUSDCPayment(
-      investor.stellar_public_key,
+      investor.stellarPublicKey,
       usdcAmount,
       treasuryKeypair.publicKey(),
       USDC_PAYMENT_WINDOW_MINUTES
@@ -160,7 +160,7 @@ async function processInvestmentPaymentWithQueue(investment, usdcPayment, req, r
 
     // Buscar investidor para obter chave pública
     const investor = await Investor.findById(investment.investor_id);
-    if (!investor || !investor.stellar_public_key) {
+    if (!investor || !investor.stellarPublicKey) {
       throw new Error(`Investor ${investment.investor_id} not found or missing Stellar key`);
     }
 
@@ -176,7 +176,7 @@ async function processInvestmentPaymentWithQueue(investment, usdcPayment, req, r
     // Adicionar job à fila para processamento assíncrono com retry
     const job = await addDistributionJob({
       investmentId: investment.id,
-      investorPublicKey: investor.stellar_public_key,
+      investorPublicKey: investor.stellarPublicKey,
       assetCode: investment.asset_code,
       amount: investment.token_amount.toString(),
       memo,
@@ -272,7 +272,7 @@ async function processInvestmentPayment(investment, usdcPayment, req, res, next)
     // Distribuir tokens com memo
     const stellarResult = await StellarService.distributeTokens(
       investment.asset_code,
-      (await Investor.findById(investment.investor_id)).stellar_public_key,
+      (await Investor.findById(investment.investor_id)).stellarPublicKey,
       investment.token_amount.toString(),
       { memo }
     );
@@ -361,15 +361,15 @@ export const getInvestmentStatus = async (req, res, next) => {
       data: {
         id: investment.id,
         status: investment.status,
-        usdcAmount: parseFloat(investment.usdc_amount),
-        tokenAmount: parseFloat(investment.token_amount),
-        assetCode: investment.asset_code,
-        usdcPaymentHash: investment.usdc_payment_hash,
-        distributionTxHash: investment.distribution_tx_hash,
+        usdcAmount: investment.usdcAmount ? parseFloat(investment.usdcAmount.toString()) : null,
+        tokenAmount: investment.tokenAmount ? parseFloat(investment.tokenAmount.toString()) : null,
+        assetCode: investment.assetCode,
+        usdcPaymentHash: investment.usdcPaymentHash,
+        distributionTxHash: investment.distributionTxHash,
         memo: investment.memo,
-        errorMessage: investment.error_message,
-        createdAt: investment.created_at,
-        updatedAt: investment.updated_at,
+        errorMessage: investment.errorMessage,
+        createdAt: investment.createdAt,
+        updatedAt: investment.updatedAt,
       },
     });
   } catch (error) {

@@ -3,6 +3,7 @@
  */
 
 import prisma from '../../config/prisma.js';
+import bcrypt from 'bcrypt';
 
 /**
  * Limpa todas as tabelas do banco de testes usando Prisma
@@ -28,8 +29,8 @@ export const cleanDatabase = async () => {
       await tx.companyUser.deleteMany({});
       await tx.platformAdmin.deleteMany({});
       await tx.company.deleteMany({});
-      await tx.token.deleteMany({});
       await tx.investor.deleteMany({});
+      await tx.token.deleteMany({});
     });
     
     // Reset sequences using raw SQL (Prisma doesn't have direct sequence reset)
@@ -108,6 +109,9 @@ export const seedTestData = async () => {
       console.log(`[testDatabase] Seeding test data with email: ${uniqueEmail}, document: ${uniqueDocument}`);
     }
     
+    // Hash password for test investor
+    const passwordHash = await bcrypt.hash('testpassword', 10);
+
     // Use upsert to handle existing data
     const investor = await prisma.investor.upsert({
       where: { email: uniqueEmail },
@@ -116,6 +120,7 @@ export const seedTestData = async () => {
         document: uniqueDocument,
         stellarPublicKey: investorStellarKey,
         kycStatus: 'approved',
+        passwordHash,
       },
       create: {
         name: 'Test Investor',
@@ -123,6 +128,7 @@ export const seedTestData = async () => {
         document: uniqueDocument,
         stellarPublicKey: investorStellarKey,
         kycStatus: 'approved',
+        passwordHash,
       },
     });
 

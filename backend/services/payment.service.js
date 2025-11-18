@@ -235,7 +235,7 @@ export class PaymentService {
       const validPayments = [];
       for (const payment of payments) {
         const investor = investors.find(inv => inv.id === payment.investorId);
-        if (!investor || !investor.stellar_public_key) {
+        if (!investor || !investor.stellarPublicKey) {
           logger.warn('Skipping payment - investor not found or missing public key', { 
             investorId: payment.investorId 
           });
@@ -268,7 +268,7 @@ export class PaymentService {
         
         const operations = batch.map(({ payment, investor }) =>
           Operation.payment({
-            destination: investor.stellar_public_key,
+            destination: investor.stellarPublicKey,
             asset: usdcAsset,
             amount: payment.usdcAmount.toString(),
             source: distributorKeypair.publicKey(),
@@ -660,11 +660,11 @@ export class PaymentService {
         throw new Error('Investor not found');
       }
 
-      if (!investor.stellar_public_key) {
+      if (!investor.stellarPublicKey) {
         throw new Error('Investor does not have a Stellar public key configured');
       }
 
-      if (investor.kyc_status !== 'approved') {
+      if (investor.kycStatus !== 'approved') {
         throw new Error('Investor KYC status must be approved to receive tokens');
       }
 
@@ -675,7 +675,7 @@ export class PaymentService {
 
       const stellarResult = await StellarService.distributeTokens(
         assetCode,
-        investor.stellar_public_key,
+        investor.stellarPublicKey,
         amount
       );
 
@@ -834,7 +834,7 @@ export class PaymentService {
       });
 
       // Filtrar apenas investidores com chave Stellar válida
-      const validInvestors = investors.filter(inv => inv.stellar_public_key);
+      const validInvestors = investors.filter(inv => inv.stellarPublicKey);
 
       if (validInvestors.length === 0) {
         logger.warn('No valid investors found for bullet payments');
@@ -960,15 +960,15 @@ export class PaymentService {
           i.id,
           i.name,
           i.email,
-          i.stellar_public_key,
-          i.kyc_status,
+          i.stellarPublicKey,
+          i.kyc_status::text as kycStatus,
           COALESCE(SUM(td.amount), 0) as token_balance
         FROM investors i
         LEFT JOIN token_distributions td ON td.investor_id = i.id
         LEFT JOIN tokens t ON t.asset_code = td.asset_code
         WHERE t.offer_id = ${offerId}
           AND i.kyc_status = 'approved'
-        GROUP BY i.id, i.name, i.email, i.stellar_public_key, i.kyc_status
+        GROUP BY i.id, i.name, i.email, i.stellarPublicKey, i.kycStatus
         HAVING COALESCE(SUM(td.amount), 0) > 0
         ORDER BY i.id
       `;

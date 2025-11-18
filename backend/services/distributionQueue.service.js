@@ -245,12 +245,12 @@ export function initDistributionQueue() {
 
       // Buscar investidor
       const investor = await Investor.findById(investment.investor_id);
-      if (!investor || !investor.stellar_public_key) {
+      if (!investor || !investor.stellarPublicKey) {
         throw new Error(`Investor ${investment.investor_id} not found or missing Stellar key`);
       }
 
       // Verificar KYC
-      if (investor.kyc_status !== 'approved') {
+      if (investor.kycStatus !== 'approved') {
         throw new Error(`Investor ${investment.investor_id} KYC not approved`);
       }
 
@@ -264,7 +264,7 @@ export function initDistributionQueue() {
       // Distribuir tokens
       const stellarResult = await StellarService.distributeTokens(
         assetCode,
-        investor.stellar_public_key,
+        investor.stellarPublicKey,
         amount,
         { memo: distributionMemo }
       );

@@ -196,12 +196,12 @@ export class PaymentMonitor {
 
       // Buscar investidor
       const investor = await Investor.findById(investment.investor_id);
-      if (!investor || !investor.stellar_public_key) {
+      if (!investor || !investor.stellarPublicKey) {
         throw new Error(`Investor ${investment.investor_id} not found or missing Stellar key`);
       }
 
       // Verificar KYC
-      if (investor.kyc_status !== 'approved') {
+      if (investor.kycStatus !== 'approved') {
         throw new Error(`Investor ${investment.investor_id} KYC not approved`);
       }
 
@@ -217,7 +217,7 @@ export class PaymentMonitor {
       // Distribuir tokens
       const stellarResult = await StellarService.distributeTokens(
         investment.asset_code,
-        investor.stellar_public_key,
+        investor.stellarPublicKey,
         investment.token_amount.toString(),
         { memo }
       );

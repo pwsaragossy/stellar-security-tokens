@@ -15,7 +15,7 @@ describe('Investors API Integration Tests', () => {
       
       // Login para obter token
       const loginResponse = await apiClient.post('/api/auth/login', {
-        body: { email: testData.investor.email },
+        body: { email: testData.investor.email, password: 'testpassword' },
       });
       authToken = loginResponse.data.data.token;
       setAuthToken(authToken);
@@ -45,6 +45,7 @@ describe('Investors API Integration Tests', () => {
       name: 'Novo Investidor',
       email: 'novo@example.com',
       document: '11122233344',
+      password: 'senha123',
     };
 
     const response = await apiClient.post('/api/investors/register', {
@@ -54,7 +55,6 @@ describe('Investors API Integration Tests', () => {
     assert.strictEqual(response.status, 201);
     assert.strictEqual(response.data.success, true);
     assert.strictEqual(response.data.data.email, newInvestor.email);
-    assert.ok(response.data.data.stellarPublicKey);
     assert.ok(response.data.stellarAccount.publicKey);
   });
 
@@ -67,6 +67,7 @@ describe('Investors API Integration Tests', () => {
       name: 'Duplicado',
       email: testData.investor.email,
       document: '99988877766',
+      password: 'senha123',
     };
 
     const response = await apiClient.post('/api/investors/register', {

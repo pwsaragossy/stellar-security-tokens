@@ -101,8 +101,8 @@ export const registerInvestor = async (req, res, next) => {
         name: investor.name,
         email: investor.email,
         document: investor.document,
-        stellarPublicKey: investor.stellar_public_key,
-        kycStatus: investor.kyc_status,
+        stellarPublicKey: investor.stellarPublicKey,
+        kycStatus: investor.kycStatus,
         createdAt: investor.created_at,
       },
       stellarAccount: {
@@ -150,8 +150,8 @@ export const loginInvestor = async (req, res, next) => {
           email: investor.email,
           name: investor.name,
           document: investor.document,
-          stellar_public_key: investor.stellar_public_key,
-          kyc_status: investor.kyc_status,
+          stellarPublicKey: investor.stellarPublicKey,
+          kycStatus: investor.kycStatus,
           created_at: investor.created_at,
           updated_at: investor.updated_at,
         },
@@ -175,7 +175,7 @@ export const whitelistInvestor = async (req, res, next) => {
       });
     }
 
-    if (!investor.stellar_public_key) {
+    if (!investor.stellarPublicKey) {
       return res.status(400).json({
         success: false,
         error: 'Investor does not have a Stellar public key',
@@ -183,7 +183,7 @@ export const whitelistInvestor = async (req, res, next) => {
     }
 
     const result = await StellarService.whitelistInvestor(
-      investor.stellar_public_key,
+      investor.stellarPublicKey,
       assetCode
     );
 
@@ -243,7 +243,18 @@ export const getInvestorById = async (req, res, next) => {
 
     res.json({
       success: true,
-      data: investor,
+      data: {
+        id: investor.id,
+        name: investor.name,
+        email: investor.email,
+        document: investor.document,
+        stellarPublicKey: investor.stellarPublicKey,
+        kycStatus: investor.kycStatus,
+        passwordHash: investor.passwordHash,
+        lastLogin: investor.lastLogin,
+        createdAt: investor.createdAt,
+        updatedAt: investor.updatedAt,
+      },
     });
   } catch (error) {
     next(error);
@@ -263,7 +274,7 @@ export const getInvestorBalance = async (req, res, next) => {
       });
     }
 
-    if (!investor.stellar_public_key) {
+    if (!investor.stellarPublicKey) {
       return res.status(400).json({
         success: false,
         error: 'Investor does not have a Stellar public key',
@@ -272,7 +283,7 @@ export const getInvestorBalance = async (req, res, next) => {
 
     const balance = await StellarService.getTokenBalance(
       assetCode,
-      investor.stellar_public_key
+      investor.stellarPublicKey
     );
 
     const distributions = await prisma.tokenDistribution.findMany({
@@ -308,8 +319,8 @@ export const getInvestorBalance = async (req, res, next) => {
           id: investor.id,
           name: investor.name,
           email: investor.email,
-          stellarPublicKey: investor.stellar_public_key,
-          kycStatus: investor.kyc_status,
+          stellarPublicKey: investor.stellarPublicKey,
+          kycStatus: investor.kycStatus,
         },
         balance: {
           assetCode: balance.assetCode,

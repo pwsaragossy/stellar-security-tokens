@@ -14,7 +14,7 @@ describe('Investments API Integration Tests', () => {
       dbAvailable = true;
       
       const loginResponse = await apiClient.post('/api/auth/login', {
-        body: { email: testData.investor.email },
+        body: { email: testData.investor.email, password: 'testpassword' },
       });
       authToken = loginResponse.data.data.token;
       setAuthToken(authToken);
@@ -107,20 +107,20 @@ describe('Investments API Integration Tests', () => {
       },
     });
 
-    if (createResponse.status === 202) {
-      const investmentId = createResponse.data.data.investment.id;
-      
-      // Buscar status
-      const statusResponse = await apiClient.get(`/api/investments/${investmentId}/status`);
-      
-      assert.strictEqual(statusResponse.status, 200);
-      assert.strictEqual(statusResponse.data.success, true);
-      assert.ok(statusResponse.data.data, 'Deve retornar dados do investimento');
-      assert.strictEqual(statusResponse.data.data.id, investmentId);
-      assert.ok(statusResponse.data.data.status, 'Deve ter status');
-      assert.ok(statusResponse.data.data.usdcAmount, 'Deve ter usdcAmount');
-      assert.ok(statusResponse.data.data.tokenAmount, 'Deve ter tokenAmount');
-    }
+    assert.strictEqual(createResponse.status, 202, 'Purchase should succeed');
+
+    const investmentId = createResponse.data.data.investment.id;
+
+    // Buscar status
+    const statusResponse = await apiClient.get(`/api/investments/${investmentId}/status`);
+
+    assert.strictEqual(statusResponse.status, 200);
+    assert.strictEqual(statusResponse.data.success, true);
+    assert.ok(statusResponse.data.data, 'Deve retornar dados do investimento');
+    assert.strictEqual(statusResponse.data.data.id, investmentId);
+    assert.ok(statusResponse.data.data.status, 'Deve ter status');
+    assert.ok(statusResponse.data.data.usdcAmount, 'Deve ter usdcAmount');
+    assert.ok(statusResponse.data.data.tokenAmount, 'Deve ter tokenAmount');
   });
 
   test('GET /api/investments/:id/status - retorna 404 para investimento inexistente', async () => {

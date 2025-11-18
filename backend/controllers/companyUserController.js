@@ -129,7 +129,7 @@ export class CompanyUserController {
             address: company.address,
             phone: company.phone,
             status: company.status,
-            kyc_status: company.kyc_status,
+            kycStatus: company.kycStatus,
             kyc_documents: company.kyc_documents,
             created_at: company.created_at,
             updated_at: company.updated_at,

@@ -75,7 +75,18 @@ export const getTokenByAssetCode = async (req, res, next) => {
 
     res.json({
       success: true,
-      data: token,
+      data: {
+        id: token.id,
+        assetCode: token.assetCode,
+        issuerPublicKey: token.issuerPublicKey,
+        totalSupply: token.totalSupply ? parseFloat(token.totalSupply.toString()) : null,
+        description: token.description,
+        annualInterestRate: token.annualInterestRate ? parseFloat(token.annualInterestRate.toString()) : null,
+        offerId: token.offerId,
+        issuedBy: token.issuedBy,
+        createdAt: token.createdAt,
+        updatedAt: token.updatedAt,
+      },
     });
   } catch (error) {
     next(error);
@@ -94,14 +105,14 @@ export const distributeTokens = async (req, res, next) => {
       });
     }
 
-    if (!investor.stellar_public_key) {
+    if (!investor.stellarPublicKey) {
       return res.status(400).json({
         success: false,
         error: 'Investor does not have a Stellar public key configured',
       });
     }
 
-    if (investor.kyc_status !== 'approved') {
+    if (investor.kycStatus !== 'approved') {
       return res.status(403).json({
         success: false,
         error: 'Investor KYC status must be approved to receive tokens',
@@ -118,7 +129,7 @@ export const distributeTokens = async (req, res, next) => {
 
     const stellarResult = await StellarService.distributeTokens(
       assetCode,
-      investor.stellar_public_key,
+      investor.stellarPublicKey,
       amount
     );
 

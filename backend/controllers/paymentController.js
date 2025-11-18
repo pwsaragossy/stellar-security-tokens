@@ -126,7 +126,7 @@ export const getPaymentHistory = async (req, res, next) => {
     ]);
 
     const uniqueInvestors = new Set(summaryData.map(p => p.investorId)).size;
-    const totalUsdcPaid = summaryData.reduce((sum, p) => sum + Number(p.usdcAmount), 0);
+    const totalUsdcPaid = summaryData.reduce((sum, p) => sum + Number(p.usdcAmount?.toString() || 0), 0);
     const averagePayment = summaryData.length > 0 ? totalUsdcPaid / summaryData.length : 0;
 
     const summary = {
@@ -136,10 +136,19 @@ export const getPaymentHistory = async (req, res, next) => {
       average_payment: averagePayment,
     };
 
+    // Convert Decimal values to numbers for JSON serialization
+    const paymentsFormatted = payments.map(payment => ({
+      ...payment,
+      tokenBalance: payment.tokenBalance ? parseFloat(payment.tokenBalance.toString()) : null,
+      interestRate: payment.interestRate ? parseFloat(payment.interestRate.toString()) : null,
+      interestAmount: payment.interestAmount ? parseFloat(payment.interestAmount.toString()) : null,
+      usdcAmount: payment.usdcAmount ? parseFloat(payment.usdcAmount.toString()) : null,
+    }));
+
     res.json({
       success: true,
       data: {
-        payments,
+        payments: paymentsFormatted,
         pagination: {
           total,
           limit: parseInt(limit, 10),

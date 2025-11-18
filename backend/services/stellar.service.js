@@ -165,9 +165,18 @@ export class StellarService {
   static async createInvestorAccount() {
     try {
       const keypair = Keypair.random();
-      
+
+      // Em ambiente de teste, não usar Friendbot
+      if (process.env.NODE_ENV === 'test') {
+        return {
+          success: true,
+          publicKey: keypair.publicKey(),
+          secretKey: keypair.secret(),
+        };
+      }
+
       const friendbotUrl = `https://friendbot.stellar.org?addr=${encodeURIComponent(keypair.publicKey())}`;
-      
+
       try {
         const response = await fetch(friendbotUrl);
         if (!response.ok) {

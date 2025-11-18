@@ -14,7 +14,7 @@ describe('Payments API Integration Tests', () => {
       dbAvailable = true;
       
       const loginResponse = await apiClient.post('/api/auth/login', {
-        body: { email: testData.investor.email },
+        body: { email: testData.investor.email, password: 'testpassword' },
       });
       authToken = loginResponse.data.data.token;
       setAuthToken(authToken);
