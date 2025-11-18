@@ -732,4 +732,742 @@ export class PaymentService {
       throw new Error(`Failed to get payment history: ${error.message}`);
     }
   }
+
+  /**
+   * Processa pagamentos bullet (pagamento único na data de vencimento)
+   * @param {string} assetCode - Código do asset
+   * @returns {Promise<Object>} Resultado do processamento
+   */
+  static async processBulletPayments(assetCode = 'SIN01') {
+    const startTime = Date.now();
+    const paymentDate = new Date().toISOString().split('T')[0];
+
+    logger.info('Starting bullet payment process', { assetCode, paymentDate });
+
+    try {
+      // Buscar ofertas bullet ativas que venceram hoje
+      const expiredBulletOffers = await this.getExpiredBulletOffers();
+
+      if (expiredBulletOffers.length === 0) {
+        logger.info('No expired bullet offers found');
+        return {
+          success: true,
+          message: 'No bullet offers to process',
+          processed: 0,
+        };
+      }
+
+      logger.info(`Processing ${expiredBulletOffers.length} expired bullet offers`);
+
+      const allPayments = [];
+      let totalProcessed = 0;
+
+      for (const offer of expiredBulletOffers) {
+        try {
+          // Buscar investidores com saldos nesta oferta
+          const investorsWithBalances = await this.getInvestorsWithBalancesByOffer(offer.id);
+
+          if (investorsWithBalances.length === 0) {
+            logger.warn(`No investors found for expired bullet offer ${offer.asset_code}`);
+            continue;
+          }
+
+          // Calcular pagamentos bullet para cada investidor
+          for (const investor of investorsWithBalances) {
+            const tokenBalance = parseFloat(investor.token_balance);
+            const bulletPayment = parseFloat(offer.bullet_payment_amount);
+
+            if (tokenBalance <= 0 || bulletPayment <= 0) {
+              logger.warn('Skipping investor - invalid balance or payment amount', {
+                investorId: investor.id,
+                balance: tokenBalance,
+                payment: bulletPayment
+              });
+              continue;
+            }
+
+            allPayments.push({
+              investorId: investor.id,
+              assetCode: offer.asset_code,
+              tokenBalance: tokenBalance.toString(),
+              interestRate: '0', // Bullet payments don't have interest rate
+              interestAmount: '0', // No periodic interest
+              usdcAmount: bulletPayment.toString(),
+              offerId: offer.id,
+              isBulletPayment: true,
+              paymentType: 'bullet',
+            });
+          }
+
+          totalProcessed += investorsWithBalances.length;
+        } catch (error) {
+          logger.error(`Failed to process bullet offer ${offer.asset_code}`, error);
+          // Continue with other offers
+        }
+      }
+
+      if (allPayments.length === 0) {
+        logger.warn('No bullet payments to process');
+        return {
+          success: true,
+          message: 'No bullet payments to process',
+          processed: 0,
+        };
+      }
+
+      logger.info(`Calculated ${allPayments.length} bullet payments`);
+
+      // Buscar dados completos dos investidores para processamento
+      const investorIds = [...new Set(allPayments.map(p => p.investorId))];
+      const investors = await prisma.investor.findMany({
+        where: {
+          id: { in: investorIds },
+          kyc_status: 'approved'
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          stellar_public_key: true,
+          kyc_status: true,
+        }
+      });
+
+      // Filtrar apenas investidores com chave Stellar válida
+      const validInvestors = investors.filter(inv => inv.stellar_public_key);
+
+      if (validInvestors.length === 0) {
+        logger.warn('No valid investors found for bullet payments');
+        return {
+          success: true,
+          message: 'No valid investors to process',
+          processed: 0,
+        };
+      }
+
+      // Processar pagamentos em lotes
+      const batchResult = await retryOperation(
+        () => this.createBatchUSDCPayment(validInvestors, allPayments),
+        3,
+        2000
+      );
+
+      // Registrar pagamentos bullet
+      if (batchResult.batches && batchResult.batches.length > 1) {
+        let paymentIndex = 0;
+        for (const batch of batchResult.batches) {
+          const batchPayments = allPayments.slice(
+            paymentIndex,
+            paymentIndex + batch.operationsCount
+          );
+          await retryOperation(
+            () => this.recordBulletPayments(batchPayments, batch.transactionHash, paymentDate),
+            3
+          );
+          paymentIndex += batch.operationsCount;
+        }
+      } else {
+        await retryOperation(
+          () => this.recordBulletPayments(allPayments, batchResult.transactionHash, paymentDate),
+          3
+        );
+      }
+
+      // Enviar emails de confirmação
+      const emailResults = await this.sendBulletPaymentEmails(
+        allPayments,
+        batchResult.transactionHash,
+        paymentDate
+      );
+
+      const successfulEmails = emailResults.filter(r => r.success).length;
+      const failedEmails = emailResults.filter(r => !r.success).length;
+
+      const duration = Date.now() - startTime;
+
+      logger.info('Bullet payment process completed', {
+        duration: `${duration}ms`,
+        offersProcessed: expiredBulletOffers.length,
+        paymentsProcessed: allPayments.length,
+        transactionHash: batchResult.transactionHash,
+        emailsSent: successfulEmails,
+        emailsFailed: failedEmails,
+      });
+
+      return {
+        success: true,
+        message: 'Bullet payments processed successfully',
+        data: {
+          paymentDate,
+          offersProcessed: expiredBulletOffers.length,
+          paymentsProcessed: allPayments.length,
+          totalAmount: allPayments.reduce((sum, p) => sum + parseFloat(p.usdcAmount), 0),
+          transactionHash: batchResult.transactionHash,
+          emailsSent: successfulEmails,
+          emailsFailed: failedEmails,
+          duration: `${duration}ms`,
+        },
+      };
+    } catch (error) {
+      logger.error('Bullet payment process failed', error);
+
+      const duration = Date.now() - startTime;
+      return {
+        success: false,
+        error: error.message,
+        duration: `${duration}ms`,
+      };
+    }
+  }
+
+  /**
+   * Busca ofertas bullet expiradas (data de vencimento chegou)
+   * @returns {Promise<Array>} Array de ofertas bullet expiradas
+   */
+  static async getExpiredBulletOffers() {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+
+      const expiredOffers = await prisma.offer.findMany({
+        where: {
+          payment_type: 'bullet',
+          maturity_date: {
+            lte: new Date(today + 'T23:59:59.999Z'), // Até o final do dia
+          },
+          status: 'active',
+        },
+        include: {
+          tokens: true,
+        },
+      });
+
+      return expiredOffers.filter(offer => offer.tokens.length > 0);
+    } catch (error) {
+      logger.error('Error fetching expired bullet offers', error);
+      throw new Error(`Failed to get expired bullet offers: ${error.message}`);
+    }
+  }
+
+  /**
+   * Busca investidores com saldos em uma oferta específica
+   * @param {number} offerId - ID da oferta
+   * @returns {Promise<Array>} Array de investidores com saldos
+   */
+  static async getInvestorsWithBalancesByOffer(offerId) {
+    try {
+      const result = await prisma.$queryRaw`
+        SELECT
+          i.id,
+          i.name,
+          i.email,
+          i.stellar_public_key,
+          i.kyc_status,
+          COALESCE(SUM(td.amount), 0) as token_balance
+        FROM investors i
+        LEFT JOIN token_distributions td ON td.investor_id = i.id
+        LEFT JOIN tokens t ON t.asset_code = td.asset_code
+        WHERE t.offer_id = ${offerId}
+          AND i.kyc_status = 'approved'
+        GROUP BY i.id, i.name, i.email, i.stellar_public_key, i.kyc_status
+        HAVING COALESCE(SUM(td.amount), 0) > 0
+        ORDER BY i.id
+      `;
+
+      return result;
+    } catch (error) {
+      logger.error('Error fetching investors with balances by offer', error);
+      throw new Error(`Failed to get investors with balances: ${error.message}`);
+    }
+  }
+
+  /**
+   * Registra pagamentos bullet no banco de dados
+   * @param {Array} payments - Array de pagamentos
+   * @param {string} transactionHash - Hash da transação Stellar
+   * @param {string} paymentDate - Data do pagamento
+   */
+  static async recordBulletPayments(payments, transactionHash, paymentDate) {
+    try {
+      const paymentRecords = payments.map(payment => ({
+        investor_id: payment.investorId,
+        asset_code: payment.assetCode,
+        token_balance: payment.tokenBalance,
+        interest_rate: payment.interestRate,
+        interest_amount: payment.interestAmount,
+        usdc_amount: payment.usdcAmount,
+        transaction_hash: transactionHash,
+        payment_date: paymentDate,
+        offer_id: payment.offerId,
+        payment_type: payment.paymentType,
+        is_bullet_payment: payment.isBulletPayment,
+        status: 'completed',
+      }));
+
+      await prisma.interestPayment.createMany({
+        data: paymentRecords,
+        skipDuplicates: true,
+      });
+
+      logger.info(`Recorded ${paymentRecords.length} bullet payments`, { transactionHash });
+    } catch (error) {
+      logger.error('Error recording bullet payments', error);
+      throw new Error(`Failed to record bullet payments: ${error.message}`);
+    }
+  }
+
+  /**
+   * Envia emails de confirmação para pagamentos bullet
+   * @param {Array} payments - Array de pagamentos
+   * @param {string} transactionHash - Hash da transação
+   * @param {string} paymentDate - Data do pagamento
+   * @returns {Promise<Array>} Resultados dos envios de email
+   */
+  static async sendBulletPaymentEmails(payments, transactionHash, paymentDate) {
+    // Agrupar pagamentos por investidor
+    const paymentsByInvestor = payments.reduce((acc, payment) => {
+      if (!acc[payment.investorId]) {
+        acc[payment.investorId] = {
+          investorId: payment.investorId,
+          payments: [],
+          totalAmount: 0,
+        };
+      }
+      acc[payment.investorId].payments.push(payment);
+      acc[payment.investorId].totalAmount += parseFloat(payment.usdcAmount);
+      return acc;
+    }, {});
+
+    const emailPromises = Object.values(paymentsByInvestor).map(async (investorData) => {
+      try {
+        // Buscar dados do investidor
+        const investor = await prisma.investor.findUnique({
+          where: { id: investorData.investorId },
+        });
+
+        if (!investor) {
+          logger.warn(`Investor ${investorData.investorId} not found for email`);
+          return { success: false, investorId: investorData.investorId, error: 'Investor not found' };
+        }
+
+        // Enviar email de confirmação
+        await EmailService.sendBulletPaymentConfirmation(
+          investor.email,
+          {
+            investorName: investor.name,
+            paymentDate,
+            transactionHash,
+            totalAmount: investorData.totalAmount,
+            payments: investorData.payments,
+          }
+        );
+
+        logger.info(`Bullet payment confirmation email sent to ${investor.email}`);
+        return { success: true, investorId: investorData.investorId };
+      } catch (error) {
+        logger.error(`Failed to send bullet payment email to investor ${investorData.investorId}`, error);
+        return { success: false, investorId: investorData.investorId, error: error.message };
+      }
+    });
+
+    return await Promise.all(emailPromises);
+  }
+
+  /**
+   * Agenda processamento de pagamentos bullet (diariamente)
+   * Executa diariamente às 01:00 UTC para verificar vencimentos
+   * @returns {Object} Job agendado
+   */
+  static scheduleBulletPayments() {
+    logger.info('Scheduling bullet payments', {
+      schedule: '0 1 * * *', // Daily at 01:00 UTC
+    });
+
+    const job = cron.schedule('0 1 * * *', async () => {
+      logger.info('Scheduled bullet payment job triggered');
+      try {
+        await this.processBulletPayments();
+      } catch (error) {
+        logger.error('Scheduled bullet payment job failed', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'UTC',
+    });
+
+    logger.info('Bullet payment schedule activated');
+    return job;
+  }
+
+  /**
+   * Agenda processamento de pagamentos trimestrais
+   * Executa no 1º dia de janeiro, abril, julho e outubro
+   * @param {string} [assetCode='SIN01'] - Código do asset
+   * @returns {Object} Job agendado
+   */
+  static scheduleQuarterlyPayments(assetCode = 'SIN01') {
+    logger.info('Scheduling quarterly payments', {
+      schedule: '0 0 1 1,4,7,10 *',
+      assetCode,
+    });
+
+    const job = cron.schedule('0 0 1 1,4,7,10 *', async () => {
+      logger.info('Scheduled quarterly payment job triggered');
+      try {
+        await this.processQuarterlyPayments(assetCode);
+      } catch (error) {
+        logger.error('Scheduled quarterly payment job failed', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'UTC',
+    });
+
+    logger.info('Quarterly payment schedule activated');
+    return job;
+  }
+
+  /**
+   * Agenda processamento de pagamentos semestrais
+   * Executa no 1º dia de janeiro e julho
+   * @param {string} [assetCode='SIN01'] - Código do asset
+   * @returns {Object} Job agendado
+   */
+  static scheduleSemiAnnualPayments(assetCode = 'SIN01') {
+    logger.info('Scheduling semi-annual payments', {
+      schedule: '0 0 1 1,7 *',
+      assetCode,
+    });
+
+    const job = cron.schedule('0 0 1 1,7 *', async () => {
+      logger.info('Scheduled semi-annual payment job triggered');
+      try {
+        await this.processSemiAnnualPayments(assetCode);
+      } catch (error) {
+        logger.error('Scheduled semi-annual payment job failed', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'UTC',
+    });
+
+    logger.info('Semi-annual payment schedule activated');
+    return job;
+  }
+
+  /**
+   * Processa pagamentos trimestrais
+   * @param {string} assetCode - Código do asset
+   * @returns {Promise<Object>} Resultado do processamento
+   */
+  static async processQuarterlyPayments(assetCode = 'SIN01') {
+    const startTime = Date.now();
+    const paymentDate = new Date().toISOString().split('T')[0];
+
+    logger.info('Starting quarterly payment process', { assetCode, paymentDate });
+
+    try {
+      // Buscar ofertas trimestrais ativas
+      const quarterlyOffers = await this.getOffersByPaymentTypeAndFrequency('quarterly', 3);
+
+      if (quarterlyOffers.length === 0) {
+        logger.info('No quarterly offers found');
+        return {
+          success: true,
+          message: 'No quarterly offers to process',
+          processed: 0,
+        };
+      }
+
+      // Usar a lógica existente de pagamentos mensais, mas com frequência trimestral
+      return await this.processPeriodicPayments(assetCode, quarterlyOffers, paymentDate, 'quarterly');
+    } catch (error) {
+      logger.error('Quarterly payment process failed', error);
+
+      const duration = Date.now() - startTime;
+      return {
+        success: false,
+        error: error.message,
+        duration: `${duration}ms`,
+      };
+    }
+  }
+
+  /**
+   * Processa pagamentos semestrais
+   * @param {string} assetCode - Código do asset
+   * @returns {Promise<Object>} Resultado do processamento
+   */
+  static async processSemiAnnualPayments(assetCode = 'SIN01') {
+    const startTime = Date.now();
+    const paymentDate = new Date().toISOString().split('T')[0];
+
+    logger.info('Starting semi-annual payment process', { assetCode, paymentDate });
+
+    try {
+      // Buscar ofertas semestrais ativas
+      const semiAnnualOffers = await this.getOffersByPaymentTypeAndFrequency('semi_annual', 6);
+
+      if (semiAnnualOffers.length === 0) {
+        logger.info('No semi-annual offers found');
+        return {
+          success: true,
+          message: 'No semi-annual offers to process',
+          processed: 0,
+        };
+      }
+
+      // Usar a lógica existente de pagamentos mensais, mas com frequência semestral
+      return await this.processPeriodicPayments(assetCode, semiAnnualOffers, paymentDate, 'semi_annual');
+    } catch (error) {
+      logger.error('Semi-annual payment process failed', error);
+
+      const duration = Date.now() - startTime;
+      return {
+        success: false,
+        error: error.message,
+        duration: `${duration}ms`,
+      };
+    }
+  }
+
+  /**
+   * Busca ofertas por tipo de pagamento e frequência
+   * @param {string} paymentType - Tipo de pagamento
+   * @param {number} frequency - Frequência em meses
+   * @returns {Promise<Array>} Array de ofertas
+   */
+  static async getOffersByPaymentTypeAndFrequency(paymentType, frequency) {
+    try {
+      const offers = await prisma.offer.findMany({
+        where: {
+          payment_type: paymentType,
+          payment_frequency: frequency,
+          status: 'active',
+        },
+        include: {
+          tokens: true,
+        },
+      });
+
+      return offers.filter(offer => offer.tokens.length > 0);
+    } catch (error) {
+      logger.error('Error fetching offers by payment type and frequency', error);
+      throw new Error(`Failed to get offers: ${error.message}`);
+    }
+  }
+
+  /**
+   * Processa pagamentos periódicos (trimestrais, semestrais)
+   * @param {string} assetCode - Código do asset
+   * @param {Array} offers - Ofertas a processar
+   * @param {string} paymentDate - Data do pagamento
+   * @param {string} paymentType - Tipo de pagamento
+   * @returns {Promise<Object>} Resultado do processamento
+   */
+  static async processPeriodicPayments(assetCode, offers, paymentDate, paymentType) {
+    const startTime = Date.now();
+
+    try {
+      const allPayments = [];
+
+      for (const offer of offers) {
+        if (offer.asset_code !== assetCode) continue;
+
+        try {
+          const result = await this.getInvestorsWithBalances(assetCode, offer.id);
+          const { investors, annualInterestRate } = result;
+
+          if (investors.length === 0) continue;
+
+          // Calcular juros baseado na frequência
+          const frequency = offer.payment_frequency || 1;
+          const periodicRate = annualInterestRate / 12 * frequency; // Taxa proporcional à frequência
+
+          for (const investor of investors) {
+            const tokenBalance = parseFloat(investor.token_balance);
+            const interestAmount = this.calculateMonthlyInterest(tokenBalance, annualInterestRate) * frequency;
+
+            if (interestAmount <= 0) continue;
+
+            allPayments.push({
+              investorId: investor.id,
+              assetCode,
+              tokenBalance: tokenBalance.toString(),
+              interestRate: annualInterestRate.toString(),
+              interestAmount: interestAmount.toString(),
+              usdcAmount: interestAmount.toString(),
+              offerId: offer.id,
+              paymentType,
+              isBulletPayment: false,
+            });
+          }
+        } catch (error) {
+          logger.error(`Failed to process ${paymentType} offer ${offer.asset_code}`, error);
+        }
+      }
+
+      if (allPayments.length === 0) {
+        return {
+          success: true,
+          message: `No ${paymentType} payments to process`,
+          processed: 0,
+        };
+      }
+
+      // Usar lógica existente para processamento em lote
+      const investors = allPayments.map(p => ({
+        id: p.investorId,
+        stellar_public_key: null, // Será buscado na função
+        name: '',
+        email: '',
+        kyc_status: 'approved',
+        token_balance: p.tokenBalance
+      }));
+
+      const batchResult = await retryOperation(
+        () => this.createBatchUSDCPayment(investors, allPayments),
+        3,
+        2000
+      );
+
+      // Registrar pagamentos
+      await retryOperation(
+        () => this.recordPeriodicPayments(allPayments, batchResult.transactionHash, paymentDate, paymentType),
+        3
+      );
+
+      const emailResults = await this.sendPeriodicPaymentEmails(
+        allPayments,
+        batchResult.transactionHash,
+        paymentDate,
+        paymentType
+      );
+
+      const successfulEmails = emailResults.filter(r => r.success).length;
+      const failedEmails = emailResults.filter(r => !r.success).length;
+
+      const duration = Date.now() - startTime;
+
+      logger.info(`${paymentType} payment process completed`, {
+        duration: `${duration}ms`,
+        paymentsProcessed: allPayments.length,
+        transactionHash: batchResult.transactionHash,
+        emailsSent: successfulEmails,
+        emailsFailed: failedEmails,
+      });
+
+      return {
+        success: true,
+        message: `${paymentType} payments processed successfully`,
+        data: {
+          paymentDate,
+          paymentsProcessed: allPayments.length,
+          totalAmount: allPayments.reduce((sum, p) => sum + parseFloat(p.usdcAmount), 0),
+          transactionHash: batchResult.transactionHash,
+          emailsSent: successfulEmails,
+          emailsFailed: failedEmails,
+          duration: `${duration}ms`,
+        },
+      };
+    } catch (error) {
+      logger.error(`${paymentType} payment process failed`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Registra pagamentos periódicos no banco de dados
+   * @param {Array} payments - Array de pagamentos
+   * @param {string} transactionHash - Hash da transação Stellar
+   * @param {string} paymentDate - Data do pagamento
+   * @param {string} paymentType - Tipo de pagamento
+   */
+  static async recordPeriodicPayments(payments, transactionHash, paymentDate, paymentType) {
+    try {
+      const paymentRecords = payments.map(payment => ({
+        investor_id: payment.investorId,
+        asset_code: payment.assetCode,
+        token_balance: payment.tokenBalance,
+        interest_rate: payment.interestRate,
+        interest_amount: payment.interestAmount,
+        usdc_amount: payment.usdcAmount,
+        transaction_hash: transactionHash,
+        payment_date: paymentDate,
+        offer_id: payment.offerId,
+        payment_type: paymentType,
+        is_bullet_payment: false,
+        status: 'completed',
+      }));
+
+      await prisma.interestPayment.createMany({
+        data: paymentRecords,
+        skipDuplicates: true,
+      });
+
+      logger.info(`Recorded ${paymentRecords.length} ${paymentType} payments`, { transactionHash });
+    } catch (error) {
+      logger.error(`Error recording ${paymentType} payments`, error);
+      throw new Error(`Failed to record ${paymentType} payments: ${error.message}`);
+    }
+  }
+
+  /**
+   * Envia emails de confirmação para pagamentos periódicos
+   * @param {Array} payments - Array de pagamentos
+   * @param {string} transactionHash - Hash da transação
+   * @param {string} paymentDate - Data do pagamento
+   * @param {string} paymentType - Tipo de pagamento
+   * @returns {Promise<Array>} Resultados dos envios de email
+   */
+  static async sendPeriodicPaymentEmails(payments, transactionHash, paymentDate, paymentType) {
+    // Agrupar pagamentos por investidor
+    const paymentsByInvestor = payments.reduce((acc, payment) => {
+      if (!acc[payment.investorId]) {
+        acc[payment.investorId] = {
+          investorId: payment.investorId,
+          payments: [],
+          totalAmount: 0,
+        };
+      }
+      acc[payment.investorId].payments.push(payment);
+      acc[payment.investorId].totalAmount += parseFloat(payment.usdcAmount);
+      return acc;
+    }, {});
+
+    const emailPromises = Object.values(paymentsByInvestor).map(async (investorData) => {
+      try {
+        const investor = await prisma.investor.findUnique({
+          where: { id: investorData.investorId },
+        });
+
+        if (!investor) {
+          logger.warn(`Investor ${investorData.investorId} not found for email`);
+          return { success: false, investorId: investorData.investorId, error: 'Investor not found' };
+        }
+
+        // Enviar email apropriado baseado no tipo
+        const emailMethod = paymentType === 'quarterly' ? 'sendQuarterlyPaymentConfirmation' : 'sendSemiAnnualPaymentConfirmation';
+
+        await EmailService[emailMethod](
+          investor.email,
+          {
+            investorName: investor.name,
+            paymentDate,
+            transactionHash,
+            totalAmount: investorData.totalAmount,
+            payments: investorData.payments,
+            paymentType,
+          }
+        );
+
+        logger.info(`${paymentType} payment confirmation email sent to ${investor.email}`);
+        return { success: true, investorId: investorData.investorId };
+      } catch (error) {
+        logger.error(`Failed to send ${paymentType} payment email to investor ${investorData.investorId}`, error);
+        return { success: false, investorId: investorData.investorId, error: error.message };
+      }
+    });
+
+    return await Promise.all(emailPromises);
+  }
 }

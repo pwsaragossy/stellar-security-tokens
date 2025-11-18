@@ -79,6 +79,10 @@ export class OfferController {
         total_supply,
         annual_interest_rate,
         offer_type,
+        payment_type = 'monthly',
+        maturity_date,
+        bullet_payment_amount,
+        payment_frequency = 1,
         offer_rules = {},
         legal_documents = {},
       } = req.body;
@@ -127,6 +131,10 @@ export class OfferController {
         total_supply,
         annual_interest_rate,
         offer_type,
+        payment_type,
+        maturity_date,
+        bullet_payment_amount,
+        payment_frequency,
         offer_rules,
         legal_documents,
       });

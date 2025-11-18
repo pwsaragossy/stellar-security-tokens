@@ -22,6 +22,64 @@ export const processMonthlyPayments = async (req, res, next) => {
 };
 
 /**
+ * Processa pagamentos bullet manualmente
+ * Processa pagamentos únicos na data de vencimento das ofertas bullet
+ */
+export const processBulletPayments = async (req, res, next) => {
+  try {
+    const result = await PaymentService.processBulletPayments();
+
+    res.json({
+      success: true,
+      message: 'Bullet payments processed successfully',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Processa pagamentos trimestrais manualmente
+ * Calcula juros trimestrais, cria transação batch no Stellar e envia emails
+ */
+export const processQuarterlyPayments = async (req, res, next) => {
+  try {
+    const { assetCode = 'SIN01' } = req.body;
+
+    const result = await PaymentService.processQuarterlyPayments(assetCode);
+
+    res.json({
+      success: true,
+      message: 'Quarterly interest payments processed successfully',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Processa pagamentos semestrais manualmente
+ * Calcula juros semestrais, cria transação batch no Stellar e envia emails
+ */
+export const processSemiAnnualPayments = async (req, res, next) => {
+  try {
+    const { assetCode = 'SIN01' } = req.body;
+
+    const result = await PaymentService.processSemiAnnualPayments(assetCode);
+
+    res.json({
+      success: true,
+      message: 'Semi-annual interest payments processed successfully',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Obtém histórico completo de pagamentos de juros
  * Inclui paginação e filtros opcionais
  */

@@ -25,6 +25,75 @@ export class OfferService {
   }
 
   /**
+   * Valida tipo de pagamento e campos associados
+   * @param {string} paymentType - Tipo de pagamento ('monthly', 'bullet', 'quarterly', 'semi_annual')
+   * @param {Object} paymentFields - Campos relacionados ao pagamento
+   * @returns {Object} { valid: boolean, errors: Array<string> }
+   */
+  static validatePaymentFields(paymentType, paymentFields) {
+    const errors = [];
+    const { maturityDate, bulletPaymentAmount, paymentFrequency, annualInterestRate } = paymentFields;
+
+    // Validar tipos de pagamento suportados
+    const validPaymentTypes = ['monthly', 'bullet', 'quarterly', 'semi_annual'];
+    if (!validPaymentTypes.includes(paymentType)) {
+      errors.push(`Invalid payment type. Must be one of: ${validPaymentTypes.join(', ')}`);
+      return { valid: false, errors };
+    }
+
+    // Para pagamentos mensais, taxa de juros é obrigatória
+    if (paymentType === 'monthly') {
+      if (!annualInterestRate || typeof annualInterestRate !== 'number' || annualInterestRate <= 0) {
+        errors.push('annual_interest_rate is required and must be a positive number for monthly payments');
+      }
+    }
+
+    // Para pagamentos bullet, data de vencimento e valor são obrigatórios
+    if (paymentType === 'bullet') {
+      if (!maturityDate) {
+        errors.push('maturity_date is required for bullet payments');
+      } else {
+        const maturity = new Date(maturityDate);
+        if (isNaN(maturity.getTime())) {
+          errors.push('maturity_date must be a valid date');
+        } else if (maturity <= new Date()) {
+          errors.push('maturity_date must be in the future');
+        }
+      }
+
+      if (!bulletPaymentAmount || typeof bulletPaymentAmount !== 'number' || bulletPaymentAmount <= 0) {
+        errors.push('bullet_payment_amount is required and must be a positive number for bullet payments');
+      }
+    }
+
+    // Para pagamentos periódicos (quarterly, semi_annual), taxa de juros é obrigatória
+    if (['quarterly', 'semi_annual'].includes(paymentType)) {
+      if (!annualInterestRate || typeof annualInterestRate !== 'number' || annualInterestRate <= 0) {
+        errors.push('annual_interest_rate is required and must be a positive number for periodic payments');
+      }
+    }
+
+    // Validar frequência de pagamento
+    if (paymentFrequency && (typeof paymentFrequency !== 'number' || paymentFrequency < 1)) {
+      errors.push('payment_frequency must be a positive number (months between payments)');
+    }
+
+    // Definir frequência padrão baseada no tipo
+    const defaultFrequencies = {
+      monthly: 1,
+      quarterly: 3,
+      semi_annual: 6,
+      bullet: null // bullet não tem frequência periódica
+    };
+
+    if (paymentFrequency && defaultFrequencies[paymentType] && paymentFrequency !== defaultFrequencies[paymentType]) {
+      errors.push(`payment_frequency for ${paymentType} should be ${defaultFrequencies[paymentType]} months`);
+    }
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  /**
    * Valida regras da oferta
    * @param {Object} offerRules - Regras da oferta
    * @param {string} offerType - Tipo da oferta ('collateral' ou 'sale')
@@ -98,6 +167,20 @@ export class OfferService {
     // Validar asset_code
     if (!this.validateAssetCode(offerData.asset_code)) {
       throw new Error('Invalid asset_code. Must be uppercase alphanumeric, max 12 characters');
+    }
+
+    // Validar campos de pagamento
+    const paymentValidation = this.validatePaymentFields(
+      offerData.payment_type || 'monthly',
+      {
+        maturityDate: offerData.maturity_date,
+        bulletPaymentAmount: offerData.bullet_payment_amount,
+        paymentFrequency: offerData.payment_frequency,
+        annualInterestRate: offerData.annual_interest_rate
+      }
+    );
+    if (!paymentValidation.valid) {
+      throw new Error(`Invalid payment fields: ${paymentValidation.errors.join(', ')}`);
     }
 
     // Validar regras

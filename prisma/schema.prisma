@@ -33,6 +33,13 @@ enum OfferStatus {
   closed
 }
 
+enum PaymentType {
+  monthly
+  bullet
+  quarterly
+  semi_annual
+}
+
 enum OfferType {
   collateral
   sale
@@ -170,6 +177,8 @@ model InterestPayment {
   status          PaymentStatus  @default(pending)
   errorMessage    String?        @map("error_message") @db.Text
   offerId         Int?           @map("offer_id")
+  paymentType     PaymentType    @default(monthly) @map("payment_type")
+  isBulletPayment Boolean        @default(false) @map("is_bullet_payment")
   createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamp
 
   // Relations
@@ -186,6 +195,7 @@ model InterestPayment {
   @@index([investorId, assetCode, paymentDate(sort: Desc)])
   @@index([investorId, paymentDate])
   @@index([paymentDate(sort: Desc), assetCode])
+  @@index([paymentType])
   @@map("interest_payments")
 }
 
@@ -280,6 +290,10 @@ model Offer {
   reviewedAt          DateTime?      @map("reviewed_at") @db.Timestamp
   legalDocuments      Json           @default("{}") @map("legal_documents")
   dueDiligenceNotes   String?        @map("due_diligence_notes") @db.Text
+  paymentType         PaymentType    @default(monthly) @map("payment_type")
+  maturityDate        DateTime?      @map("maturity_date")
+  bulletPaymentAmount Decimal?       @map("bullet_payment_amount") @db.Decimal(20, 7)
+  paymentFrequency    Int            @default(1) @map("payment_frequency")
   createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamp
   updatedAt           DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamp
 
@@ -297,6 +311,7 @@ model Offer {
   @@index([assetCode])
   @@index([offerType])
   @@index([reviewedBy])
+  @@index([paymentType])
   @@map("offers")
 }
 

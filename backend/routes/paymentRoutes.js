@@ -4,6 +4,9 @@ import { validate } from '../middleware/validator.js';
 import { authenticateToken } from '../middleware/auth.js';
 import {
   processMonthlyPayments,
+  processBulletPayments,
+  processQuarterlyPayments,
+  processSemiAnnualPayments,
   getPaymentHistory,
   getPaymentStatistics,
 } from '../controllers/paymentController.js';
@@ -31,6 +34,9 @@ const getStatisticsValidation = [
 ];
 
 router.post('/process', processPaymentsValidation, authenticateToken, processMonthlyPayments);
+router.post('/process/bullet', authenticateToken, processBulletPayments);
+router.post('/process/quarterly', processPaymentsValidation, authenticateToken, processQuarterlyPayments);
+router.post('/process/semi-annual', processPaymentsValidation, authenticateToken, processSemiAnnualPayments);
 router.get('/history', getHistoryValidation, authenticateToken, getPaymentHistory);
 router.get('/statistics', getStatisticsValidation, authenticateToken, getPaymentStatistics);
 
