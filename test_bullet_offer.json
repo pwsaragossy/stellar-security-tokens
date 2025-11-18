@@ -1,0 +1,14 @@
+{
+  "asset_code": "BULLET01",
+  "offer_name": "Bullet Payment Test Token",
+  "description": "Testing bullet payment functionality",
+  "total_supply": 1000000,
+  "offer_type": "collateral",
+  "payment_type": "bullet",
+  "maturity_date": "2026-11-18",
+  "bullet_payment_amount": 10000.00,
+  "offer_rules": {
+    "min_investment": 100,
+    "max_investment": 10000
+  }
+}
