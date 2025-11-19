@@ -98,8 +98,8 @@ services:
       sh -c "
         echo 'Waiting for database...' &&
         sleep 5 &&
-        node backend/database/migrate.js &&
-        node backend/server.js
+        node backend/src/database/migrate.js &&
+        node backend/src/index.js
       "
 
   frontend:

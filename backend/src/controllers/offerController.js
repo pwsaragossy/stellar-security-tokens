@@ -1,0 +1,631 @@
+import { Offer } from './models/Offer.js';
+import { Company } from './models/Company.js';
+import { Token } from './models/Token.js';
+import { StellarService } from './services/stellar.service.js';
+import { OfferService } from './services/offer.service.js';
+import { IPFSService } from './services/ipfs.service.js';
+import { StellarTomlService } from './services/stellarToml.service.js';
+
+/**
+ * Controller para gerenciar ofertas de tokenização
+ */
+export class OfferController {
+  /**
+   * Formata documentos legais adicionando URLs IPFS completas
+   * @param {Object} legalDocuments - Documentos do banco (JSONB)
+   * @returns {Object} Documentos formatados com URLs completas
+   */
+  static formatLegalDocuments(legalDocuments) {
+    if (!legalDocuments || typeof legalDocuments !== 'object') {
+      return {};
+    }
+
+    const formatted = {};
+    
+    // Lista de tipos de documentos suportados
+    const documentTypes = ['contract', 'terms', 'prospectus', 'kyc', 'other'];
+    
+    for (const docType of documentTypes) {
+      if (legalDocuments[docType]) {
+        const doc = legalDocuments[docType];
+        
+        formatted[docType] = {
+          hash: doc.hash || null,
+          url: doc.url || (doc.hash ? IPFSService.getIPFSURL(doc.hash) : null),
+          fileName: doc.fileName || null,
+          uploadedAt: doc.uploadedAt || null,
+        };
+      }
+    }
+    
+    return formatted;
+  }
+
+  /**
+   * Formata oferta para resposta do frontend
+   * @param {Object} offer - Oferta do banco
+   * @returns {Object} Oferta formatada
+   */
+  static formatOfferForResponse(offer) {
+    if (!offer) {
+      return null;
+    }
+
+    // Parse JSONB fields se necessário
+    const legalDocuments = typeof offer.legal_documents === 'string' 
+      ? JSON.parse(offer.legal_documents) 
+      : offer.legal_documents || {};
+    
+    const offerRules = typeof offer.offer_rules === 'string'
+      ? JSON.parse(offer.offer_rules)
+      : offer.offer_rules || {};
+
+    return {
+      ...offer,
+      legal_documents: this.formatLegalDocuments(legalDocuments),
+      offer_rules: offerRules,
+    };
+  }
+  /**
+   * Cria uma nova oferta (company_user)
+   * POST /api/companies/offers
+   */
+  static async createOffer(req, res) {
+    try {
+      const {
+        asset_code,
+        offer_name,
+        description,
+        total_supply,
+        annual_interest_rate,
+        offer_type,
+        payment_type = 'monthly',
+        maturity_date,
+        bullet_payment_amount,
+        payment_frequency = 1,
+        offer_rules = {},
+        legal_documents = {},
+      } = req.body;
+
+      // Validações básicas
+      if (!asset_code || !offer_name || !description || !total_supply || !offer_type) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing required fields: asset_code, offer_name, description, total_supply, offer_type',
+        });
+      }
+
+      if (!['collateral', 'sale'].includes(offer_type)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid offer_type. Must be "collateral" or "sale"',
+        });
+      }
+
+      // Validar formato do asset_code (máximo 12 caracteres, alfanumérico)
+      if (asset_code.length > 12 || !/^[A-Z0-9]+$/.test(asset_code)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid asset_code. Must be uppercase alphanumeric, max 12 characters',
+        });
+      }
+
+      // Verificar se asset_code já existe
+      const existingOffer = await Offer.findByAssetCode(asset_code);
+      if (existingOffer) {
+        return res.status(409).json({
+          success: false,
+          error: 'Asset code already exists',
+        });
+      }
+
+      const companyId = req.user.companyId;
+      const requestedBy = req.user.userId;
+
+      const offer = await Offer.create({
+        company_id: companyId,
+        requested_by: requestedBy,
+        asset_code,
+        offer_name,
+        description,
+        total_supply,
+        annual_interest_rate,
+        offer_type,
+        payment_type,
+        maturity_date,
+        bullet_payment_amount,
+        payment_frequency,
+        offer_rules,
+        legal_documents,
+      });
+
+      res.status(201).json({
+        success: true,
+        data: this.formatOfferForResponse(offer),
+      });
+    } catch (error) {
+      console.error('Error creating offer:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to create offer',
+        details: error.message,
+      });
+    }
+  }
+
+  /**
+   * Lista ofertas da empresa (company_user)
+   * GET /api/companies/offers
+   */
+  static async getCompanyOffers(req, res) {
+    try {
+      const companyId = req.user.companyId;
+      const offers = await Offer.findByCompany(companyId);
+
+      // Formatar ofertas com documentos IPFS
+      const formattedOffers = offers.map(offer => 
+        this.formatOfferForResponse(offer)
+      );
+
+      res.json({
+        success: true,
+        data: formattedOffers,
+      });
+    } catch (error) {
+      console.error('Error fetching company offers:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch company offers',
+        details: error.message,
+      });
+    }
+  }
+
+  /**
+   * Busca detalhes de uma oferta específica
+   * GET /api/companies/offers/:id
+   */
+  static async getOfferDetails(req, res) {
+    try {
+      const { id } = req.params;
+      const offer = await Offer.findById(parseInt(id));
+
+      if (!offer) {
+        return res.status(404).json({
+          success: false,
+          error: 'Offer not found',
+        });
+      }
+
+      // Verificar acesso (company_user só vê suas próprias ofertas)
+      if (req.user.role === 'company_user' && offer.company_id !== req.user.companyId) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: this.formatOfferForResponse(offer),
+      });
+    } catch (error) {
+      console.error('Error fetching offer details:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch offer details',
+        details: error.message,
+      });
+    }
+  }
+
+  /**
+   * Atualiza oferta (company_user, apenas se pending_review)
+   * PUT /api/companies/offers/:id
+   */
+  static async updateOffer(req, res) {
+    try {
+      const { id } = req.params;
+      const offer = await Offer.findById(parseInt(id));
+
+      if (!offer) {
+        return res.status(404).json({
+          success: false,
+          error: 'Offer not found',
+        });
+      }
+
+      // Verificar acesso
+      if (offer.company_id !== req.user.companyId) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied',
+        });
+      }
+
+      // Só pode atualizar se estiver em pending_review
+      if (offer.status !== 'pending_review') {
+        return res.status(400).json({
+          success: false,
+          error: 'Can only update offers with status "pending_review"',
+        });
+      }
+
+      const {
+        offer_name,
+        description,
+        total_supply,
+        annual_interest_rate,
+        offer_rules,
+      } = req.body;
+
+      const updatedOffer = await Offer.update(parseInt(id), {
+        offer_name,
+        description,
+        total_supply,
+        annual_interest_rate,
+        offer_rules,
+      });
+
+      res.json({
+        success: true,
+        data: this.formatOfferForResponse(updatedOffer),
+      });
+    } catch (error) {
+      console.error('Error updating offer:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update offer',
+        details: error.message,
+      });
+    }
+  }
+
+  /**
+   * Lista ofertas ativas (público/investidores)
+   * GET /api/offers/active
+   */
+  static async getActiveOffers(req, res) {
+    try {
+      const { limit = 100, offset = 0, offer_type } = req.query;
+
+      const offers = await Offer.findAllActive(
+        parseInt(limit),
+        parseInt(offset),
+        offer_type || null
+      );
+
+      // Formatar ofertas com documentos IPFS
+      const formattedOffers = offers.map(offer => 
+        this.formatOfferForResponse(offer)
+      );
+
+      res.json({
+        success: true,
+        data: formattedOffers,
+        pagination: {
+          limit: parseInt(limit),
+          offset: parseInt(offset),
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching active offers:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch active offers',
+        details: error.message,
+      });
+    }
+  }
+
+  /**
+   * Busca detalhes de oferta pública (com IPFS)
+   * GET /api/offers/:id
+   */
+  static async getPublicOfferDetails(req, res) {
+    try {
+      const { id } = req.params;
+      const offer = await Offer.findById(parseInt(id));
+
+      if (!offer) {
+        return res.status(404).json({
+          success: false,
+          error: 'Offer not found',
+        });
+      }
+
+      // Só retornar se estiver ativa ou se for admin/company_user
+      if (offer.status !== 'active' && 
+          req.user?.role !== 'platform_admin' && 
+          req.user?.role !== 'company_user') {
+        return res.status(403).json({
+          success: false,
+          error: 'Offer is not active',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: this.formatOfferForResponse(offer),
+      });
+    } catch (error) {
+      console.error('Error fetching public offer details:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch offer details',
+        details: error.message,
+      });
+    }
+  }
+
+  /**
+   * Lista todas as ofertas (platform_admin)
+   * GET /api/admin/offers
+   */
+  static async getAllOffers(req, res) {
+    try {
+      const { limit = 100, offset = 0, status } = req.query;
+
+      const offers = await Offer.findAll(
+        parseInt(limit),
+        parseInt(offset),
+        status || null
+      );
+
+      // Formatar ofertas com documentos IPFS
+      const formattedOffers = offers.map(offer => 
+        this.formatOfferForResponse(offer)
+      );
+
+      res.json({
+        success: true,
+        data: formattedOffers,
+        pagination: {
+          limit: parseInt(limit),
+          offset: parseInt(offset),
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching all offers:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch offers',
+        details: error.message,
+      });
+    }
+  }
+
+  /**
+   * Revisa oferta (platform_admin)
+   * PUT /api/admin/offers/:id/review
+   */
+  static async reviewOffer(req, res) {
+    try {
+      const { id } = req.params;
+      const { status, rejection_reason } = req.body;
+
+      if (!status || !['approved', 'rejected', 'under_review'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid status. Must be: approved, rejected, or under_review',
+        });
+      }
+
+      if (status === 'rejected' && !rejection_reason) {
+        return res.status(400).json({
+          success: false,
+          error: 'Rejection reason is required when rejecting an offer',
+        });
+      }
+
+      const reviewedBy = req.user.userId;
+      const updatedOffer = await Offer.updateStatus(
+        parseInt(id),
+        status,
+        reviewedBy,
+        rejection_reason
+      );
+
+      if (!updatedOffer) {
+        return res.status(404).json({
+          success: false,
+          error: 'Offer not found',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: this.formatOfferForResponse(updatedOffer),
+      });
+    } catch (error) {
+      console.error('Error reviewing offer:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to review offer',
+        details: error.message,
+      });
+    }
+  }
+
+  /**
+   * Adiciona notas de due diligence (platform_admin)
+   * POST /api/admin/offers/:id/due-diligence
+   */
+  static async addDueDiligenceNotes(req, res) {
+    try {
+      const { id } = req.params;
+      const { notes } = req.body;
+
+      if (!notes) {
+        return res.status(400).json({
+          success: false,
+          error: 'Notes are required',
+        });
+      }
+
+      const updatedOffer = await Offer.addDueDiligenceNotes(parseInt(id), notes);
+
+      if (!updatedOffer) {
+        return res.status(404).json({
+          success: false,
+          error: 'Offer not found',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: this.formatOfferForResponse(updatedOffer),
+      });
+    } catch (error) {
+      console.error('Error adding due diligence notes:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to add due diligence notes',
+        details: error.message,
+      });
+    }
+  }
+
+  /**
+   * Emite token a partir de uma oferta aprovada (platform_admin)
+   * POST /api/admin/offers/:id/issue
+   */
+  static async issueTokenFromOffer(req, res) {
+    try {
+      const { id } = req.params;
+      const offer = await Offer.findById(parseInt(id));
+
+      if (!offer) {
+        return res.status(404).json({
+          success: false,
+          error: 'Offer not found',
+        });
+      }
+
+      if (offer.status !== 'approved') {
+        return res.status(400).json({
+          success: false,
+          error: 'Offer must be approved before issuing token',
+        });
+      }
+
+      // Verificar se token já foi emitido
+      const existingToken = await Token.findByAssetCode(offer.asset_code);
+      if (existingToken) {
+        return res.status(409).json({
+          success: false,
+          error: 'Token already issued for this offer',
+        });
+      }
+
+      // Emitir token usando o serviço
+      const issuerPublicKey = process.env.STELLAR_ISSUER_PUBLIC_KEY;
+      if (!issuerPublicKey) {
+        return res.status(500).json({
+          success: false,
+          error: 'Stellar issuer public key not configured',
+        });
+      }
+
+      // Verificar documentos IPFS
+      const legalDocuments = offer.legal_documents || {};
+      const ipfsValidation = IPFSService.validateLegalDocuments(legalDocuments);
+      
+      if (!ipfsValidation.valid && Object.keys(legalDocuments).length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid IPFS documents: ${ipfsValidation.errors.join(', ')}`,
+        });
+      }
+
+      // Configurar home domain se disponível
+      const homeDomain = process.env.STELLAR_HOME_DOMAIN || null;
+      
+      // Emitir token no Stellar com home domain
+      const tokenResult = await StellarService.issueSecurityToken(
+        offer.asset_code,
+        offer.total_supply.toString(),
+        { homeDomain }
+      );
+
+      // Criar registro no banco usando o serviço
+      const token = await OfferService.issueTokenFromOffer(
+        offer.id,
+        req.user.userId,
+        issuerPublicKey
+      );
+
+      // Se home domain configurado e documentos IPFS existem, gerar stellar.toml
+      if (homeDomain && Object.keys(legalDocuments).length > 0) {
+        try {
+          const tomlContent = StellarTomlService.generateToml({
+            code: offer.asset_code,
+            issuer: issuerPublicKey,
+            name: offer.offer_name,
+            description: offer.description,
+            ipfsDocuments: legalDocuments,
+            conditions: {
+              annual_interest_rate: offer.annual_interest_rate,
+              ...offer.offer_rules,
+            },
+          });
+          
+          // TODO: Salvar stellar.toml no servidor web configurado no home_domain
+          // Por enquanto, apenas logamos
+          console.log(`Stellar.toml content for ${offer.asset_code}:`, tomlContent);
+        } catch (error) {
+          console.warn('Failed to generate stellar.toml:', error.message);
+        }
+      }
+
+      res.status(201).json({
+        success: true,
+        data: {
+          token,
+          stellar_transaction: tokenResult,
+        },
+      });
+    } catch (error) {
+      console.error('Error issuing token from offer:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to issue token',
+        details: error.message,
+      });
+    }
+  }
+
+  /**
+   * Ativa oferta após token emitido (platform_admin)
+   * POST /api/admin/offers/:id/activate
+   */
+  static async activateOffer(req, res) {
+    try {
+      const { id } = req.params;
+      const offer = await Offer.findById(parseInt(id));
+
+      if (!offer) {
+        return res.status(404).json({
+          success: false,
+          error: 'Offer not found',
+        });
+      }
+
+      // Ativar usando o serviço
+      const updatedOffer = await OfferService.activateOffer(parseInt(id));
+
+      res.json({
+        success: true,
+        data: this.formatOfferForResponse(updatedOffer),
+      });
+    } catch (error) {
+      console.error('Error activating offer:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to activate offer',
+        details: error.message,
+      });
+    }
+  }
+}
+
