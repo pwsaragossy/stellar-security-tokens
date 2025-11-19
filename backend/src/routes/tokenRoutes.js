@@ -7,7 +7,7 @@ import {
   getTokenByAssetCode,
   distributeTokens,
   getTokenBalance,
-} from './controllers/tokenController.js';
+} from '../controllers/tokenController.js';
 
 const router = express.Router();
 

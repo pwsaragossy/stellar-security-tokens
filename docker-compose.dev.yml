@@ -16,8 +16,9 @@ services:
       ENABLE_DEV_ROUTES: 'true'
       # Ambiente de desenvolvimento
       NODE_ENV: development
-    # O volume ./backend já está mapeado no docker-compose.yml principal
-    # Isso permite hot-reload automático quando você edita arquivos
+    # Removendo volume temporariamente para evitar conflito com schema.prisma
+    # volumes:
+    #   - ./backend:/app/backend
 
   frontend:
     environment:

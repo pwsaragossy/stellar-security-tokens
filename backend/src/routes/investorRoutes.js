@@ -11,7 +11,7 @@ import {
   getInvestorBalance,
   getInvestorPayments,
   updateInvestor,
-} from './controllers/investorController.js';
+} from '../controllers/investorController.js';
 
 const router = express.Router();
 
@@ -37,7 +37,7 @@ const whitelistValidation = [
   validate,
 ];
 
-import { loginInvestor, getInvestorPortfolio, getInvestorMetrics } from './controllers/investorController.js';
+import { loginInvestor, getInvestorPortfolio, getInvestorMetrics } from '../controllers/investorController.js';
 import { requireInvestor, requireOwnData } from '../middleware/authorize.js';
 
 router.post('/', investorValidation, authenticateToken, createInvestor);

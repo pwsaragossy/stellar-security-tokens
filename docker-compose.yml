@@ -92,8 +92,8 @@ services:
         condition: service_healthy
     networks:
       - stellar_network
-    volumes:
-      - ./backend:/app/backend
+    # volumes:
+    #   - ./backend:/app/backend
     command: >
       sh -c "
         echo 'Waiting for database...' &&

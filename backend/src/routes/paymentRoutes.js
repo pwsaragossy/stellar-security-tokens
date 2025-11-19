@@ -9,7 +9,7 @@ import {
   processSemiAnnualPayments,
   getPaymentHistory,
   getPaymentStatistics,
-} from './controllers/paymentController.js';
+} from '../controllers/paymentController.js';
 
 const router = express.Router();
 

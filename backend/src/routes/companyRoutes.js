@@ -2,7 +2,7 @@ import express from 'express';
 import { body } from 'express-validator';
 import { validate } from '../middleware/validator.js';
 import { requireCompanyUser, requirePlatformAdmin } from '../middleware/authorize.js';
-import { CompanyController } from './controllers/companyController.js';
+import { CompanyController } from '../controllers/companyController.js';
 
 const router = express.Router();
 
