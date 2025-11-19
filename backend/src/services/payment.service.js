@@ -1,7 +1,7 @@
-import prisma from './config/prisma.js';
-import { Investor } from './models/Investor.js';
-import { Token } from './models/Token.js';
-import { Offer } from './models/Offer.js';
+import prisma from '../config/prisma.js';
+import { Investor } from '../models/Investor.js';
+import { Token } from '../models/Token.js';
+import { Offer } from '../models/Offer.js';
 import { StellarService } from './stellar.service.js';
 import { EmailService } from './email.service.js';
 import {
@@ -9,7 +9,7 @@ import {
   getDistributorKeypair,
   buildTransaction,
   signAndSubmitTransaction,
-} from './config/stellar.js';
+} from '../config/stellar.js';
 import { Operation, Asset } from '@stellar/stellar-sdk';
 import cron from 'node-cron';
 

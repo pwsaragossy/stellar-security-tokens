@@ -1,5 +1,5 @@
-import { PlatformAdmin } from './models/PlatformAdmin.js';
-import { generateToken } from './middleware/auth.js';
+import { PlatformAdmin } from '../models/PlatformAdmin.js';
+import { generateToken } from '../middleware/auth.js';
 
 /**
  * Controller para gerenciar administradores da plataforma

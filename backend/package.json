@@ -1,0 +1,67 @@
+{
+  "name": "stellar-security-tokens",
+  "version": "1.0.0",
+  "description": "API REST para tokenização de security tokens no Stellar",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "seed": "node src/database/seed.js",
+    "prisma:generate": "prisma generate",
+    "prisma:studio": "prisma studio",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:db:pull": "prisma db pull",
+    "migrate": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev",
+    "setup": "node ../scripts/setup.js",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "find tests/unit/ -name '*.test.js' ! -name '*integration*' -exec node --test {} \\;",
+    "test:unit:all": "node --test tests/unit/**/*.test.js",
+    "test:integration": "node --test tests/integration/**/*.test.js",
+    "test:watch": "node --watch --test",
+    "test:email": "node ../scripts/test-email.js",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:dev": "docker-compose -f docker-compose.yml -f docker-compose.dev.yml up",
+    "docker:dev:build": "docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
+    "docker:dev:down": "docker-compose -f docker-compose.yml -f docker-compose.dev.yml down"
+  },
+  "keywords": [
+    "stellar",
+    "security-tokens",
+    "blockchain",
+    "tokenization"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "@simplewebauthn/browser": "^13.2.2",
+    "@simplewebauthn/server": "^13.2.2",
+    "@stellar/stellar-sdk": "^14.3.2",
+    "axios": "^1.6.0",
+    "bcrypt": "^5.1.1",
+    "bull": "^4.12.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-validator": "^7.0.1",
+    "form-data": "^4.0.0",
+    "helmet": "^7.1.0",
+    "ioredis": "^5.3.2",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^7.0.10",
+    "pg": "^8.11.3",
+    "prisma": "^6.19.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,5 +1,5 @@
-import { InvestmentMetricsService } from './services/investmentMetrics.service.js';
-import { requirePlatformAdmin } from './middleware/authorize.js';
+import { InvestmentMetricsService } from '../services/investmentMetrics.service.js';
+import { requirePlatformAdmin } from '../middleware/authorize.js';
 
 /**
  * Controller para métricas de investimentos (apenas platform_admin)

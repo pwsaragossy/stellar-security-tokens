@@ -5,13 +5,13 @@ import assert from 'node:assert';
 
 describe('EmailService - Structure Tests', () => {
   test('EmailService exports correctly', async () => {
-    const { EmailService } = await import('../../../services/email.service.js');
+    const { EmailService } = await import('../../../src/services/email.service.js');
     assert.ok(EmailService);
     assert.ok(typeof EmailService.sendInterestPaymentConfirmation === 'function');
   });
 
   test('EmailService.sendInterestPaymentConfirmation is a function', async () => {
-    const { EmailService } = await import('../../../services/email.service.js');
+    const { EmailService } = await import('../../../src/services/email.service.js');
     assert.ok(typeof EmailService.sendInterestPaymentConfirmation === 'function');
   });
 
@@ -24,7 +24,7 @@ describe('EmailService - Structure Tests', () => {
     delete process.env.SMTP_PASSWORD;
 
     // Importar módulo com timestamp para forçar reload
-    const { EmailService } = await import(`../../../services/email.service.js?t=${Date.now()}`);
+    const { EmailService } = await import(`../../../src/services/email.service.js?t=${Date.now()}`);
     
     // O serviço deve lançar erro quando SMTP não está configurado ou falhar ao enviar
     try {

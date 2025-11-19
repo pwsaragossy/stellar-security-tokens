@@ -4,7 +4,7 @@ import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
 } from '@simplewebauthn/server';
-import prisma from './config/prisma.js';
+import prisma from '../config/prisma.js';
 
 const rpName = 'Stellar Security Tokens';
 const rpID = process.env.WEBAUTHN_RP_ID || 'localhost';

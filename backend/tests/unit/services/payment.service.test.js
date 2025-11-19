@@ -7,7 +7,7 @@ let PaymentService;
 describe('PaymentService', () => {
   test('PaymentService exports correctly', async () => {
     try {
-      const module = await import('../../../services/payment.service.js');
+      const module = await import('../../../src/services/payment.service.js');
       PaymentService = module.PaymentService;
       
       assert.ok(PaymentService);
@@ -27,7 +27,7 @@ describe('PaymentService', () => {
   test('calculateMonthlyInterest() - calcula juros mensais corretamente (10% a.a.)', async () => {
     try {
       if (!PaymentService) {
-        const module = await import('../../../services/payment.service.js');
+        const module = await import('../../../src/services/payment.service.js');
         PaymentService = module.PaymentService;
       }
       
@@ -47,7 +47,7 @@ describe('PaymentService', () => {
   test('calculateMonthlyInterest() - retorna 0 para saldo zero', async () => {
     try {
       if (!PaymentService) {
-        const module = await import('../../../services/payment.service.js');
+        const module = await import('../../../src/services/payment.service.js');
         PaymentService = module.PaymentService;
       }
       
@@ -65,7 +65,7 @@ describe('PaymentService', () => {
   test('calculateMonthlyInterest() - retorna 0 para saldo negativo', async () => {
     try {
       if (!PaymentService) {
-        const module = await import('../../../services/payment.service.js');
+        const module = await import('../../../src/services/payment.service.js');
         PaymentService = module.PaymentService;
       }
       
@@ -83,7 +83,7 @@ describe('PaymentService', () => {
   test('calculateMonthlyInterest() - calcula juros para valores grandes', async () => {
     try {
       if (!PaymentService) {
-        const module = await import('../../../services/payment.service.js');
+        const module = await import('../../../src/services/payment.service.js');
         PaymentService = module.PaymentService;
       }
       
@@ -102,7 +102,7 @@ describe('PaymentService', () => {
   test('calculateMonthlyInterest() - calcula juros para valores decimais', async () => {
     try {
       if (!PaymentService) {
-        const module = await import('../../../services/payment.service.js');
+        const module = await import('../../../src/services/payment.service.js');
         PaymentService = module.PaymentService;
       }
       
@@ -122,7 +122,7 @@ describe('PaymentService', () => {
   test('PaymentService has all required static methods', async () => {
     try {
       if (!PaymentService) {
-        const module = await import('../../../services/payment.service.js');
+        const module = await import('../../../src/services/payment.service.js');
         PaymentService = module.PaymentService;
       }
       

@@ -4,12 +4,12 @@ import assert from 'node:assert';
 describe('DistributionQueue - Integration Style Tests', () => {
   // Garantir que a fila seja fechada após todos os testes
   after(async () => {
-    const { closeDistributionQueue } = await import('../../../services/distributionQueue.service.js');
+    const { closeDistributionQueue } = await import('../../../src/services/distributionQueue.service.js');
     await closeDistributionQueue();
   });
 
   test('initDistributionQueue handles Redis unavailability gracefully', async () => {
-    const { initDistributionQueue, closeDistributionQueue } = await import('../../../services/distributionQueue.service.js');
+    const { initDistributionQueue, closeDistributionQueue } = await import('../../../src/services/distributionQueue.service.js');
     
     // Limpar fila existente se houver
     await closeDistributionQueue();
@@ -43,14 +43,14 @@ describe('DistributionQueue - Integration Style Tests', () => {
   });
 
   test('isQueueAvailable returns correct state', async () => {
-    const { isQueueAvailable } = await import('../../../services/distributionQueue.service.js');
+    const { isQueueAvailable } = await import('../../../src/services/distributionQueue.service.js');
     
     const available = isQueueAvailable();
     assert.ok(typeof available === 'boolean', 'Should return boolean');
   });
 
   test('addDistributionJob throws error when queue unavailable', async () => {
-    const { addDistributionJob, isQueueAvailable } = await import('../../../services/distributionQueue.service.js');
+    const { addDistributionJob, isQueueAvailable } = await import('../../../src/services/distributionQueue.service.js');
     
     // Só testar se fila realmente não está disponível
     if (!isQueueAvailable()) {

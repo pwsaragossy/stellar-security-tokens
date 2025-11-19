@@ -6,7 +6,7 @@ import {
   buildTransaction,
   signAndSubmitTransaction,
   getNetworkPassphrase,
-} from './config/stellar.js';
+} from '../config/stellar.js';
 import {
   Operation,
   Keypair,

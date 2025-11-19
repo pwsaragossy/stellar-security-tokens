@@ -1,10 +1,10 @@
-import { Investor } from './models/Investor.js';
-import { Company } from './models/Company.js';
-import { CompanyUser } from './models/CompanyUser.js';
-import { PlatformAdmin } from './models/PlatformAdmin.js';
-import { StellarService } from './services/stellar.service.js';
-import { generateToken } from './middleware/auth.js';
-import prisma from './config/prisma.js';
+import { Investor } from '../models/Investor.js';
+import { Company } from '../models/Company.js';
+import { CompanyUser } from '../models/CompanyUser.js';
+import { PlatformAdmin } from '../models/PlatformAdmin.js';
+import { StellarService } from '../services/stellar.service.js';
+import { generateToken } from '../middleware/auth.js';
+import prisma from '../config/prisma.js';
 import bcrypt from 'bcrypt';
 
 /**

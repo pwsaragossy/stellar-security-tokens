@@ -1,7 +1,7 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { body, validationResult } from 'express-validator';
-import { validate } from '../../../middleware/validator.js';
+import { validate } from '../../../src/middleware/validator.js';
 import { createMockRequest, createMockResponse, createMockNext } from '../../helpers/testUtils.js';
 
 describe('Validator Middleware', () => {

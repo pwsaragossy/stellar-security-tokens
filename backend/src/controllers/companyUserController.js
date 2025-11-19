@@ -1,6 +1,6 @@
-import { CompanyUser } from './models/CompanyUser.js';
-import { Company } from './models/Company.js';
-import { generateToken } from './middleware/auth.js';
+import { CompanyUser } from '../models/CompanyUser.js';
+import { Company } from '../models/Company.js';
+import { generateToken } from '../middleware/auth.js';
 
 /**
  * Controller para gerenciar usuários de empresas

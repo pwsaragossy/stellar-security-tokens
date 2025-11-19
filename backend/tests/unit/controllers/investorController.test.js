@@ -6,7 +6,7 @@ import assert from 'node:assert';
 describe('InvestorController - Structure Tests', () => {
   test('InvestorController exports all required functions', async () => {
     try {
-      const controllers = await import('../../../controllers/investorController.js');
+      const controllers = await import('../../../src/controllers/investorController.js');
       
       const requiredFunctions = [
         'createInvestor',

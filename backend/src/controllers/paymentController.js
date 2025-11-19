@@ -1,5 +1,5 @@
-import { PaymentService } from './services/payment.service.js';
-import prisma from './config/prisma.js';
+import { PaymentService } from '../services/payment.service.js';
+import prisma from '../config/prisma.js';
 
 /**
  * Processa pagamentos de juros mensais manualmente

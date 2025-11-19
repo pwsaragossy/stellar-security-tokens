@@ -3,13 +3,13 @@ import assert from 'node:assert';
 
 describe('Investment Model - Structure Tests', () => {
   test('Investment model exports correctly', async () => {
-    const { Investment } = await import('../../../models/Investment.js');
+    const { Investment } = await import('../../../src/models/Investment.js');
     assert.ok(Investment, 'Investment should be exported');
     assert.ok(typeof Investment === 'function', 'Investment should be a class');
   });
 
   test('Investment model has all required static methods', async () => {
-    const { Investment } = await import('../../../models/Investment.js');
+    const { Investment } = await import('../../../src/models/Investment.js');
     
     const requiredMethods = [
       'create',

@@ -1,8 +1,8 @@
-import { Investor } from './models/Investor.js';
-import { StellarService } from './services/stellar.service.js';
-import { PaymentService } from './services/payment.service.js';
-import { generateToken } from './middleware/auth.js';
-import prisma from './config/prisma.js';
+import { Investor } from '../models/Investor.js';
+import { StellarService } from '../services/stellar.service.js';
+import { PaymentService } from '../services/payment.service.js';
+import { generateToken } from '../middleware/auth.js';
+import prisma from '../config/prisma.js';
 import bcrypt from 'bcrypt';
 
 export const createInvestor = async (req, res, next) => {

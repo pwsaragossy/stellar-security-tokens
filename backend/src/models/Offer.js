@@ -1,4 +1,4 @@
-import prisma from './config/prisma.js';
+import prisma from '../config/prisma.js';
 
 /**
  * Modelo para gerenciar ofertas de tokenização usando Prisma

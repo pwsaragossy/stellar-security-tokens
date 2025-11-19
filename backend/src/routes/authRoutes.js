@@ -1,8 +1,8 @@
 import express from 'express';
 import { body } from 'express-validator';
-import { validate } from './middleware/validator.js';
-import { generateToken } from './middleware/auth.js';
-import { Investor } from './models/Investor.js';
+import { validate } from '../middleware/validator.js';
+import { generateToken } from '../middleware/auth.js';
+import { Investor } from '../models/Investor.js';
 
 const router = express.Router();
 

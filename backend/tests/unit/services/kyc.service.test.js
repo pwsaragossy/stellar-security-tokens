@@ -6,7 +6,7 @@ import assert from 'node:assert';
 
 describe('KYCService - Structure Tests', () => {
   test('KYCService exports correctly', async () => {
-    const { KYCService } = await import('../../../services/kyc.service.js');
+    const { KYCService } = await import('../../../src/services/kyc.service.js');
     assert.ok(KYCService);
     assert.ok(typeof KYCService.verifyInvestor === 'function');
     assert.ok(typeof KYCService.approveInvestor === 'function');
@@ -15,7 +15,7 @@ describe('KYCService - Structure Tests', () => {
   });
 
   test('KYCService has all required static methods', async () => {
-    const { KYCService } = await import('../../../services/kyc.service.js');
+    const { KYCService } = await import('../../../src/services/kyc.service.js');
     
     const requiredMethods = [
       'verifyInvestor',

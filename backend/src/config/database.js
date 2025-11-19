@@ -1,11 +1,11 @@
 // Database configuration - now using Prisma
 // This file is kept for backward compatibility during migration
-// All new code should import from './config/prisma.js' directly
+// All new code should import from '../config/prisma.js' directly
 
 import prisma from './prisma.js';
 
 /**
- * @deprecated Use Prisma Client directly: import prisma from './config/prisma.js'
+ * @deprecated Use Prisma Client directly: import prisma from '../config/prisma.js'
  * This export is kept for backward compatibility during migration
  */
 export { prisma as default };

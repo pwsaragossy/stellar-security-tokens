@@ -3,7 +3,7 @@ import assert from 'node:assert';
 
 describe('InvestmentController - Structure Tests', () => {
   test('InvestmentController exports all required functions', async () => {
-    const controllers = await import('../../../controllers/investmentController.js');
+    const controllers = await import('../../../src/controllers/investmentController.js');
     
     const requiredFunctions = [
       'purchaseInvestment',

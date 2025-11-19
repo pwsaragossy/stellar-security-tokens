@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, param } from 'express-validator';
-import { validate } from './middleware/validator.js';
+import { validate } from '../middleware/validator.js';
 import { WebAuthnController } from './controllers/webauthnController.js';
 
 const router = express.Router();

@@ -1,10 +1,10 @@
-import { Offer } from './models/Offer.js';
-import { Company } from './models/Company.js';
-import { Token } from './models/Token.js';
-import { StellarService } from './services/stellar.service.js';
-import { OfferService } from './services/offer.service.js';
-import { IPFSService } from './services/ipfs.service.js';
-import { StellarTomlService } from './services/stellarToml.service.js';
+import { Offer } from '../models/Offer.js';
+import { Company } from '../models/Company.js';
+import { Token } from '../models/Token.js';
+import { StellarService } from '../services/stellar.service.js';
+import { OfferService } from '../services/offer.service.js';
+import { IPFSService } from '../services/ipfs.service.js';
+import { StellarTomlService } from '../services/stellarToml.service.js';
 
 /**
  * Controller para gerenciar ofertas de tokenização

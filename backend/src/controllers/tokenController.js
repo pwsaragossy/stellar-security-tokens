@@ -1,6 +1,6 @@
-import { Token } from './models/Token.js';
-import { Investor } from './models/Investor.js';
-import { StellarService } from './services/stellar.service.js';
+import { Token } from '../models/Token.js';
+import { Investor } from '../models/Investor.js';
+import { StellarService } from '../services/stellar.service.js';
 
 export const issueToken = async (req, res, next) => {
   try {

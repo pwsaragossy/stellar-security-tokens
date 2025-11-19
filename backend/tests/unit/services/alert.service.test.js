@@ -3,13 +3,13 @@ import assert from 'node:assert';
 
 describe('AlertService - Structure Tests', () => {
   test('AlertService exports correctly', async () => {
-    const { AlertService } = await import('../../../services/alert.service.js');
+    const { AlertService } = await import('../../../src/services/alert.service.js');
     assert.ok(AlertService, 'AlertService should be exported');
     assert.ok(typeof AlertService === 'function', 'AlertService should be a class');
   });
 
   test('AlertService has all required static methods', async () => {
-    const { AlertService } = await import('../../../services/alert.service.js');
+    const { AlertService } = await import('../../../src/services/alert.service.js');
     
     const requiredMethods = [
       'notify',
@@ -32,7 +32,7 @@ describe('AlertService - Structure Tests', () => {
   });
 
   test('AlertService.notify handles different alert levels', async () => {
-    const { AlertService } = await import('../../../services/alert.service.js');
+    const { AlertService } = await import('../../../src/services/alert.service.js');
     
     // Test that notify can be called without errors
     const result = await AlertService.notify('INFO', 'Test message', { test: true });
@@ -42,7 +42,7 @@ describe('AlertService - Structure Tests', () => {
   });
 
   test('AlertService helper methods work correctly', async () => {
-    const { AlertService } = await import('../../../services/alert.service.js');
+    const { AlertService } = await import('../../../src/services/alert.service.js');
     
     const infoResult = await AlertService.info('Info message');
     assert.ok(infoResult.level === 'INFO', 'info should set level to INFO');

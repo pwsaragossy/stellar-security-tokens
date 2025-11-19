@@ -14,10 +14,10 @@ import platformAdminRoutes from './routes/platformAdminRoutes.js';
 import offerRoutes from './routes/offerRoutes.js';
 import webauthnRoutes from './routes/webauthnRoutes.js';
 import devRoutes from './routes/devRoutes.js';
-import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
-import { startPaymentScheduler } from './services/paymentScheduler.js';
-import { getPaymentMonitor } from './services/paymentMonitor.service.js';
-import { initDistributionQueue } from './services/distributionQueue.service.js';
+import { errorHandler, notFoundHandler } from '../middleware/errorHandler.js';
+import { startPaymentScheduler } from '../services/paymentScheduler.js';
+import { getPaymentMonitor } from '../services/paymentMonitor.service.js';
+import { initDistributionQueue } from '../services/distributionQueue.service.js';
 
 dotenv.config();
 

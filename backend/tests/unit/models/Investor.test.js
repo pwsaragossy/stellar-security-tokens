@@ -9,7 +9,7 @@ describe('Investor Model - Integration Style Tests', () => {
   // Para testes completos, é necessário PostgreSQL rodando ou refatoração para dependency injection
   
   test('Investor model exports correctly', async () => {
-    const { Investor } = await import('../../../models/Investor.js');
+    const { Investor } = await import('../../../src/models/Investor.js');
     assert.ok(Investor);
     assert.ok(typeof Investor.create === 'function');
     assert.ok(typeof Investor.findById === 'function');
@@ -20,7 +20,7 @@ describe('Investor Model - Integration Style Tests', () => {
   });
 
   test('Investor model has all required static methods', async () => {
-    const { Investor } = await import('../../../models/Investor.js');
+    const { Investor } = await import('../../../src/models/Investor.js');
     
     const requiredMethods = [
       'create',

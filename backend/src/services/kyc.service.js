@@ -1,4 +1,4 @@
-import { Investor } from './models/Investor.js';
+import { Investor } from '../models/Investor.js';
 
 /**
  * Serviço para gerenciar verificação KYC (Know Your Customer) de investidores

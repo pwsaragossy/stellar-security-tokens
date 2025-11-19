@@ -3,7 +3,7 @@ import assert from 'node:assert';
 
 describe('Investment Model - Integration Style Tests', () => {
   test('Investment model has correct method signatures', async () => {
-    const { Investment } = await import('../../../models/Investment.js');
+    const { Investment } = await import('../../../src/models/Investment.js');
     
     // Verificar que métodos existem e são funções
     assert.ok(typeof Investment.create === 'function', 'create should be a function');
@@ -14,7 +14,7 @@ describe('Investment Model - Integration Style Tests', () => {
   });
 
   test('Investment.create requires correct parameters', async () => {
-    const { Investment } = await import('../../../models/Investment.js');
+    const { Investment } = await import('../../../src/models/Investment.js');
     
     // Tentar criar sem parâmetros deve lançar erro
     try {
@@ -27,7 +27,7 @@ describe('Investment Model - Integration Style Tests', () => {
   });
 
   test('Investment.findByStatus accepts status parameter', async () => {
-    const { Investment } = await import('../../../models/Investment.js');
+    const { Investment } = await import('../../../src/models/Investment.js');
     
     // Deve aceitar status válido sem erro de sintaxe
     try {
@@ -45,7 +45,7 @@ describe('Investment Model - Integration Style Tests', () => {
   });
 
   test('Investment.updateStatus accepts update data', async () => {
-    const { Investment } = await import('../../../models/Investment.js');
+    const { Investment } = await import('../../../src/models/Investment.js');
     
     // Deve aceitar dados de atualização sem erro de sintaxe
     try {

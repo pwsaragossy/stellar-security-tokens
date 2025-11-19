@@ -3,7 +3,7 @@ import assert from 'node:assert';
 
 describe('DistributionQueue - Structure Tests', () => {
   test('DistributionQueue exports correctly', async () => {
-    const module = await import('../../../services/distributionQueue.service.js');
+    const module = await import('../../../src/services/distributionQueue.service.js');
     
     assert.ok(module.initDistributionQueue, 'initDistributionQueue should be exported');
     assert.ok(module.addDistributionJob, 'addDistributionJob should be exported');
@@ -17,7 +17,7 @@ describe('DistributionQueue - Structure Tests', () => {
       addDistributionJob,
       getDistributionQueue,
       isQueueAvailable,
-    } = await import('../../../services/distributionQueue.service.js');
+    } = await import('../../../src/services/distributionQueue.service.js');
     
     assert.ok(typeof initDistributionQueue === 'function', 'initDistributionQueue should be a function');
     assert.ok(typeof addDistributionJob === 'function', 'addDistributionJob should be a function');
@@ -26,14 +26,14 @@ describe('DistributionQueue - Structure Tests', () => {
   });
 
   test('isQueueAvailable returns boolean', async () => {
-    const { isQueueAvailable } = await import('../../../services/distributionQueue.service.js');
+    const { isQueueAvailable } = await import('../../../src/services/distributionQueue.service.js');
     
     const result = isQueueAvailable();
     assert.ok(typeof result === 'boolean', 'isQueueAvailable should return a boolean');
   });
 
   test('getDistributionQueue returns queue or null', async () => {
-    const { getDistributionQueue } = await import('../../../services/distributionQueue.service.js');
+    const { getDistributionQueue } = await import('../../../src/services/distributionQueue.service.js');
     
     const queue = getDistributionQueue();
     // Queue pode ser null se Redis não estiver disponível

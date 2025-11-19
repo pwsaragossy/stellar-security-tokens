@@ -1,4 +1,4 @@
-import { Investor } from './models/Investor.js';
+import { Investor } from '../models/Investor.js';
 import dotenv from 'dotenv';
 
 dotenv.config();

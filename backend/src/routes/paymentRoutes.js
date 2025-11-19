@@ -1,7 +1,7 @@
 import express from 'express';
 import { body, query } from 'express-validator';
-import { validate } from './middleware/validator.js';
-import { authenticateToken } from './middleware/auth.js';
+import { validate } from '../middleware/validator.js';
+import { authenticateToken } from '../middleware/auth.js';
 import {
   processMonthlyPayments,
   processBulletPayments,

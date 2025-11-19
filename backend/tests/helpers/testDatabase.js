@@ -2,7 +2,7 @@
  * Setup e teardown do banco de dados de teste para integration tests usando Prisma
  */
 
-import prisma from '../../config/prisma.js';
+import prisma from '../../src/config/prisma.js';
 import bcrypt from 'bcrypt';
 
 /**

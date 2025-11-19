@@ -9,7 +9,7 @@ describe('Token Model - Integration Style Tests', () => {
   // Para testes completos, é necessário PostgreSQL rodando ou refatoração para dependency injection
   
   test('Token model exports correctly', async () => {
-    const { Token } = await import('../../../models/Token.js');
+    const { Token } = await import('../../../src/models/Token.js');
     assert.ok(Token);
     assert.ok(typeof Token.create === 'function');
     assert.ok(typeof Token.findByAssetCode === 'function');
@@ -17,7 +17,7 @@ describe('Token Model - Integration Style Tests', () => {
   });
 
   test('Token model has all required static methods', async () => {
-    const { Token } = await import('../../../models/Token.js');
+    const { Token } = await import('../../../src/models/Token.js');
     
     const requiredMethods = [
       'create',

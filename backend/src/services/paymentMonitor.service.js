@@ -1,9 +1,9 @@
-import { stellarServer } from './config/stellar.js';
-import { getTreasuryKeypair } from './config/stellar.js';
-import { Investment } from './models/Investment.js';
-import { Investor } from './models/Investor.js';
+import { stellarServer } from '../config/stellar.js';
+import { getTreasuryKeypair } from '../config/stellar.js';
+import { Investment } from '../models/Investment.js';
+import { Investor } from '../models/Investor.js';
 import { StellarService } from './stellar.service.js';
-import { Token } from './models/Token.js';
+import { Token } from '../models/Token.js';
 import crypto from 'crypto';
 
 const USDC_ISSUER = process.env.USDC_ISSUER || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';

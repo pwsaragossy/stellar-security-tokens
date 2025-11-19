@@ -1,7 +1,7 @@
 import express from 'express';
 import { body, param } from 'express-validator';
-import { validate } from './middleware/validator.js';
-import { authenticateToken } from './middleware/auth.js';
+import { validate } from '../middleware/validator.js';
+import { authenticateToken } from '../middleware/auth.js';
 import {
   createInvestor,
   registerInvestor,
@@ -38,7 +38,7 @@ const whitelistValidation = [
 ];
 
 import { loginInvestor, getInvestorPortfolio, getInvestorMetrics } from './controllers/investorController.js';
-import { requireInvestor, requireOwnData } from './middleware/authorize.js';
+import { requireInvestor, requireOwnData } from '../middleware/authorize.js';
 
 router.post('/', investorValidation, authenticateToken, createInvestor);
 router.post('/register', registerValidation, registerInvestor);

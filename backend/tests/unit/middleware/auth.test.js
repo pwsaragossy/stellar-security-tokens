@@ -1,7 +1,7 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import jwt from 'jsonwebtoken';
-import { authenticateToken, generateToken, optionalAuth } from '../../../middleware/auth.js';
+import { authenticateToken, generateToken, optionalAuth } from '../../../src/middleware/auth.js';
 import { createMockRequest, createMockResponse, createMockNext, createMockJWT } from '../../helpers/testUtils.js';
 
 describe('Auth Middleware', () => {

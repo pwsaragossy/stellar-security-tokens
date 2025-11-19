@@ -2,19 +2,22 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copiar arquivos de dependências
-COPY package*.json ./
+# Copiar arquivos de dependências do backend
+COPY backend/package*.json ./backend/
 
-# Instalar dependências (incluindo devDependencies para build)
+# Instalar dependências do backend (incluindo devDependencies para build)
+WORKDIR /app/backend
 RUN npm ci
 
-# Copiar código do backend
+# Voltar para o diretório raiz e copiar código
+WORKDIR /app
 COPY backend/ ./backend/
 COPY scripts/ ./scripts/
-COPY prisma/ ./prisma/
 
 # Gerar Prisma Client
+WORKDIR /app/backend
 RUN npx prisma generate
+WORKDIR /app
 
 # Criar diretório para logs
 RUN mkdir -p /app/logs

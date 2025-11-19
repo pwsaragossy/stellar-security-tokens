@@ -4,7 +4,7 @@ import assert from 'node:assert';
 describe('PaymentController - Structure Tests', () => {
   test('PaymentController exports all required functions', async () => {
     try {
-      const controllers = await import('../../../controllers/paymentController.js');
+      const controllers = await import('../../../src/controllers/paymentController.js');
       
       const requiredFunctions = [
         'processMonthlyPayments',

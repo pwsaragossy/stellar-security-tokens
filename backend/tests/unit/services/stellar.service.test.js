@@ -7,7 +7,7 @@ import assert from 'node:assert';
 describe('StellarService - Structure Tests', () => {
   test('StellarService exports correctly', async () => {
     try {
-      const { StellarService } = await import('../../../services/stellar.service.js');
+      const { StellarService } = await import('../../../src/services/stellar.service.js');
       assert.ok(StellarService);
       assert.ok(typeof StellarService.createIssuerAccount === 'function');
       assert.ok(typeof StellarService.createInvestorAccount === 'function');
@@ -21,7 +21,7 @@ describe('StellarService - Structure Tests', () => {
 
   test('StellarService has all required static methods', async () => {
     try {
-      const { StellarService } = await import('../../../services/stellar.service.js');
+      const { StellarService } = await import('../../../src/services/stellar.service.js');
       
       const requiredMethods = [
         'createIssuerAccount',

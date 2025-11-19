@@ -1,8 +1,8 @@
 import express from 'express';
 import { body, param } from 'express-validator';
-import { validate } from './middleware/validator.js';
-import { authenticateToken } from './middleware/auth.js';
-import { requirePlatformAdmin, requireAdminRole } from './middleware/authorize.js';
+import { validate } from '../middleware/validator.js';
+import { authenticateToken } from '../middleware/auth.js';
+import { requirePlatformAdmin, requireAdminRole } from '../middleware/authorize.js';
 import { PlatformAdminController } from './controllers/platformAdminController.js';
 import { InvestmentMetricsController } from './controllers/investmentMetricsController.js';
 

@@ -1,6 +1,6 @@
-import { Offer } from './models/Offer.js';
-import { Token } from './models/Token.js';
-import { Company } from './models/Company.js';
+import { Offer } from '../models/Offer.js';
+import { Token } from '../models/Token.js';
+import { Company } from '../models/Company.js';
 
 /**
  * Serviço para gerenciar ofertas de tokenização

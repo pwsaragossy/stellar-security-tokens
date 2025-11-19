@@ -1,8 +1,8 @@
 import Bull from 'bull';
-import { Investment } from './models/Investment.js';
-import { Investor } from './models/Investor.js';
+import { Investment } from '../models/Investment.js';
+import { Investor } from '../models/Investor.js';
 import { StellarService } from './stellar.service.js';
-import { Token } from './models/Token.js';
+import { Token } from '../models/Token.js';
 import { AlertService } from './alert.service.js';
 import crypto from 'crypto';
 

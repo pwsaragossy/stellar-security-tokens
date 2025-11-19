@@ -1,6 +1,6 @@
 import express from 'express';
 import { body } from 'express-validator';
-import { validate } from './middleware/validator.js';
+import { validate } from '../middleware/validator.js';
 import {
   issueToken,
   getTokens,

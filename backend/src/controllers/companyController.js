@@ -1,5 +1,5 @@
-import { Company } from './models/Company.js';
-import { generateToken } from './middleware/auth.js';
+import { Company } from '../models/Company.js';
+import { generateToken } from '../middleware/auth.js';
 
 /**
  * Controller para gerenciar empresas

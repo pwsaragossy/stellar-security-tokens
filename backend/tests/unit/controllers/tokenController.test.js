@@ -3,7 +3,7 @@ import assert from 'node:assert';
 
 describe('TokenController - Structure Tests', () => {
   test('TokenController exports all required functions', async () => {
-    const controllers = await import('../../../controllers/tokenController.js');
+    const controllers = await import('../../../src/controllers/tokenController.js');
     
     const requiredFunctions = [
       'issueToken',

@@ -1,10 +1,10 @@
-import { Investor } from './models/Investor.js';
-import { Token } from './models/Token.js';
-import { Investment } from './models/Investment.js';
-import { StellarService } from './services/stellar.service.js';
-import { PaymentService } from './services/payment.service.js';
-import { getTreasuryKeypair } from './config/stellar.js';
-import { addDistributionJob, isQueueAvailable } from './services/distributionQueue.service.js';
+import { Investor } from '../models/Investor.js';
+import { Token } from '../models/Token.js';
+import { Investment } from '../models/Investment.js';
+import { StellarService } from '../services/stellar.service.js';
+import { PaymentService } from '../services/payment.service.js';
+import { getTreasuryKeypair } from '../config/stellar.js';
+import { addDistributionJob, isQueueAvailable } from '../services/distributionQueue.service.js';
 import crypto from 'crypto';
 
 const SIN01_ASSET_CODE = 'SIN01';

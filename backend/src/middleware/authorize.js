@@ -1,7 +1,7 @@
 import { authenticateToken } from './auth.js';
-import { CompanyUser } from './models/CompanyUser.js';
-import { Company } from './models/Company.js';
-import { Offer } from './models/Offer.js';
+import { CompanyUser } from '../models/CompanyUser.js';
+import { Company } from '../models/Company.js';
+import { Offer } from '../models/Offer.js';
 
 /**
  * Middleware para requerer que o usuário seja um investidor

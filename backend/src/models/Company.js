@@ -1,4 +1,4 @@
-import prisma from './config/prisma.js';
+import prisma from '../config/prisma.js';
 
 /**
  * Modelo para gerenciar empresas no banco de dados usando Prisma

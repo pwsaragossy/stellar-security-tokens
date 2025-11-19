@@ -1,9 +1,9 @@
-import { WebAuthnService } from './services/webauthn.service.js';
-import { Investor } from './models/Investor.js';
-import { Company } from './models/Company.js';
-import { CompanyUser } from './models/CompanyUser.js';
-import { PlatformAdmin } from './models/PlatformAdmin.js';
-import { generateToken } from './middleware/auth.js';
+import { WebAuthnService } from '../services/webauthn.service.js';
+import { Investor } from '../models/Investor.js';
+import { Company } from '../models/Company.js';
+import { CompanyUser } from '../models/CompanyUser.js';
+import { PlatformAdmin } from '../models/PlatformAdmin.js';
+import { generateToken } from '../middleware/auth.js';
 
 // Armazenar challenges temporariamente (em produção, usar Redis)
 const challenges = new Map();
