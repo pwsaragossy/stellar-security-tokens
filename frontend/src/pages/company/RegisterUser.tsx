@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { companyUsersApi } from '@/api/companyUsers';
 import { useToast } from '@/contexts/ToastContext';
 import { Loading } from '@/components/ui/loading';
@@ -229,16 +229,18 @@ export function CompanyRegisterUser() {
             />
 
             <Select
-              label="Role"
               value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value as 'user' | 'admin' })}
-              options={[
-                { value: 'user', label: 'User' },
-                { value: 'admin', label: 'Admin' },
-              ]}
+              onValueChange={(value: string) => setFormData({ ...formData, role: value as 'user' | 'admin' })}
               disabled={loading}
-              className="w-64"
-            />
+            >
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">User</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
 
             <Button type="submit" disabled={loading}>
               {loading ? (

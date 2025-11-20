@@ -4,7 +4,6 @@ import { InvestorLayout } from '@/components/layout/InvestorLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Calendar,
@@ -17,7 +16,7 @@ import {
   CheckCircle,
   ArrowLeft
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import api from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 
 interface Offer {
@@ -77,7 +76,7 @@ export function InvestorOfferDetail() {
     } catch (error: any) {
       console.error('Error fetching offer:', error);
       setError(error.response?.data?.error || 'Failed to load offer');
-      showToast('Failed to load offer details', 'error');
+      showToast('error', 'Failed to load offer details');
     } finally {
       setIsLoading(false);
     }
@@ -126,9 +125,9 @@ export function InvestorOfferDetail() {
       case 'bullet':
         return 'secondary';
       case 'quarterly':
-        return 'outline';
+        return 'secondary';
       case 'semi_annual':
-        return 'outline';
+        return 'secondary';
       default:
         return 'default';
     }
@@ -194,7 +193,7 @@ export function InvestorOfferDetail() {
               {getPaymentIcon(offer.payment_type)}
               <span className="ml-1">{PAYMENT_TYPE_LABELS[offer.payment_type]}</span>
             </Badge>
-            <Badge variant="outline">{offer.status}</Badge>
+            <Badge variant="secondary">{offer.status}</Badge>
           </div>
         </div>
 
@@ -280,7 +279,7 @@ export function InvestorOfferDetail() {
               </div>
               <div className="flex justify-between">
                 <span className="text-sm font-medium">Offer Type</span>
-                <Badge variant="outline" className="capitalize">
+                <Badge variant="secondary" className="capitalize">
                   {offer.offer_type}
                 </Badge>
               </div>

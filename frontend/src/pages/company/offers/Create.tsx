@@ -7,9 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, Calendar, DollarSign, Percent } from 'lucide-react';
+import { AlertCircle, Calendar, DollarSign } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { api } from '@/lib/api';
+import api from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 
 interface OfferFormData {
@@ -127,7 +127,7 @@ export function CompanyOfferCreate() {
     e.preventDefault();
 
     if (!validateForm()) {
-      showToast('Please fix the errors in the form', 'error');
+      showToast('error', 'Please fix the errors in the form');
       return;
     }
 
@@ -145,12 +145,12 @@ export function CompanyOfferCreate() {
       };
 
       await api.post('/companies/offers', submitData);
-      showToast('Offer created successfully!', 'success');
+      showToast('success', 'Offer created successfully!');
       navigate('/company/offers');
     } catch (error: any) {
       console.error('Error creating offer:', error);
       const errorMessage = error.response?.data?.error || 'Failed to create offer';
-      showToast(errorMessage, 'error');
+      showToast('error', errorMessage);
 
       if (error.response?.data?.details) {
         setErrors({ general: error.response.data.details });
@@ -224,7 +224,7 @@ export function CompanyOfferCreate() {
                 <Textarea
                   id="description"
                   value={formData.description}
-                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange('description', e.target.value)}
                   placeholder="Describe your offering, use case, and value proposition..."
                   rows={3}
                 />
@@ -252,7 +252,7 @@ export function CompanyOfferCreate() {
 
                 <div className="space-y-2">
                   <Label htmlFor="offer_type">Offer Type *</Label>
-                  <Select value={formData.offer_type} onValueChange={(value) => handleInputChange('offer_type', value)}>
+                  <Select value={formData.offer_type} onValueChange={(value: string) => handleInputChange('offer_type', value)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -271,7 +271,7 @@ export function CompanyOfferCreate() {
 
                 <div className="space-y-2">
                   <Label htmlFor="payment_type">Payment Type *</Label>
-                  <Select value={formData.payment_type} onValueChange={(value) => handleInputChange('payment_type', value)}>
+                  <Select value={formData.payment_type} onValueChange={(value: string) => handleInputChange('payment_type', value)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
