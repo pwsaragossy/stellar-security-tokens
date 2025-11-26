@@ -216,9 +216,9 @@ export class PaymentMonitor {
 
       // Distribuir tokens
       const stellarResult = await StellarService.distributeTokens(
-        investment.assetCode,
         investor.stellarPublicKey,
         investment.tokenAmount.toString(),
+        investment.assetCode,
         { memo }
       );
 

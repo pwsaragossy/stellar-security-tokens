@@ -263,9 +263,9 @@ export function initDistributionQueue() {
 
       // Distribuir tokens
       const stellarResult = await StellarService.distributeTokens(
-        assetCode,
         investor.stellarPublicKey,
         amount,
+        assetCode,
         { memo: distributionMemo }
       );
 

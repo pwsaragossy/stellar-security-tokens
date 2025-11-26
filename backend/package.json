@@ -55,6 +55,7 @@
     "morgan": "^1.10.0",
     "node-cron": "^3.0.3",
     "nodemailer": "^7.0.10",
+    "passkey-kit": "^0.11.3",
     "pg": "^8.11.3",
     "prisma": "^6.19.0"
   },

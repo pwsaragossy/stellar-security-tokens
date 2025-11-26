@@ -1,6 +1,8 @@
 import { Investor } from '../models/Investor.js';
 import { StellarService } from '../services/stellar.service.js';
 import { PaymentService } from '../services/payment.service.js';
+import { PasskeyWalletService, UserType } from '../services/passkeyWallet.service.js';
+import { EmailService } from '../services/email.service.js';
 import { generateToken } from '../middleware/auth.js';
 import prisma from '../config/prisma.js';
 import bcrypt from 'bcrypt';
@@ -495,6 +497,300 @@ export const getInvestorMetrics = async (req, res, next) => {
         },
         metrics,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================================================
+// PASSKEY WALLET REGISTRATION FLOW
+// ============================================================================
+
+/**
+ * Register investor with email verification (Step 1 of Passkey Wallet flow)
+ * Does NOT create Stellar account - that happens after email verification
+ */
+export const registerInvestorWithPasskey = async (req, res, next) => {
+  try {
+    const { name, email, document } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !document) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name, email, and document are required',
+      });
+    }
+
+    // Check for existing email
+    const existingEmail = await Investor.findByEmail(email);
+    if (existingEmail) {
+      return res.status(409).json({
+        success: false,
+        error: 'Investor with this email already exists',
+      });
+    }
+
+    // Check for existing document
+    const existingDocument = await Investor.findByDocument(document);
+    if (existingDocument) {
+      return res.status(409).json({
+        success: false,
+        error: 'Investor with this document already exists',
+      });
+    }
+
+    // Generate verification token
+    const verificationToken = EmailService.generateVerificationToken();
+    const verificationExpiry = EmailService.getVerificationExpiry();
+
+    // Create investor without Stellar account (will be created after email verification)
+    const investor = await prisma.investor.create({
+      data: {
+        name,
+        email,
+        document,
+        kycStatus: 'pending',
+        emailVerified: false,
+        emailVerificationToken: verificationToken,
+        emailVerificationExpiry: verificationExpiry,
+      },
+    });
+
+    // Send verification email
+    await EmailService.sendVerificationEmail(email, name, verificationToken);
+
+    res.status(201).json({
+      success: true,
+      message: 'Registration initiated. Please check your email to verify your account.',
+      data: {
+        id: investor.id,
+        name: investor.name,
+        email: investor.email,
+        emailVerified: false,
+        nextStep: 'verify_email',
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Verify email address (Step 2 of Passkey Wallet flow)
+ */
+export const verifyEmail = async (req, res, next) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        error: 'Verification token is required',
+      });
+    }
+
+    // Find investor by verification token
+    const investor = await prisma.investor.findFirst({
+      where: {
+        emailVerificationToken: token,
+      },
+    });
+
+    if (!investor) {
+      return res.status(404).json({
+        success: false,
+        error: 'Invalid verification token',
+      });
+    }
+
+    // Check if token is expired
+    if (investor.emailVerificationExpiry && new Date() > investor.emailVerificationExpiry) {
+      return res.status(400).json({
+        success: false,
+        error: 'Verification token has expired. Please request a new one.',
+      });
+    }
+
+    // Check if already verified
+    if (investor.emailVerified) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is already verified',
+      });
+    }
+
+    // Mark email as verified
+    const updatedInvestor = await prisma.investor.update({
+      where: { id: investor.id },
+      data: {
+        emailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationExpiry: null,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully. You can now create your passkey wallet.',
+      data: {
+        id: updatedInvestor.id,
+        name: updatedInvestor.name,
+        email: updatedInvestor.email,
+        emailVerified: true,
+        nextStep: 'create_passkey',
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Resend verification email
+ */
+export const resendVerificationEmail = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is required',
+      });
+    }
+
+    const investor = await prisma.investor.findUnique({
+      where: { email },
+    });
+
+    if (!investor) {
+      return res.status(404).json({
+        success: false,
+        error: 'Investor not found',
+      });
+    }
+
+    if (investor.emailVerified) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is already verified',
+      });
+    }
+
+    // Generate new verification token
+    const verificationToken = EmailService.generateVerificationToken();
+    const verificationExpiry = EmailService.getVerificationExpiry();
+
+    // Update investor with new token
+    await prisma.investor.update({
+      where: { id: investor.id },
+      data: {
+        emailVerificationToken: verificationToken,
+        emailVerificationExpiry: verificationExpiry,
+      },
+    });
+
+    // Send verification email
+    await EmailService.sendVerificationEmail(email, investor.name, verificationToken);
+
+    res.json({
+      success: true,
+      message: 'Verification email sent successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Create smart wallet after passkey registration (Step 3 of Passkey Wallet flow)
+ * Called by frontend after WebAuthn credential is created
+ */
+export const createSmartWallet = async (req, res, next) => {
+  try {
+    const { investorId, credentialId, publicKey } = req.body;
+
+    if (!investorId || !credentialId || !publicKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'investorId, credentialId, and publicKey are required',
+      });
+    }
+
+    // Convert publicKey from base64 to Buffer if needed
+    const publicKeyBuffer = Buffer.isBuffer(publicKey)
+      ? publicKey
+      : Buffer.from(publicKey, 'base64');
+
+    // Create smart wallet using PasskeyWalletService
+    const result = await PasskeyWalletService.createSmartWallet(
+      UserType.INVESTOR,
+      parseInt(investorId, 10),
+      credentialId,
+      publicKeyBuffer
+    );
+
+    // Send welcome email
+    const investor = await prisma.investor.findUnique({
+      where: { id: parseInt(investorId, 10) },
+    });
+
+    if (investor) {
+      await EmailService.sendWelcomeEmail(
+        investor.email,
+        investor.name,
+        result.contractId
+      );
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Smart wallet created successfully',
+      data: {
+        contractId: result.contractId,
+        transactionHash: result.transactionHash,
+        investor: result.user,
+        nextStep: 'complete_kyc',
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get wallet creation status for an investor
+ */
+export const getWalletStatus = async (req, res, next) => {
+  try {
+    const { investorId } = req.params;
+
+    const status = await PasskeyWalletService.getWalletStatus(
+      UserType.INVESTOR,
+      parseInt(investorId, 10)
+    );
+
+    res.json({
+      success: true,
+      data: status,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get passkey kit client configuration
+ */
+export const getPasskeyConfig = async (req, res, next) => {
+  try {
+    const config = PasskeyWalletService.getClientConfig();
+
+    res.json({
+      success: true,
+      data: config,
     });
   } catch (error) {
     next(error);

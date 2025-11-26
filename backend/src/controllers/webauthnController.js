@@ -372,11 +372,11 @@ export class WebAuthnController {
         };
       } else if (userType === 'company_user') {
         // Buscar dados completos da empresa
-        const company = await Company.findById(user.company_id);
+        const company = await Company.findById(user.companyId);
         
         userData = {
           company: {
-            id: company?.id || user.company_id,
+            id: company?.id || user.companyId,
             name: company?.name || '',
             cnpj: company?.cnpj || '',
             email: company?.email || user.email,

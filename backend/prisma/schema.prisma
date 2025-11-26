@@ -89,6 +89,16 @@ model Investor {
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp
   updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp
 
+  // Smart Wallet (Passkey Kit) fields
+  stellarContractId       String?   @map("stellar_contract_id") @db.VarChar(56)
+  passkeyCredentialId     String?   @map("passkey_credential_id") @db.Text
+  passkeyPublicKey        Bytes?    @map("passkey_public_key")
+
+  // Email verification fields
+  emailVerified           Boolean   @default(false) @map("email_verified")
+  emailVerificationToken  String?   @map("email_verification_token") @db.VarChar(64)
+  emailVerificationExpiry DateTime? @map("email_verification_expiry") @db.Timestamp
+
   // Relations
   tokenDistributions  TokenDistribution[]
   interestPayments    InterestPayment[]
@@ -98,6 +108,8 @@ model Investor {
   @@index([email])
   @@index([document])
   @@index([stellarPublicKey])
+  @@index([stellarContractId])
+  @@index([emailVerified])
   @@index([kycStatus, createdAt(sort: Desc)])
   @@map("investors")
 }
@@ -230,12 +242,22 @@ model CompanyUser {
   id               Int             @id @default(autoincrement())
   companyId        Int             @map("company_id")
   email            String          @unique @db.VarChar(255)
-  passwordHash     String          @map("password_hash") @db.VarChar(255)
+  passwordHash     String?         @map("password_hash") @db.VarChar(255)
   name             String          @db.VarChar(255)
   role             CompanyUserRole @default(user)
   isActive         Boolean         @default(true) @map("is_active")
   stellarPublicKey String?         @map("stellar_public_key") @db.VarChar(56)
   createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamp
+
+  // Smart Wallet (Passkey Kit) fields
+  stellarContractId       String?   @map("stellar_contract_id") @db.VarChar(56)
+  passkeyCredentialId     String?   @map("passkey_credential_id") @db.Text
+  passkeyPublicKey        Bytes?    @map("passkey_public_key")
+
+  // Email verification fields
+  emailVerified           Boolean   @default(false) @map("email_verified")
+  emailVerificationToken  String?   @map("email_verification_token") @db.VarChar(64)
+  emailVerificationExpiry DateTime? @map("email_verification_expiry") @db.Timestamp
 
   // Relations
   company             Company                         @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -246,6 +268,8 @@ model CompanyUser {
   @@index([companyId])
   @@index([isActive])
   @@index([stellarPublicKey])
+  @@index([stellarContractId])
+  @@index([emailVerified])
   @@map("company_users")
 }
 

@@ -270,10 +270,11 @@ async function processInvestmentPayment(investment, usdcPayment, req, res, next)
     });
 
     // Distribuir tokens com memo
+    const investor = await Investor.findById(investment.investorId);
     const stellarResult = await StellarService.distributeTokens(
-      investment.assetCode,
-      (await Investor.findById(investment.investorId)).stellarPublicKey,
+      investor.stellarPublicKey,
       investment.tokenAmount.toString(),
+      investment.assetCode,
       { memo }
     );
 
