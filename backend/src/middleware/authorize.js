@@ -100,7 +100,7 @@ export const requireCompanyAccess = async (req, res, next) => {
       }
 
       const user = await CompanyUser.findById(req.user.userId);
-      if (!user || user.company_id !== companyId) {
+      if (!user || user.companyId !== companyId) {
         return res.status(403).json({
           success: false,
           error: 'Access denied. You do not have access to this company.',
@@ -150,7 +150,7 @@ export const requireOfferAccess = async (req, res, next) => {
       }
 
       const user = await CompanyUser.findById(req.user.userId);
-      if (!user || user.company_id !== offer.company_id) {
+      if (!user || user.companyId !== offer.companyId) {
         return res.status(403).json({
           success: false,
           error: 'Access denied. You do not have access to this offer.',
@@ -158,7 +158,7 @@ export const requireOfferAccess = async (req, res, next) => {
       }
 
       req.offerId = offerId;
-      req.companyId = offer.company_id;
+      req.companyId = offer.companyId;
       next();
     });
   } catch (error) {

@@ -236,19 +236,19 @@ export class OfferService {
     }
 
     // Verificar se token já foi emitido
-    const existingToken = await Token.findByAssetCode(offer.asset_code);
+    const existingToken = await Token.findByAssetCode(offer.assetCode);
     if (existingToken) {
       throw new Error('Token already issued for this offer');
     }
 
     // Criar token
     const token = await Token.create({
-      asset_code: offer.asset_code,
-      issuer_public_key: issuerPublicKey,
-      total_supply: offer.total_supply,
+      assetCode: offer.assetCode,
+      issuerPublicKey: issuerPublicKey,
+      totalSupply: offer.totalSupply,
       description: offer.description,
-      offer_id: offer.id,
-      issued_by: issuedBy,
+      offerId: offer.id,
+      issuedBy: issuedBy,
     });
 
     return token;
@@ -266,7 +266,7 @@ export class OfferService {
     }
 
     // Verificar se token foi emitido
-    const token = await Token.findByAssetCode(offer.asset_code);
+    const token = await Token.findByAssetCode(offer.assetCode);
     if (!token) {
       throw new Error('Token must be issued before activating offer');
     }

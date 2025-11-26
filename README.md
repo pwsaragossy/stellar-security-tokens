@@ -24,7 +24,7 @@ API REST para tokenização de security tokens na rede Stellar.
 
 ### Método Docker (Recomendado)
 
-Para executar o projeto usando Docker, veja [DOCKER.md](./DOCKER.md) para instruções completas.
+Para executar o projeto usando Docker, veja [DOCKER.md](./docs/DOCKER.md) para instruções completas.
 
 ```bash
 # Desenvolvimento
@@ -140,7 +140,7 @@ stellar-security-tokens/
 
 ## Documentação da API
 
-Para documentação completa e detalhada de todos os endpoints, veja [API.md](./API.md).
+Para documentação completa e detalhada de todos os endpoints, veja [API.md](./docs/API.md).
 
 ## Endpoints da API
 
@@ -274,7 +274,7 @@ Acesse `http://localhost:5173` e faça login com o email de um investidor cadast
 
 ## Testes
 
-O projeto inclui uma suite completa de testes automatizados. Veja [TESTING.md](./TESTING.md) para detalhes completos.
+O projeto inclui uma suite completa de testes automatizados. Veja [TESTING.md](./docs/TESTING.md) para detalhes completos.
 
 ### Executar Testes
 
@@ -297,11 +297,11 @@ npm run test:watch
 - **Unit Tests**: Testam componentes isolados (models, services, controllers, middleware)
 - **Integration Tests**: Testam fluxos completos da API com banco de dados real
 
-Veja [TESTING.md](./TESTING.md) para documentação completa sobre testes.
+Veja [TESTING.md](./docs/TESTING.md) para documentação completa sobre testes.
 
 ## Configuração de Email
 
-O sistema envia emails automáticos de confirmação quando pagamentos de juros são processados. Veja [EMAIL_SETUP.md](./EMAIL_SETUP.md) para instruções detalhadas de configuração.
+O sistema envia emails automáticos de confirmação quando pagamentos de juros são processados. Veja [EMAIL_SETUP.md](./docs/EMAIL_SETUP.md) para instruções detalhadas de configuração.
 
 ### Teste Rápido
 

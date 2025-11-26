@@ -14,7 +14,7 @@ export const issueToken = async (req, res, next) => {
       });
     }
 
-    const stellarResult = await StellarService.issueToken(assetCode, totalSupply);
+    const stellarResult = await StellarService.issueSecurityToken(assetCode, totalSupply);
 
     const token = await Token.create({
       assetCode,
@@ -128,13 +128,13 @@ export const distributeTokens = async (req, res, next) => {
     }
 
     const stellarResult = await StellarService.distributeTokens(
-      assetCode,
       investor.stellarPublicKey,
-      amount
+      amount,
+      assetCode
     );
 
-    // Buscar offer_id do token se existir
-    const offerId = token?.offer_id || null;
+    // Buscar offerId do token se existir
+    const offerId = token?.offerId || null;
 
     const distribution = await Token.createDistribution({
       investorId,

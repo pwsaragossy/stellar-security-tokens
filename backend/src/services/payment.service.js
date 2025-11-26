@@ -492,9 +492,9 @@ export class PaymentService {
 
       logger.info(`Processing payments for ${investors.length} investors with ${annualInterestRate}% annual rate`);
 
-      // Buscar offer_id do token se existir
+      // Buscar offerId do token se existir
       const token = await Token.findByAssetCode(assetCode);
-      const offerId = token?.offer_id || null;
+      const offerId = token?.offerId || null;
 
       const payments = [];
       for (const investor of investors) {
@@ -674,9 +674,9 @@ export class PaymentService {
       }
 
       const stellarResult = await StellarService.distributeTokens(
-        assetCode,
         investor.stellarPublicKey,
-        amount
+        amount,
+        assetCode
       );
 
       const distribution = await Token.createDistribution({
@@ -822,14 +822,14 @@ export class PaymentService {
       const investors = await prisma.investor.findMany({
         where: {
           id: { in: investorIds },
-          kyc_status: 'approved'
+          kycStatus: 'approved'
         },
         select: {
           id: true,
           name: true,
           email: true,
-          stellar_public_key: true,
-          kyc_status: true,
+          stellarPublicKey: true,
+          kycStatus: true,
         }
       });
 

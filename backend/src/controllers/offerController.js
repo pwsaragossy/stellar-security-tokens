@@ -198,7 +198,7 @@ export class OfferController {
       }
 
       // Verificar acesso (company_user só vê suas próprias ofertas)
-      if (req.user.role === 'company_user' && offer.company_id !== req.user.companyId) {
+      if (req.user.role === 'company_user' && offer.companyId !== req.user.companyId) {
         return res.status(403).json({
           success: false,
           error: 'Access denied',
@@ -236,7 +236,7 @@ export class OfferController {
       }
 
       // Verificar acesso
-      if (offer.company_id !== req.user.companyId) {
+      if (offer.companyId !== req.user.companyId) {
         return res.status(403).json({
           success: false,
           error: 'Access denied',
@@ -510,7 +510,7 @@ export class OfferController {
       }
 
       // Verificar se token já foi emitido
-      const existingToken = await Token.findByAssetCode(offer.asset_code);
+      const existingToken = await Token.findByAssetCode(offer.assetCode);
       if (existingToken) {
         return res.status(409).json({
           success: false,
@@ -528,7 +528,7 @@ export class OfferController {
       }
 
       // Verificar documentos IPFS
-      const legalDocuments = offer.legal_documents || {};
+      const legalDocuments = offer.legalDocuments || {};
       const ipfsValidation = IPFSService.validateLegalDocuments(legalDocuments);
       
       if (!ipfsValidation.valid && Object.keys(legalDocuments).length > 0) {
@@ -543,8 +543,8 @@ export class OfferController {
       
       // Emitir token no Stellar com home domain
       const tokenResult = await StellarService.issueSecurityToken(
-        offer.asset_code,
-        offer.total_supply.toString(),
+        offer.assetCode,
+        offer.totalSupply.toString(),
         { homeDomain }
       );
 
@@ -559,20 +559,20 @@ export class OfferController {
       if (homeDomain && Object.keys(legalDocuments).length > 0) {
         try {
           const tomlContent = StellarTomlService.generateToml({
-            code: offer.asset_code,
+            code: offer.assetCode,
             issuer: issuerPublicKey,
-            name: offer.offer_name,
+            name: offer.offerName,
             description: offer.description,
             ipfsDocuments: legalDocuments,
             conditions: {
-              annual_interest_rate: offer.annual_interest_rate,
-              ...offer.offer_rules,
+              annual_interest_rate: offer.annualInterestRate,
+              ...offer.offerRules,
             },
           });
           
           // TODO: Salvar stellar.toml no servidor web configurado no home_domain
           // Por enquanto, apenas logamos
-          console.log(`Stellar.toml content for ${offer.asset_code}:`, tomlContent);
+          console.log(`Stellar.toml content for ${offer.assetCode}:`, tomlContent);
         } catch (error) {
           console.warn('Failed to generate stellar.toml:', error.message);
         }

@@ -406,7 +406,7 @@ export class StellarService {
    * @returns {number} returns.ledger - Número do ledger
    * @throws {Error} Se chave inválida, conta não existir, trustline não autorizada ou amount inválido
    */
-  static async distributeTokens(investorPublicKey, amount, assetCode = 'SIN01') {
+  static async distributeTokens(investorPublicKey, amount, assetCode = 'SIN01', options = {}) {
     try {
       const issuerKeypair = getIssuerKeypair();
       const distributorKeypair = getDistributorKeypair();

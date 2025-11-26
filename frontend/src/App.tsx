@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { WalletProvider } from './contexts/WalletContext';
 import { PrivateRoute } from './components/auth/PrivateRoute';
 import { PublicRoute } from './components/auth/PublicRoute';
 
@@ -12,6 +13,7 @@ import { DevLogin } from './pages/DevLogin';
 
 // Investor Portal
 import { InvestorRegister } from './pages/investor/Register';
+import { InvestorVerifyEmail } from './pages/investor/VerifyEmail';
 import { InvestorDashboard } from './pages/investor/Dashboard';
 import { InvestorPortfolio } from './pages/investor/Portfolio';
 import { InvestorOffers } from './pages/investor/Offers';
@@ -26,6 +28,7 @@ import { InvestorProfile } from './pages/investor/Profile';
 // Company Portal
 import { CompanyRegister } from './pages/company/Register';
 import { CompanyRegisterUser } from './pages/company/RegisterUser';
+import { CompanyVerifyEmail } from './pages/company/VerifyEmail';
 import { CompanyDashboard } from './pages/company/Dashboard';
 import { CompanyProfile } from './pages/company/Profile';
 import { CompanyOffersList } from './pages/company/offers/List';
@@ -55,6 +58,7 @@ function App() {
   return (
     <AuthProvider>
       <ToastProvider>
+        <WalletProvider>
         <BrowserRouter>
         <Routes>
           {/* Public Routes */}
@@ -82,6 +86,14 @@ function App() {
             element={
               <PublicRoute>
                 <InvestorRegister />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/investor/verify-email"
+            element={
+              <PublicRoute>
+                <InvestorVerifyEmail />
               </PublicRoute>
             }
           />
@@ -188,6 +200,14 @@ function App() {
             element={
               <PublicRoute>
                 <CompanyRegisterUser />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/company/verify-email"
+            element={
+              <PublicRoute>
+                <CompanyVerifyEmail />
               </PublicRoute>
             }
           />
@@ -387,6 +407,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+        </WalletProvider>
       </ToastProvider>
     </AuthProvider>
   );

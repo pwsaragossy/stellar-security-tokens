@@ -5,30 +5,34 @@ import assert from 'node:assert';
 
 describe('InvestorController - Structure Tests', () => {
   test('InvestorController exports all required functions', async () => {
-    try {
-      const controllers = await import('../../../src/controllers/investorController.js');
-      
-      const requiredFunctions = [
-        'createInvestor',
-        'registerInvestor',
-        'whitelistInvestor',
-        'getInvestors',
-        'getInvestorById',
-        'getInvestorBalance',
-        'getInvestorPayments',
-        'updateInvestor',
-      ];
+    const controllers = await import('../../../src/controllers/investorController.js');
 
-      for (const funcName of requiredFunctions) {
-        assert.ok(
-          typeof controllers[funcName] === 'function',
-          `${funcName} should be exported`
-        );
-      }
-    } catch (error) {
-      // Se falhar por dependências, apenas verificar que é um erro esperado
-      assert.ok(error.message.includes('import') || error.message.includes('Server'),
-        'Expected import error');
+    const requiredFunctions = [
+      'createInvestor',
+      'registerInvestor',
+      'loginInvestor',
+      'whitelistInvestor',
+      'getInvestors',
+      'getInvestorById',
+      'getInvestorBalance',
+      'getInvestorPayments',
+      'updateInvestor',
+      'getInvestorPortfolio',
+      'getInvestorMetrics',
+      // Passkey Wallet functions
+      'registerInvestorWithPasskey',
+      'verifyEmail',
+      'resendVerificationEmail',
+      'createSmartWallet',
+      'getWalletStatus',
+      'getPasskeyConfig',
+    ];
+
+    for (const funcName of requiredFunctions) {
+      assert.ok(
+        typeof controllers[funcName] === 'function',
+        `${funcName} should be exported`
+      );
     }
   });
 });
