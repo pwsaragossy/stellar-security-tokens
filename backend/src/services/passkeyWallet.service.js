@@ -1,6 +1,4 @@
-// Temporarily disabled due to TypeScript module issues
-// import { PasskeyServer } from 'passkey-kit';
-const PasskeyServer = null; // Placeholder
+import { PasskeyKit as PasskeyServer } from 'passkey-kit';
 import { getNetworkPassphrase } from '../config/stellar.js';
 import prisma from '../config/prisma.js';
 
@@ -89,7 +87,7 @@ export class PasskeyWalletService {
     try {
       const server = this.getServer();
       const model = this.#getPrismaModel(userType);
-      
+
       if (!model) {
         throw new Error(`Invalid user type: ${userType}`);
       }
@@ -162,7 +160,7 @@ export class PasskeyWalletService {
    */
   static async getContractIdByEmail(userType, email) {
     const model = this.#getPrismaModel(userType);
-    
+
     if (!model) {
       throw new Error(`Invalid user type: ${userType}`);
     }
@@ -187,7 +185,7 @@ export class PasskeyWalletService {
    */
   static async getUserByCredentialId(userType, credentialId) {
     const model = this.#getPrismaModel(userType);
-    
+
     if (!model) {
       throw new Error(`Invalid user type: ${userType}`);
     }
@@ -226,7 +224,7 @@ export class PasskeyWalletService {
   static async signTransaction(contractId, authEntry, credentials) {
     try {
       const server = this.getServer();
-      
+
       // Use PasskeyServer to create the signed auth entry
       const signedAuth = await server.sign(
         contractId,
@@ -254,7 +252,7 @@ export class PasskeyWalletService {
   static async sendTransaction(transaction) {
     try {
       const server = this.getServer();
-      
+
       const result = await server.send(transaction);
 
       return {
@@ -277,7 +275,7 @@ export class PasskeyWalletService {
    */
   static async hasSmartWallet(userType, userId) {
     const model = this.#getPrismaModel(userType);
-    
+
     if (!model) {
       throw new Error(`Invalid user type: ${userType}`);
     }
@@ -299,7 +297,7 @@ export class PasskeyWalletService {
    */
   static async getWalletStatus(userType, userId) {
     const model = this.#getPrismaModel(userType);
-    
+
     if (!model) {
       throw new Error(`Invalid user type: ${userType}`);
     }
