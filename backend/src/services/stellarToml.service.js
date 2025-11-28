@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { IPFSService } from './ipfs.service.js';
+import { ipfsService } from './ipfs.service.js';
 
 /**
  * Serviço para gerenciar stellar.toml e metadados de assets
@@ -53,17 +53,17 @@ desc = "${description || ''}"
     if (ipfsDocuments.contract) {
       toml += `\n# Legal Documents (IPFS)\n`;
       toml += `ipfs_contract_hash = "${ipfsDocuments.contract.hash}"\n`;
-      toml += `ipfs_contract_url = "${IPFSService.getIPFSURL(ipfsDocuments.contract.hash)}"\n`;
+      toml += `ipfs_contract_url = "${ipfsService.getGatewayUrl(ipfsDocuments.contract.hash)}"\n`;
     }
 
     if (ipfsDocuments.terms) {
       toml += `ipfs_terms_hash = "${ipfsDocuments.terms.hash}"\n`;
-      toml += `ipfs_terms_url = "${IPFSService.getIPFSURL(ipfsDocuments.terms.hash)}"\n`;
+      toml += `ipfs_terms_url = "${ipfsService.getGatewayUrl(ipfsDocuments.terms.hash)}"\n`;
     }
 
     if (ipfsDocuments.prospectus) {
       toml += `ipfs_prospectus_hash = "${ipfsDocuments.prospectus.hash}"\n`;
-      toml += `ipfs_prospectus_url = "${IPFSService.getIPFSURL(ipfsDocuments.prospectus.hash)}"\n`;
+      toml += `ipfs_prospectus_url = "${ipfsService.getGatewayUrl(ipfsDocuments.prospectus.hash)}"\n`;
     }
 
     // Adicionar condições e termos
@@ -135,7 +135,7 @@ desc = "${description || ''}"
 
     for (const line of lines) {
       const trimmed = line.trim();
-      
+
       // Ignorar comentários e linhas vazias
       if (!trimmed || trimmed.startsWith('#')) {
         continue;
@@ -155,7 +155,7 @@ desc = "${description || ''}"
       if (inCurrencySection && trimmed.includes('=')) {
         const [key, ...valueParts] = trimmed.split('=');
         const value = valueParts.join('=').trim().replace(/^["']|["']$/g, '');
-        
+
         if (key && value) {
           currentCurrency[key.trim()] = value;
         }
@@ -179,7 +179,7 @@ desc = "${description || ''}"
   static async getAssetInfo(assetCode, issuerPublicKey, homeDomain) {
     try {
       const toml = await this.resolveToml(homeDomain);
-      const currency = toml.CURRENCIES.find(c => 
+      const currency = toml.CURRENCIES.find(c =>
         c.code === assetCode && c.issuer === issuerPublicKey
       );
 
@@ -192,19 +192,19 @@ desc = "${description || ''}"
       if (currency.ipfs_contract_hash) {
         ipfsDocuments.contract = {
           hash: currency.ipfs_contract_hash,
-          url: currency.ipfs_contract_url || IPFSService.getIPFSURL(currency.ipfs_contract_hash),
+          url: currency.ipfs_contract_url || ipfsService.getGatewayUrl(currency.ipfs_contract_hash),
         };
       }
       if (currency.ipfs_terms_hash) {
         ipfsDocuments.terms = {
           hash: currency.ipfs_terms_hash,
-          url: currency.ipfs_terms_url || IPFSService.getIPFSURL(currency.ipfs_terms_hash),
+          url: currency.ipfs_terms_url || ipfsService.getGatewayUrl(currency.ipfs_terms_hash),
         };
       }
       if (currency.ipfs_prospectus_hash) {
         ipfsDocuments.prospectus = {
           hash: currency.ipfs_prospectus_hash,
-          url: currency.ipfs_prospectus_url || IPFSService.getIPFSURL(currency.ipfs_prospectus_hash),
+          url: currency.ipfs_prospectus_url || ipfsService.getGatewayUrl(currency.ipfs_prospectus_hash),
         };
       }
 
@@ -235,11 +235,11 @@ desc = "${description || ''}"
    */
   static async verifyIPFSDocument(ipfsHash, expectedContent = null) {
     try {
-      if (!IPFSService.isValidHash(ipfsHash)) {
+      if (!ipfsService.isValidHash(ipfsHash)) {
         return { valid: false, error: 'Invalid IPFS hash format' };
       }
 
-      const content = await IPFSService.fetchFile(ipfsHash);
+      const content = await ipfsService.fetchFile(ipfsHash);
 
       // Se conteúdo esperado fornecido, comparar
       if (expectedContent) {

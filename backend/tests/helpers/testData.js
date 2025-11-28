@@ -101,3 +101,61 @@ export const mockKeypair = {
 
 export const mockJWTToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW1haWwiOiJqb2FvQGV4YW1wbGUuY29tIiwicm9sZSI6ImludmVzdG9yIiwiaWF0IjoxNzA1MzI0MDAwfQ.mock_signature';
 
+import dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
+
+import prisma from '../../src/config/prisma.js';
+import { generateToken } from '../../src/middleware/auth.js';
+
+export class TestData {
+  static async createCompany(data = {}) {
+    return await prisma.company.create({
+      data: {
+        name: 'Test Company',
+        cnpj: '12345678901234',
+        email: 'company@test.com',
+        legalRepresentative: 'John Doe',
+        status: 'approved',
+        kycStatus: 'approved',
+        ...data,
+      },
+    });
+  }
+
+  static async createCompanyUser(companyId, data = {}) {
+    return await prisma.companyUser.create({
+      data: {
+        companyId,
+        email: `user_${Date.now()}@company.com`,
+        passwordHash: 'hashed_password',
+        name: 'Test User',
+        ...data,
+      },
+    });
+  }
+
+  static async createPlatformAdmin(data = {}) {
+    return await prisma.platformAdmin.create({
+      data: {
+        name: 'Admin User',
+        email: `admin_${Date.now()}@platform.com`,
+        passwordHash: 'hashed_password',
+        ...data,
+      },
+    });
+  }
+
+  static generateToken(userId, role, companyId = null) {
+    const payload = {
+      userId,
+      role,
+      email: 'test@example.com', // Dummy email
+    };
+    if (companyId) {
+      payload.companyId = companyId;
+    }
+    return generateToken(payload);
+  }
+}
+

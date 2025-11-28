@@ -60,30 +60,6 @@ enum InvestmentStatus {
 }
 
 // ============================================
-// TEMPORARY REGISTRATION (Pre-Wallet Signup)
-// ============================================
-
-/// Temporary storage for user registration before smart wallet creation
-/// Records auto-expire after 24 hours via cleanup job
-model TempRegistration {
-  id                 Int       @id @default(autoincrement())
-  email              String    @unique
-  name               String
-  document           String    @unique
-  userType           String    // 'investor' or 'company_user'
-  emailVerified      Boolean   @default(false) @map("email_verified")
-  verificationToken  String?   @unique @map("verification_token")
-  verificationExpiry DateTime? @map("verification_expiry") @db.Timestamp
-  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamp
-  expiresAt          DateTime  @map("expires_at") @db.Timestamp
-
-  @@map("temp_registrations")
-  @@index([email])
-  @@index([verificationToken])
-  @@index([expiresAt])
-}
-
-// ============================================
 // CORE MODELS
 // ============================================
 
@@ -333,6 +309,12 @@ model Offer {
   assetCode           String      @unique @map("asset_code") @db.VarChar(12)
   offerName           String      @map("offer_name") @db.VarChar(255)
   description         String      @db.Text
+
+  // Real Estate Collateral
+  collateralType        String?   @default("real_estate") @map("collateral_type")
+  collateralDescription String?   @map("collateral_description") @db.Text
+  collateralValue       Decimal?  @map("collateral_value") @db.Decimal(20, 2)
+  collateralLTV         Decimal?  @map("collateral_ltv") @db.Decimal(5, 2)
   totalSupply         Decimal     @map("total_supply") @db.Decimal(20, 7)
   annualInterestRate  Decimal?    @map("annual_interest_rate") @db.Decimal(10, 7)
   offerType           OfferType   @map("offer_type")

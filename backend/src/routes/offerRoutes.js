@@ -30,8 +30,22 @@ const dueDiligenceValidation = [
   validate,
 ];
 
+import multer from 'multer';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  }
+});
+
 // Rotas para company_users
-router.post('/companies/offers', requireCompanyUser, createOfferValidation, OfferController.createOffer);
+router.post('/companies/offers',
+  requireCompanyUser,
+  upload.any(), // Allow any files, controller will handle processing
+  createOfferValidation,
+  OfferController.createOffer
+);
 router.get('/companies/offers', requireCompanyUser, OfferController.getCompanyOffers);
 router.get('/companies/offers/:id', requireCompanyUser, OfferController.getOfferDetails);
 router.put('/companies/offers/:id', requireCompanyUser, OfferController.updateOffer);

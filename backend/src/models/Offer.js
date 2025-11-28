@@ -32,6 +32,11 @@ export class Offer {
       offer_type,
       offer_rules = {},
       legal_documents = {},
+      // Collateral
+      collateral_type,
+      collateral_description,
+      collateral_value,
+      collateral_ltv,
     } = offerData;
 
     return await prisma.offer.create({
@@ -47,6 +52,11 @@ export class Offer {
         offerRules: offer_rules,
         legalDocuments: legal_documents,
         status: 'pending_review',
+        // Collateral
+        collateralType: collateral_type,
+        collateralDescription: collateral_description,
+        collateralValue: collateral_value,
+        collateralLTV: collateral_ltv,
       },
     });
   }
@@ -98,7 +108,7 @@ export class Offer {
    */
   static async findAll(limit = 100, offset = 0, status = null) {
     const where = status ? { status: status.toLowerCase() } : {};
-    
+
     return await prisma.offer.findMany({
       where,
       take: limit,
@@ -119,7 +129,7 @@ export class Offer {
     if (offerType) {
       where.offerType = offerType.toLowerCase();
     }
-    
+
     return await prisma.offer.findMany({
       where,
       take: limit,

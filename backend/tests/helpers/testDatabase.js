@@ -169,3 +169,13 @@ export const setupTestDatabase = async () => {
 export const teardownTestDatabase = async () => {
   await cleanDatabase();
 };
+
+export class TestDatabase {
+  static async setup() {
+    await setupTestDatabase();
+  }
+
+  static async cleanup() {
+    await cleanDatabase();
+  }
+}

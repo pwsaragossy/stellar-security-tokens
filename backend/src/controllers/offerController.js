@@ -21,14 +21,14 @@ export class OfferController {
     }
 
     const formatted = {};
-    
+
     // Lista de tipos de documentos suportados
-    const documentTypes = ['contract', 'terms', 'prospectus', 'kyc', 'other'];
-    
+    const documentTypes = ['contract', 'terms', 'prospectus', 'kyc', 'matricula', 'laudo', 'projeto', 'other'];
+
     for (const docType of documentTypes) {
       if (legalDocuments[docType]) {
         const doc = legalDocuments[docType];
-        
+
         formatted[docType] = {
           hash: doc.hash || null,
           url: doc.url || (doc.hash ? IPFSService.getIPFSURL(doc.hash) : null),
@@ -37,7 +37,7 @@ export class OfferController {
         };
       }
     }
-    
+
     return formatted;
   }
 
@@ -52,10 +52,10 @@ export class OfferController {
     }
 
     // Parse JSONB fields se necessário
-    const legalDocuments = typeof offer.legal_documents === 'string' 
-      ? JSON.parse(offer.legal_documents) 
+    const legalDocuments = typeof offer.legal_documents === 'string'
+      ? JSON.parse(offer.legal_documents)
       : offer.legal_documents || {};
-    
+
     const offerRules = typeof offer.offer_rules === 'string'
       ? JSON.parse(offer.offer_rules)
       : offer.offer_rules || {};
@@ -64,8 +64,17 @@ export class OfferController {
       ...offer,
       legal_documents: this.formatLegalDocuments(legalDocuments),
       offer_rules: offerRules,
+      // Ensure collateral fields are included (they should be in ...offer but explicit is good)
+      collateral_type: offer.collateralType || offer.collateral_type,
+      collateral_description: offer.collateralDescription || offer.collateral_description,
+      collateral_value: offer.collateralValue || offer.collateral_value,
+      collateral_ltv: offer.collateralLTV || offer.collateral_ltv,
     };
   }
+  /**
+   * Cria uma nova oferta (company_user)
+   * POST /api/companies/offers
+   */
   /**
    * Cria uma nova oferta (company_user)
    * POST /api/companies/offers
@@ -84,7 +93,11 @@ export class OfferController {
         bullet_payment_amount,
         payment_frequency = 1,
         offer_rules = {},
-        legal_documents = {},
+        // Collateral fields
+        collateral_type = 'real_estate',
+        collateral_description,
+        collateral_value,
+        collateral_ltv,
       } = req.body;
 
       // Validações básicas
@@ -122,6 +135,47 @@ export class OfferController {
       const companyId = req.user.companyId;
       const requestedBy = req.user.userId;
 
+      // Processar uploads de arquivos para IPFS
+      let legal_documents = {};
+
+      // Se vieram arquivos via multipart/form-data
+      if (req.files && req.files.length > 0) {
+        for (const file of req.files) {
+          // O campo do formulário define o tipo (ex: 'matricula', 'laudo', 'contract')
+          // Se usar upload.any(), o fieldname vem no arquivo
+          const docType = file.fieldname;
+
+          const uploadResult = await IPFSService.uploadFile(
+            file.buffer,
+            file.originalname,
+            {
+              companyId,
+              assetCode: asset_code,
+              type: docType
+            }
+          );
+
+          legal_documents[docType] = {
+            hash: uploadResult.ipfsHash,
+            fileName: file.originalname,
+            uploadedAt: new Date().toISOString(),
+            url: uploadResult.url
+          };
+        }
+      } else if (req.body.legal_documents) {
+        // Fallback para JSON se enviado diretamente (sem upload de arquivo)
+        legal_documents = typeof req.body.legal_documents === 'string'
+          ? JSON.parse(req.body.legal_documents)
+          : req.body.legal_documents;
+      }
+
+      // Calcular LTV se não fornecido e temos valores
+      let finalLTV = collateral_ltv;
+      if (!finalLTV && collateral_value && total_supply) {
+        // LTV = (Total Supply / Collateral Value) * 100
+        finalLTV = (parseFloat(total_supply) / parseFloat(collateral_value)) * 100;
+      }
+
       const offer = await Offer.create({
         company_id: companyId,
         requested_by: requestedBy,
@@ -137,6 +191,11 @@ export class OfferController {
         payment_frequency,
         offer_rules,
         legal_documents,
+        // Collateral
+        collateral_type,
+        collateral_description,
+        collateral_value,
+        collateral_ltv: finalLTV,
       });
 
       res.status(201).json({
@@ -163,7 +222,7 @@ export class OfferController {
       const offers = await Offer.findByCompany(companyId);
 
       // Formatar ofertas com documentos IPFS
-      const formattedOffers = offers.map(offer => 
+      const formattedOffers = offers.map(offer =>
         this.formatOfferForResponse(offer)
       );
 
@@ -296,7 +355,7 @@ export class OfferController {
       );
 
       // Formatar ofertas com documentos IPFS
-      const formattedOffers = offers.map(offer => 
+      const formattedOffers = offers.map(offer =>
         this.formatOfferForResponse(offer)
       );
 
@@ -335,9 +394,9 @@ export class OfferController {
       }
 
       // Só retornar se estiver ativa ou se for admin/company_user
-      if (offer.status !== 'active' && 
-          req.user?.role !== 'platform_admin' && 
-          req.user?.role !== 'company_user') {
+      if (offer.status !== 'active' &&
+        req.user?.role !== 'platform_admin' &&
+        req.user?.role !== 'company_user') {
         return res.status(403).json({
           success: false,
           error: 'Offer is not active',
@@ -373,7 +432,7 @@ export class OfferController {
       );
 
       // Formatar ofertas com documentos IPFS
-      const formattedOffers = offers.map(offer => 
+      const formattedOffers = offers.map(offer =>
         this.formatOfferForResponse(offer)
       );
 
@@ -530,7 +589,7 @@ export class OfferController {
       // Verificar documentos IPFS
       const legalDocuments = offer.legalDocuments || {};
       const ipfsValidation = IPFSService.validateLegalDocuments(legalDocuments);
-      
+
       if (!ipfsValidation.valid && Object.keys(legalDocuments).length > 0) {
         return res.status(400).json({
           success: false,
@@ -540,7 +599,7 @@ export class OfferController {
 
       // Configurar home domain se disponível
       const homeDomain = process.env.STELLAR_HOME_DOMAIN || null;
-      
+
       // Emitir token no Stellar com home domain
       const tokenResult = await StellarService.issueSecurityToken(
         offer.assetCode,
@@ -569,7 +628,7 @@ export class OfferController {
               ...offer.offerRules,
             },
           });
-          
+
           // TODO: Salvar stellar.toml no servidor web configurado no home_domain
           // Por enquanto, apenas logamos
           console.log(`Stellar.toml content for ${offer.assetCode}:`, tomlContent);

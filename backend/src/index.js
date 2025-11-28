@@ -1,59 +1,13 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import morgan from 'morgan';
+import app from './app.js';
 import dotenv from 'dotenv';
-import investorRoutes from './routes/investorRoutes.js';
-import tokenRoutes from './routes/tokenRoutes.js';
-import investmentRoutes from './routes/investmentRoutes.js';
-import authRoutes from './routes/authRoutes.js';
-import paymentRoutes from './routes/paymentRoutes.js';
-import companyRoutes from './routes/companyRoutes.js';
-import companyUserRoutes from './routes/companyUserRoutes.js';
-import platformAdminRoutes from './routes/platformAdminRoutes.js';
-import offerRoutes from './routes/offerRoutes.js';
-import webauthnRoutes from './routes/webauthnRoutes.js';
-
-import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import path from 'path';
 import { startPaymentScheduler } from './services/paymentScheduler.js';
 import { getPaymentMonitor } from './services/PaymentMonitor.service.js';
 import { initDistributionQueue } from './services/distributionQueue.service.js';
 
-import path from 'path';
-
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
 
-const app = express();
 const PORT = process.env.PORT || 3000;
-
-app.use(helmet());
-app.use(cors());
-app.use(morgan('combined'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-app.get('/health', (req, res) => {
-  res.json({
-    success: true,
-    message: 'API is running',
-    timestamp: new Date().toISOString(),
-  });
-});
-
-app.use('/api/auth', authRoutes);
-app.use('/api/investors', investorRoutes);
-app.use('/api/tokens', tokenRoutes);
-app.use('/api/investments', investmentRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/companies', companyRoutes);
-app.use('/api/company-users', companyUserRoutes);
-app.use('/api/platform-admins', platformAdminRoutes);
-app.use('/api/webauthn', webauthnRoutes);
-
-app.use('/api', offerRoutes);
-
-app.use(notFoundHandler);
-app.use(errorHandler);
 
 // Process-level error handlers to prevent crashes from unhandled errors
 process.on('unhandledRejection', (reason, promise) => {
@@ -170,6 +124,3 @@ app.listen(PORT, async () => {
     console.log('Distribution queue is disabled (ENABLE_DISTRIBUTION_QUEUE=false)');
   }
 });
-
-export default app;
-
