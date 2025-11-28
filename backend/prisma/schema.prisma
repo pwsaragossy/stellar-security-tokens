@@ -82,6 +82,7 @@ model Investor {
   name             String    @db.VarChar(255)
   email            String    @unique @db.VarChar(255)
   document         String    @unique @db.VarChar(100)
+  // DEPRECATED: Legacy field for migration only. All new investors use stellarContractId
   stellarPublicKey String?   @map("stellar_public_key") @db.VarChar(56)
   kycStatus        KYCStatus @default(pending) @map("kyc_status")
   passwordHash     String?   @map("password_hash") @db.VarChar(255)
@@ -89,10 +90,10 @@ model Investor {
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp
   updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp
 
-  // Smart Wallet (Passkey Kit) fields
-  stellarContractId       String?   @map("stellar_contract_id") @db.VarChar(56)
-  passkeyCredentialId     String?   @map("passkey_credential_id") @db.Text
-  passkeyPublicKey        Bytes?    @map("passkey_public_key")
+  // Smart Wallet (Passkey Kit) fields - REQUIRED for all new investors
+  stellarContractId       String    @map("stellar_contract_id") @db.VarChar(56)
+  passkeyCredentialId     String    @map("passkey_credential_id") @db.Text
+  passkeyPublicKey        Bytes     @map("passkey_public_key")
 
   // Email verification fields
   emailVerified           Boolean   @default(false) @map("email_verified")

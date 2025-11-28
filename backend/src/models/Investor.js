@@ -6,38 +6,19 @@ import bcrypt from 'bcrypt';
  */
 export class Investor {
   /**
-   * Cria um novo investidor no banco de dados
-   * @param {Object} investorData - Dados do investidor
-   * @param {string} investorData.name - Nome completo do investidor
-   * @param {string} investorData.email - Email do investidor (único)
-   * @param {string} investorData.document - CPF/CNPJ do investidor (único)
-   * @param {string} investorData.stellarPublicKey - Chave pública Stellar (obrigatória, 56 caracteres)
-   * @param {string} [investorData.kycStatus='pending'] - Status KYC (pending/approved/rejected)
-   * @returns {Promise<Object>} Investidor criado com todos os campos
-   * @throws {Error} Se houver violação de constraint (email/document duplicado)
+   * DEPRECATED: Use PasskeyWalletService.createSmartWallet and direct Prisma calls instead.
+   * Traditional investor creation is no longer supported.
+   * 
+   * For passkey-based registration:
+   * 1. Create investor record with email, name, document (no stellarPublicKey)
+   * 2. Send email verification
+   * 3. After verification, create passkey and smart wallet via PasskeyWalletService
+   * 4. Update investor with stellarContractId, passkeyCredentialId, passkeyPublicKey
    */
-  static async create(investorData) {
-    const { name, email, document, stellarPublicKey, kycStatus = 'pending' } = investorData;
-    
-    if (!stellarPublicKey) {
-      throw new Error('stellarPublicKey é obrigatório para criar um investidor');
-    }
-    
-    // Validar formato da chave Stellar (56 caracteres, começando com G)
-    if (!/^G[A-Z0-9]{55}$/.test(stellarPublicKey)) {
-      throw new Error('stellarPublicKey deve ter 56 caracteres e começar com G');
-    }
-    
-    return await prisma.investor.create({
-      data: {
-        name,
-        email,
-        document,
-        stellarPublicKey,
-        kycStatus: kycStatus.toLowerCase(),
-      },
-    });
+  static async create() {
+    throw new Error('Investor.create() is deprecated. Use passkey registration flow instead.');
   }
+
 
   /**
    * Busca investidor por ID
@@ -73,13 +54,24 @@ export class Investor {
   }
 
   /**
-   * Busca investidor por chave pública Stellar
-   * @param {string} stellarPublicKey - Chave pública Stellar (56 caracteres)
-   * @returns {Promise<Object|null>} Investidor encontrado ou null
+   * DEPRECATED: Use findByStellarContractId instead for smart wallet lookups
+   * @param {string} stellarPublicKey - Legacy Stellar public key
+   * @returns {Promise<Object|null>} Investor found or null
    */
   static async findByStellarPublicKey(stellarPublicKey) {
     return await prisma.investor.findFirst({
       where: { stellarPublicKey },
+    });
+  }
+
+  /**
+   * Busca investidor por contract ID (smart wallet address)
+   * @param {string} stellarContractId - Smart wallet contract address (56 characters)
+   * @returns {Promise<Object|null>} Investidor encontrado ou null
+   */
+  static async findByStellarContractId(stellarContractId) {
+    return await prisma.investor.findFirst({
+      where: { stellarContractId },
     });
   }
 
@@ -111,7 +103,7 @@ export class Investor {
    */
   static async update(id, investorData) {
     const { name, email, document, stellarPublicKey, kycStatus } = investorData;
-    
+
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (email !== undefined) updateData.email = email;

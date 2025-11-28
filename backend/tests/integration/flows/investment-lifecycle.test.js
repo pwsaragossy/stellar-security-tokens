@@ -135,6 +135,7 @@ describe('Investment Lifecycle Flow', () => {
         const price = 1; // 1 USDC per token
         const tokenAmount = investmentAmount / price;
 
+        console.log('DEBUG: Investor created:', investor);
         const investment = await prisma.investment.create({
             data: {
                 investorId: investor.id,
