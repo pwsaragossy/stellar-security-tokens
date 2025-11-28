@@ -196,10 +196,11 @@ export class PaymentMonitor {
 
       // Buscar investidor
       const investor = await Investor.findById(investment.investorId);
-      if (!investor || !investor.stellarPublicKey) {
-        throw new Error(`Investor ${investment.investorId} not found or missing Stellar key`);
+      if (!investor || !investor.stellarContractId) {
+        throw new Error(`Investor ${investment.investorId} not found or missing smart wallet address`);
       }
 
+      console.log(`[PaymentMonitor] Distributing ${investment.tokenAmount} tokens to ${investor.stellarContractId}`);
       // Verificar KYC
       if (investor.kycStatus !== 'approved') {
         throw new Error(`Investor ${investment.investorId} KYC not approved`);
@@ -214,9 +215,9 @@ export class PaymentMonitor {
         usdc_payment_hash: payment.transaction_hash,
       });
 
-      // Distribuir tokens
+      // Distribuir tokens to smart wallet
       const stellarResult = await StellarService.distributeTokens(
-        investor.stellarPublicKey,
+        investor.stellarContractId,  // Smart wallet address
         investment.tokenAmount.toString(),
         investment.assetCode,
         { memo }

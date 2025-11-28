@@ -79,20 +79,20 @@ export class Investment {
 
   /**
    * Busca investimentos pendentes de pagamento por investidor
-   * @param {string} investorPublicKey - Chave pública do investidor
+   * @param {string} investorStellarAddress - Smart wallet address do investidor
    * @param {number|string} expectedAmount - Valor esperado (com tolerância)
    * @param {number} [windowMinutes=2] - Janela de tempo em minutos
    * @returns {Promise<Array>} Array de investimentos pendentes
    */
-  static async findPendingByInvestor(investorPublicKey, expectedAmount, windowMinutes = 2) {
+  static async findPendingByInvestor(investorStellarAddress, expectedAmount, windowMinutes = 2) {
     const windowStartTime = new Date(Date.now() - windowMinutes * 60 * 1000);
     const expectedAmountFloat = parseFloat(expectedAmount);
     const tolerance = expectedAmountFloat * 0.0001; // 0.01% tolerance
-    
+
     return await prisma.investment.findMany({
       where: {
         investor: {
-          stellarPublicKey: investorPublicKey,
+          stellarContractId: investorStellarAddress,  // Smart wallet address
         },
         status: 'pending_payment',
         usdcAmount: {
@@ -106,7 +106,7 @@ export class Investment {
       include: {
         investor: {
           select: {
-            stellarPublicKey: true,
+            stellarContractId: true,
           },
         },
       },

@@ -6,6 +6,7 @@ import { createStellarMock } from '../../helpers/stellarMock.js';
 import { stellarServer } from '../../../src/config/stellar.js';
 import { getPaymentMonitor } from '../../../src/services/PaymentMonitor.service.js';
 import { createTestAdmin } from '../../helpers/authHelper.js';
+import { StellarService } from '../../../src/services/stellar.service.js';
 
 describe('Investment Lifecycle Flow', () => {
     let investor;
@@ -15,6 +16,7 @@ describe('Investment Lifecycle Flow', () => {
     let originalPayments;
     let originalSubmitTransaction;
     let originalLoadAccount;
+    let originalDistributeTokens;
     let mockStreamCallback;
 
     before(async () => {
@@ -23,15 +25,17 @@ describe('Investment Lifecycle Flow', () => {
         // Setup initial data
         const admin = await createTestAdmin();
 
-        // Create Investor (must be approved)
+        // Create Investor (must be approved) with passkey fields
         investor = await prisma.investor.create({
             data: {
                 name: 'Investment Tester',
                 email: `investor.${Date.now()}@example.com`,
                 document: '99988877766',
-                stellarPublicKey: 'GASCYDDBXMEW3J5VMJKRNHBP3NSV4SLBLRETGNHKONA5FTUA4V5HTIGA',
+                stellarContractId: 'CTEST' + 'CONTRACT1234567890123456789012345678901234567890123'.substring(0, 51),
+                passkeyCredentialId: `mock-credential-${Date.now()}`,
+                passkeyPublicKey: Buffer.from('mock-passkey-public-key-for-testing'),
                 kycStatus: 'approved',
-                passwordHash: 'hash',
+                emailVerified: true,
             }
         });
 
@@ -100,6 +104,7 @@ describe('Investment Lifecycle Flow', () => {
         originalPayments = stellarServer.payments;
         originalSubmitTransaction = stellarServer.submitTransaction;
         originalLoadAccount = stellarServer.loadAccount;
+        originalDistributeTokens = StellarService.distributeTokens;
 
         // Monkey-patch stellarServer
         // We need to capture the callback to trigger it manually
@@ -108,6 +113,16 @@ describe('Investment Lifecycle Flow', () => {
         stellarServer.payments = stellarMock.mockPayments;
         stellarServer.submitTransaction = stellarMock.mockSubmitTransaction;
         stellarServer.loadAccount = stellarMock.mockLoadAccount;
+
+        // Mock StellarService.distributeTokens for smart wallet support
+        StellarService.distributeTokens = async (destination, amount, assetCode, options) => {
+            // Mock successful distribution to smart wallet
+            return {
+                transactionHash: 'mock_distribution_tx_' + Date.now(),
+                ledger: 12345,
+                successful: true,
+            };
+        };
 
         // Start PaymentMonitor
         paymentMonitor = getPaymentMonitor();
@@ -124,6 +139,7 @@ describe('Investment Lifecycle Flow', () => {
         stellarServer.payments = originalPayments;
         stellarServer.submitTransaction = originalSubmitTransaction;
         stellarServer.loadAccount = originalLoadAccount;
+        StellarService.distributeTokens = originalDistributeTokens;
 
         await cleanDatabase();
         await prisma.$disconnect();
@@ -135,7 +151,6 @@ describe('Investment Lifecycle Flow', () => {
         const price = 1; // 1 USDC per token
         const tokenAmount = investmentAmount / price;
 
-        console.log('DEBUG: Investor created:', investor);
         const investment = await prisma.investment.create({
             data: {
                 investorId: investor.id,
@@ -154,7 +169,7 @@ describe('Investment Lifecycle Flow', () => {
             type: 'payment',
             asset_code: 'USDC',
             asset_issuer: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN', // Default USDC issuer
-            from: investor.stellarPublicKey,
+            from: investor.stellarContractId,  // Smart wallet address
             to: 'G_TREASURY_KEY', // Must match the treasury key we started monitoring with
             amount: investment.usdcAmount.toString(),
             transaction_hash: paymentHash,
