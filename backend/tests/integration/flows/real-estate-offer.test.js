@@ -82,7 +82,7 @@ describe('Real Estate Offer Flow', () => {
         const offer = response.body.data.find(o => o.assetCode === 'RES01');
 
         assert.ok(offer);
-        assert.strictEqual(offer.collateral_description, 'Casa de alto padrão');
-        assert.strictEqual(offer.legal_documents.matricula.fileName, 'test-document.pdf');
+        assert.strictEqual(offer.collateralDescription, 'Casa de alto padrão');
+        assert.strictEqual(offer.legalDocuments.matricula.fileName, 'test-document.pdf');
     });
 });
