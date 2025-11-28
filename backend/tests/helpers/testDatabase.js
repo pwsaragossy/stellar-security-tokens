@@ -10,12 +10,12 @@ import bcrypt from 'bcrypt';
  */
 export const cleanDatabase = async () => {
   const isTestEnv = process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
-  
+
   try {
     if (isTestEnv) {
       console.log('[testDatabase] Starting database cleanup...');
     }
-    
+
     // Use Prisma transaction to delete all data in correct order
     await prisma.$transaction(async (tx) => {
       // Delete in dependency order to avoid foreign key violations
@@ -32,7 +32,7 @@ export const cleanDatabase = async () => {
       await tx.investor.deleteMany({});
       await tx.token.deleteMany({});
     });
-    
+
     // Reset sequences using raw SQL (Prisma doesn't have direct sequence reset)
     const sequences = await prisma.$queryRaw`
       SELECT sequence_name
@@ -40,7 +40,7 @@ export const cleanDatabase = async () => {
       WHERE sequence_schema = 'public'
       ORDER BY sequence_name
     `;
-    
+
     for (const seq of sequences) {
       try {
         await prisma.$executeRawUnsafe(`ALTER SEQUENCE ${seq.sequence_name} RESTART WITH 1`);
@@ -54,7 +54,7 @@ export const cleanDatabase = async () => {
         }
       }
     }
-    
+
     // Verification
     if (isTestEnv) {
       try {
@@ -62,11 +62,11 @@ export const cleanDatabase = async () => {
         const tokensCount = await prisma.token.count();
         const investorsSeq = await prisma.$queryRawUnsafe("SELECT last_value FROM investors_id_seq");
         const tokensSeq = await prisma.$queryRawUnsafe("SELECT last_value FROM tokens_id_seq");
-        
+
         console.log(`[testDatabase] Cleanup verification:`);
         console.log(`  - Investors: ${investorsCount} rows, sequence: ${investorsSeq[0].last_value}`);
         console.log(`  - Tokens: ${tokensCount} rows, sequence: ${tokensSeq[0].last_value}`);
-        
+
         if (investorsCount > 0 || tokensCount > 0) {
           console.warn('[testDatabase] WARNING: Data still exists after cleanup!');
         }
@@ -79,7 +79,7 @@ export const cleanDatabase = async () => {
         }
       }
     }
-    
+
     if (isTestEnv) {
       console.log('[testDatabase] Database cleanup completed');
     }
@@ -94,34 +94,38 @@ export const cleanDatabase = async () => {
  */
 export const seedTestData = async () => {
   const isTestEnv = process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
-  
+
   try {
-    // Chaves Stellar válidas: 56 caracteres, começando com G seguido de 55 caracteres alfanuméricos
-    const investorStellarKey = 'G' + 'TEST1234567890123456789012345678901234567890123456789012345'.substring(0, 55);
+    // Smart wallet contract IDs (56 characters, starting with C for contract)
+    const stellarContractId = 'C' + 'CONTRACT12345678901234567890123456789012345678901234567890123'.substring(0, 55);
     const issuerStellarKey = 'G' + 'ISSUER12345678901234567890123456789012345678901234567890123456'.substring(0, 55);
-    
+
     // Usar email e document únicos baseados em timestamp + random para evitar conflitos
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 10000);
     const uniqueEmail = `test-${timestamp}-${random}@example.com`;
     const uniqueDocument = `${(timestamp + random) % 100000000000}`.padStart(11, '0'); // 11 dígitos
-    
+
     if (isTestEnv) {
       console.log(`[testDatabase] Seeding test data with email: ${uniqueEmail}, document: ${uniqueDocument}`);
     }
-    
-    // Hash password for test investor
-    const passwordHash = await bcrypt.hash('testpassword', 10);
 
-    // Create investor (using unique email and document)
+    // Mock passkey data for testing
+    const mockPasskeyCredentialId = `mock-credential-${timestamp}`;
+    const mockPasskeyPublicKey = Buffer.from('mock-public-key-data-for-testing');
+
+    // Create investor with passkey fields (REQUIRED)
     const investor = await prisma.investor.create({
       data: {
         name: 'Test Investor',
         email: uniqueEmail,
         document: uniqueDocument,
-        stellarPublicKey: investorStellarKey,
+        stellarContractId,  // Smart wallet address
+        passkeyCredentialId: mockPasskeyCredentialId,
+        passkeyPublicKey: mockPasskeyPublicKey,
         kycStatus: 'approved',
-        passwordHash,
+        emailVerified: true,
+        passwordHash: null, // Passkey-only, no password
       },
     });
 

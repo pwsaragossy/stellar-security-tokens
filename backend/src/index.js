@@ -16,10 +16,12 @@ import webauthnRoutes from './routes/webauthnRoutes.js';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { startPaymentScheduler } from './services/paymentScheduler.js';
-import { getPaymentMonitor } from './services/paymentMonitor.service.js';
+import { getPaymentMonitor } from './services/PaymentMonitor.service.js';
 import { initDistributionQueue } from './services/distributionQueue.service.js';
 
-dotenv.config();
+import path from 'path';
+
+dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
