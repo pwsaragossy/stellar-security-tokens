@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { investorApi } from '@/lib/api';
-import { connectFreighter, checkFreighterInstalled } from '@/lib/freighter';
+import { connectFreighter, isFreighterInstalled } from '@/lib/freighter';
 import { Wallet, LogOut, TrendingUp, History, DollarSign } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -19,7 +19,7 @@ export function InvestorPortal() {
   }, []);
 
   const checkConnection = async () => {
-    if (checkFreighterInstalled()) {
+    if (await isFreighterInstalled()) {
       try {
         const pk = await connectFreighter();
         setPublicKey(pk);
@@ -35,7 +35,7 @@ export function InvestorPortal() {
     try {
       setLoading(true);
       const investors = await investorApi.getAll();
-      const investor = investors.data?.find((inv: any) => 
+      const investor = investors.data?.find((inv: any) =>
         inv.stellar_public_key === stellarPublicKey
       );
 
@@ -43,7 +43,7 @@ export function InvestorPortal() {
         setInvestorData(investor);
         const balanceRes = await investorApi.getBalance(investor.id);
         setBalance(balanceRes.data);
-        
+
         const paymentsRes = await investorApi.getPayments(investor.id);
         setPayments(paymentsRes.data?.payments || []);
       }
@@ -106,7 +106,7 @@ export function InvestorPortal() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {!checkFreighterInstalled() ? (
+          {!isFreighterInstalled() ? (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 Você precisa instalar a extensão Freighter Wallet para continuar.
@@ -217,11 +217,11 @@ export function InvestorPortal() {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Line 
-                      type="monotone" 
-                      dataKey="amount" 
-                      stroke="#8884d8" 
-                      name="Juros (USDC)" 
+                    <Line
+                      type="monotone"
+                      dataKey="amount"
+                      stroke="#8884d8"
+                      name="Juros (USDC)"
                     />
                   </LineChart>
                 </ResponsiveContainer>

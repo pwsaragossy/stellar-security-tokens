@@ -7,7 +7,6 @@ import {
   signTransactionWithFreighter,
   isFreighterInstalled,
   openFreighterDownload,
-  type FreighterStatus,
   type NetworkDetails,
 } from '@/lib/freighter';
 

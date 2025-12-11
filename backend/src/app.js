@@ -15,6 +15,7 @@ import offerRoutes from './routes/offerRoutes.js';
 import webauthnRoutes from './routes/webauthnRoutes.js';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { globalLimiter, authLimiter, apiLimiter, strictLimiter } from './middleware/rateLimit.js';
 import path from 'path';
 
 // Load env vars if not already loaded
@@ -32,6 +33,9 @@ app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Apply global rate limiting to all routes (100 req/min per IP)
+app.use(globalLimiter);
+
 app.get('/health', (req, res) => {
     res.json({
         success: true,
@@ -40,17 +44,22 @@ app.get('/health', (req, res) => {
     });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/investors', investorRoutes);
-app.use('/api/tokens', tokenRoutes);
-app.use('/api/investments', investmentRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/companies', companyRoutes);
-app.use('/api/company-users', companyUserRoutes);
-app.use('/api/platform-admins', platformAdminRoutes);
-app.use('/api/webauthn', webauthnRoutes);
+// Auth routes with strict rate limiting (5 req/min - prevents brute force)
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/webauthn', authLimiter, webauthnRoutes);
 
-app.use('/api', offerRoutes);
+// Standard API routes with moderate rate limiting (30 req/min)
+app.use('/api/investors', apiLimiter, investorRoutes);
+app.use('/api/tokens', apiLimiter, tokenRoutes);
+app.use('/api/investments', apiLimiter, investmentRoutes);
+app.use('/api/companies', apiLimiter, companyRoutes);
+app.use('/api/company-users', apiLimiter, companyUserRoutes);
+app.use('/api/platform-admins', apiLimiter, platformAdminRoutes);
+
+// Payment routes with strict rate limiting (10 req/min - expensive operations)
+app.use('/api/payments', strictLimiter, paymentRoutes);
+
+app.use('/api', apiLimiter, offerRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

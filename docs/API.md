@@ -974,7 +974,43 @@ Todos os erros seguem o formato:
 
 ## Rate Limiting
 
-Atualmente não há rate limiting implementado. Recomenda-se implementar em produção.
+Rate limiting is implemented to protect the API from abuse and DDoS attacks. Limits are applied per IP address.
+
+### Rate Limit Tiers
+
+| Tier | Routes | Limit | Window |
+|------|--------|-------|--------|
+| Global | All routes | 100 requests | 1 minute |
+| Auth | `/api/auth/*`, `/api/webauthn/*` | 5 requests | 1 minute |
+| API | Most `/api/*` routes | 30 requests | 1 minute |
+| Strict | `/api/payments/*` | 10 requests | 1 minute |
+
+### Headers
+
+All responses include rate limit headers:
+
+```
+RateLimit-Limit: 100
+RateLimit-Remaining: 95
+RateLimit-Reset: 1702345678
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1702345678
+```
+
+### Rate Limit Exceeded Response
+
+**HTTP 429 Too Many Requests:**
+```json
+{
+  "success": false,
+  "error": "Too many requests from this IP, please try again after a minute."
+}
+```
+
+### Bypassing Rate Limits
+
+The `/health` endpoint is exempt from rate limiting. Trusted API keys can also bypass limits when configured via `TRUSTED_API_KEY` environment variable.
 
 ---
 

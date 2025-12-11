@@ -2,7 +2,7 @@ import app from './app.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { startPaymentScheduler } from './services/paymentScheduler.js';
-import { getPaymentMonitor } from './services/PaymentMonitor.service.js';
+import { getPaymentMonitor } from './services/paymentMonitor.service.js';
 import { initDistributionQueue } from './services/distributionQueue.service.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });

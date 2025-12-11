@@ -2,11 +2,11 @@ import {
   isConnected as freighterIsConnected,
   isAllowed as freighterIsAllowed,
   setAllowed as freighterSetAllowed,
-  getPublicKey as freighterGetPublicKey,
   signTransaction as freighterSignTransaction,
   getNetwork as freighterGetNetwork,
   getNetworkDetails as freighterGetNetworkDetails,
 } from '@stellar/freighter-api';
+import freighterApi from '@stellar/freighter-api'; // Default export object
 import { Networks } from '@stellar/stellar-sdk';
 
 export interface FreighterStatus {
@@ -54,9 +54,9 @@ export async function requestFreighterAccess(): Promise<string> {
   try {
     const accessResult = await freighterSetAllowed();
     if (accessResult.isAllowed) {
-      const publicKeyResult = await freighterGetPublicKey();
-      if (publicKeyResult.publicKey) {
-        return publicKeyResult.publicKey;
+      const addressResult = await freighterApi.getAddress();
+      if (addressResult.address) {
+        return addressResult.address;
       }
       throw new Error('Failed to get public key after granting access');
     }
@@ -74,8 +74,8 @@ export async function requestFreighterAccess(): Promise<string> {
  */
 export async function getFreighterPublicKey(): Promise<string | null> {
   try {
-    const result = await freighterGetPublicKey();
-    return result.publicKey || null;
+    const result = await freighterApi.getAddress();
+    return result.address || null;
   } catch {
     return null;
   }
@@ -117,7 +117,7 @@ export async function getFreighterNetworkDetails(): Promise<NetworkDetails | nul
  */
 export async function getFreighterStatus(): Promise<FreighterStatus> {
   const isInstalled = await isFreighterInstalled();
-  
+
   if (!isInstalled) {
     return {
       isInstalled: false,
@@ -163,7 +163,7 @@ export async function signTransactionWithFreighter(
     if (result.signedTxXdr) {
       return result.signedTxXdr;
     }
-    
+
     throw new Error('Failed to sign transaction');
   } catch (error: any) {
     if (error.message?.includes('rejected') || error.message?.includes('denied')) {
@@ -179,7 +179,7 @@ export async function signTransactionWithFreighter(
  */
 export async function connectFreighter(): Promise<string> {
   const isInstalled = await isFreighterInstalled();
-  
+
   if (!isInstalled) {
     throw new Error('Freighter wallet is not installed. Please install it from freighter.app');
   }
@@ -221,10 +221,10 @@ export async function isCorrectNetwork(expectedNetwork: 'testnet' | 'public'): P
   const networkDetails = await getFreighterNetworkDetails();
   if (!networkDetails) return false;
 
-  const expectedPassphrase = expectedNetwork === 'testnet' 
-    ? Networks.TESTNET 
+  const expectedPassphrase = expectedNetwork === 'testnet'
+    ? Networks.TESTNET
     : Networks.PUBLIC;
-  
+
   return networkDetails.networkPassphrase === expectedPassphrase;
 }
 

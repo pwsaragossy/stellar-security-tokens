@@ -48,6 +48,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "express-rate-limit": "^8.2.1",
     "express-validator": "^7.0.1",
     "form-data": "^4.0.0",
     "helmet": "^7.1.0",
@@ -59,13 +60,15 @@
     "nodemailer": "^7.0.10",
     "passkey-kit": "^0.11.3",
     "pg": "^8.11.3",
-    "prisma": "^6.19.0"
+    "prisma": "^6.19.0",
+    "rate-limit-redis": "^4.3.1",
+    "redis": "^5.10.0",
+    "tsx": "^4.20.6"
   },
   "devDependencies": {
     "dotenv-cli": "^11.0.0",
     "nodemon": "^3.0.2",
-    "supertest": "^7.1.4",
-    "tsx": "^4.20.6"
+    "supertest": "^7.1.4"
   },
   "engines": {
     "node": ">=18.0.0"

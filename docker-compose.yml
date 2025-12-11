@@ -11,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,7 +26,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -99,7 +99,7 @@ services:
         echo 'Waiting for database...' &&
         sleep 5 &&
         node backend/src/database/migrate.js &&
-        node backend/src/index.js
+        cd backend && node --import tsx src/index.js
       "
 
   frontend:
@@ -120,7 +120,7 @@ volumes:
   postgres_data:
   redis_data:
 
+
 networks:
   stellar_network:
     driver: bridge
-

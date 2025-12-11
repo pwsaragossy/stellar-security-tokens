@@ -98,6 +98,7 @@ export class PaymentMonitor {
 
   /**
    * Trata erros do stream e reconecta
+   * Aplica backoff mais longo para erros de rate limit (429)
    * @private
    */
   async handleStreamError(error) {
@@ -107,6 +108,9 @@ export class PaymentMonitor {
 
     this.reconnectAttempts++;
 
+    // Detectar erro 429 (rate limit) do Horizon
+    const isRateLimitError = this.isRateLimitError(error);
+
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error(`[PaymentMonitor] Max reconnection attempts (${this.maxReconnectAttempts}) reached. Stopping.`);
       this.isRunning = false;
@@ -115,14 +119,49 @@ export class PaymentMonitor {
       return;
     }
 
-    const delay = RECONNECT_DELAY * Math.pow(2, Math.min(this.reconnectAttempts - 1, 5)); // Exponential backoff, max 5s * 2^5
-    console.log(`[PaymentMonitor] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+    // Use longer backoff for rate limit errors (30s base vs 5s default)
+    const baseDelay = isRateLimitError ? 30000 : RECONNECT_DELAY;
+    const delay = baseDelay * Math.pow(2, Math.min(this.reconnectAttempts - 1, 4)); // Max 4 doublings
+
+    if (isRateLimitError) {
+      console.warn(`[PaymentMonitor] Rate limited by Horizon (429). Backing off for ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+    } else {
+      console.log(`[PaymentMonitor] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+    }
 
     setTimeout(() => {
       if (this.isRunning) {
         this.startStream();
       }
     }, delay);
+  }
+
+  /**
+   * Check if error is a rate limit (429) error from Horizon
+   * @param {Error} error - Error object
+   * @returns {boolean} True if rate limit error
+   * @private
+   */
+  isRateLimitError(error) {
+    if (!error) return false;
+
+    // Check status code directly
+    if (error.status === 429 || error.response?.status === 429) {
+      return true;
+    }
+
+    // Check error message
+    const message = error.message || error.toString() || '';
+    if (message.includes('429') || message.toLowerCase().includes('too many requests')) {
+      return true;
+    }
+
+    // Check for Horizon-specific error format
+    if (error.type === 'error' && error.status === 429) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
