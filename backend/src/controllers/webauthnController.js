@@ -139,7 +139,7 @@ export class WebAuthnController {
       }
 
       const stored = challenges.get(challengeKey);
-      
+
       if (Date.now() > stored.expiresAt) {
         challenges.delete(challengeKey);
         return res.status(400).json({
@@ -284,7 +284,7 @@ export class WebAuthnController {
       }
 
       const stored = challenges.get(challengeKey);
-      
+
       if (Date.now() > stored.expiresAt) {
         challenges.delete(challengeKey);
         return res.status(400).json({
@@ -351,7 +351,7 @@ export class WebAuthnController {
 
       // Gerar token JWT
       const token = generateToken({
-        id: user.id,
+        userId: user.id,
         email: user.email,
         role: userType === 'investor' ? 'investor' : userType === 'company_user' ? 'company' : 'platform_admin',
       });
@@ -373,7 +373,7 @@ export class WebAuthnController {
       } else if (userType === 'company_user') {
         // Buscar dados completos da empresa
         const company = await Company.findById(user.companyId);
-        
+
         userData = {
           company: {
             id: company?.id || user.companyId,

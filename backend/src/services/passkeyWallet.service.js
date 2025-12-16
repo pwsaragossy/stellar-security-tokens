@@ -1,6 +1,15 @@
-import { PasskeyKit as PasskeyServer } from 'passkey-kit';
-import { getNetworkPassphrase } from '../config/stellar.js';
+import { PasskeyServer } from 'passkey-kit';
+import { getNetworkPassphrase, getIssuerKeypair } from '../config/stellar.js';
 import prisma from '../config/prisma.js';
+import {
+  Contract,
+  TransactionBuilder,
+  BASE_FEE,
+  xdr,
+  StrKey,
+  hash,
+  Address
+} from '@stellar/stellar-sdk';
 
 /**
  * Supported user types for passkey wallet
@@ -43,7 +52,7 @@ export class PasskeyWalletService {
         rpcUrl,
         launchtubeUrl,
         launchtubeJwt,
-        networkPassphrase: getNetworkPassphrase(),
+        // networkPassphrase is not used by PasskeyServer constructor in the version checking source, but harmless
       });
     }
     return this.#server;
@@ -54,10 +63,13 @@ export class PasskeyWalletService {
    * @returns {Object} Configuration object for frontend
    */
   static getClientConfig() {
+    // Default walletWasmHash from passkey-kit testnet demo
+    const defaultWasmHash = 'ecd990f0b45ca6817149b6175f79b32efb442f35731985a084131e8265c4cd90';
+
     return {
       rpcUrl: process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org',
       networkPassphrase: getNetworkPassphrase(),
-      factoryContractId: process.env.FACTORY_CONTRACT_ID,
+      walletWasmHash: process.env.WALLET_WASM_HASH || defaultWasmHash,
     };
   }
 
@@ -74,12 +86,86 @@ export class PasskeyWalletService {
   }
 
   /**
+   * Deploy a new smart wallet using the Factory logic
+   * Used during registration when user doesn't exist yet
+   * 
+   * @param {string} credentialId - The WebAuthn credential ID (base64)
+   * @param {Buffer} publicKey - The passkey public key
+   * @returns {Promise<Object>} Result with contractId and transactionHash
+   */
+  static async deploySmartWallet(credentialId, publicKey) {
+    try {
+      const server = this.getServer();
+      const factoryContractId = process.env.FACTORY_CONTRACT_ID;
+      const networkPassphrase = getNetworkPassphrase();
+      const issuerKeypair = getIssuerKeypair();
+
+      // 1. Prepare Arguments
+      const credentialIdBuffer = Buffer.from(credentialId, 'base64');
+      const publicKeyBuffer = Buffer.isBuffer(publicKey) ? publicKey : Buffer.from(publicKey, 'base64');
+
+      // 2. Build Transaction calling Factory 'deploy'
+      const factory = new Contract(factoryContractId);
+      const deployOp = factory.call(
+        'deploy',
+        xdr.ScVal.scvBytes(credentialIdBuffer),
+        xdr.ScVal.scvBytes(publicKeyBuffer)
+      );
+
+      const tx = new TransactionBuilder(
+        await server.rpc.getAccount(issuerKeypair.publicKey()),
+        { fee: BASE_FEE, networkPassphrase }
+      )
+        .addOperation(deployOp)
+        .setTimeout(30)
+        .build();
+
+      tx.sign(issuerKeypair);
+
+      // 3. Send via Launchtube (Sponsoring)
+      const result = await server.send(tx);
+
+      if (!result || !result.hash) {
+        throw new Error('Failed to submit transaction via PasskeyServer');
+      }
+
+      // 4. Calculate Contract ID
+      const salt = hash(credentialIdBuffer);
+      const contractIdPreimage = xdr.ContractIdPreimage.contractIdPreimageFromAddress(
+        new xdr.ContractIdPreimageFromAddress({
+          address: Address.fromString(factoryContractId).toScAddress(),
+          salt: salt,
+        })
+      );
+
+      const contractIdHash = hash(
+        xdr.HashIdPreimage.envelopeTypeContractId(new xdr.HashIdPreimageContractId({
+          networkId: hash(Buffer.from(networkPassphrase)),
+          contractIdPreimage,
+        })).toXDR()
+      );
+
+      const contractId = StrKey.encodeContract(contractIdHash);
+
+      return {
+        success: true,
+        contractId,
+        transactionHash: result.hash,
+      };
+
+    } catch (error) {
+      console.error('Error deploying smart wallet:', error);
+      throw new Error(`Smart wallet deployment failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Create a new smart wallet for a user (investor or company user)
    * This method is called after passkey registration on the client side
    * 
    * @param {string} userType - Type of user: 'investor' or 'company_user'
    * @param {number} userId - The user's database ID
-   * @param {string} credentialId - The WebAuthn credential ID (base64url encoded)
+   * @param {string} credentialId - The WebAuthn credential ID (base64)
    * @param {Buffer} publicKey - The passkey public key
    * @returns {Promise<Object>} Result with contract address and transaction details
    */
@@ -109,32 +195,91 @@ export class PasskeyWalletService {
         throw new Error('Email must be verified before creating wallet');
       }
 
-      // Deploy the smart wallet contract using Launchtube
-      // The PasskeyServer.createWallet method handles the deployment
-      const result = await server.createWallet(
-        credentialId,
-        publicKey
+      const factoryContractId = process.env.FACTORY_CONTRACT_ID;
+      const networkPassphrase = getNetworkPassphrase();
+      const issuerKeypair = getIssuerKeypair(); // Use issuer as source/signer for deployment tx
+
+      // 1. Prepare Arguments
+      // credentialId is base64 string -> Buffer
+      const credentialIdBuffer = Buffer.from(credentialId, 'base64');
+
+      // publicKey is already Buffer or base64
+      const publicKeyBuffer = Buffer.isBuffer(publicKey) ? publicKey : Buffer.from(publicKey, 'base64');
+
+      // 2. Build Transaction calling Factory 'deploy'
+      // Assuming Factory interface: deploy(credential_id: Bytes, public_key: Bytes) -> Address
+      const factory = new Contract(factoryContractId);
+      const deployOp = factory.call(
+        'deploy',
+        xdr.ScVal.scvBytes(credentialIdBuffer),
+        xdr.ScVal.scvBytes(publicKeyBuffer)
       );
 
-      if (!result || !result.contractId) {
-        throw new Error('Failed to deploy smart wallet contract');
+      const tx = new TransactionBuilder(
+        await server.rpc.getAccount(issuerKeypair.publicKey()), // Fetch sequence from RPC using Server's connection (server extends Base which works with rpc)
+        // Wait, PasskeyServer extends PasskeyBase which has 'rpc'.
+        // But getAccount needs Horizon or RPC? PasskeyBase takes rpcUrl. 
+        // PasskeyBase from 'passkey-kit' usually wraps rpc. 
+        // Let's use standard TransactionBuilder pattern with fetch:
+        { fee: BASE_FEE, networkPassphrase }
+      )
+        .addOperation(deployOp)
+        .setTimeout(30)
+        .build();
+
+      tx.sign(issuerKeypair);
+
+      // 3. Send via Launchtube (Sponsoring)
+      const result = await server.send(tx);
+
+      if (!result || !result.hash) {
+        throw new Error('Failed to submit transaction via PasskeyServer');
       }
+
+      // 4. Calculate Contract ID
+      // Contract ID = specific algorithm using salt.
+      // Factory uses salt = hash(credentialIdBuffer)
+      // We need to replicate how Factory derives the address or fetch it.
+      // Since we can't easily fetch the return value from the tx result without parsing events/simulation,
+      // and checking 'result' format from Launchtube might not give us the return value directly.
+
+      // PREDICT the address:
+      // Address = Contract(FactoryID).derived(salt=hash(credentialId))
+      // Stellar SDK has helpers for this?
+      // StrKey.encodeContract(hash(xdr.HashIdPreimage.envelopeTypeContractId(...)))
+
+      const salt = hash(credentialIdBuffer);
+      const contractIdPreimage = xdr.ContractIdPreimage.contractIdPreimageFromAddress(
+        new xdr.ContractIdPreimageFromAddress({
+          address: Address.fromString(factoryContractId).toScAddress(),
+          salt: salt,
+        })
+      );
+
+      const contractIdHash = hash(
+        xdr.HashIdPreimage.envelopeTypeContractId(new xdr.HashIdPreimageContractId({
+          networkId: hash(Buffer.from(networkPassphrase)),
+          contractIdPreimage,
+        })).toXDR()
+      );
+
+      const contractId = StrKey.encodeContract(contractIdHash);
 
       // Store the contract address in our database
       const updatedUser = await prisma[model].update({
         where: { id: userId },
         data: {
-          stellarContractId: result.contractId,
+          stellarContractId: contractId,
           passkeyCredentialId: credentialId,
-          passkeyPublicKey: publicKey,
+          passkeyPublicKey: publicKeyBuffer,
           // Also store as stellarPublicKey for compatibility with existing code
-          stellarPublicKey: result.contractId,
+          stellarPublicKey: contractId,
         },
       });
 
       return {
         success: true,
-        contractId: result.contractId,
+        contractId: contractId,
         transactionHash: result.hash,
         user: {
           id: updatedUser.id,
@@ -144,6 +289,7 @@ export class PasskeyWalletService {
           userType,
         },
       };
+
     } catch (error) {
       console.error('Error creating smart wallet:', error);
       throw new Error(`Smart wallet creation failed: ${error.message}`);

@@ -8,7 +8,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -21,7 +21,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -70,6 +70,16 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # Pinata Web3 (IPFS)
+      PINATA_JWT: ${PINATA_JWT}
+      # WebAuthn
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-http://localhost}
+      # Stellar Passkey Kit & Smart Wallets
+      SOROBAN_RPC_URL: ${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
+      LAUNCHTUBE_URL: ${LAUNCHTUBE_URL:-https://launchtube.xyz}
+      LAUNCHTUBE_JWT: ${LAUNCHTUBE_JWT}
+      FACTORY_CONTRACT_ID: ${FACTORY_CONTRACT_ID}
     depends_on:
       postgres:
         condition: service_healthy
@@ -104,7 +114,7 @@ volumes:
   postgres_data:
   redis_data:
 
+
 networks:
   stellar_network:
     driver: bridge
-

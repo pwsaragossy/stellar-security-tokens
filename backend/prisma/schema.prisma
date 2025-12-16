@@ -96,7 +96,7 @@ model Investor {
   // Smart Wallet (Passkey Kit) fields - REQUIRED for all new investors
   stellarContractId       String    @map("stellar_contract_id") @db.VarChar(56)
   passkeyCredentialId     String    @map("passkey_credential_id") @db.Text
-  passkeyPublicKey        Bytes     @map("passkey_public_key")
+  passkeyPublicKey        Bytes?    @map("passkey_public_key")
 
   // Email verification fields
   emailVerified           Boolean   @default(false) @map("email_verified")

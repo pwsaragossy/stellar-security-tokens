@@ -81,6 +81,17 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # Pinata Web3 (IPFS)
+      PINATA_JWT: ${PINATA_JWT}
+      # WebAuthn
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-http://localhost:5173}
+      # Stellar Passkey Kit & Smart Wallets
+      SOROBAN_RPC_URL: ${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
+      LAUNCHTUBE_URL: ${LAUNCHTUBE_URL:-https://launchtube.xyz}
+      LAUNCHTUBE_JWT: ${LAUNCHTUBE_JWT}
+      FACTORY_CONTRACT_ID: ${FACTORY_CONTRACT_ID}
+
       # Dev Routes (habilitar rotas de desenvolvimento)
       ENABLE_DEV_ROUTES: ${ENABLE_DEV_ROUTES:-false}
     ports:

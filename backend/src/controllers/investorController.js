@@ -54,6 +54,7 @@ export const getInvestorById = async (req, res, next) => {
         document: investor.document,
         stellarPublicKey: investor.stellarPublicKey,
         kycStatus: investor.kycStatus,
+        emailVerified: investor.emailVerified,
         lastLogin: investor.lastLogin,
         createdAt: investor.createdAt,
         updatedAt: investor.updatedAt,
@@ -330,13 +331,14 @@ export const getInvestorMetrics = async (req, res, next) => {
  */
 export const registerInvestorWithPasskey = async (req, res, next) => {
   try {
-    const { name, email, document, credentialId, publicKey } = req.body;
+    const { name, email, document, credentialId, publicKey, contractId } = req.body;
 
     // Validate required fields
-    if (!name || !email || !document || !credentialId || !publicKey) {
+    // contractId is now provided by frontend (wallet deployed client-side via Launchtube)
+    if (!name || !email || !document || !credentialId || !contractId) {
       return res.status(400).json({
         success: false,
-        error: 'Name, email, document, credentialId, and publicKey are required',
+        error: 'Name, email, document, credentialId, and contractId are required',
       });
     }
 
@@ -358,31 +360,22 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
       });
     }
 
-    // Convert publicKey from base64 to Buffer if needed
-    const publicKeyBuffer = Buffer.isBuffer(publicKey)
-      ? publicKey
-      : Buffer.from(publicKey, 'base64');
-
-    // Deploy smart wallet contract
-    const server = PasskeyWalletService.getServer();
-    const walletResult = await server.createWallet(credentialId, publicKeyBuffer);
-
-    if (!walletResult || !walletResult.contractId) {
-      throw new Error('Failed to deploy smart wallet contract');
-    }
-
+    // Convert publicKey from base64 to Buffer if provided
+    const publicKeyBuffer = publicKey
+      ? (Buffer.isBuffer(publicKey) ? publicKey : Buffer.from(publicKey, 'base64'))
+      : null;
 
     // Generate verification token
     const verificationToken = EmailService.generateVerificationToken();
     const verificationExpiry = EmailService.getVerificationExpiry();
 
-    // Create investor with ALL required passkey fields
+    // Create investor with wallet contract ID from frontend
     const investor = await prisma.investor.create({
       data: {
         name,
         email,
         document,
-        stellarContractId: walletResult.contractId,
+        stellarContractId: contractId, // From client-side deployment
         passkeyCredentialId: credentialId,
         passkeyPublicKey: publicKeyBuffer,
         kycStatus: 'pending',
@@ -404,6 +397,7 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
       userId: investor.id,
       email: investor.email,
       userType: 'investor',
+      role: 'investor',
     });
 
     res.status(201).json({
