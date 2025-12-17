@@ -55,6 +55,30 @@ export class ApiClient {
 
     return response.json();
   }
+
+  async put(endpoint: string, data: any) {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeader(),
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API Error: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
 }
 
 export const api = new ApiClient();

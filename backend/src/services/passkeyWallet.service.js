@@ -501,10 +501,123 @@ export class PasskeyWalletService {
       result.isActive = user.isActive;
     }
 
+    // Fetch balances if wallet exists
+    if (hasWallet && user.stellarContractId) {
+      try {
+        const { StellarService } = await import('./stellar.service.js');
+        const accountInfo = await StellarService.getAccountInfo(user.stellarContractId);
+
+        const xlmBalance = accountInfo.balances.find(b => b.asset_type === 'native')?.balance || '0';
+        // Assuming USDC has asset code 'USDC' - looking for any asset with code 'USDC'
+        const usdcBalance = accountInfo.balances.find(b => b.asset_code === 'USDC')?.balance || '0';
+
+        result.balances = {
+          xlm: xlmBalance,
+          usdc: usdcBalance
+        };
+
+        // Add explorer link (using testnet for now as per env)
+        result.explorer = `https://stellar.expert/explorer/testnet/account/${user.stellarContractId}`;
+      } catch (error) {
+        console.error('Failed to fetch wallet balances:', error);
+        // Don't fail the whole request, just omit balances
+        result.balancesError = 'Could not fetch on-chain balances';
+      }
+    }
+
     return result;
   }
 
 
+  /**
+   * Build a withdrawal transaction to be signed by the user's Passkey
+   * 
+   * @param {number} investorId - The investor ID
+   * @param {string} destinationAddress - Destination Stellar address (G...)
+   * @param {string} amount - Amount to withdraw
+   * @param {string} assetCode - Asset code (USDC, XLM)
+   * @returns {Promise<Object>} Transaction XDR and network info
+   */
+  static async buildWithdrawalTx(investorId, destinationAddress, amount, assetCode = 'USDC') {
+    const server = this.getServer();
 
+    // Get investor wallet
+    const investor = await prisma.investor.findUnique({
+      where: { id: investorId },
+    });
+
+    if (!investor || !investor.stellarContractId) {
+      throw new Error('Investor wallet not found');
+    }
+
+    // Determine asset contract ID based on code (simplified map for MVP)
+    // In production, fetch this from DB or config
+    let tokenContractId;
+    if (assetCode === 'USDC') {
+      tokenContractId = process.env.USDC_CONTRACT_ID || 'CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75'; // Testnet USDC
+    } else if (assetCode === 'XLM') {
+      tokenContractId = process.env.XLM_CONTRACT_ID || 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC'; // Native Token Contract
+    } else {
+      throw new Error('Unsupported asset for withdrawal');
+    }
+
+    // Build the transaction
+    const networkPassphrase = getNetworkPassphrase();
+    const issuerKeypair = getIssuerKeypair(); // Sponsor/Source
+
+    // Function: transfer(from, to, amount)
+    const walletAddress = Address.fromString(investor.stellarContractId);
+    const destination = Address.fromString(destinationAddress);
+
+    // Convert amount to Stroops (7 decimals)
+    const amountBigInt = BigInt(Math.floor(parseFloat(amount) * 10_000_000));
+
+    const contract = new Contract(tokenContractId);
+    const transferOp = contract.call(
+      'transfer',
+      xdr.ScVal.scvAddress(walletAddress.toScAddress()),
+      xdr.ScVal.scvAddress(destination.toScAddress()),
+      xdr.ScVal.scvI128(xdr.Int128Parts.fromBigInt(amountBigInt))
+    );
+
+    const tx = new TransactionBuilder(
+      await server.rpc.getAccount(issuerKeypair.publicKey()),
+      { fee: BASE_FEE, networkPassphrase }
+    )
+      .addOperation(transferOp)
+      .setTimeout(180)
+      .build();
+
+    // Sign with issuer (sponsor)
+    tx.sign(issuerKeypair);
+
+    return {
+      xdr: tx.toXDR(),
+      networkPassphrase,
+      walletId: investor.stellarContractId
+    };
+  }
+
+  /**
+   * Submit a signed withdrawal transaction
+   * 
+   * @param {string} xdr - The signed transaction XDR
+   * @returns {Promise<Object>} Transaction hash
+   */
+  static async submitWithdrawalTx(signedXdr) {
+    const server = this.getServer();
+
+    const tx = TransactionBuilder.fromXDR(signedXdr, getNetworkPassphrase());
+
+    const result = await server.send(tx);
+
+    if (!result || !result.hash) {
+      throw new Error('Failed to submit withdrawal transaction');
+    }
+
+    return {
+      hash: result.hash,
+      status: result.status
+    };
+  }
 }
-

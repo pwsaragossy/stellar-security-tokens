@@ -593,3 +593,52 @@ export const getPasskeyConfig = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Propose a withdrawal transaction
+ */
+export const proposeWithdrawal = async (req, res, next) => {
+  try {
+    const { investorId } = req.params;
+    const { destination, amount, assetCode } = req.body;
+
+    if (parseInt(investorId, 10) !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized access to wallet'
+      });
+    }
+
+    const result = await PasskeyWalletService.buildWithdrawalTx(
+      parseInt(investorId, 10),
+      destination,
+      amount,
+      assetCode
+    );
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Submit a signed withdrawal transaction
+ */
+export const submitWithdrawal = async (req, res, next) => {
+  try {
+    const { signedXdr } = req.body;
+
+    const result = await PasskeyWalletService.submitWithdrawalTx(signedXdr);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

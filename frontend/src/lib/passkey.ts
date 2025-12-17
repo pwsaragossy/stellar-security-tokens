@@ -140,6 +140,22 @@ export class PasskeyClient {
             throw error;
         }
     }
+
+    /**
+     * Sign a transaction with the user's Passkey
+     */
+    async signTransaction(xdr: string): Promise<string> {
+        await this.init();
+        if (!this.kit) throw new Error('PasskeyKit not initialized');
+
+        try {
+            const signedTx = await this.kit.sign(xdr);
+            return signedTx.toXDR();
+        } catch (error) {
+            console.error('Signing error:', error);
+            throw error;
+        }
+    }
 }
 
 export const passkeyClient = new PasskeyClient();

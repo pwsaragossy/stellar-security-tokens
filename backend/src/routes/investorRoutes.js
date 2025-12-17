@@ -16,6 +16,8 @@ import {
   getInvestorPortfolio,
   getInvestorMetrics,
   getWalletStatus,
+  proposeWithdrawal,
+  submitWithdrawal,
 } from '../controllers/investorController.js';
 import { requireInvestor, requireOwnData } from '../middleware/authorize.js';
 
@@ -317,5 +319,67 @@ router.get('/:investorId/payments', authenticateToken, getInvestorPayments);
  */
 router.get('/:investorId/wallet-status', getWalletStatus);
 router.put('/:id', authenticateToken, updateInvestor);
+
+/**
+ * @swagger
+ * /api/investors/{investorId}/withdraw/propose:
+ *   post:
+ *     summary: Propose a withdrawal transaction
+ *     description: Builds a withdrawal transaction for signing
+ *     tags: [Investors]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: investorId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - amount
+ *               - assetCode
+ *               - destination
+ *             properties:
+ *               amount:
+ *                 type: string
+ *               assetCode:
+ *                 type: string
+ *                 enum: [USDC, XLM]
+ *               destination:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Transaction built successfully
+ */
+router.post('/:investorId/withdraw/propose', authenticateToken, proposeWithdrawal);
+
+/**
+ * @swagger
+ * /api/investors/withdraw/submit:
+ *   post:
+ *     summary: Submit a signed withdrawal transaction
+ *     tags: [Investors]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - signedXdr
+ *             properties:
+ *               signedXdr:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Transaction submitted successfully
+ */
+router.post('/withdraw/submit', authenticateToken, submitWithdrawal);
 
 export default router;
