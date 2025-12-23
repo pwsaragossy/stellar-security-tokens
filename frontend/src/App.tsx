@@ -11,6 +11,13 @@ import { Portfolio } from './pages/investor/Portfolio';
 import { Transactions } from './pages/investor/Transactions';
 import { Settings } from './pages/investor/Settings';
 
+// Admin imports
+import { AdminLayout } from './layouts/AdminLayout';
+import { AdminLogin } from './pages/admin/Login';
+import { AdminDashboard } from './pages/admin/Dashboard';
+import { UserManagement } from './pages/admin/UserManagement';
+import { FeeConfig } from './pages/admin/FeeConfig';
+
 function App() {
   return (
     <BrowserRouter>
@@ -29,6 +36,15 @@ function App() {
           <Route path="market/:id" element={<OfferDetails />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="settings" element={<Settings />} />
+        </Route>
+
+        {/* Admin Routes */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="users" element={<UserManagement />} />
+          <Route path="fees" element={<FeeConfig />} />
         </Route>
       </Routes>
     </BrowserRouter>

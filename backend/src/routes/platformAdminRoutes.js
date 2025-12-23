@@ -106,69 +106,7 @@ if (process.env.NODE_ENV !== 'production') {
 router.post('/', requireAdminRole('super_admin'), createValidation, PlatformAdminController.createPlatformAdmin);
 router.get('/', requirePlatformAdmin, PlatformAdminController.getPlatformAdmins);
 
-/**
- * @swagger
- * /api/platform-admins/{id}:
- *   put:
- *     summary: Atualizar administrador
- *     tags: [Platform Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Admin atualizado
- */
-router.put('/:id', requirePlatformAdmin, PlatformAdminController.updatePlatformAdmin);
-
-/**
- * @swagger
- * /api/platform-admins/investments/metrics:
- *   get:
- *     summary: Métricas de investimentos
- *     tags: [Platform Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Métricas retornadas
- */
-// Investment metrics routes (platform admin only)
-router.get('/investments/metrics', authenticateToken, requirePlatformAdmin, InvestmentMetricsController.getMetrics);
-
-/**
- * @swagger
- * /api/platform-admins/investments/statistics:
- *   get:
- *     summary: Estatísticas de investimentos
- *     tags: [Platform Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Estatísticas retornadas
- */
-router.get('/investments/statistics', authenticateToken, requirePlatformAdmin, InvestmentMetricsController.getStatistics);
-
-/**
- * @swagger
- * /api/platform-admins/investments/pending:
- *   get:
- *     summary: Investimentos pendentes
- *     tags: [Platform Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Lista de investimentos pendentes
- */
-router.get('/investments/pending', authenticateToken, requirePlatformAdmin, InvestmentMetricsController.getPendingInvestments);
-
+// Rotas de configuração e logs (DEVEM vir antes de /:id)
 /**
  * @swagger
  * /api/platform-admins/system-config:
@@ -230,6 +168,115 @@ router.put('/system-config', authenticateToken, requirePlatformAdmin, PlatformAd
  *         description: Logs retornados com sumário de receita
  */
 router.get('/fee-logs', authenticateToken, requirePlatformAdmin, PlatformAdminController.getFeeLogs);
+
+/**
+ * @swagger
+ * /api/platform-admins/{id}:
+ *   put:
+ *     summary: Atualizar administrador
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Admin atualizado
+ */
+router.put('/:id', requirePlatformAdmin, PlatformAdminController.updatePlatformAdmin);
+
+/**
+ * @swagger
+ * /api/platform-admins/investors:
+ *   get:
+ *     summary: "[Admin] Listar todos os investidores"
+ *     description: Lista investidores com filtro por status (pending/active/rejected)
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, active, rejected]
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Lista de investidores
+ */
+router.get('/investors', authenticateToken, requirePlatformAdmin, PlatformAdminController.getAllInvestors);
+
+/**
+ * @swagger
+ * /api/platform-admins/investors/{id}/approve:
+ *   put:
+ *     summary: "[Admin] Aprovar KYC de investidor"
+ *     description: Altera o status do investidor para 'active'
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Investidor aprovado
+ *       404:
+ *         description: Investidor não encontrado
+ */
+router.put('/investors/:id/approve', authenticateToken, requirePlatformAdmin, PlatformAdminController.approveInvestor);
+
+/**
+ * @swagger
+ * /api/platform-admins/investors/{id}/reject:
+ *   put:
+ *     summary: "[Admin] Rejeitar KYC de investidor"
+ *     description: Altera o status do investidor para 'rejected'
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reason
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 description: Motivo da rejeição
+ *     responses:
+ *       200:
+ *         description: Investidor rejeitado
+ *       400:
+ *         description: Motivo não fornecido
+ *       404:
+ *         description: Investidor não encontrado
+ */
+router.put('/investors/:id/reject', authenticateToken, requirePlatformAdmin, PlatformAdminController.rejectInvestor);
 
 export default router;
 

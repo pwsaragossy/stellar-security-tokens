@@ -295,5 +295,175 @@ export class PlatformAdminController {
       });
     }
   }
+
+  /**
+   * Get all investors for Admin review
+   * Supports filtering by status (pending, active, rejected)
+   */
+  static async getAllInvestors(req, res) {
+    try {
+      const { status, limit = 50, offset = 0 } = req.query;
+
+      const whereClause = status ? { kycStatus: status } : {};
+
+      const investors = await prisma.investor.findMany({
+        where: whereClause,
+        orderBy: { createdAt: 'desc' },
+        take: parseInt(limit),
+        skip: parseInt(offset),
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          document: true,
+          kycStatus: true,
+          emailVerified: true,
+          stellarContractId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      // Map kycStatus to status and stellarContractId to walletAddress for frontend
+      const mappedInvestors = investors.map(i => ({
+        ...i,
+        status: i.kycStatus,
+        walletAddress: i.stellarContractId,
+      }));
+
+      const total = await prisma.investor.count({ where: whereClause });
+
+      res.json({
+        success: true,
+        data: mappedInvestors,
+        pagination: {
+          total,
+          limit: parseInt(limit),
+          offset: parseInt(offset),
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching investors:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch investors',
+      });
+    }
+  }
+
+  /**
+   * Approve an investor's KYC
+   * Sets status to 'active'
+   */
+  static async approveInvestor(req, res) {
+    try {
+      const { id } = req.params;
+
+      const investor = await prisma.investor.findUnique({
+        where: { id: parseInt(id) },
+      });
+
+      if (!investor) {
+        return res.status(404).json({
+          success: false,
+          error: 'Investor not found',
+        });
+      }
+
+      if (investor.kycStatus === 'active') {
+        return res.status(400).json({
+          success: false,
+          error: 'Investor is already approved',
+        });
+      }
+
+      const updatedInvestor = await prisma.investor.update({
+        where: { id: parseInt(id) },
+        data: {
+          kycStatus: 'active',
+          updatedAt: new Date(),
+        },
+      });
+
+      // TODO: Send approval email to investor
+      console.log(`[Admin] Investor ${id} approved by admin ${req.user?.id}`);
+
+      res.json({
+        success: true,
+        message: 'Investor approved successfully',
+        data: {
+          id: updatedInvestor.id,
+          name: updatedInvestor.name,
+          email: updatedInvestor.email,
+          status: updatedInvestor.kycStatus,
+        },
+      });
+    } catch (error) {
+      console.error('Error approving investor:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to approve investor',
+      });
+    }
+  }
+
+  /**
+   * Reject an investor's KYC
+   * Sets status to 'rejected' with a reason
+   */
+  static async rejectInvestor(req, res) {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+
+      if (!reason || reason.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Rejection reason is required',
+        });
+      }
+
+      const investor = await prisma.investor.findUnique({
+        where: { id: parseInt(id) },
+      });
+
+      if (!investor) {
+        return res.status(404).json({
+          success: false,
+          error: 'Investor not found',
+        });
+      }
+
+      const updatedInvestor = await prisma.investor.update({
+        where: { id: parseInt(id) },
+        data: {
+          kycStatus: 'rejected',
+          // Store rejection reason in a JSON field or dedicated column if available
+          updatedAt: new Date(),
+        },
+      });
+
+      // TODO: Send rejection email to investor with reason
+      console.log(`[Admin] Investor ${id} rejected by admin ${req.user?.id}. Reason: ${reason}`);
+
+      res.json({
+        success: true,
+        message: 'Investor rejected',
+        data: {
+          id: updatedInvestor.id,
+          name: updatedInvestor.name,
+          email: updatedInvestor.email,
+          status: updatedInvestor.kycStatus,
+          rejectionReason: reason,
+        },
+      });
+    } catch (error) {
+      console.error('Error rejecting investor:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to reject investor',
+      });
+    }
+  }
 }
 

@@ -318,7 +318,7 @@ router.get('/:investorId/payments', authenticateToken, getInvestorPayments);
  *         description: Status da wallet
  */
 router.get('/:investorId/wallet-status', getWalletStatus);
-router.put('/:id', authenticateToken, updateInvestor);
+router.put('/:id', requireInvestor, requireOwnData, updateInvestor);
 
 /**
  * @swagger

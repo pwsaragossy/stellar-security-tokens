@@ -77,30 +77,27 @@ export const purchaseInvestment = async (req, res, next) => {
     const percentageFeeAmount = grossAmount * (feePercent / 100);
     const totalFeeAmount = percentageFeeAmount + fixedFee;
 
-    // Validate if amount covers fees
+    // Validate if amount covers fees (Company must receive at least 0 after fees)
     if (grossAmount <= totalFeeAmount) {
       return res.status(400).json({
         success: false,
-        error: `Investment amount (${grossAmount} USDC) is too low to cover the Blockchain Operation Fee (${fixedFee} USDC) + Platform Fees.`,
+        error: `Investment amount (${grossAmount} USDC) is too low to cover the Platform Fees (${totalFeeAmount} USDC) which are deducted from the company's receipt.`,
       });
     }
 
-    const netTokenAmount = grossAmount - totalFeeAmount;
+    // Investor receives the FULL amount in tokens (Company pays the fee logic)
+    const tokenAmount = grossAmount;
 
-    // Log Fee synchronously or async? Async is better but for financial logs consistency is key.
+    // Log Fee
     if (totalFeeAmount > 0) {
-      // Log fee intent - actual log might be better after payment success? 
-      // User pays GROSS amount (usdcAmount). Platform takes fee. Investor gets NET tokens.
       await ConfigService.logFee({
         amount: totalFeeAmount,
         assetCode: 'USDC',
         category: 'INVESTMENT_FEE',
         sourceId: investor.id,
-        description: `Fees: ${fixedFee} USDC (Blockchain Operation Fee) + ${feePercent}% (${percentageFeeAmount} USDC)`,
+        description: `Crowdfunding Fee: ${fixedFee} USDC (Fixed) + ${feePercent}% (${percentageFeeAmount} USDC) - Charge to Company`,
       });
     }
-
-    const tokenAmount = netTokenAmount;
     const treasuryKeypair = getTreasuryKeypair();
 
     // Criar registro de investimento primeiro

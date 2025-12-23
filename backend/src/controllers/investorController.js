@@ -223,8 +223,33 @@ export const updateInvestor = async (req, res, next) => {
       });
     }
 
-    if (updateData.email) {
-      const existingEmail = await Investor.findByEmail(updateData.email);
+    // Whitelist allowed fields for self-update (security: block sensitive fields)
+    const ALLOWED_FIELDS = ['name', 'document'];
+    const BLOCKED_FIELDS = ['status', 'walletAddress', 'emailVerified', 'kycStatus', 'role', 'credentialId', 'publicKey'];
+
+    // Filter to only allowed fields
+    const safeUpdateData = {};
+    for (const key of Object.keys(updateData)) {
+      if (BLOCKED_FIELDS.includes(key)) {
+        return res.status(403).json({
+          success: false,
+          error: `Field '${key}' cannot be updated by the user`,
+        });
+      }
+      if (ALLOWED_FIELDS.includes(key)) {
+        safeUpdateData[key] = updateData[key];
+      }
+    }
+
+    if (Object.keys(safeUpdateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No valid fields to update',
+      });
+    }
+
+    if (safeUpdateData.email) {
+      const existingEmail = await Investor.findByEmail(safeUpdateData.email);
       if (existingEmail && existingEmail.id !== parseInt(id, 10)) {
         return res.status(409).json({
           success: false,
@@ -233,7 +258,7 @@ export const updateInvestor = async (req, res, next) => {
       }
     }
 
-    const updatedInvestor = await Investor.update(id, updateData);
+    const updatedInvestor = await Investor.update(id, safeUpdateData);
 
     res.json({
       success: true,
