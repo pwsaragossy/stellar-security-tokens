@@ -2,23 +2,6 @@
 import { useState } from 'react';
 import { api } from '@/lib/api';
 
-interface PurchaseResponse {
-    success: boolean;
-    message: string;
-    data: {
-        investment: {
-            id: number;
-            status: string;
-            usdcAmount: number;
-            tokenAmount: number;
-        };
-        paymentInstructions?: {
-            treasuryAddress: string;
-            message: string;
-        };
-    };
-}
-
 export function useInvestment() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -31,7 +14,7 @@ export function useInvestment() {
             if (!userStr) throw new Error("User not found");
             const user = JSON.parse(userStr);
 
-            const response = await api.post<PurchaseResponse>('/investments/purchase', {
+            const response = await api.post('/investments/purchase', {
                 investorId: user.id,
                 usdcAmount,
                 offerId,

@@ -5,7 +5,7 @@ import { InvestmentDialog } from '@/components/invest/InvestmentDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ArrowLeft, Calendar, FileText, TrendingUp, DollarSign } from 'lucide-react';
+import { ArrowLeft, Calendar, FileText, TrendingUp } from 'lucide-react';
 
 export function OfferDetails() {
     const { id } = useParams();
@@ -17,13 +17,6 @@ export function OfferDetails() {
     if (loading) return <div className="p-8 text-white">Loading offer details...</div>;
     if (error || !offer) return <div className="p-8 text-white">Offer not found.</div>;
 
-    const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
-    };
 
     return (
         <div className="space-y-6">

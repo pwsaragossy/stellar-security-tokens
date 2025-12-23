@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, User, Key, Mail, Shield, Check, Pencil, Save, X, ArrowUpRight, Copy, ExternalLink, QrCode } from 'lucide-react';
+import { Loader2, User, Key, Mail, Shield, Check, Pencil, Save, X, ArrowUpRight, Copy, ExternalLink } from 'lucide-react';
 import { api } from '@/lib/api';
 import { passkeyClient } from '@/lib/passkey';
 import {
