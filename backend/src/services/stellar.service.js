@@ -5,7 +5,9 @@ import {
   createAsset,
   buildTransaction,
   signAndSubmitTransaction,
+  signAndSubmitTransaction,
   getNetworkPassphrase,
+  getTreasuryKeypair,
 } from '../config/stellar.js';
 import {
   Operation,
@@ -206,7 +208,7 @@ export class StellarService {
         }
       } else {
         // Mainnet: Sponsored Activation via Treasury
-        const treasuryKeypair = stellar.getTreasuryKeypair();
+        const treasuryKeypair = getTreasuryKeypair();
         if (!treasuryKeypair) {
           throw new Error('Treasury Keypair not configured. Cannot sponsor account activation on Mainnet.');
         }
@@ -216,7 +218,7 @@ export class StellarService {
 
           const transaction = new TransactionBuilder(treasuryAccount, {
             fee: BASE_FEE,
-            networkPassphrase: stellar.getNetworkPassphrase(),
+            networkPassphrase: getNetworkPassphrase(),
           })
             .addOperation(Operation.createAccount({
               destination: keypair.publicKey(),

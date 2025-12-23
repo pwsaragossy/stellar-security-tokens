@@ -1,4 +1,5 @@
 import { PlatformAdmin } from '../models/PlatformAdmin.js';
+import prisma from '../config/prisma.js';
 import { generateToken } from '../middleware/auth.js';
 
 /**
@@ -186,6 +187,111 @@ export class PlatformAdminController {
         success: false,
         error: 'Failed to update platform admin',
         details: error.message,
+      });
+    }
+  }
+  /**
+   * Obtém configuração do sistema
+   * GET /api/platform-admins/system-config
+   */
+  static async getSystemConfig(req, res) {
+    try {
+      const config = await prisma.systemConfig.findMany();
+      // Reduce array to object { key: value } for easier frontend consumption
+      const configMap = config.reduce((acc, item) => {
+        acc[item.key] = item.value;
+        return acc;
+      }, {});
+
+      res.json({
+        success: true,
+        data: configMap,
+      });
+    } catch (error) {
+      console.error('Error fetching system config:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch system config',
+      });
+    }
+  }
+
+  /**
+   * Atualiza configuração do sistema
+   * PUT /api/platform-admins/system-config
+   * Body: { settings: [{ key: 'withdrawal_fee', value: '5' }] }
+   */
+  static async updateSystemConfig(req, res) {
+    try {
+      const { settings } = req.body;
+      if (!Array.isArray(settings)) {
+        return res.status(400).json({ success: false, error: 'Settings must be an array' });
+      }
+
+      const results = [];
+      // Transaction to update all keys
+      await prisma.$transaction(async (tx) => {
+        for (const setting of settings) {
+          const { key, value, description } = setting;
+          const updated = await tx.systemConfig.upsert({
+            where: { key },
+            update: { value, description, updatedAt: new Date() },
+            create: { key, value, description, updatedAt: new Date() },
+          });
+          results.push(updated);
+        }
+      });
+
+      res.json({
+        success: true,
+        data: results,
+      });
+    } catch (error) {
+      console.error('Error updating system config:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update system config',
+      });
+    }
+  }
+
+  /**
+   * Obtém logs de taxas (Receita)
+   * GET /api/platform-admins/fee-logs
+   */
+  static async getFeeLogs(req, res) {
+    try {
+      const { limit = 100, offset = 0 } = req.query;
+
+      const logs = await prisma.feeLog.findMany({
+        take: parseInt(limit),
+        skip: parseInt(offset),
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Calculate total revenue by currency (simple aggregation)
+      // Note: For large datasets, use native database aggregation
+      const revenue = await prisma.feeLog.groupBy({
+        by: ['assetCode'],
+        _sum: {
+          amount: true,
+        },
+      });
+
+      res.json({
+        success: true,
+        data: logs,
+        revenueSummary: revenue,
+        pagination: {
+          limit: parseInt(limit),
+          offset: parseInt(offset),
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching fee logs:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch fee logs',
       });
     }
   }

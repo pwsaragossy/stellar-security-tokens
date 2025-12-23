@@ -4,6 +4,7 @@ import { Token } from '../models/Token.js';
 import { Offer } from '../models/Offer.js';
 import { StellarService } from './stellar.service.js';
 import { EmailService } from './email.service.js';
+import { ConfigService } from './config.service.js';
 import {
   stellarServer,
   getDistributorKeypair,
@@ -49,7 +50,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
  */
 const retryOperation = async (operation, maxRetries = 3, delayMs = 1000) => {
   let lastError;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       logger.info(`Attempt ${attempt}/${maxRetries}`, { operation: operation.name });
@@ -57,7 +58,7 @@ const retryOperation = async (operation, maxRetries = 3, delayMs = 1000) => {
     } catch (error) {
       lastError = error;
       logger.warn(`Attempt ${attempt} failed`, { error: error.message });
-      
+
       if (attempt < maxRetries) {
         const backoffDelay = delayMs * Math.pow(2, attempt - 1);
         logger.info(`Retrying in ${backoffDelay}ms...`);
@@ -65,7 +66,7 @@ const retryOperation = async (operation, maxRetries = 3, delayMs = 1000) => {
       }
     }
   }
-  
+
   throw lastError;
 };
 
@@ -97,11 +98,11 @@ export class PaymentService {
       if (offerId) {
         where.offerId = offerId;
       }
-      
+
       const token = await prisma.token.findFirst({ where });
-      
-      const annualInterestRate = token?.annualInterestRate 
-        ? parseFloat(token.annualInterestRate) 
+
+      const annualInterestRate = token?.annualInterestRate
+        ? parseFloat(token.annualInterestRate)
         : DEFAULT_ANNUAL_INTEREST_RATE;
 
       logger.info(`Token interest rate: ${annualInterestRate}%`, { assetCode });
@@ -174,7 +175,7 @@ export class PaymentService {
     if (balance <= 0) {
       return 0;
     }
-    
+
     const monthlyInterestRate = annualInterestRate / 12 / 100;
     const monthlyInterest = balance * monthlyInterestRate;
     return parseFloat(monthlyInterest.toFixed(7));
@@ -196,21 +197,21 @@ export class PaymentService {
    */
   static async createBatchUSDCPayment(investors, payments) {
     try {
-      logger.info('Creating batch USDC payment transaction', { 
+      logger.info('Creating batch USDC payment transaction', {
         investorCount: investors.length,
-        paymentCount: payments.length 
+        paymentCount: payments.length
       });
 
       const distributorKeypair = getDistributorKeypair();
       const distributorAccount = await stellarServer.loadAccount(distributorKeypair.publicKey());
-      
+
       // Verificar liquidez USDC antes de criar operações
       const usdcBalance = distributorAccount.balances.find(
         b => b.asset_code === USDC_ASSET_CODE && b.asset_issuer === USDC_ISSUER
       );
-      
+
       const totalNeeded = payments.reduce((sum, p) => sum + parseFloat(p.usdcAmount), 0);
-      
+
       if (!usdcBalance || parseFloat(usdcBalance.balance) < totalNeeded) {
         const available = usdcBalance ? parseFloat(usdcBalance.balance) : 0;
         logger.error('Insufficient USDC liquidity', {
@@ -222,22 +223,22 @@ export class PaymentService {
           `Insufficient USDC liquidity. Required: ${totalNeeded}, Available: ${available}`
         );
       }
-      
+
       logger.info('USDC liquidity verified', {
         available: parseFloat(usdcBalance.balance),
         required: totalNeeded,
         remaining: parseFloat(usdcBalance.balance) - totalNeeded
       });
-      
+
       const usdcAsset = new Asset(USDC_ASSET_CODE, USDC_ISSUER);
-      
+
       // Preparar operações válidas
       const validPayments = [];
       for (const payment of payments) {
         const investor = investors.find(inv => inv.id === payment.investorId);
         if (!investor || !investor.stellarPublicKey) {
-          logger.warn('Skipping payment - investor not found or missing public key', { 
-            investorId: payment.investorId 
+          logger.warn('Skipping payment - investor not found or missing public key', {
+            investorId: payment.investorId
           });
           continue;
         }
@@ -261,11 +262,11 @@ export class PaymentService {
       });
 
       const results = [];
-      
+
       // Processar batches sequencialmente
       for (const [index, batch] of batches.entries()) {
         logger.info(`Processing batch ${index + 1}/${batches.length} with ${batch.length} operations`);
-        
+
         const operations = batch.map(({ payment, investor }) =>
           Operation.payment({
             destination: investor.stellarPublicKey,
@@ -328,9 +329,9 @@ export class PaymentService {
    */
   static async recordInterestPayments(payments, transactionHash, paymentDate) {
     try {
-      logger.info('Recording interest payments in database', { 
+      logger.info('Recording interest payments in database', {
         paymentCount: payments.length,
-        transactionHash 
+        transactionHash
       });
 
       // Use Prisma transaction for atomicity
@@ -419,7 +420,7 @@ export class PaymentService {
         });
 
         logger.info('Email sent successfully', { investorId: investor.id, email: investor.email });
-        
+
         await sleep(500);
       } catch (error) {
         logger.error('Failed to send email', {
@@ -470,7 +471,7 @@ export class PaymentService {
   static async processMonthlyInterestPayments(assetCode = 'SIN01') {
     const startTime = Date.now();
     const paymentDate = new Date().toISOString().split('T')[0];
-    
+
     logger.info('Starting monthly interest payment process', { assetCode, paymentDate });
 
     try {
@@ -496,14 +497,35 @@ export class PaymentService {
       const token = await Token.findByAssetCode(assetCode);
       const offerId = token?.offerId || null;
 
+      const feePercent = await ConfigService.getFloat('DIVIDEND_FEE_PERCENT', 0);
+      logger.info(`Applying Dividend Fee: ${feePercent}%`);
+
       const payments = [];
       for (const investor of investors) {
         const tokenBalance = parseFloat(investor.token_balance);
-        const interestAmount = this.calculateMonthlyInterest(tokenBalance, annualInterestRate);
-        
-        if (interestAmount <= 0) {
+        const grossInterest = this.calculateMonthlyInterest(tokenBalance, annualInterestRate);
+
+        if (grossInterest <= 0) {
           logger.warn('Skipping investor - zero interest', { investorId: investor.id });
           continue;
+        }
+
+        // Apply Fee
+        let feeAmount = 0;
+        let netInterest = grossInterest;
+
+        if (feePercent > 0) {
+          feeAmount = grossInterest * (feePercent / 100);
+          netInterest = grossInterest - feeAmount;
+
+          // Log Fee (Fire and forget, or await?) Await to ensure log.
+          await ConfigService.logFee({
+            amount: feeAmount,
+            assetCode: USDC_ASSET_CODE,
+            category: 'DIVIDEND_FEE',
+            sourceId: investor.id,
+            description: `Dividend Fee ${feePercent}% on ${grossInterest} USDC`,
+          });
         }
 
         payments.push({
@@ -511,8 +533,11 @@ export class PaymentService {
           assetCode,
           tokenBalance: tokenBalance.toString(),
           interestRate: annualInterestRate.toString(),
-          interestAmount: interestAmount.toString(),
-          usdcAmount: interestAmount.toString(),
+          interestAmount: grossInterest.toString(), // Record GROSS interest for accounting? Or Net?
+          // Usually InterestPayment table has interestAmount. We should probably add feeAmount column to table later.
+          // For now, let's store GROSS in interestAmount and NET in usdcAmount (actual pay).
+          interestAmount: grossInterest.toString(),
+          usdcAmount: netInterest.toString(),
           offerId,
         });
       }
@@ -590,7 +615,7 @@ export class PaymentService {
       };
     } catch (error) {
       logger.error('Monthly interest payment process failed', error);
-      
+
       // Log error payment record (investor_id can be null for system errors)
       await prisma.interestPayment.create({
         data: {
@@ -655,7 +680,7 @@ export class PaymentService {
   static async distributeTokensToInvestor(investorId, assetCode, amount) {
     try {
       const investor = await Investor.findById(investorId);
-      
+
       if (!investor) {
         throw new Error('Investor not found');
       }
@@ -720,7 +745,7 @@ export class PaymentService {
           { createdAt: 'desc' },
         ],
       });
-      
+
       return {
         investorId,
         tokenDistributions: distributions,

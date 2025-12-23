@@ -169,5 +169,67 @@ router.get('/investments/statistics', authenticateToken, requirePlatformAdmin, I
  */
 router.get('/investments/pending', authenticateToken, requirePlatformAdmin, InvestmentMetricsController.getPendingInvestments);
 
+/**
+ * @swagger
+ * /api/platform-admins/system-config:
+ *   get:
+ *     summary: Obter configurações do sistema (Taxas)
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Configurações retornadas
+ *   put:
+ *     summary: Atualizar configurações do sistema
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               settings:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     key:
+ *                       type: string
+ *                     value:
+ *                       type: string
+ *     responses:
+ *       200:
+ *         description: Configurações atualizadas
+ */
+router.get('/system-config', authenticateToken, requirePlatformAdmin, PlatformAdminController.getSystemConfig);
+router.put('/system-config', authenticateToken, requirePlatformAdmin, PlatformAdminController.updateSystemConfig);
+
+/**
+ * @swagger
+ * /api/platform-admins/fee-logs:
+ *   get:
+ *     summary: Obter logs de taxas (Receita)
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Logs retornados com sumário de receita
+ */
+router.get('/fee-logs', authenticateToken, requirePlatformAdmin, PlatformAdminController.getFeeLogs);
+
 export default router;
 

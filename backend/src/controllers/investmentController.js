@@ -5,6 +5,7 @@ import { StellarService } from '../services/stellar.service.js';
 import { PaymentService } from '../services/payment.service.js';
 import { getTreasuryKeypair } from '../config/stellar.js';
 import { addDistributionJob, isQueueAvailable } from '../services/distributionQueue.service.js';
+import { ConfigService } from '../services/config.service.js';
 import crypto from 'crypto';
 
 const SIN01_ASSET_CODE = 'SIN01';
@@ -68,7 +69,26 @@ export const purchaseInvestment = async (req, res, next) => {
       });
     }
 
-    const tokenAmount = parseFloat(usdcAmount);
+    // Fee Logic
+    const grossAmount = parseFloat(usdcAmount);
+    const feePercent = await ConfigService.getFloat('INVESTMENT_FEE_PERCENT', 0);
+    const feeAmount = grossAmount * (feePercent / 100);
+    const netTokenAmount = grossAmount - feeAmount;
+
+    // Log Fee synchronously or async? Async is better but for financial logs consistency is key.
+    if (feeAmount > 0) {
+      // Log fee intent - actual log might be better after payment success? 
+      // User pays GROSS amount (usdcAmount). Platform takes fee. Investor gets NET tokens.
+      await ConfigService.logFee({
+        amount: feeAmount,
+        assetCode: 'USDC',
+        category: 'INVESTMENT_FEE',
+        sourceId: investor.id,
+        description: `Investment Fee ${feePercent}% on ${grossAmount} USDC`,
+      });
+    }
+
+    const tokenAmount = netTokenAmount;
     const treasuryKeypair = getTreasuryKeypair();
 
     // Criar registro de investimento primeiro
@@ -76,8 +96,8 @@ export const purchaseInvestment = async (req, res, next) => {
       investor_id: investorId,
       offer_id: offerId || null,
       asset_code: assetCode,
-      usdc_amount: usdcAmount,
-      token_amount: tokenAmount,
+      usdc_amount: usdcAmount, // User sends full amount
+      token_amount: tokenAmount, // User receives net amount
       memo: null, // Será gerado quando pagamento for detectado
     });
 
@@ -99,6 +119,7 @@ export const purchaseInvestment = async (req, res, next) => {
             id: investment.id,
             status: investment.status,
             usdcAmount: parseFloat(usdcAmount),
+            feeAmount: feeAmount,
             tokenAmount: tokenAmount,
             assetCode: assetCode,
           },
@@ -137,7 +158,7 @@ async function processInvestmentPaymentWithQueue(investment, usdcPayment, req, r
   try {
     // Verificar idempotência: se já existe distribuição para este pagamento
     const existingDistribution = await Token.findDistributionByUSDC(usdcPayment.transactionHash);
-    
+
     if (existingDistribution) {
       await Investment.updateStatus(investment.id, {
         status: 'distributed',
@@ -226,7 +247,7 @@ async function processInvestmentPayment(investment, usdcPayment, req, res, next)
   try {
     // Verificar idempotência: se já existe distribuição para este pagamento
     const existingDistribution = await Token.findDistributionByUSDC(usdcPayment.transactionHash);
-    
+
     if (existingDistribution) {
       // Já processado, atualizar investment e retornar distribuição existente
       await Investment.updateStatus(investment.id, {

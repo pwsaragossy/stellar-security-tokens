@@ -436,3 +436,27 @@ model PlatformAdminWebauthnCredential {
   @@index([credentialId])
   @@map("platform_admin_webauthn_credentials")
 }
+
+model SystemConfig {
+  key         String   @id @db.VarChar(50)
+  value       String   @db.Text
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp
+
+  @@map("system_config")
+}
+
+model FeeLog {
+  id              Int      @id @default(autoincrement())
+  amount          Decimal  @db.Decimal(20, 7)
+  assetCode       String   @map("asset_code") @db.VarChar(12)
+  category        String   @db.VarChar(50) // ISSUANCE, WITHDRAWAL, DIVIDEND
+  sourceId        Int?     @map("source_id")
+  description     String?  @db.Text
+  transactionHash String?  @map("transaction_hash") @db.VarChar(64)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp
+
+  @@index([category])
+  @@index([createdAt])
+  @@map("fee_logs")
+}
