@@ -46,14 +46,13 @@ describe('Wallet Controller Integration', () => {
         adminId = admin.id;
         // Middleware expects role='platform_admin' for generic admin access
         // The specific role (super_admin) is usually stored in adminRole if needed, but the base role claim must be platform_admin
-        const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret_here_change_in_production';
-        adminToken = jwt.sign({
+        adminToken = generateToken({
             id: admin.id,
             userId: admin.id,
             email: admin.email,
             role: 'platform_admin',
             adminRole: admin.role
-        }, jwtSecret);
+        });
     });
 
     after(async () => {

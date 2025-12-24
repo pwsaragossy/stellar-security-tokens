@@ -40,6 +40,7 @@ describe('KYC Lifecycle Flow', () => {
         const uniqueDocument = `DOC-${Date.now()}`;
         const credentialId = Buffer.from(`cred-${Date.now()}`).toString('base64url');
         const publicKey = Buffer.from(`pub-${Date.now()}`).toString('base64url');
+        const contractId = 'C' + 'MOCK_CONTRACT_ID_KYC_' + Date.now().toString().padEnd(30, '0').substring(0, 30);
 
         // 1. Register
         const registerRes = await request
@@ -49,7 +50,8 @@ describe('KYC Lifecycle Flow', () => {
                 email: uniqueEmail,
                 document: uniqueDocument,
                 credentialId: credentialId,
-                publicKey: publicKey
+                publicKey: publicKey,
+                contractId: contractId
             })
             .expect(201);
 
