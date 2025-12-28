@@ -23,6 +23,10 @@ export const cleanDatabase = async () => {
       await tx.tokenDistribution.deleteMany({});
       await tx.investment.deleteMany({});
       await tx.offer.deleteMany({});
+      await tx.feeLog.deleteMany({});
+      // We don't delete systemConfig here because many tests rely on the initial setup
+      // and it doesn't change much between tests.
+      await tx.multiSigTransaction.deleteMany({});
       await tx.companyUserWebauthnCredential.deleteMany({});
       await tx.platformAdminWebauthnCredential.deleteMany({});
       await tx.investorWebauthnCredential.deleteMany({});
@@ -63,14 +67,17 @@ export const cleanDatabase = async () => {
         const investorsSeq = await prisma.$queryRawUnsafe("SELECT last_value FROM investors_id_seq");
         const tokensSeq = await prisma.$queryRawUnsafe("SELECT last_value FROM tokens_id_seq");
 
+        const invVal = String(investorsSeq[0].last_value);
+        const tokVal = String(tokensSeq[0].last_value);
+
         console.log(`[testDatabase] Cleanup verification:`);
-        console.log(`  - Investors: ${investorsCount} rows, sequence: ${investorsSeq[0].last_value}`);
-        console.log(`  - Tokens: ${tokensCount} rows, sequence: ${tokensSeq[0].last_value}`);
+        console.log(`  - Investors: ${investorsCount} rows, sequence: ${invVal}`);
+        console.log(`  - Tokens: ${tokensCount} rows, sequence: ${tokVal}`);
 
         if (investorsCount > 0 || tokensCount > 0) {
           console.warn('[testDatabase] WARNING: Data still exists after cleanup!');
         }
-        if (investorsSeq[0].last_value !== '1' || tokensSeq[0].last_value !== '1') {
+        if (invVal !== '1' || tokVal !== '1') {
           console.warn('[testDatabase] WARNING: Sequences not reset correctly!');
         }
       } catch (e) {

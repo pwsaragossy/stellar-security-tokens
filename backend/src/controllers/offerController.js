@@ -125,7 +125,7 @@ export class OfferController {
    */
   static async createOffer(req, res) {
     try {
-      const {
+      let {
         asset_code,
         offer_name,
         description,
@@ -143,6 +143,22 @@ export class OfferController {
         collateral_value,
         collateral_ltv,
       } = req.body;
+
+      // Converter campos numéricos vindos de multipart/form-data (strings)
+      if (total_supply) total_supply = parseFloat(total_supply);
+      if (annual_interest_rate) annual_interest_rate = parseFloat(annual_interest_rate);
+      if (bullet_payment_amount) bullet_payment_amount = parseFloat(bullet_payment_amount);
+      if (payment_frequency) payment_frequency = parseInt(payment_frequency, 10);
+      if (collateral_ltv) collateral_ltv = parseFloat(collateral_ltv);
+
+      // Parse offer_rules se enviado como string JSON (comum em multipart)
+      if (typeof offer_rules === 'string') {
+        try {
+          offer_rules = JSON.parse(offer_rules);
+        } catch (e) {
+          offer_rules = {};
+        }
+      }
 
       // Validações básicas
       if (!asset_code || !offer_name || !description || !total_supply || !offer_type) {
@@ -186,7 +202,6 @@ export class OfferController {
       if (req.files && req.files.length > 0) {
         for (const file of req.files) {
           // O campo do formulário define o tipo (ex: 'matricula', 'laudo', 'contract')
-          // Se usar upload.any(), o fieldname vem no arquivo
           const docType = file.fieldname;
 
           const uploadResult = await ipfsService.uploadFile(
@@ -216,11 +231,11 @@ export class OfferController {
       // Calcular LTV se não fornecido e temos valores
       let finalLTV = collateral_ltv;
       if (!finalLTV && collateral_value && total_supply) {
-        // LTV = (Total Supply / Collateral Value) * 100
         finalLTV = (parseFloat(total_supply) / parseFloat(collateral_value)) * 100;
       }
 
-      const offer = await Offer.create({
+      // USAR O SERVIÇO para criação centralizada com taxas
+      const offer = await OfferService.createOffer({
         company_id: companyId,
         requested_by: requestedBy,
         asset_code,

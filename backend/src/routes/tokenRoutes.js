@@ -1,6 +1,7 @@
 import express from 'express';
 import { body } from 'express-validator';
 import { validate } from '../middleware/validator.js';
+import { requirePlatformAdmin } from '../middleware/authorize.js';
 import {
   issueToken,
   getTokens,
@@ -66,7 +67,7 @@ const distributeTokenValidation = [
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/issue', issueTokenValidation, issueToken);
+router.post('/issue', requirePlatformAdmin, issueTokenValidation, issueToken);
 
 /**
  * @swagger
@@ -151,7 +152,7 @@ router.get('/:assetCode', getTokenByAssetCode);
  *       400:
  *         description: Dados inválidos
  */
-router.post('/distribute', distributeTokenValidation, distributeTokens);
+router.post('/distribute', requirePlatformAdmin, distributeTokenValidation, distributeTokens);
 
 /**
  * @swagger

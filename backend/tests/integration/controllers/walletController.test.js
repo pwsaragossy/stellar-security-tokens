@@ -2,18 +2,22 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import request from 'supertest';
-import app from '../../../src/app.js';
+// import app from '../../../src/app.js';
 import prisma from '../../../src/config/prisma.js';
 import { stellarServer } from '../../../src/config/stellar.js'; // Import the singleton
 import { Keypair } from '@stellar/stellar-sdk';
 import { generateToken } from '../../../src/middleware/auth.js';
 
 describe('Wallet Controller Integration', () => {
+    let app;
     let adminToken;
     let adminId;
     const destinationDetail = Keypair.random();
 
     before(async () => {
+        const appModule = await import('../../../src/app.js');
+        app = appModule.default;
+
         // Mock Stellar Server
         stellarServer.loadAccount = async (publicKey) => {
             return {

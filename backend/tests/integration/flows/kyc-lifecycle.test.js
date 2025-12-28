@@ -1,15 +1,20 @@
 import { test, describe, before, after, mock } from 'node:test';
 import assert from 'node:assert';
 import supertest from 'supertest';
-import app from '../../../src/app.js';
+// import app from '../../../src/app.js';
 import { setupTestDatabase, teardownTestDatabase } from '../../helpers/testDatabase.js';
 import crypto from 'crypto';
 import { PasskeyWalletService } from '../../../src/services/passkeyWallet.service.js';
 
-const request = supertest(app);
+let app;
+let request;
 
 describe('KYC Lifecycle Flow', () => {
     before(async () => {
+        const appModule = await import('../../../src/app.js');
+        app = appModule.default;
+        request = supertest(app);
+
         await setupTestDatabase();
 
         // Mock the getServer method or the instance methods

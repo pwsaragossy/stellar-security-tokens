@@ -302,6 +302,22 @@ async function main() {
     const distribution = await createAccount('Distribution');
     await sleep(1000);
 
+    // 4. Configurações do Sistema
+    console.log('⚙️  Configurando parâmetros do sistema...');
+    const configs = [
+      { key: 'withdrawal_fee', value: '5', description: 'Taxa fixa de saque em USDC' },
+      { key: 'min_investment', value: '100', description: 'Investimento mínimo padrão' },
+      { key: 'token_issuance_fee', value: '500', description: 'Taxa de solicitação de tokenização (revisão de documentos)' },
+    ];
+
+    for (const config of configs) {
+      await prisma.systemConfig.upsert({
+        where: { key: config.key },
+        update: { value: config.value, description: config.description },
+        create: config,
+      });
+    }
+
     const treasury = await createAccount('Treasury');
     await sleep(1000);
 

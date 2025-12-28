@@ -1,6 +1,7 @@
 import { Offer } from '../models/Offer.js';
 import { Token } from '../models/Token.js';
 import { Company } from '../models/Company.js';
+import prisma from '../config/prisma.js';
 
 /**
  * Serviço para gerenciar ofertas de tokenização
@@ -110,8 +111,8 @@ export class OfferService {
       if (offerRules.max_investment && typeof offerRules.max_investment !== 'number') {
         errors.push('max_investment must be a number');
       }
-      if (offerRules.min_investment && offerRules.max_investment && 
-          offerRules.min_investment > offerRules.max_investment) {
+      if (offerRules.min_investment && offerRules.max_investment &&
+        offerRules.min_investment > offerRules.max_investment) {
         errors.push('min_investment cannot be greater than max_investment');
       }
       if (offerRules.loan_term && (typeof offerRules.loan_term !== 'number' || offerRules.loan_term < 1)) {
@@ -195,7 +196,47 @@ export class OfferService {
       throw new Error('Asset code already exists');
     }
 
-    return await Offer.create(offerData);
+    // Usar transação para garantir que a oferta e o log de taxa sejam criados juntos
+    return await prisma.$transaction(async (tx) => {
+      // 1. Criar a oferta
+      const offer = await tx.offer.create({
+        data: {
+          companyId: offerData.company_id,
+          requestedBy: offerData.requested_by,
+          assetCode: offerData.asset_code,
+          offerName: offerData.offer_name,
+          description: offerData.description,
+          totalSupply: offerData.total_supply,
+          annualInterestRate: offerData.annual_interest_rate,
+          offerType: offerData.offer_type,
+          paymentType: offerData.payment_type || 'monthly',
+          maturityDate: offerData.maturity_date ? new Date(offerData.maturity_date) : null,
+          bulletPaymentAmount: offerData.bullet_payment_amount,
+          paymentFrequency: offerData.payment_frequency || 1,
+          offerRules: offerData.offer_rules || {},
+          legalDocuments: offerData.legal_documents || {},
+          collateralType: offerData.collateral_type || 'real_estate',
+          collateralDescription: offerData.collateral_description,
+          collateralValue: offerData.collateral_value,
+          collateralLTV: offerData.collateral_ltv,
+          status: 'pending_review',
+        }
+      });
+
+      // 2. Buscar e registrar a taxa de emissão
+      const feeAmount = await this.getIssuanceFee();
+      await tx.feeLog.create({
+        data: {
+          amount: feeAmount,
+          assetCode: offer.assetCode,
+          category: 'ISSUANCE',
+          sourceId: offer.id,
+          description: `Taxa de solicitação de tokenização para o asset ${offer.assetCode}`,
+        }
+      });
+
+      return offer;
+    });
   }
 
   /**
@@ -276,6 +317,41 @@ export class OfferService {
     }
 
     return await Offer.updateStatus(offerId, 'active');
+  }
+
+  /**
+   * Obtém o valor da taxa de emissão configurada no sistema
+   * @returns {Promise<number>} Valor da taxa (padrão 500 se não configurado)
+   */
+  static async getIssuanceFee() {
+    try {
+      const config = await prisma.systemConfig.findUnique({
+        where: { key: 'token_issuance_fee' }
+      });
+      return config ? parseFloat(config.value) : 500;
+    } catch (error) {
+      console.warn('Error fetching issuance fee config, using default 500');
+      return 500;
+    }
+  }
+
+  /**
+   * Registra a taxa de emissão no log de taxas
+   * @param {number} offerId - ID da oferta
+   * @param {string} assetCode - Código do asset
+   * @param {number} amount - Valor da taxa
+   * @returns {Promise<Object>} Registro do log
+   */
+  static async recordIssuanceFee(offerId, assetCode, amount) {
+    return await prisma.feeLog.create({
+      data: {
+        amount,
+        assetCode,
+        category: 'ISSUANCE',
+        sourceId: offerId,
+        description: `Taxa de solicitação de tokenização para o asset ${assetCode}`,
+      }
+    });
   }
 }
 

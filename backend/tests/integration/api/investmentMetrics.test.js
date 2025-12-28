@@ -1,17 +1,22 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import supertest from 'supertest';
-import app from '../../../src/app.js';
+// import app from '../../../src/app.js';
 import { setupTestDatabase, teardownTestDatabase } from '../../helpers/testDatabase.js';
 import { getInvestorToken } from '../../helpers/authHelper.js';
 
-const request = supertest(app);
+let app;
+let request;
 
 describe('Investment Metrics API Integration Tests', () => {
   let investor;
   let authToken;
 
   before(async () => {
+    const appModule = await import('../../../src/app.js');
+    app = appModule.default;
+    request = supertest(app);
+
     const data = await setupTestDatabase();
     investor = data.investor;
     authToken = getInvestorToken(investor);
