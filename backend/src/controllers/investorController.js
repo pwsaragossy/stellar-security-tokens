@@ -68,7 +68,14 @@ export const getInvestorById = async (req, res, next) => {
 export const getInvestorBalance = async (req, res, next) => {
   try {
     const { investorId } = req.params;
-    const { assetCode = 'SIN01' } = req.query;
+    const { assetCode } = req.query;
+
+    if (!assetCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'assetCode query parameter is required',
+      });
+    }
 
     const investor = await Investor.findById(parseInt(investorId, 10));
     if (!investor) {

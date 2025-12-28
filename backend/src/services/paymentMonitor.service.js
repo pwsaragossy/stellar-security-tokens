@@ -4,6 +4,7 @@ import { Investment } from '../models/Investment.js';
 import { Investor } from '../models/Investor.js';
 import { StellarService } from './stellar.service.js';
 import { Token } from '../models/Token.js';
+import { EmailService } from './email.service.js';
 import crypto from 'crypto';
 
 const USDC_ISSUER = process.env.USDC_ISSUER || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
@@ -281,8 +282,9 @@ export class PaymentMonitor {
 
       console.log(`[PaymentMonitor] Successfully processed investment ${investment.id}: distributed ${investment.tokenAmount} tokens`);
 
-      // TODO: Enviar email de confirmação para investidor
-      // await EmailService.sendInvestmentConfirmation(investor.email, investment, distribution);
+
+      // Enviar email de confirmação para investidor
+      await EmailService.sendInvestmentConfirmation(investor.email, investment, distribution);
 
     } catch (error) {
       console.error(`[PaymentMonitor] Error processing investment ${investment.id}:`, error);

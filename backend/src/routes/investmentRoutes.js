@@ -41,7 +41,7 @@ const purchaseValidation = [
  *                 example: 1000.00
  *               assetCode:
  *                 type: string
- *                 example: SIN01
+ *                 example: REIT01
  *               offerId:
  *                 type: integer
  *     responses:

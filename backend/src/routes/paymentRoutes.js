@@ -50,7 +50,7 @@ const getStatisticsValidation = [
  *             properties:
  *               assetCode:
  *                 type: string
- *                 example: SIN01
+ *                 example: REIT01
  *     responses:
  *       200:
  *         description: Pagamentos processados

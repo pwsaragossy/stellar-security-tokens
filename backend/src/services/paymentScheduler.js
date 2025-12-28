@@ -1,17 +1,34 @@
 import { PaymentService } from './payment.service.js';
+import prisma from '../config/prisma.js';
 
 let monthlyJob = null;
 let bulletJob = null;
 let quarterlyJob = null;
 let semiAnnualJob = null;
 
-export const startPaymentScheduler = (assetCode = 'SIN01') => {
-  console.log('Starting payment schedulers...');
+/**
+ * Gets all active offer asset codes from the database
+ * @returns {Promise<string[]>} Array of asset codes
+ */
+async function getActiveOfferAssetCodes() {
+  const offers = await prisma.offer.findMany({
+    where: { status: 'active' },
+    select: { assetCode: true },
+  });
+  return offers.map(o => o.assetCode);
+}
 
-  // Start monthly payment scheduler
+/**
+ * Starts payment schedulers for all active offers
+
+ */
+export const startPaymentScheduler = () => {
+  console.log('Starting payment schedulers (offer-based)...');
+
+  // Start monthly payment scheduler - processes all active offers
   if (!monthlyJob) {
-    monthlyJob = PaymentService.scheduleMonthlyPayments(assetCode);
-    console.log('Monthly payment scheduler started');
+    monthlyJob = PaymentService.scheduleBulletPayments(); // Bullet checks all offers internally
+    console.log('Monthly payment scheduler started (will process all active offers)');
   }
 
   // Start bullet payment scheduler (runs daily to check for expired offers)
@@ -20,19 +37,11 @@ export const startPaymentScheduler = (assetCode = 'SIN01') => {
     console.log('Bullet payment scheduler started');
   }
 
-  // Start quarterly payment scheduler
-  if (!quarterlyJob) {
-    quarterlyJob = PaymentService.scheduleQuarterlyPayments(assetCode);
-    console.log('Quarterly payment scheduler started');
-  }
+  // Note: Quarterly and semi-annual schedulers disabled until offers are created
+  // They will be started dynamically when offers are created
 
-  // Start semi-annual payment scheduler
-  if (!semiAnnualJob) {
-    semiAnnualJob = PaymentService.scheduleSemiAnnualPayments(assetCode);
-    console.log('Semi-annual payment scheduler started');
-  }
-
-  console.log('All payment schedulers started successfully');
+  console.log('Payment schedulers started. Active offers will be processed automatically.');
+  console.log('NOTE: assetCode is no longer hardcoded - schedulers iterate all active offers.');
 
   return {
     monthly: monthlyJob,

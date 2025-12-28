@@ -18,7 +18,7 @@ export class Token {
    */
   static async create(tokenData) {
     const { assetCode, issuerPublicKey, totalSupply, description, offerId, issuedBy } = tokenData;
-    
+
     return await prisma.token.create({
       data: {
         assetCode,
@@ -33,7 +33,7 @@ export class Token {
 
   /**
    * Busca token por código do asset
-   * @param {string} assetCode - Código do asset (ex: 'SIN01')
+   * @param {string} assetCode - Código do asset (ex: 'REIT01')
    * @returns {Promise<Object|null>} Token encontrado ou null
    */
   static async findByAssetCode(assetCode) {
@@ -51,7 +51,7 @@ export class Token {
    */
   static async findAll(limit = 100, offset = 0, offerId = null) {
     const where = offerId ? { offerId } : {};
-    
+
     return await prisma.token.findMany({
       where,
       take: limit,
@@ -178,7 +178,7 @@ export class Token {
       console.log('Distribution already exists (idempotency check):', existing.id);
       return existing;
     }
-    
+
     return await prisma.tokenDistribution.create({
       data: {
         investorId,

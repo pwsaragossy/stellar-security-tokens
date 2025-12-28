@@ -26,7 +26,7 @@ export const mockInvestorPending = {
 
 export const mockToken = {
   id: 1,
-  asset_code: 'SIN01',
+  asset_code: 'TEST01',
   issuer_public_key: 'GXYZ7890123456789012345678901234567890123456789012',
   total_supply: '1000.0000000',
   description: 'Sunset Income Note - Security token backed by rental income',
@@ -37,7 +37,7 @@ export const mockToken = {
 export const mockTokenDistribution = {
   id: 1,
   investor_id: 1,
-  asset_code: 'SIN01',
+  asset_code: 'TEST01',
   amount: '100.0000000',
   transaction_hash: 'abc123def456ghi789jkl012mno345pqr678stu901vwx234yz567',
   created_at: new Date('2024-01-15T11:00:00.000Z'),
@@ -46,7 +46,7 @@ export const mockTokenDistribution = {
 export const mockInterestPayment = {
   id: 1,
   investor_id: 1,
-  asset_code: 'SIN01',
+  asset_code: 'TEST01',
   token_balance: '100.0000000',
   interest_rate: '10.0000000',
   interest_amount: '0.8333333',
@@ -71,7 +71,7 @@ export const mockStellarAccount = {
     },
     {
       asset_type: 'credit_alphanum4',
-      asset_code: 'SIN01',
+      asset_code: 'TEST01',
       asset_issuer: 'GXYZ7890123456789012345678901234567890123456789012',
       balance: '100.0000000',
       is_authorized: true,

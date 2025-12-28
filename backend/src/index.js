@@ -78,10 +78,10 @@ app.listen(PORT, async () => {
   const enableAutoPayments = process.env.ENABLE_AUTO_PAYMENTS !== 'false';
   if (enableAutoPayments) {
     try {
-      const assetCode = process.env.ASSET_CODE || 'SIN01';
-      startPaymentScheduler(assetCode);
-      console.log(`Automatic payment scheduler enabled for asset: ${assetCode}`);
-      console.log('Payments will be processed automatically on the 1st of each month at 00:00 UTC');
+
+      startPaymentScheduler();
+      console.log('Automatic payment scheduler enabled (offer-based)');
+      console.log('Payments will be processed automatically for all active offers');
     } catch (error) {
       console.error('Failed to start payment scheduler:', error.message);
       console.warn('Automatic payments will not be scheduled. You can process payments manually via POST /api/payments/process');

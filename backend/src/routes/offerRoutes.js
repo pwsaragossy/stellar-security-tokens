@@ -63,7 +63,7 @@ const upload = multer({
  *             properties:
  *               asset_code:
  *                 type: string
- *                 example: SIN01
+ *                 example: REIT01
  *               offer_name:
  *                 type: string
  *                 example: Oferta Imobiliária ABC

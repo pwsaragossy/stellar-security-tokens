@@ -62,8 +62,7 @@ services:
       TREASURY_SECRET_KEY: ${TREASURY_SECRET_KEY}
       TREASURY_PUBLIC_KEY: ${TREASURY_PUBLIC_KEY}
       # Token Details
-      ASSET_CODE: ${ASSET_CODE:-SIN01}
-      ASSET_SUPPLY: ${ASSET_SUPPLY:-1000}
+      # ASSET_CODE and ASSET_SUPPLY removed - using offer-specific assets
       USDC_ISSUER: ${USDC_ISSUER:-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN}
       # Security
       JWT_SECRET: ${JWT_SECRET:-change_this_in_production}

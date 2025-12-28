@@ -263,22 +263,17 @@ export class StellarService {
 
   /**
    * Emite tokens de segurança e transfere para a conta distribuidora
-   * @param {string} code - Código do asset (padrão: 'SIN01')
+   * @param {string} code - Código do asset (REQUIRED)
    * @param {number|string} amount - Quantidade de tokens a emitir
    * @param {Object} [options] - Opções adicionais
    * @param {string} [options.homeDomain] - Home domain para stellar.toml
    * @returns {Promise<Object>} Resultado da emissão
-   * @returns {boolean} returns.success - Indica sucesso
-   * @returns {string} returns.assetCode - Código do asset emitido
-   * @returns {string} returns.issuerPublicKey - Chave pública do emissor
-   * @returns {string} returns.distributorPublicKey - Chave pública do distribuidor
-   * @returns {string} returns.amount - Quantidade emitida
-   * @returns {string} returns.transactionHash - Hash da transação
-   * @returns {number} returns.ledger - Número do ledger
-   * @returns {string} [returns.homeDomain] - Home domain configurado
-   * @throws {Error} Se houver erro na emissão ou se amount for inválido
+   * @throws {Error} Se code não for fornecido, amount for inválido ou houver erro na emissão
    */
-  static async issueSecurityToken(code = 'SIN01', amount, options = {}) {
+  static async issueSecurityToken(code, amount, options = {}) {
+    if (!code) {
+      throw new Error('Asset code is required');
+    }
     try {
       const issuerKeypair = getIssuerKeypair();
       const distributorKeypair = getDistributorKeypair();
@@ -343,7 +338,7 @@ export class StellarService {
    * Envia tokens da conta distribuidora para o investidor
    * @param {string} investorPublicKey - Chave pública do investidor (56 caracteres)
    * @param {number|string} amount - Quantidade de tokens a distribuir
-   * @param {string} assetCode - Código do asset (padrão: 'SIN01')
+   * @param {string} assetCode - Código do asset (REQUIRED)
    * @returns {Promise<Object>} Resultado da distribuição
    * @returns {boolean} returns.success - Indica sucesso
    * @returns {string} returns.assetCode - Código do asset
@@ -351,9 +346,12 @@ export class StellarService {
    * @returns {string} returns.amount - Quantidade distribuída
    * @returns {string} returns.transactionHash - Hash da transação
    * @returns {number} returns.ledger - Número do ledger
-   * @throws {Error} Se chave inválida, conta não existir, trustline não autorizada ou amount inválido
+   * @throws {Error} Se assetCode não for fornecido, chave inválida, conta não existir, trustline não autorizada ou amount inválido
    */
-  static async distributeTokens(investorPublicKey, amount, assetCode = 'SIN01', options = {}) {
+  static async distributeTokens(investorPublicKey, amount, assetCode, options = {}) {
+    if (!assetCode) {
+      throw new Error('assetCode is required');
+    }
     try {
       const issuerKeypair = getIssuerKeypair();
       const distributorKeypair = getDistributorKeypair();
@@ -441,7 +439,7 @@ export class StellarService {
    * Congela conta do investidor revogando a autorização da trustline
    * Remove a flag AuthRequiredFlag, impedindo transferências do asset
    * @param {string} investorPublicKey - Chave pública do investidor (56 caracteres)
-   * @param {string} assetCode - Código do asset (padrão: 'SIN01')
+   * @param {string} assetCode - Código do asset (REQUIRED)
    * @returns {Promise<Object>} Resultado do congelamento
    * @returns {boolean} returns.success - Indica sucesso
    * @returns {string} returns.investorPublicKey - Chave pública do investidor
@@ -449,9 +447,12 @@ export class StellarService {
    * @returns {string} returns.transactionHash - Hash da transação
    * @returns {number} returns.ledger - Número do ledger
    * @returns {string} returns.message - Mensagem de confirmação
-   * @throws {Error} Se chave inválida, conta não existir ou trustline não existir
+   * @throws {Error} Se assetCode não for fornecido, chave inválida, conta não existir ou trustline não existir
    */
-  static async freezeAccount(investorPublicKey, assetCode = 'SIN01') {
+  static async freezeAccount(investorPublicKey, assetCode) {
+    if (!assetCode) {
+      throw new Error('assetCode is required');
+    }
     try {
       const issuerKeypair = getIssuerKeypair();
 
@@ -509,7 +510,7 @@ export class StellarService {
    * Requer que o asset tenha AuthClawbackEnabledFlag habilitada
    * @param {string} investorPublicKey - Chave pública do investidor (56 caracteres)
    * @param {number|string} amount - Quantidade de tokens a recuperar
-   * @param {string} assetCode - Código do asset (padrão: 'SIN01')
+   * @param {string} assetCode - Código do asset (REQUIRED)
    * @returns {Promise<Object>} Resultado do clawback
    * @returns {boolean} returns.success - Indica sucesso
    * @returns {string} returns.investorPublicKey - Chave pública do investidor
@@ -518,9 +519,12 @@ export class StellarService {
    * @returns {string} returns.transactionHash - Hash da transação
    * @returns {number} returns.ledger - Número do ledger
    * @returns {string} returns.message - Mensagem de confirmação
-   * @throws {Error} Se chave inválida, saldo insuficiente, conta não existir ou clawback não autorizado
+   * @throws {Error} Se assetCode não for fornecido, chave inválida, saldo insuficiente, conta não existir ou clawback não autorizado
    */
-  static async clawbackTokens(investorPublicKey, amount, assetCode = 'SIN01') {
+  static async clawbackTokens(investorPublicKey, amount, assetCode) {
+    if (!assetCode) {
+      throw new Error('assetCode is required');
+    }
     try {
       const issuerKeypair = getIssuerKeypair();
 

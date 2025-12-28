@@ -583,5 +583,203 @@ export class EmailService {
       throw new Error(`Failed to send semi-annual payment email: ${error.message}`);
     }
   }
+  /**
+   * Envia email de confirmação de investimento
+   * @param {string} investorEmail - Email do investidor
+   * @param {Object} investment - Dados do investimento
+   * @param {Object} distribution - Dados da distribuição de tokens
+   * @returns {Promise<Object>} Resultado do envio
+   */
+  static async sendInvestmentConfirmation(investorEmail, investment, distribution) {
+    if (!transporter) {
+      return { success: false, message: 'Email service not configured' };
+    }
+
+    try {
+      const { assetCode, tokenAmount } = investment;
+      const { transactionHash } = distribution;
+
+      const mailOptions = {
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: investorEmail,
+        subject: `Investimento Confirmado - ${assetCode}`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #27ae60; color: white; padding: 20px; text-align: center; }
+              .content { padding: 20px; background-color: #f9f9f9; }
+              .amount { font-size: 24px; font-weight: bold; color: #27ae60; }
+              .transaction { font-family: monospace; background-color: #e8e8e8; padding: 10px; border-radius: 4px; word-break: break-all; }
+              .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>Investimento Confirmado!</h1>
+              </div>
+              <div class="content">
+                <p>Olá,</p>
+                <p>Seu investimento em <strong>${assetCode}</strong> foi confirmado e os tokens foram enviados para sua carteira.</p>
+                <p><strong>Tokens Recebidos:</strong> <span class="amount">${tokenAmount} ${assetCode}</span></p>
+                <p><strong>Hash da Transação:</strong></p>
+                <div class="transaction">${transactionHash}</div>
+                <p>Você já pode visualizar seus tokens no painel do investidor.</p>
+                <p>Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+              </div>
+              <div class="footer">
+                <p>Este é um email automático, por favor não responda.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+        text: `Investimento Confirmado - ${assetCode}\n\nSeu investimento foi processado com sucesso.\n\nTokens: ${tokenAmount} ${assetCode}\nHash da Transação: ${transactionHash}\n\nAtenciosamente,\nEquipe Stellar Security Tokens`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      console.error(`Error sending investment confirmation to ${investorEmail}:`, error);
+      // Don't throw here to avoid blocking payment processing flow? 
+      // Actually keeping throw consistent with other methods is better for now.
+      throw new Error(`Failed to send investment confirmation: ${error.message}`);
+    }
+  }
+
+  /**
+   * Envia email de aprovação de KYC
+   * @param {string} investorEmail - Email do investidor
+   * @param {string} investorName - Nome do investidor
+   * @returns {Promise<Object>} Resultado do envio
+   */
+  static async sendKYCApprovalEmail(investorEmail, investorName) {
+    if (!transporter) {
+      return { success: false, message: 'Email service not configured' };
+    }
+
+    try {
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const dashboardLink = `${frontendUrl}/investor/dashboard`;
+
+      const mailOptions = {
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: investorEmail,
+        subject: 'Sua conta foi aprovada! - Stellar Security Tokens',
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #27ae60; color: white; padding: 20px; text-align: center; }
+              .content { padding: 20px; background-color: #f9f9f9; }
+              .button { display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 20px 0; }
+              .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>Conta Aprovada! 🎉</h1>
+              </div>
+              <div class="content">
+                <p>Olá ${investorName},</p>
+                <p>Temos ótimas notícias! Sua verificação de identidade (KYC) foi aprovada.</p>
+                <p>Agora você tem acesso completo à plataforma e pode começar a investir nas ofertas disponíveis.</p>
+                <p style="text-align: center;">
+                  <a href="${dashboardLink}" class="button">Acessar Plataforma</a>
+                </p>
+                <p>Se tiver qualquer dúvida, nossa equipe de suporte está à disposição.</p>
+                <p>Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+              </div>
+              <div class="footer">
+                <p>Este é um email automático, por favor não responda.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+        text: `Conta Aprovada!\n\nOlá ${investorName},\n\nSua verificação de identidade foi aprovada. Voce já pode investir na plataforma.\n\nAcesse: ${dashboardLink}\n\nAtenciosamente,\nEquipe Stellar Security Tokens`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      console.error(`Error sending KYC approval email to ${investorEmail}:`, error);
+      throw new Error(`Failed to send KYC approval email: ${error.message}`);
+    }
+  }
+
+  /**
+   * Envia email de rejeição de KYC
+   * @param {string} investorEmail - Email do investidor
+   * @param {string} investorName - Nome do investidor
+   * @param {string} reason - Motivo da rejeição
+   * @returns {Promise<Object>} Resultado do envio
+   */
+  static async sendKYCRejectionEmail(investorEmail, investorName, reason) {
+    if (!transporter) {
+      return { success: false, message: 'Email service not configured' };
+    }
+
+    try {
+      const mailOptions = {
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: investorEmail,
+        subject: 'Atualização sobre sua conta - Stellar Security Tokens',
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #e74c3c; color: white; padding: 20px; text-align: center; }
+              .content { padding: 20px; background-color: #f9f9f9; }
+              .reason { background-color: #fcebeb; border-left: 4px solid #e74c3c; padding: 10px; margin: 15px 0; }
+              .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>Atenção Necessária</h1>
+              </div>
+              <div class="content">
+                <p>Olá ${investorName},</p>
+                <p>Infelizmente não foi possível aprovar sua verificação de identidade (KYC) neste momento.</p>
+                <p><strong>Motivo:</strong></p>
+                <div class="reason">
+                  ${reason}
+                </div>
+                <p>Por favor, verifique se seus documentos estão legíveis e atualizados. Você pode entrar em contato com nosso suporte para mais detalhes ou tentar enviar novamente.</p>
+                <p>Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+              </div>
+              <div class="footer">
+                <p>Este é um email automático, por favor não responda.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+        text: `Atualização sobre sua conta\n\nOlá ${investorName},\n\nInfelizmente sua verificação de identidade não foi aprovada.\n\nMotivo: ${reason}\n\nPor favor, entre em contato com o suporte.\n\nAtenciosamente,\nEquipe Stellar Security Tokens`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      console.error(`Error sending KYC rejection email to ${investorEmail}:`, error);
+      throw new Error(`Failed to send KYC rejection email: ${error.message}`);
+    }
+  }
 }
 

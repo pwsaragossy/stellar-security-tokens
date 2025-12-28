@@ -8,7 +8,7 @@ import { addDistributionJob, isQueueAvailable } from '../services/distributionQu
 import { ConfigService } from '../services/config.service.js';
 import crypto from 'crypto';
 
-const SIN01_ASSET_CODE = 'SIN01';
+
 const USDC_PAYMENT_WINDOW_MINUTES = parseInt(process.env.USDC_PAYMENT_WINDOW_MINUTES || '2', 10);
 
 /**
@@ -30,7 +30,14 @@ function generateInvestmentMemo(investmentId, investorId, assetCode) {
 
 export const purchaseInvestment = async (req, res, next) => {
   try {
-    const { investorId, usdcAmount, assetCode = SIN01_ASSET_CODE, offerId } = req.body;
+    const { investorId, usdcAmount, assetCode, offerId } = req.body;
+
+    if (!assetCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'assetCode is required. Please specify the token asset code.',
+      });
+    }
 
     if (!usdcAmount || parseFloat(usdcAmount) <= 0) {
       return res.status(400).json({

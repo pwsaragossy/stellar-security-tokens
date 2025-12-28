@@ -129,16 +129,16 @@ export const seedTestData = async () => {
       },
     });
 
-    // Create or get token 'SIN01'
+    // Create or get token 'TEST01' (generic test token)
     const token = await prisma.token.upsert({
-      where: { assetCode: 'SIN01' },
+      where: { assetCode: 'TEST01' },
       update: {
         issuerPublicKey: issuerStellarKey,
         totalSupply: 1000,
         description: 'Test Token',
       },
       create: {
-        assetCode: 'SIN01',
+        assetCode: 'TEST01',
         issuerPublicKey: issuerStellarKey,
         totalSupply: 1000,
         description: 'Test Token',

@@ -26,7 +26,6 @@ describe('Investor Model - Integration Style Tests', () => {
       'findById',
       'findByEmail',
       'findByDocument',
-      // 'findByStellarPublicKey', // Deprecated
       'findAll',
       'update',
       'delete',

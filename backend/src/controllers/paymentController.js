@@ -7,7 +7,14 @@ import prisma from '../config/prisma.js';
  */
 export const processMonthlyPayments = async (req, res, next) => {
   try {
-    const { assetCode = 'SIN01' } = req.body;
+    const { assetCode } = req.body;
+
+    if (!assetCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'assetCode is required',
+      });
+    }
 
     const result = await PaymentService.processMonthlyInterestPayments(assetCode);
 
@@ -45,7 +52,14 @@ export const processBulletPayments = async (req, res, next) => {
  */
 export const processQuarterlyPayments = async (req, res, next) => {
   try {
-    const { assetCode = 'SIN01' } = req.body;
+    const { assetCode } = req.body;
+
+    if (!assetCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'assetCode is required',
+      });
+    }
 
     const result = await PaymentService.processQuarterlyPayments(assetCode);
 
@@ -65,7 +79,14 @@ export const processQuarterlyPayments = async (req, res, next) => {
  */
 export const processSemiAnnualPayments = async (req, res, next) => {
   try {
-    const { assetCode = 'SIN01' } = req.body;
+    const { assetCode } = req.body;
+
+    if (!assetCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'assetCode is required',
+      });
+    }
 
     const result = await PaymentService.processSemiAnnualPayments(assetCode);
 

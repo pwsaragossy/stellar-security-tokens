@@ -46,7 +46,7 @@ const distributeTokenValidation = [
  *                 type: string
  *                 minLength: 1
  *                 maxLength: 12
- *                 example: SIN01
+ *                 example: REIT01
  *               totalSupply:
  *                 type: number
  *                 example: 1000000
@@ -105,7 +105,7 @@ router.get('/', getTokens);
  *         required: true
  *         schema:
  *           type: string
- *         description: Código do ativo (ex. SIN01)
+ *         description: Código do ativo (ex. REIT01)
  *     responses:
  *       200:
  *         description: Detalhes do token
@@ -141,7 +141,7 @@ router.get('/:assetCode', getTokenByAssetCode);
  *                 example: 1
  *               assetCode:
  *                 type: string
- *                 example: SIN01
+ *                 example: REIT01
  *               amount:
  *                 type: number
  *                 example: 1000

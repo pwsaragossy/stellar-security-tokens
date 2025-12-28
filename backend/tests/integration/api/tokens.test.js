@@ -30,7 +30,7 @@ describe('Tokens API Integration Tests', () => {
       .expect(200);
 
     assert.strictEqual(res.body.success, true);
-    assert.ok(process.env.ASSET_CODE || 'SIN01');
+    assert.ok(createdToken.assetCode);
     // We expect at least the seeded token
     assert.ok(res.body.data.length >= 1);
     const found = res.body.data.find(t => t.assetCode === createdToken.assetCode);

@@ -84,7 +84,7 @@ export const getTreasuryKeypair = () => {
 
 /**
  * Cria um objeto Asset do Stellar SDK
- * @param {string} code - Código do asset (ex: 'SIN01', 'USDC')
+ * @param {string} code - Código do asset (ex: 'REIT01', 'USDC')
  * @param {string} issuerPublicKey - Chave pública da conta emissora
  * @returns {Asset} Objeto Asset configurado
  */

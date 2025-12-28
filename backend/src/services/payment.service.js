@@ -77,19 +77,17 @@ const retryOperation = async (operation, maxRetries = 3, delayMs = 1000) => {
 export class PaymentService {
   /**
    * Busca lista de investidores aprovados com saldos de tokens do banco de dados
-   * @param {string} [assetCode='SIN01'] - Código do asset a consultar
+   * @param {string} assetCode - Código do asset a consultar (REQUIRED)
+   * @param {number|null} offerId - ID da oferta opcional
    * @returns {Promise<Object>} Objeto com investidores e taxa de juros
    * @returns {Array} returns.investors - Array de investidores com saldos
    * @returns {number} returns.annualInterestRate - Taxa de juros anual do token
-   * @returns {number} returns.investors[].id - ID do investidor
-   * @returns {string} returns.investors[].name - Nome do investidor
-   * @returns {string} returns.investors[].email - Email do investidor
-   * @returns {string} returns.investors[].stellar_public_key - Chave pública Stellar
-   * @returns {string} returns.investors[].kyc_status - Status KYC (deve ser 'approved')
-   * @returns {string} returns.investors[].token_balance - Saldo de tokens (soma de distribuições)
-   * @throws {Error} Se houver erro ao consultar o banco de dados
+   * @throws {Error} Se assetCode não for fornecido ou houver erro ao consultar
    */
-  static async getInvestorsWithBalances(assetCode = 'SIN01', offerId = null) {
+  static async getInvestorsWithBalances(assetCode, offerId = null) {
+    if (!assetCode) {
+      throw new Error('assetCode is required');
+    }
     try {
       logger.info('Fetching investors with balances', { assetCode, offerId });
 
@@ -455,20 +453,14 @@ export class PaymentService {
   /**
    * Processa pagamento automático de juros mensais para todos os investidores
    * Fluxo completo: busca investidores → calcula juros → cria transação batch → registra no DB → envia emails
-   * @param {string} [assetCode='SIN01'] - Código do asset a processar
+   * @param {string} assetCode - Código do asset a processar (REQUIRED)
    * @returns {Promise<Object>} Resultado completo do processamento
-   * @returns {boolean} returns.success - Indica sucesso geral
-   * @returns {string} returns.paymentDate - Data do pagamento (YYYY-MM-DD)
-   * @returns {string} returns.transactionHash - Hash da transação Stellar
-   * @returns {number} returns.ledger - Número do ledger
-   * @returns {number} returns.paymentsProcessed - Número de pagamentos processados
-   * @returns {number} returns.totalInterestAmount - Total de juros pagos
-   * @returns {number} returns.emailsSent - Número de emails enviados com sucesso
-   * @returns {number} returns.emailsFailed - Número de emails que falharam
-   * @returns {string} returns.duration - Duração do processamento em milissegundos
-   * @throws {Error} Se houver erro em qualquer etapa do processo
+   * @throws {Error} Se assetCode não for fornecido ou houver erro no processo
    */
-  static async processMonthlyInterestPayments(assetCode = 'SIN01') {
+  static async processMonthlyInterestPayments(assetCode) {
+    if (!assetCode) {
+      throw new Error('assetCode is required');
+    }
     const startTime = Date.now();
     const paymentDate = new Date().toISOString().split('T')[0];
 
@@ -637,10 +629,13 @@ export class PaymentService {
   /**
    * Agenda execução automática mensal usando node-cron
    * Executa no dia 1 de cada mês às 00:00 UTC
-   * @param {string} [assetCode='SIN01'] - Código do asset a processar
+   * @param {string} assetCode - Código do asset a processar (REQUIRED)
    * @returns {Object} Job do cron para controle (start/stop)
    */
-  static scheduleMonthlyPayments(assetCode = 'SIN01') {
+  static scheduleMonthlyPayments(assetCode) {
+    if (!assetCode) {
+      throw new Error('assetCode is required for scheduling');
+    }
     logger.info('Scheduling monthly interest payments', {
       schedule: '0 0 1 * *',
       assetCode,
@@ -758,10 +753,13 @@ export class PaymentService {
 
   /**
    * Processa pagamentos bullet (pagamento único na data de vencimento)
-   * @param {string} assetCode - Código do asset
+   * @param {string} assetCode - Código do asset (REQUIRED)
    * @returns {Promise<Object>} Resultado do processamento
    */
-  static async processBulletPayments(assetCode = 'SIN01') {
+  static async processBulletPayments(assetCode) {
+    if (!assetCode) {
+      throw new Error('assetCode is required');
+    }
     const startTime = Date.now();
     const paymentDate = new Date().toISOString().split('T')[0];
 
@@ -1124,10 +1122,13 @@ export class PaymentService {
   /**
    * Agenda processamento de pagamentos trimestrais
    * Executa no 1º dia de janeiro, abril, julho e outubro
-   * @param {string} [assetCode='SIN01'] - Código do asset
+   * @param {string} assetCode - Código do asset (REQUIRED)
    * @returns {Object} Job agendado
    */
-  static scheduleQuarterlyPayments(assetCode = 'SIN01') {
+  static scheduleQuarterlyPayments(assetCode) {
+    if (!assetCode) {
+      throw new Error('assetCode is required for scheduling');
+    }
     logger.info('Scheduling quarterly payments', {
       schedule: '0 0 1 1,4,7,10 *',
       assetCode,
@@ -1152,10 +1153,13 @@ export class PaymentService {
   /**
    * Agenda processamento de pagamentos semestrais
    * Executa no 1º dia de janeiro e julho
-   * @param {string} [assetCode='SIN01'] - Código do asset
+   * @param {string} assetCode - Código do asset (REQUIRED)
    * @returns {Object} Job agendado
    */
-  static scheduleSemiAnnualPayments(assetCode = 'SIN01') {
+  static scheduleSemiAnnualPayments(assetCode) {
+    if (!assetCode) {
+      throw new Error('assetCode is required for scheduling');
+    }
     logger.info('Scheduling semi-annual payments', {
       schedule: '0 0 1 1,7 *',
       assetCode,
@@ -1179,10 +1183,13 @@ export class PaymentService {
 
   /**
    * Processa pagamentos trimestrais
-   * @param {string} assetCode - Código do asset
+   * @param {string} assetCode - Código do asset (REQUIRED)
    * @returns {Promise<Object>} Resultado do processamento
    */
-  static async processQuarterlyPayments(assetCode = 'SIN01') {
+  static async processQuarterlyPayments(assetCode) {
+    if (!assetCode) {
+      throw new Error('assetCode is required');
+    }
     const startTime = Date.now();
     const paymentDate = new Date().toISOString().split('T')[0];
 
@@ -1217,10 +1224,13 @@ export class PaymentService {
 
   /**
    * Processa pagamentos semestrais
-   * @param {string} assetCode - Código do asset
+   * @param {string} assetCode - Código do asset (REQUIRED)
    * @returns {Promise<Object>} Resultado do processamento
    */
-  static async processSemiAnnualPayments(assetCode = 'SIN01') {
+  static async processSemiAnnualPayments(assetCode) {
+    if (!assetCode) {
+      throw new Error('assetCode is required');
+    }
     const startTime = Date.now();
     const paymentDate = new Date().toISOString().split('T')[0];
 

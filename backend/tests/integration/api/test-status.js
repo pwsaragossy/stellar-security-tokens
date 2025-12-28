@@ -44,7 +44,7 @@ describe('Investment Status Test', () => {
     const investment = await prisma.investment.create({
       data: {
         investorId: testData.investor.id,
-        assetCode: 'SIN01',
+        assetCode: 'TEST01',
         usdcAmount: 50,
         tokenAmount: 50,
         status: 'pending_payment',

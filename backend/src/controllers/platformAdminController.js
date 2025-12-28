@@ -1,6 +1,7 @@
 import { PlatformAdmin } from '../models/PlatformAdmin.js';
 import prisma from '../config/prisma.js';
 import { generateToken } from '../middleware/auth.js';
+import { EmailService } from '../services/email.service.js';
 
 /**
  * Controller para gerenciar administradores da plataforma
@@ -386,7 +387,9 @@ export class PlatformAdminController {
       });
 
 
-      // TODO: Send approval email to investor
+
+      // Send approval email to investor
+      await EmailService.sendKYCApprovalEmail(updatedInvestor.email, updatedInvestor.name);
       console.log(`[Admin] Investor ${id} approved by admin ${req.user?.id}`);
 
       res.json({
@@ -444,7 +447,9 @@ export class PlatformAdminController {
         },
       });
 
-      // TODO: Send rejection email to investor with reason
+
+      // Send rejection email to investor with reason
+      await EmailService.sendKYCRejectionEmail(updatedInvestor.email, updatedInvestor.name, reason);
       console.log(`[Admin] Investor ${id} rejected by admin ${req.user?.id}. Reason: ${reason}`);
 
       res.json({

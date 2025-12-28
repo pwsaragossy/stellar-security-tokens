@@ -62,10 +62,12 @@ describe('Investment Lifecycle Flow', () => {
             }
         });
 
+        const uniqueAssetCode = `TEST${Date.now().toString().slice(-8)}`;
+
         // Create Token
         token = await prisma.token.create({
             data: {
-                assetCode: 'TEST01',
+                assetCode: uniqueAssetCode,
                 issuerPublicKey: 'G_ISSUER_KEY',
                 totalSupply: 1000000,
                 description: 'Test Security Token',
@@ -78,7 +80,7 @@ describe('Investment Lifecycle Flow', () => {
             data: {
                 companyId: company.id,
                 requestedBy: companyUser.id,
-                assetCode: 'TEST01',
+                assetCode: uniqueAssetCode,
                 offerName: 'Test Offer',
                 description: 'Test Description',
                 totalSupply: 1000000,
