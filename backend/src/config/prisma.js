@@ -17,7 +17,7 @@ if (process.env.NODE_ENV === 'production') {
   // Em desenvolvimento, usar global para hot-reload
   if (!global.prisma) {
     global.prisma = new PrismaClient({
-      log: ['query', 'error', 'warn'],
+      log: process.env.NODE_ENV === 'test' ? ['error', 'warn'] : ['query', 'error', 'warn'],
     });
   }
   prisma = global.prisma;

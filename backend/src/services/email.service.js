@@ -801,5 +801,154 @@ export class EmailService {
       throw new Error(`Failed to send KYC rejection email: ${error.message}`);
     }
   }
+
+  /**
+   * Envia email de atualização de status da empresa
+   * @param {string} email - Email do usuário da empresa
+   * @param {string} companyName - Nome da empresa
+   * @param {string} status - Novo status
+   * @param {string} reason - Motivo (opcional)
+   * @returns {Promise<Object>} Resultado do envio
+   */
+  static async sendCompanyStatusUpdate(email, companyName, status, reason = '') {
+    if (!transporter) {
+      return { success: false, message: 'Email service not configured' };
+    }
+
+    try {
+      const statusMessages = {
+        'approved': 'Aprovada',
+        'rejected': 'Rejeitada',
+        'pending': 'Em Análise'
+      };
+
+      const readableStatus = statusMessages[status] || status;
+      const subject = `Atualização de Status da Empresa - ${companyName}`;
+
+      const reasonHtml = reason ? `
+        <div style="background-color: #fcebeb; border-left: 4px solid #e74c3c; padding: 10px; margin: 15px 0;">
+          <strong>Motivo/Observações:</strong><br>
+          ${reason}
+        </div>
+      ` : '';
+
+      const mailOptions = {
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: email,
+        subject: subject,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #34495e; color: white; padding: 20px; text-align: center; }
+              .content { padding: 20px; background-color: #f9f9f9; }
+              .status { font-weight: bold; color: #34495e; }
+              .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>Atualização de Status</h1>
+              </div>
+              <div class="content">
+                <p>Olá,</p>
+                <p>O status da empresa <strong>${companyName}</strong> foi atualizado para: <span class="status">${readableStatus}</span></p>
+                ${reasonHtml}
+                <p>Acesse o painel para mais detalhes.</p>
+                <p>Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+              </div>
+              <div class="footer">
+                <p>Este é um email automático.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+        text: `Atualização de Status - ${companyName}\n\nNovo Status: ${readableStatus}\n${reason ? `Motivo: ${reason}\n` : ''}\nAtenciosamente,\nEquipe Stellar Security Tokens`
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      console.error(`Error sending company status email to ${email}:`, error);
+      throw new Error(`Failed to send company status email: ${error.message}`);
+    }
+  }
+
+  /**
+   * Envia email de atualização de status da oferta
+   * @param {string} email - Email do responsável
+   * @param {string} offerTitle - Título da oferta
+   * @param {string} status - Novo status
+   * @param {string} reason - Motivo (opcional)
+   * @returns {Promise<Object>} Resultado do envio
+   */
+  static async sendOfferStatusUpdate(email, offerTitle, status, reason = '') {
+    if (!transporter) {
+      return { success: false, message: 'Email service not configured' };
+    }
+
+    try {
+      const subject = `Atualização de Oferta - ${offerTitle}`;
+
+      const reasonHtml = reason ? `
+        <div style="background-color: #fcebeb; border-left: 4px solid #e74c3c; padding: 10px; margin: 15px 0;">
+          <strong>Motivo/Observações:</strong><br>
+          ${reason}
+        </div>
+      ` : '';
+
+      const mailOptions = {
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: email,
+        subject: subject,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #8e44ad; color: white; padding: 20px; text-align: center; }
+              .content { padding: 20px; background-color: #f9f9f9; }
+              .status { font-weight: bold; color: #8e44ad; }
+              .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>Atualização de Oferta</h1>
+              </div>
+              <div class="content">
+                <p>Olá,</p>
+                <p>A oferta <strong>${offerTitle}</strong> foi atualizada para o status: <span class="status">${status}</span></p>
+                ${reasonHtml}
+                <p>Acesse o painel para mais detalhes.</p>
+                <p>Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+              </div>
+              <div class="footer">
+                <p>Este é um email automático.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+        text: `Atualização de Oferta - ${offerTitle}\n\nNovo Status: ${status}\n${reason ? `Motivo: ${reason}\n` : ''}\nAtenciosamente,\nEquipe Stellar Security Tokens`
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      console.error(`Error sending offer status email to ${email}:`, error);
+      throw new Error(`Failed to send offer status email: ${error.message}`);
+    }
+  }
 }
 

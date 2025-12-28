@@ -796,13 +796,29 @@ export class PaymentService {
           // Calcular pagamentos bullet para cada investidor
           for (const investor of investorsWithBalances) {
             const tokenBalance = parseFloat(investor.token_balance);
-            const bulletPayment = parseFloat(offer.bullet_payment_amount);
+            // Calculate payment based on Annual Interest Rate and Duration
+            const startDate = new Date(offer.createdAt).getTime();
+            const endDate = new Date(offer.maturityDate).getTime();
+            const durationMs = endDate - startDate;
+            const msPerYear = 1000 * 60 * 60 * 24 * 365;
+            const durationYears = durationMs / msPerYear;
 
-            if (tokenBalance <= 0 || bulletPayment <= 0) {
+            const annualRatePercent = parseFloat(offer.annualInterestRate || 0);
+            const totalRoiPercent = (annualRatePercent * durationYears) / 100;
+
+            // Formula: Balance * (1 + KPI%)
+            // 1 (Principal) + ROI (Interest)
+            const multiplier = 1 + totalRoiPercent;
+
+            const totalPayment = tokenBalance * multiplier;
+
+            if (tokenBalance <= 0 || totalPayment <= 0) {
               logger.warn('Skipping investor - invalid balance or payment amount', {
                 investorId: investor.id,
                 balance: tokenBalance,
-                payment: bulletPayment
+                payment: totalPayment,
+                multiplier,
+                durationYears
               });
               continue;
             }
@@ -811,9 +827,9 @@ export class PaymentService {
               investorId: investor.id,
               assetCode: offer.asset_code,
               tokenBalance: tokenBalance.toString(),
-              interestRate: '0', // Bullet payments don't have interest rate
-              interestAmount: '0', // No periodic interest
-              usdcAmount: bulletPayment.toString(),
+              interestRate: annualRatePercent.toString(),
+              interestAmount: (totalPayment - tokenBalance).toFixed(7), // Amount that is interest
+              usdcAmount: totalPayment.toFixed(7), // Total including principal
               offerId: offer.id,
               isBulletPayment: true,
               paymentType: 'bullet',
@@ -1304,7 +1320,7 @@ export class PaymentService {
       const allPayments = [];
 
       for (const offer of offers) {
-        if (offer.asset_code !== assetCode) continue;
+        if (assetCode && offer.asset_code !== assetCode) continue;
 
         try {
           const result = await this.getInvestorsWithBalances(assetCode, offer.id);

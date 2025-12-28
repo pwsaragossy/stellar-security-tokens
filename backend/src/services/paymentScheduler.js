@@ -37,8 +37,17 @@ export const startPaymentScheduler = () => {
     console.log('Bullet payment scheduler started');
   }
 
-  // Note: Quarterly and semi-annual schedulers disabled until offers are created
-  // They will be started dynamically when offers are created
+  // Start quarterly payment scheduler - processes all active offers
+  if (!quarterlyJob) {
+    quarterlyJob = PaymentService.scheduleQuarterlyPayments();
+    console.log('Quarterly payment scheduler started');
+  }
+
+  // Start semi-annual payment scheduler - processes all active offers
+  if (!semiAnnualJob) {
+    semiAnnualJob = PaymentService.scheduleSemiAnnualPayments();
+    console.log('Semi-annual payment scheduler started');
+  }
 
   console.log('Payment schedulers started. Active offers will be processed automatically.');
   console.log('NOTE: assetCode is no longer hardcoded - schedulers iterate all active offers.');
