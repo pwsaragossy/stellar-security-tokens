@@ -62,7 +62,7 @@ export function Login() {
                     <CardHeader>
                         <CardTitle className="text-white">Welcome Back</CardTitle>
                         <CardDescription className="text-slate-400">
-                            Select your role and connect your Smart Wallet.
+                            Select your role to log in.
                         </CardDescription>
                     </CardHeader>
 
@@ -96,13 +96,21 @@ export function Login() {
                                             {error}
                                         </div>
                                     )}
+
+                                    {/* Passkey disclaimer */}
+                                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                                        <p className="text-xs text-amber-200/80">
+                                            <strong>📱 Important:</strong> You must log in from the same device where you created your account. Your passkey is securely stored on that device.
+                                        </p>
+                                    </div>
+
                                     <Button
                                         type="submit"
                                         className={`w-full text-white font-semibold shadow-lg transition-colors ${userType === 'investor' ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20' : 'bg-teal-600 hover:bg-teal-500 shadow-teal-900/20'}`}
                                         disabled={isLoading}
                                     >
                                         <Wallet className="w-4 h-4 mr-2" />
-                                        {isLoading ? 'Connecting...' : `Connect ${userType === 'investor' ? 'Investor' : 'Company'} Wallet`}
+                                        {isLoading ? 'Logging in...' : 'Login with Passkey'}
                                     </Button>
                                 </div>
                             </form>

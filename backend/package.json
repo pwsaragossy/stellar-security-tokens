@@ -20,6 +20,7 @@
     "test:unit": "bash -c 'source ../.env && NODE_ENV=test DATABASE_URL=postgresql://postgres:postgres@localhost:5432/stellar_tokens_test find tests/unit/ -name \"*.test.js\" ! -name \"*integration*\" -exec node --import tsx --test {} \\;'",
     "test:unit:all": "bash -c 'source ../.env && NODE_ENV=test DATABASE_URL=postgresql://postgres:postgres@localhost:5432/stellar_tokens_test node --import tsx --test tests/unit/**/*.test.js'",
     "test:integration": "bash -c 'source ../.env && NODE_ENV=test DATABASE_URL=postgresql://postgres:postgres@localhost:5432/stellar_tokens_test node --import tsx --test --test-concurrency=1 tests/integration/**/*.test.js'",
+    "test:ci": "bash -c 'NODE_ENV=test node --import tsx --test --test-concurrency=1 tests/unit/**/*.test.js tests/integration/**/*.mocked.test.js'",
     "test:watch": "node --watch --test",
     "test:email": "node ../scripts/test-email.js",
     "docker:up": "docker-compose up -d",
@@ -74,6 +75,7 @@
     "dotenv-cli": "^11.0.0",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
+    "esmock": "^2.7.3",
     "nodemon": "^3.0.2",
     "prettier": "^3.2.5",
     "supertest": "^7.1.4"

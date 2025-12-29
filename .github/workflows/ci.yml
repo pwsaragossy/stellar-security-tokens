@@ -48,8 +48,8 @@ jobs:
     - name: Install Backend Dependencies
       run: cd backend && npm ci
 
-    - name: Run Backend Tests
-      run: cd backend && npm test
+    - name: Run Backend Tests (Mocked)
+      run: cd backend && npm run test:ci
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/stellar_tokens_test
         REDIS_HOST: localhost

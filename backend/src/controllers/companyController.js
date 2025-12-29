@@ -72,7 +72,10 @@ export class CompanyController {
     try {
       const {
         name,
-        cnpj, // Optional - for Brazilian companies
+        cnpj, // Legacy field - still supported
+        country, // USA or BRASIL
+        tax_id, // EIN for USA, CNPJ for Brasil
+        tax_id_type, // EIN or CNPJ
         email,
         legal_representative,
         address,
@@ -83,7 +86,7 @@ export class CompanyController {
         contractId,
       } = req.body;
 
-      // Validações básicas (CNPJ is now optional)
+      // Validações básicas
       if (!name || !email || !legal_representative) {
         return res.status(400).json({
           success: false,
@@ -100,9 +103,13 @@ export class CompanyController {
         });
       }
 
-      // Verificar CNPJ apenas se fornecido
-      if (cnpj) {
-        const existingCnpj = await Company.findByCnpj(cnpj);
+      // Handle tax_id (new) or cnpj (legacy)
+      const effectiveTaxId = tax_id || cnpj;
+      const effectiveTaxIdType = tax_id_type || (cnpj ? 'CNPJ' : null);
+
+      // Verificar CNPJ apenas se fornecido (for backwards compatibility)
+      if (effectiveTaxIdType === 'CNPJ' && effectiveTaxId) {
+        const existingCnpj = await Company.findByCnpj(effectiveTaxId);
         if (existingCnpj) {
           return res.status(409).json({
             success: false,
@@ -132,7 +139,10 @@ export class CompanyController {
 
       const company = await Company.create({
         name,
-        cnpj: cnpj || null, // Optional
+        cnpj: effectiveTaxIdType === 'CNPJ' ? effectiveTaxId : null,
+        country: country || null,
+        tax_id: effectiveTaxId || null,
+        tax_id_type: effectiveTaxIdType || null,
         email,
         legal_representative,
         address,
