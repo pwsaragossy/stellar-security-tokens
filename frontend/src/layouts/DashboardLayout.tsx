@@ -2,12 +2,20 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, PieChart, ArrowLeftRight, Settings, LogOut, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NotificationBell } from '@/components/NotificationBell';
 
 export function DashboardLayout() {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('dashboard');
+
+    // Auth guard - redirect to login if no token
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            navigate('/login', { replace: true });
+        }
+    }, [navigate]);
 
     const navItems = [
         { id: 'dashboard', label: 'Overview', icon: LayoutDashboard, path: '/dashboard' },

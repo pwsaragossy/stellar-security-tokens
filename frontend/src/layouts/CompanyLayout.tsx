@@ -12,6 +12,14 @@ export function CompanyLayout() {
     const location = useLocation();
     const [company, setCompany] = useState<Company | null>(null);
 
+    // Auth guard - redirect to login if no token
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            navigate('/login', { replace: true });
+        }
+    }, [navigate]);
+
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/company/dashboard' },
         { id: 'offers', label: 'My Offers', icon: FileText, path: '/company/offers' },

@@ -3,10 +3,19 @@ import { LayoutDashboard, Users, LogOut, DollarSign, Shield, Wallet } from 'luci
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/NotificationBell';
+import { useEffect } from 'react';
 
 export function AdminLayout() {
     const navigate = useNavigate();
     const location = useLocation();
+
+    // Auth guard - redirect to admin login if no token
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            navigate('/admin/login', { replace: true });
+        }
+    }, [navigate]);
 
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
