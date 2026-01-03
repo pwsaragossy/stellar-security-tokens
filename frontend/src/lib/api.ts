@@ -23,6 +23,9 @@ export class ApiClient {
 
     if (response.status === 401 || response.status === 403) {
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('userType');
+      localStorage.removeItem('admin');
       window.location.href = '/login';
       throw new Error('Unauthorized');
     }
@@ -46,6 +49,9 @@ export class ApiClient {
 
     if (response.status === 401 || response.status === 403) {
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('userType');
+      localStorage.removeItem('admin');
       window.location.href = '/login';
       throw new Error('Unauthorized');
     }
@@ -68,6 +74,9 @@ export class ApiClient {
 
     if (response.status === 401 || response.status === 403) {
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('userType');
+      localStorage.removeItem('admin');
       window.location.href = '/login';
       throw new Error('Unauthorized');
     }

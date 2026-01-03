@@ -31,7 +31,9 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      
+      localStorage.removeItem('userType');
+      localStorage.removeItem('admin');
+
       // Determine redirect path based on current location
       const path = window.location.pathname;
       if (path.startsWith('/investor')) {

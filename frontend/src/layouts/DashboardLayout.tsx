@@ -18,7 +18,10 @@ export function DashboardLayout() {
     ];
 
     const handleLogout = () => {
-        // Clear session logic here
+        // Clear all session data
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('userType');
         navigate('/login');
     };
 

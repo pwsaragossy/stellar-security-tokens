@@ -20,6 +20,8 @@ export function AdminLayout() {
     const handleLogout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('admin');
+        localStorage.removeItem('user');
+        localStorage.removeItem('userType');
         navigate('/admin/login');
     };
 
