@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import hpp from 'hpp';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import investorRoutes from './routes/investorRoutes.js';
@@ -29,8 +30,20 @@ if (!process.env.JWT_SECRET) {
 
 const app = express();
 
-app.use(helmet());
+// Security Middleware
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline needed for Swagger UI
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'", process.env.FRONTEND_URL || 'http://localhost:5173'],
+        },
+    },
+}));
 app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
+app.use(hpp()); // HTTP Parameter Pollution protection
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

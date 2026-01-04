@@ -38,4 +38,13 @@ This document tracks items that need to be addressed **after** the initial Mainn
 - [ ] **Refresh Tokens**: Implement short-lived access tokens (15 min) + long-lived refresh tokens (7 days) to reduce exposure if a token is stolen. Currently using single 24h JWT.
 - [ ] **Token Blocklist**: Implement Redis-backed token blocklist for proper logout. Currently, logout only clears the token client-side but the token remains valid server-side until expiry. Add `POST /api/auth/logout` endpoint that adds token to blocklist, and check blocklist in `authenticateToken` middleware.
 - [ ] **Security Audit Logging**: Log security-relevant events (logins, failed auth attempts, password changes, admin actions, sensitive operations) to a dedicated audit log for compliance and incident investigation. Consider using a structured logging library (winston/pino) with a separate audit transport.
+- [ ] **Cold Issuer Wallet Strategy (Phased)**: **Critical for Mainnet**. Refactor the Issuer Account to use **Multisig (2-of-2)**.
+    - **Phase 1 (MVP)**: Use **Admin Passkeys** as the second signer.
+        - *Benefit*: Fast to implement (uses existing infra), very secure (Secure Enclave).
+        - *Trade-off*: Admin is tied to their specific device.
+    - **Phase 2 (Growth)**: Migrate Admin signer to **Ledger (Hardware Wallet)** via Freighter.
+        - *Benefit*: Portability, physical governance (can lock device in safe), platform independent.
+
+- [ ] **HttpOnly Cookies**: Migrate from `localStorage` to `HttpOnly Secure` cookies for JWT storage. This mitigates XSS risks where malicious scripts could steal the token from localStorage.
+
 
