@@ -47,4 +47,9 @@ This document tracks items that need to be addressed **after** the initial Mainn
 
 - [ ] **HttpOnly Cookies**: Migrate from `localStorage` to `HttpOnly Secure` cookies for JWT storage. This mitigates XSS risks where malicious scripts could steal the token from localStorage.
 
+## Scalability & Reliability
+- [x] **USDC Deposit Safety (UX)**: Added explicit warnings in the Deposit UI: **"Send only Stellar Network USDC. Do not send ERC-20/SPL tokens directly."** to prevent user fund loss.
+- [x] **Memo Validation**: Enforced unique Memo checks for all deposits. Backend now relaxes sender validation if Memo matches (supporting Exchanges).
+- [ ] **Channel Accounts (Worker Pool)**: Implement Channel Accounts for the `Distributor` wallet to prevent `Bad Sequence Number` errors during high-volume token distributions.
+
 

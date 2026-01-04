@@ -679,7 +679,7 @@ export class StellarService {
    * @returns {number} returns.ledger - Número do ledger
    * @throws {Error} Se houver erro ao buscar pagamentos
    */
-  static async verifyUSDCPayment(investorPublicKey, expectedAmount, treasuryPublicKey = null, windowMinutes = 2) {
+  static async verifyUSDCPayment(investorPublicKey, expectedAmount, treasuryPublicKey = null, windowMinutes = 2, expectedMemo = null) {
     try {
       const treasuryKey = treasuryPublicKey || process.env.TREASURY_PUBLIC_KEY;
       if (!treasuryKey) {
@@ -711,9 +711,33 @@ export class StellarService {
           return false;
         }
 
-        // Verificar origem e destino
-        if (payment.from !== investorPublicKey || payment.to !== treasuryKey) {
+        // Verificar destino
+        if (payment.to !== treasuryKey) {
           return false;
+        }
+
+        // --- RELIABILITY FIX: MEMO CHECK ---
+        if (expectedMemo) {
+          // If we expect a specific Memo (Strong Validation), check it.
+          // We do NOT strictly check 'from' because the user might be sending from an Exchange (Coinbase, Binance)
+          // where the sender address is the Exchange's Hot Wallet, not the User's registered key.
+          // The Memo is the unique identifier.
+          if (payment.memo !== expectedMemo && payment.transaction_attr && payment.transaction_attr.memo !== expectedMemo) {
+            // Check both direct memo field and transaction attribute if available
+            // Note: Horizon response structure for payments usually excludes memo directly,
+            // we might need to fetch transaction details if memo is not on the payment record.
+            // However, for efficiency, we assume the memo is needed.
+            // Actually, the 'payments' endpoint does NOT return the Memo!
+            // The 'transactions' endpoint returns the Memo.
+            // We might need to fetch the transaction for EACH candidate or use the transactions endpoint initially.
+            // Optimization: Using 'payments' is faster for filtering. If we match Amount/Time, THEN fetch Transaction to verify Memo.
+            return false;
+          }
+        } else {
+          // Legacy/Fallback: Strict Sender Check (only works for self-custody wallets)
+          if (payment.from !== investorPublicKey) {
+            return false;
+          }
         }
 
         // Verificar amount (permite pequena diferença por arredondamento)
@@ -735,7 +759,23 @@ export class StellarService {
         return null;
       }
 
-      // Issue 1 Fix: Check if this payment was already used for another investment
+      // --- MEMO VERIFICATION (Double Check) ---
+      // Since the 'payments' endpoint response might not contain the memo, we MUST fetch the transaction details
+      // to rely on it for security.
+      if (expectedMemo) {
+        try {
+          const tx = await matchingPayment.transaction();
+          if (tx.memo !== expectedMemo) {
+            console.log(`[verifyUSDCPayment] Memo mismatch. Expected: ${expectedMemo}, Got: ${tx.memo}`);
+            return null;
+          }
+        } catch (err) {
+          console.error(`[verifyUSDCPayment] Failed to fetch transaction ${matchingPayment.transaction_hash} for memo check`, err);
+          return null;
+        }
+      }
+
+      // Check if this payment was already used for another investment
       const { Investment } = await import('../models/Investment.js');
       const existingInvestment = await Investment.findByUSDC(matchingPayment.transaction_hash);
       if (existingInvestment) {
@@ -748,6 +788,7 @@ export class StellarService {
         amount: matchingPayment.amount,
         createdAt: matchingPayment.created_at,
         ledger: matchingPayment.ledger,
+        memo: expectedMemo, // Return the verified memo
       };
     } catch (error) {
       console.error('Error verifying USDC payment:', error);

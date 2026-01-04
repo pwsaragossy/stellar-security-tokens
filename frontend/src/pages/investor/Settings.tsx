@@ -604,9 +604,21 @@ export function Settings() {
                                             <Copy className="w-4 h-4 text-gray-400" />
                                         </Button>
                                     </div>
-                                    <p className="text-xs text-gray-500 mt-2">
-                                        Send USDC or XLM only to this address. Assets sent on other networks will be lost.
-                                    </p>
+                                    <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                                        <div className="flex items-start gap-2">
+                                            <Shield className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                            <div>
+                                                <p className="font-semibold text-red-400 text-sm">Critical Warning</p>
+                                                <p className="text-xs text-red-300 mt-1">
+                                                    Only send <strong>Stellar Network USDC</strong> (Native).
+                                                    <br />
+                                                    Do <strong>NOT</strong> send USDC from Ethereum, Solana, or Polygon directly.
+                                                    <br />
+                                                    Sending wrong chain assets will result in <strong>permanent loss of funds</strong>.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

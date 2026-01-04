@@ -148,21 +148,29 @@ export const purchaseInvestment = async (req, res, next) => {
       investor_id: investorId,
       offer_id: offerId || null,
       asset_code: assetCode,
-      usdc_amount: usdcAmount, // User sends full amount
-      token_amount: tokenAmount, // User receives NET amount (minus blockchain fee)
-      memo: null, // Será gerado quando pagamento for detectado
+      usdc_amount: usdcAmount,
+      token_amount: tokenAmount,
+      memo: null, // Will be updated if not passed to create, but we should probably generate it now.
+      // Wait, the generateInvestmentMemo requires ID. We can create first, then generate memo, then update.
     });
 
-    // Verificar se pagamento USDC já foi recebido
+    // Generate Memo using the new ID
+    const memo = generateInvestmentMemo(investment.id, investorId, assetCode);
+
+    // Update investment with the generated memo
+    await Investment.updateStatus(investment.id, { memo: memo });
+
+    // Verificar se pagamento USDC já foi recebido (Passando o Memo)
     const usdcPayment = await StellarService.verifyUSDCPayment(
       investor.stellarPublicKey,
       usdcAmount,
       treasuryKeypair.publicKey(),
-      USDC_PAYMENT_WINDOW_MINUTES
+      USDC_PAYMENT_WINDOW_MINUTES,
+      memo // Pass the expected Memo (Reliability Fix)
     );
 
     if (!usdcPayment) {
-      // Pagamento ainda não recebido, retornar instruções
+      // Pagamento ainda não recebido, retornar instruções COM O MEMO
       return res.status(202).json({
         success: true,
         message: 'Investment created. Please send USDC payment.',
@@ -174,13 +182,16 @@ export const purchaseInvestment = async (req, res, next) => {
             feeAmount: fixedFee,
             tokenAmount: tokenAmount,
             assetCode: assetCode,
+            memo: memo, // Return Memo to user
           },
           paymentInstructions: {
             treasuryAddress: treasuryKeypair.publicKey(),
             requiredAmount: usdcAmount,
             assetCode: 'USDC',
+            memo: memo, // Return Memo in instructions
+            memoType: 'text',
             windowMinutes: USDC_PAYMENT_WINDOW_MINUTES,
-            message: `Send ${usdcAmount} USDC to ${treasuryKeypair.publicKey()} within ${USDC_PAYMENT_WINDOW_MINUTES} minutes`,
+            message: `Send ${usdcAmount} USDC to ${treasuryKeypair.publicKey()} with MEMO: ${memo}`,
           },
         },
       });
