@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, DollarSign, Shield, Wallet } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, DollarSign, Shield, Wallet, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -22,6 +22,7 @@ export function AdminLayout() {
         { id: 'users', label: 'User Management', icon: Users, path: '/admin/users' },
         { id: 'wallets', label: 'Wallets', icon: Wallet, path: '/admin/wallets' },
         { id: 'fees', label: 'Fee Configuration', icon: DollarSign, path: '/admin/fees' },
+        { id: 'defaults', label: 'Default Cases', icon: AlertTriangle, path: '/admin/defaults' },
     ];
 
     const isActive = (path: string) => location.pathname === path;
