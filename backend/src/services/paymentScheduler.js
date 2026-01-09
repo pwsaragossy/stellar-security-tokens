@@ -1,10 +1,7 @@
 import { PaymentService } from './payment.service.js';
 import prisma from '../config/prisma.js';
 
-let monthlyJob = null;
-let bulletJob = null;
-let quarterlyJob = null;
-let semiAnnualJob = null;
+let bulletJob = null; // Single unified scheduler for all payment types
 
 /**
  * Gets all active offer asset codes from the database
@@ -19,94 +16,49 @@ async function getActiveOfferAssetCodes() {
 }
 
 /**
- * Starts payment schedulers for all active offers
-
+ * Starts payment schedulers for all payment types
+ * Each scheduler iterates all active offers with matching payment type
  */
 export const startPaymentScheduler = () => {
   console.log('Starting payment schedulers (offer-based)...');
 
-  // Start monthly payment scheduler - processes all active offers
-  if (!monthlyJob) {
-    monthlyJob = PaymentService.scheduleBulletPayments(); // Bullet checks all offers internally
-    console.log('Monthly payment scheduler started (will process all active offers)');
-  }
-
   // Start bullet payment scheduler (runs daily to check for expired offers)
+  // This handles both bullet payments at maturity AND monthly interest
   if (!bulletJob) {
     bulletJob = PaymentService.scheduleBulletPayments();
-    console.log('Bullet payment scheduler started');
+    console.log('Bullet/Monthly payment scheduler started (daily check for all active offers)');
   }
 
-  // Start quarterly payment scheduler - processes all active offers
-  if (!quarterlyJob) {
-    quarterlyJob = PaymentService.scheduleQuarterlyPayments();
-    console.log('Quarterly payment scheduler started');
-  }
-
-  // Start semi-annual payment scheduler - processes all active offers
-  if (!semiAnnualJob) {
-    semiAnnualJob = PaymentService.scheduleSemiAnnualPayments();
-    console.log('Semi-annual payment scheduler started');
-  }
+  // Note: Quarterly, Semi-Annual, and Annual payments are also handled by
+  // the daily bullet job which checks offer.paymentType and pays accordingly.
+  // We don't need separate schedulers - they would just create duplicate processing.
 
   console.log('Payment schedulers started. Active offers will be processed automatically.');
-  console.log('NOTE: assetCode is no longer hardcoded - schedulers iterate all active offers.');
+  console.log('NOTE: Schedulers check all active offers and pay based on each offer\'s paymentType.');
 
   return {
-    monthly: monthlyJob,
     bullet: bulletJob,
-    quarterly: quarterlyJob,
-    semiAnnual: semiAnnualJob,
   };
 };
 
 export const stopPaymentScheduler = () => {
-  if (monthlyJob) {
-    monthlyJob.stop();
-    monthlyJob = null;
-    console.log('Monthly payment scheduler stopped');
-  }
-
   if (bulletJob) {
     bulletJob.stop();
     bulletJob = null;
-    console.log('Bullet payment scheduler stopped');
-  }
-
-  if (quarterlyJob) {
-    quarterlyJob.stop();
-    quarterlyJob = null;
-    console.log('Quarterly payment scheduler stopped');
-  }
-
-  if (semiAnnualJob) {
-    semiAnnualJob.stop();
-    semiAnnualJob = null;
-    console.log('Semi-annual payment scheduler stopped');
+    console.log('Payment scheduler stopped');
   }
 };
 
 export const getSchedulerStatus = () => {
   return {
-    isRunning: monthlyJob !== null || bulletJob !== null || quarterlyJob !== null || semiAnnualJob !== null,
+    isRunning: bulletJob !== null,
     schedulers: {
-      monthly: {
-        running: monthlyJob !== null,
-        nextRun: monthlyJob ? '1st of each month at 00:00 UTC' : 'Not scheduled',
-      },
-      bullet: {
+      unified: {
         running: bulletJob !== null,
-        nextRun: bulletJob ? 'Daily at 01:00 UTC' : 'Not scheduled',
-      },
-      quarterly: {
-        running: quarterlyJob !== null,
-        nextRun: quarterlyJob ? '1st of Jan, Apr, Jul, Oct at 00:00 UTC' : 'Not scheduled',
-      },
-      semiAnnual: {
-        running: semiAnnualJob !== null,
-        nextRun: semiAnnualJob ? '1st of Jan, Jul at 00:00 UTC' : 'Not scheduled',
+        schedule: 'Daily at 01:00 UTC',
+        description: 'Checks all active offers and processes payments based on each offer\'s paymentType',
+        supportedPaymentTypes: ['monthly', 'bullet', 'quarterly', 'semi_annual', 'annual'],
       },
     },
   };
 };
-

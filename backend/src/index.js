@@ -2,6 +2,7 @@ import app from './app.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { startPaymentScheduler } from './services/paymentScheduler.js';
+import { PaymentReminderService } from './services/paymentReminder.service.js';
 import { getPaymentMonitor } from './services/paymentMonitor.service.js';
 import { initDistributionQueue } from './services/distributionQueue.service.js';
 
@@ -89,6 +90,14 @@ app.listen(PORT, async () => {
   } else {
     console.log('Automatic payment scheduler is disabled (ENABLE_AUTO_PAYMENTS=false)');
     console.log('You can process payments manually via POST /api/payments/process');
+  }
+
+  // Start payment reminder scheduler (daily reminders for upcoming payments)
+  try {
+    PaymentReminderService.startReminderScheduler();
+    console.log('Payment reminder scheduler enabled - companies will receive payment reminders');
+  } catch (error) {
+    console.error('Failed to start payment reminder scheduler:', error.message);
   }
 
   // Iniciar monitoramento de pagamentos USDC em tempo real

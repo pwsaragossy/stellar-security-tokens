@@ -27,8 +27,10 @@ import { CompanyDashboard } from './pages/company/Dashboard';
 import { Offers } from './pages/company/Offers';
 import { CreateOffer } from './pages/company/CreateOffer';
 import { OfferDetails as CompanyOfferDetails } from './pages/company/OfferDetails';
+import { PayInvestors } from './pages/company/PayInvestors';
 import { Reports } from './pages/company/Reports';
 import { Settings as CompanySettings } from './pages/company/Settings';
+import { DefaultCases } from './pages/admin/DefaultCases';
 
 function App() {
   return (
@@ -59,6 +61,7 @@ function App() {
           <Route path="offers" element={<Offers />} />
           <Route path="offers/new" element={<CreateOffer />} />
           <Route path="offers/:id" element={<CompanyOfferDetails />} />
+          <Route path="payments/:offerId" element={<PayInvestors />} />
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<CompanySettings />} />
         </Route>
@@ -71,6 +74,7 @@ function App() {
           <Route path="users" element={<UserManagement />} />
           <Route path="wallets" element={<Wallets />} />
           <Route path="fees" element={<FeeConfig />} />
+          <Route path="defaults" element={<DefaultCases />} />
         </Route>
       </Routes>
     </BrowserRouter>

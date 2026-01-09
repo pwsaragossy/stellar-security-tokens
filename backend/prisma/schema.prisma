@@ -38,6 +38,7 @@ enum PaymentType {
   bullet
   quarterly
   semi_annual
+  annual
 }
 
 enum OfferType {
@@ -49,6 +50,14 @@ enum PaymentStatus {
   pending
   completed
   failed
+}
+
+enum PaymentDueStatus {
+  current       // Payments up to date
+  upcoming      // Payment due within 30 days
+  due           // Payment due today
+  overdue       // Past due but within grace period
+  defaulted     // Past grace period, collateral liquidated
 }
 
 enum InvestmentStatus {
@@ -235,8 +244,10 @@ model Company {
   updatedAt           DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamp
 
   // Relations
-  users  CompanyUser[]
-  offers Offer[]
+  users     CompanyUser[]
+  offers    Offer[]
+  reminders PaymentReminder[]
+  penalties CompanyPenalty[]
 
   @@index([email])
   @@index([cnpj])
@@ -334,6 +345,10 @@ model Offer {
   maturityDate        DateTime?   @map("maturity_date")
   bulletPaymentAmount Decimal?    @map("bullet_payment_amount") @db.Decimal(20, 7)
   paymentFrequency    Int         @default(1) @map("payment_frequency")
+  paymentDay          Int         @default(1) @map("payment_day") // Day of month/period for payments (1-28)
+  nextPaymentDue      DateTime?   @map("next_payment_due")
+  lastPaymentDate     DateTime?   @map("last_payment_date")
+  paymentDueStatus    PaymentDueStatus @default(current) @map("payment_due_status")
   createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamp
   updatedAt           DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamp
 
@@ -345,6 +360,7 @@ model Offer {
   distributions    TokenDistribution[]
   interestPayments InterestPayment[]
   investments      Investment[]
+  reminders        PaymentReminder[]
 
   @@index([companyId])
   @@index([status])
@@ -352,6 +368,8 @@ model Offer {
   @@index([offerType])
   @@index([reviewedBy])
   @@index([paymentType])
+  @@index([paymentDueStatus])
+  @@index([nextPaymentDue])
   @@map("offers")
 }
 
@@ -510,4 +528,54 @@ model Notification {
   @@index([isRead])
   @@index([createdAt(sort: Desc)])
   @@map("notifications")
+}
+
+// Payment reminder tracking for company payments
+model PaymentReminder {
+  id              Int       @id @default(autoincrement())
+  offerId         Int       @map("offer_id")
+  companyId       Int       @map("company_id")
+  reminderType    String    @map("reminder_type") // '30_day', '21_day', '14_day', '7_day', '3_day', '1_day', 'due_day', 'overdue'
+  dueDate         DateTime  @map("due_date") @db.Date
+  amountDue       Decimal   @map("amount_due") @db.Decimal(20, 7)
+  sentAt          DateTime  @default(now()) @map("sent_at") @db.Timestamp
+  sentVia         String    @default("email") @map("sent_via") // 'email', 'notification', 'both'
+  acknowledged    Boolean   @default(false)
+  acknowledgedAt  DateTime? @map("acknowledged_at") @db.Timestamp
+
+  // Relations
+  offer           Offer     @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([offerId, reminderType, dueDate])
+  @@index([offerId])
+  @@index([companyId])
+  @@index([dueDate])
+  @@index([reminderType])
+  @@map("payment_reminders")
+}
+
+// Company penalties for late/defaulted payments
+model CompanyPenalty {
+  id              Int       @id @default(autoincrement())
+  companyId       Int       @map("company_id")
+  offerId         Int       @map("offer_id")
+  penaltyType     String    @map("penalty_type") // 'late_fee', 'default_fee', 'platform_ban'
+  description     String    @db.Text
+  amount          Decimal?  @db.Decimal(20, 7) // In USDC
+  percentageRate  Decimal?  @map("percentage_rate") @db.Decimal(5, 4) // e.g., 0.005 for 0.5% per day
+  daysLate        Int?      @map("days_late")
+  status          String    @default("pending") // 'pending', 'paid', 'waived', 'enforced'
+  enforcedAt      DateTime? @map("enforced_at") @db.Timestamp
+  paidAt          DateTime? @map("paid_at") @db.Timestamp
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamp
+
+  // Relations
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([offerId])
+  @@index([status])
+  @@index([penaltyType])
+  @@map("company_penalties")
 }

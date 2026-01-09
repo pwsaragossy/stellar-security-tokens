@@ -125,9 +125,11 @@ describe('Investment Lifecycle Flow (Mocked)', () => {
                     data: {
                         investorId: investor.id,
                         offerId: offer.id,
+                        assetCode: token.assetCode,
                         amount: parseFloat(payment.amount),
+                        transactionHash: 'mock_dist_tx_' + Date.now(),
                         usdcPaymentHash: payment.transaction_hash,
-                        status: 'completed'
+                        approvalStatus: 'approved'
                     }
                 });
             }

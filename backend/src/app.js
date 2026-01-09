@@ -15,6 +15,7 @@ import platformAdminRoutes from './routes/platformAdminRoutes.js';
 import offerRoutes from './routes/offerRoutes.js';
 import webauthnRoutes from './routes/webauthnRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
+import companyPaymentRoutes from './routes/companyPaymentRoutes.js';
 import { swaggerUi, swaggerSpec } from './config/swagger.js';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -125,6 +126,7 @@ app.use('/api/platform-admins', apiLimiter, platformAdminRoutes);
 
 // Payment routes with strict rate limiting (10 req/min - expensive operations)
 app.use('/api/payments', strictLimiter, paymentRoutes);
+app.use('/api/company/payments', strictLimiter, companyPaymentRoutes);
 app.use('/api/wallets', apiLimiter, walletRoutes);
 
 app.use('/api', apiLimiter, offerRoutes);

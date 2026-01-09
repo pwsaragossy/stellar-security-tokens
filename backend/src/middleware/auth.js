@@ -124,3 +124,18 @@ export const requireOwnData = (req, res, next) => {
   });
 };
 
+/**
+ * Middleware to require company user role
+ * Verifies that the authenticated user is a company_user
+ */
+export const requireCompanyUser = (req, res, next) => {
+  authenticateToken(req, res, () => {
+    if (req.user.role !== 'company_user') {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. Company user role required.',
+      });
+    }
+    next();
+  });
+};

@@ -15,6 +15,8 @@ interface OfferFormData {
     annual_interest_rate: string;
     min_investment: string;
     max_investment: string;
+    payment_type: 'monthly' | 'quarterly' | 'semi_annual' | 'annual' | 'bullet';
+    payment_day: string;
     // Legal documents will be handled separately via IPFS
     legal_documents: {
         contract?: { name: string; file?: File };
@@ -32,6 +34,8 @@ const initialFormData: OfferFormData = {
     annual_interest_rate: '',
     min_investment: '100',
     max_investment: '',
+    payment_type: 'monthly',
+    payment_day: '1',
     legal_documents: {},
 };
 
@@ -84,6 +88,8 @@ export function CreateOffer() {
                 offer_type: formData.offer_type,
                 total_supply: formData.total_supply,
                 annual_interest_rate: formData.offer_type === 'collateral' ? parseFloat(formData.annual_interest_rate) : undefined,
+                payment_type: formData.offer_type === 'collateral' ? formData.payment_type : undefined,
+                payment_day: formData.offer_type === 'collateral' && formData.payment_type !== 'bullet' ? parseInt(formData.payment_day) : undefined,
                 offer_rules: {
                     min_investment: formData.min_investment,
                     max_investment: formData.max_investment || undefined,
@@ -271,6 +277,54 @@ export function CreateOffer() {
                                 </div>
                             )}
 
+                            {formData.offer_type === 'collateral' && (
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-white">Payment Frequency *</label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {[
+                                            { value: 'monthly', label: 'Monthly' },
+                                            { value: 'quarterly', label: 'Quarterly' },
+                                            { value: 'semi_annual', label: 'Semi-Annual' },
+                                            { value: 'annual', label: 'Annual' },
+                                            { value: 'bullet', label: 'Bullet (at maturity)' },
+                                        ].map((option) => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => updateFormData({ payment_type: option.value as any })}
+                                                className={`p-2 rounded-lg border text-sm transition-all ${formData.payment_type === option.value
+                                                    ? 'border-teal-500 bg-teal-500/10 text-teal-400'
+                                                    : 'border-white/10 bg-white/5 hover:bg-white/10 text-white'
+                                                    }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        How often investors receive yield payments
+                                    </p>
+                                </div>
+                            )}
+
+                            {formData.offer_type === 'collateral' && formData.payment_type !== 'bullet' && (
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-white">Payment Day</label>
+                                    <Input
+                                        type="number"
+                                        min="1"
+                                        max="28"
+                                        placeholder="1"
+                                        value={formData.payment_day}
+                                        onChange={(e) => updateFormData({ payment_day: e.target.value })}
+                                        className="bg-white/5 border-white/10 focus:border-teal-500/50 w-24"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Day of the month when payments are distributed (1-28)
+                                    </p>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-white">Minimum Investment (USD)</label>
@@ -406,6 +460,15 @@ export function CreateOffer() {
                                             <div>
                                                 <p className="text-xs text-muted-foreground">Interest Rate</p>
                                                 <p className="text-emerald-400">{formData.annual_interest_rate}% APY</p>
+                                            </div>
+                                        )}
+                                        {formData.offer_type === 'collateral' && (
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Payment Schedule</p>
+                                                <p className="text-teal-400 capitalize">
+                                                    {formData.payment_type.replace('_', '-')}
+                                                    {formData.payment_type !== 'bullet' && ` (Day ${formData.payment_day})`}
+                                                </p>
                                             </div>
                                         )}
                                         <div>
