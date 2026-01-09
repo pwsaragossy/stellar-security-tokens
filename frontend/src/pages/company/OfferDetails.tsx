@@ -84,12 +84,23 @@ export function OfferDetails() {
                         <p className="text-muted-foreground font-mono">{offer.asset_code}</p>
                     </div>
                 </div>
-                {canEdit && (
-                    <Button className="bg-teal-600 hover:bg-teal-500 text-white">
-                        <Edit className="w-4 h-4 mr-2" />
-                        Edit Offer
-                    </Button>
-                )}
+                <div className="flex gap-3">
+                    {offer.status === 'active' && offer.offer_type === 'collateral' && (
+                        <Button
+                            onClick={() => navigate(`/company/payments/${offer.id}`)}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                        >
+                            <DollarSign className="w-4 h-4 mr-2" />
+                            Pay Investors
+                        </Button>
+                    )}
+                    {canEdit && (
+                        <Button className="bg-teal-600 hover:bg-teal-500 text-white">
+                            <Edit className="w-4 h-4 mr-2" />
+                            Edit Offer
+                        </Button>
+                    )}
+                </div>
             </div>
 
             {/* Status Timeline */}
@@ -311,12 +322,12 @@ function TimelineStep({
     return (
         <div className="flex flex-col items-center gap-2">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isRejected
-                    ? 'bg-red-500/20'
-                    : isComplete
-                        ? 'bg-emerald-500/20'
-                        : isCurrent
-                            ? 'bg-teal-500/20'
-                            : 'bg-white/10'
+                ? 'bg-red-500/20'
+                : isComplete
+                    ? 'bg-emerald-500/20'
+                    : isCurrent
+                        ? 'bg-teal-500/20'
+                        : 'bg-white/10'
                 }`}>
                 {isRejected ? (
                     <XCircle className="w-4 h-4 text-red-400" />
