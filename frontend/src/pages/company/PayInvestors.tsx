@@ -7,7 +7,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, AlertTriangle, Clock, CheckCircle, DollarSign, Users, Calendar, Loader2 } from "lucide-react";
-import { companyPaymentsApi, PaymentDetails, BulletPaymentDetails } from "@/api/companyPayments";
+import { companyPaymentsApi, type PaymentDetails, type BulletPaymentDetails } from "@/api/companyPayments";
 import { usePasskey } from "@/hooks/usePasskey";
 
 export function PayInvestors() {
@@ -232,7 +232,9 @@ export function PayInvestors() {
                                                 ${('interestOwed' in investor ? investor.interestOwed : investor.totalPayout).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                             </p>
                                             <p className="text-xs text-muted-foreground">
-                                                ${investor.investedAmount?.toLocaleString('en-US')} invested
+                                                ${'investedAmount' in investor
+                                                    ? investor.investedAmount?.toLocaleString('en-US')
+                                                    : investor.principal?.toLocaleString('en-US')} invested
                                             </p>
                                         </div>
                                     </div>

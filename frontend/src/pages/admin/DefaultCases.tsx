@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Users, DollarSign, Building2, Loader2, CheckCircle, ArrowRight } from "lucide-react";
-import { adminDefaultsApi, DefaultedOffer, DefaultStats } from "@/api/adminDefaults";
+import { adminDefaultsApi, type DefaultedOffer, type DefaultStats } from "@/api/adminDefaults";
 import { usePasskey } from "@/hooks/usePasskey";
 
 export function DefaultCases() {
