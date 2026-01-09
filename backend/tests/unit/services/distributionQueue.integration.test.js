@@ -11,8 +11,12 @@ describe('DistributionQueue - Integration Style Tests', () => {
   test('initDistributionQueue handles Redis unavailability gracefully', async () => {
     const { initDistributionQueue, closeDistributionQueue } = await import('../../../src/services/distributionQueue.service.js');
 
-    // Limpar fila existente se houver
-    await closeDistributionQueue();
+    try {
+      // Limpar fila existente se houver
+      await closeDistributionQueue();
+    } catch (e) {
+      // Connection may already be closed - this is expected
+    }
 
     // Aguardar um pouco para garantir que a fila anterior foi completamente fechada
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -36,7 +40,11 @@ describe('DistributionQueue - Integration Style Tests', () => {
     }
 
     // Fechar a fila imediatamente após o teste para evitar atividade assíncrona
-    await closeDistributionQueue();
+    try {
+      await closeDistributionQueue();
+    } catch (e) {
+      // Connection may already be closed - this is expected
+    }
 
     // Aguardar um pouco mais para garantir que tudo foi limpo
     await new Promise(resolve => setTimeout(resolve, 100));

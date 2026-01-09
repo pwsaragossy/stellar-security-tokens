@@ -33,6 +33,8 @@ export const offersApi = {
     description: string;
     total_supply: string;
     annual_interest_rate?: number;
+    payment_type?: 'monthly' | 'quarterly' | 'semi_annual' | 'annual' | 'bullet';
+    payment_day?: number;
     offer_type: 'collateral' | 'sale';
     offer_rules: Record<string, any>;
     legal_documents?: Record<string, any>; // Metadata if any, but files passed separately
@@ -52,6 +54,14 @@ export const offersApi = {
 
     if (data.annual_interest_rate !== undefined) {
       formData.append('annual_interest_rate', data.annual_interest_rate.toString());
+    }
+
+    if (data.payment_type !== undefined) {
+      formData.append('payment_type', data.payment_type);
+    }
+
+    if (data.payment_day !== undefined) {
+      formData.append('payment_day', data.payment_day.toString());
     }
 
     // Append complex objects as JSON strings

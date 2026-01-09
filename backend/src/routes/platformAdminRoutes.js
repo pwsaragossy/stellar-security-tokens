@@ -382,5 +382,97 @@ router.put('/investors/:id/approve', authenticateToken, requirePlatformAdmin, Pl
  */
 router.put('/investors/:id/reject', authenticateToken, requirePlatformAdmin, PlatformAdminController.rejectInvestor);
 
+// ============ Default Management Routes ============
+import { CollateralDistributionService } from '../services/collateralDistribution.service.js';
+
+/**
+ * GET /api/platform-admins/defaults
+ * Get all defaulted offers awaiting admin action
+ */
+router.get('/defaults', authenticateToken, requirePlatformAdmin, async (req, res) => {
+  try {
+    const defaults = await CollateralDistributionService.getDefaultedOffers();
+    const stats = await CollateralDistributionService.getDefaultStatistics();
+
+    res.json({
+      success: true,
+      data: { defaults, stats }
+    });
+  } catch (error) {
+    console.error('[Admin Defaults] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/platform-admins/defaults/:offerId
+ * Get details of a specific defaulted offer
+ */
+router.get('/defaults/:offerId', authenticateToken, requirePlatformAdmin, async (req, res) => {
+  try {
+    const { offerId } = req.params;
+    const details = await CollateralDistributionService.getDefaultedOfferDetails(parseInt(offerId));
+
+    if (!details) {
+      return res.status(404).json({ success: false, error: 'Defaulted offer not found' });
+    }
+
+    res.json({ success: true, data: details });
+  } catch (error) {
+    console.error('[Admin Defaults] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/platform-admins/defaults/:offerId/prepare
+ * Prepare collateral distribution transaction for admin signing
+ */
+router.post('/defaults/:offerId/prepare', authenticateToken, requirePlatformAdmin, async (req, res) => {
+  try {
+    const { offerId } = req.params;
+    const transaction = await CollateralDistributionService.prepareCollateralDistribution(parseInt(offerId));
+
+    res.json({
+      success: true,
+      data: transaction,
+      message: 'Transaction prepared. Sign with admin passkey to distribute collateral.'
+    });
+  } catch (error) {
+    console.error('[Admin Defaults] Prepare error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/platform-admins/defaults/:offerId/distribute
+ * Submit signed collateral distribution transaction
+ */
+router.post('/defaults/:offerId/distribute', authenticateToken, requirePlatformAdmin, async (req, res) => {
+  try {
+    const { offerId } = req.params;
+    const { signedXDR } = req.body;
+
+    if (!signedXDR) {
+      return res.status(400).json({ success: false, error: 'Signed transaction XDR required' });
+    }
+
+    const result = await CollateralDistributionService.processCollateralDistribution(
+      signedXDR,
+      parseInt(offerId),
+      req.user.userId
+    );
+
+    res.json({
+      success: true,
+      data: result,
+      message: 'Collateral distributed to investors successfully'
+    });
+  } catch (error) {
+    console.error('[Admin Defaults] Distribute error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
 
