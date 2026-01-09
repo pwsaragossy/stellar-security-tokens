@@ -100,6 +100,31 @@ app.listen(PORT, async () => {
     console.error('Failed to start payment reminder scheduler:', error.message);
   }
 
+  // Start overdue payment status checker (runs daily at 00:30 UTC)
+  // This updates offer statuses to overdue/defaulted based on payment due dates
+  try {
+    const cron = await import('node-cron');
+    const { CompanyPaymentService } = await import('./services/companyPayment.service.js');
+
+    cron.default.schedule('30 0 * * *', async () => {
+      console.log('[OverdueChecker] Running daily overdue/maturity check');
+      try {
+        const result = await CompanyPaymentService.checkOverduePayments();
+        console.log('[OverdueChecker] Completed:', result);
+      } catch (error) {
+        console.error('[OverdueChecker] Error:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'UTC'
+    });
+
+    console.log('Overdue payment checker enabled - payment statuses will be updated daily at 00:30 UTC');
+  } catch (error) {
+    console.error('Failed to start overdue payment checker:', error.message);
+  }
+
+
   // Iniciar monitoramento de pagamentos USDC em tempo real
   const enablePaymentMonitoring = process.env.ENABLE_PAYMENT_MONITORING !== 'false';
   if (enablePaymentMonitoring) {

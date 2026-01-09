@@ -380,21 +380,26 @@ export class CompanyPaymentService {
 
     /**
      * Check for overdue payments and apply penalties
-     * @returns {Promise<Array>} List of overdue offers with penalties applied
+     * Also checks bullet payment maturity dates
+     * @returns {Promise<Object>} Results of overdue and maturity checks
      */
     static async checkOverduePayments() {
         const now = new Date();
+        const results = {
+            overduePayments: [],
+            bulletMaturities: []
+        };
 
+        // 1. Check regular payment overdue offers
         const overdueOffers = await prisma.offer.findMany({
             where: {
                 status: 'active',
+                paymentType: { not: 'bullet' },
                 nextPaymentDue: { lt: now },
                 paymentDueStatus: { notIn: ['defaulted'] }
             },
             include: { company: true }
         });
-
-        const results = [];
 
         for (const offer of overdueOffers) {
             const daysOverdue = Math.floor((now - new Date(offer.nextPaymentDue)) / (24 * 60 * 60 * 1000));
@@ -422,7 +427,6 @@ export class CompanyPaymentService {
                     }
                 });
 
-                // TODO: Trigger collateral liquidation process
                 console.log(`[CompanyPayment] DEFAULT: Offer ${offer.id} defaulted after ${daysOverdue} days`);
 
             } else if (daysOverdue > 0) {
@@ -465,10 +469,82 @@ export class CompanyPaymentService {
                 });
             }
 
-            results.push({
+            results.overduePayments.push({
                 offerId: offer.id,
                 offerName: offer.offerName,
                 companyId: offer.companyId,
+                daysOverdue,
+                status: newStatus,
+                penalty
+            });
+        }
+
+        // 2. Check bullet payment maturity dates
+        const maturingBulletOffers = await prisma.offer.findMany({
+            where: {
+                status: 'active',
+                paymentType: 'bullet',
+                maturityDate: { lt: now },
+                paymentDueStatus: { notIn: ['defaulted'] }
+            },
+            include: { company: true }
+        });
+
+        for (const offer of maturingBulletOffers) {
+            const daysOverdue = Math.floor((now - new Date(offer.maturityDate)) / (24 * 60 * 60 * 1000));
+
+            let newStatus = offer.paymentDueStatus;
+            let penalty = null;
+
+            if (daysOverdue > GRACE_PERIOD_DAYS) {
+                // Default triggered for bullet payment
+                newStatus = 'defaulted';
+
+                const bulletDetails = await this.calculateBulletPayment(offer.id);
+                const defaultFee = bulletDetails.totalPayout * DEFAULT_FEE_PERCENT;
+
+                penalty = await prisma.companyPenalty.create({
+                    data: {
+                        companyId: offer.companyId,
+                        offerId: offer.id,
+                        penaltyType: 'default_fee',
+                        description: `Bullet payment default on ${offer.offerName} - ${daysOverdue} days after maturity`,
+                        amount: defaultFee,
+                        daysLate: daysOverdue,
+                        status: 'pending'
+                    }
+                });
+
+                console.log(`[CompanyPayment] BULLET DEFAULT: Offer ${offer.id} defaulted ${daysOverdue} days after maturity`);
+
+            } else if (daysOverdue > 0) {
+                // Mark as overdue (maturity passed, grace period active)
+                newStatus = 'overdue';
+
+                // Notify company about matured bullet payment
+                console.log(`[CompanyPayment] BULLET DUE: Offer ${offer.id} matured ${daysOverdue} days ago`);
+            } else if (daysOverdue === 0) {
+                // Maturity day - mark as due
+                newStatus = 'due';
+                console.log(`[CompanyPayment] BULLET MATURED: Offer ${offer.id} reached maturity today`);
+            }
+
+            // Update offer status
+            if (newStatus !== offer.paymentDueStatus) {
+                await prisma.offer.update({
+                    where: { id: offer.id },
+                    data: {
+                        paymentDueStatus: newStatus,
+                        nextPaymentDue: offer.maturityDate // Ensure nextPaymentDue is set for bullet
+                    }
+                });
+            }
+
+            results.bulletMaturities.push({
+                offerId: offer.id,
+                offerName: offer.offerName,
+                companyId: offer.companyId,
+                maturityDate: offer.maturityDate,
                 daysOverdue,
                 status: newStatus,
                 penalty
