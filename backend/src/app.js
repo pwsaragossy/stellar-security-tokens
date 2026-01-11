@@ -31,6 +31,9 @@ if (!process.env.JWT_SECRET) {
 
 const app = express();
 
+// Trust first proxy (nginx) - needed for rate limiting behind reverse proxy
+app.set('trust proxy', 1);
+
 // Security Middleware
 app.use(helmet({
     contentSecurityPolicy: {

@@ -8,7 +8,11 @@ import {
   getInvestorBalance,
   getInvestorPayments,
   updateInvestor,
-  // Passkey Wallet Registration Flow (now primary)
+  // Email-first registration flow (NEW)
+  initiateRegistration,
+  verifyEmailCode,
+  resendVerificationCode,
+  // Passkey Wallet Registration Flow
   registerInvestorWithPasskey,
   verifyEmail,
   resendVerificationEmail,
@@ -23,18 +27,112 @@ import { requireInvestor, requireOwnData } from '../middleware/authorize.js';
 
 const router = express.Router();
 
+// ============================================================================
+// EMAIL-FIRST REGISTRATION FLOW (NEW - for MVP)
+// ============================================================================
 
+/**
+ * @swagger
+ * /api/investors/initiate-registration:
+ *   post:
+ *     summary: Start registration - send verification code
+ *     description: Step 1 of email-first flow. Sends 6-digit code to email.
+ *     tags: [Investors]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Verification code sent
+ *       409:
+ *         description: Email already registered
+ */
+router.post('/initiate-registration', [
+  body('email').isEmail().withMessage('Valid email is required'),
+  validate,
+], initiateRegistration);
+
+/**
+ * @swagger
+ * /api/investors/verify-email-code:
+ *   post:
+ *     summary: Verify email code
+ *     description: Step 2 of email-first flow. Returns registration token.
+ *     tags: [Investors]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               code:
+ *                 type: string
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: Email verified, registration token returned
+ *       400:
+ *         description: Invalid or expired code
+ */
+router.post('/verify-email-code', [
+  body('email').isEmail().withMessage('Valid email is required'),
+  body('code').isLength({ min: 6, max: 6 }).withMessage('6-digit code is required'),
+  validate,
+], verifyEmailCode);
+
+/**
+ * @swagger
+ * /api/investors/resend-code:
+ *   post:
+ *     summary: Resend verification code
+ *     tags: [Investors]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: New code sent
+ */
+router.post('/resend-code', [
+  body('email').isEmail().withMessage('Valid email is required'),
+  validate,
+], resendVerificationCode);
 
 // ============================================================================
-// PASSKEY-ONLY REGISTRATION FLOW
+// PASSKEY REGISTRATION FLOW (Step 3 - requires registrationToken)
 // ============================================================================
 
 /**
  * @swagger
  * /api/investors/register:
  *   post:
- *     summary: Registrar novo investidor
- *     description: Primeiro passo do fluxo de registro - cria conta com email
+ *     summary: Complete investor registration with passkey
+ *     description: Step 3 of email-first flow. Requires registrationToken from verify-email-code.
  *     tags: [Investors]
  *     requestBody:
  *       required: true
@@ -44,29 +142,41 @@ const router = express.Router();
  *             type: object
  *             required:
  *               - name
- *               - email
  *               - document
+ *               - registrationToken
+ *               - credentialId
+ *               - contractId
  *             properties:
  *               name:
  *                 type: string
  *                 example: João Silva
- *               email:
- *                 type: string
- *                 format: email
  *               document:
  *                 type: string
  *                 description: CPF ou documento de identificação
+ *               registrationToken:
+ *                 type: string
+ *                 description: JWT token from verify-email-code
+ *               credentialId:
+ *                 type: string
+ *                 description: WebAuthn credential ID
+ *               contractId:
+ *                 type: string
+ *                 description: Stellar smart wallet contract ID
  *     responses:
  *       201:
- *         description: Investidor registrado, email de verificação enviado
+ *         description: Investor registered successfully
  *       400:
- *         description: Dados inválidos ou email já cadastrado
+ *         description: Invalid data
+ *       401:
+ *         description: Invalid or expired registration token
  */
-// Step 1: Register with email (no password needed)
+// Step 3: Complete registration with passkey (email verified via token)
 router.post('/register', [
   body('name').trim().notEmpty().withMessage('Name is required'),
-  body('email').isEmail().withMessage('Valid email is required'),
   body('document').trim().notEmpty().withMessage('Document is required'),
+  body('registrationToken').notEmpty().withMessage('Registration token is required'),
+  body('credentialId').notEmpty().withMessage('Credential ID is required'),
+  body('contractId').notEmpty().withMessage('Contract ID is required'),
   validate,
 ], registerInvestorWithPasskey);
 

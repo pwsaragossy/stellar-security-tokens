@@ -174,6 +174,77 @@ export class EmailService {
   }
 
   /**
+   * Send 6-digit verification code email for email-first registration
+   * @param {string} email - Email address
+   * @param {string} code - 6-digit verification code
+   * @returns {Promise<Object>} Result of email send
+   */
+  static async send6DigitVerificationCode(email, code) {
+    if (!transporter) {
+      console.warn('Email service not configured - verification code not sent');
+      console.log(`[DEV MODE] Verification code for ${email}: ${code}`);
+      return { success: true, message: 'Dev mode - code logged to console' };
+    }
+
+    try {
+      const mailOptions = {
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: email,
+        subject: `${code} is your verification code - Stellar Tokens`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+              .content { padding: 30px; background-color: #f8fafc; }
+              .code { font-size: 36px; font-weight: bold; color: #1e3a8a; letter-spacing: 8px; text-align: center; padding: 20px; background: white; border-radius: 8px; margin: 20px 0; border: 2px dashed #3b82f6; }
+              .warning { color: #ea580c; font-size: 13px; text-align: center; }
+              .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>Verify Your Email</h1>
+              </div>
+              <div class="content">
+                <p>Your verification code is:</p>
+                <div class="code">${code}</div>
+                <p class="warning">This code expires in 10 minutes.</p>
+                <p>Enter this code on the registration page to continue creating your account.</p>
+                <p>If you didn't request this code, you can safely ignore this email.</p>
+                <p>Best regards,<br>Stellar Security Tokens Team</p>
+              </div>
+              <div class="footer">
+                <p>This is an automated email, please do not reply.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+        text: `Your Stellar Tokens verification code is: ${code}\n\nThis code expires in 10 minutes.\n\nIf you didn't request this code, please ignore this email.`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log(`6-digit verification code sent to ${email}:`, info.messageId);
+
+      return {
+        success: true,
+        messageId: info.messageId,
+        message: 'Verification code sent successfully',
+      };
+    } catch (error) {
+      console.error(`Error sending verification code to ${email}:`, error);
+      throw new Error(`Failed to send verification code: ${error.message}`);
+    }
+  }
+
+
+  /**
    * Send email verification email to new investor
    * @param {string} investorEmail - Email do investidor
    * @param {string} investorName - Nome do investidor
