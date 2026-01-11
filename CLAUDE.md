@@ -31,6 +31,45 @@ Stellar Security Tokens - A blockchain-based security token platform with:
 
 See `.agent/workflows/frontend-design.md` for full guidelines.
 
+### Security Guidance Skill (Auto-Detect)
+
+**When writing or editing code, automatically check for these security anti-patterns and warn if detected:**
+
+| Pattern | Trigger | Guidance |
+|---------|---------|----------|
+| **GitHub Actions Injection** | `.github/workflows/*.yml` | Never use untrusted input (issue titles, PR descriptions) directly in `run:` commands. Use `env:` with proper quoting. |
+| **Command Injection** | `child_process.exec`, `exec()`, `execSync()` | Use `execFile` instead of `exec` to prevent shell injection. Never pass user input to shell commands. |
+| **Code Injection** | `new Function()`, `eval()` | Avoid evaluating arbitrary code. Use `JSON.parse()` for data, consider alternative designs. |
+| **XSS via React** | `dangerouslySetInnerHTML` | Sanitize all content with DOMPurify before rendering. |
+| **XSS via DOM** | `document.write`, `.innerHTML =` | Use `textContent` for plain text, or safe DOM methods with sanitization. |
+| **Pickle Deserialization** | `pickle` | Can lead to arbitrary code execution. Use JSON or other safe formats. |
+| **OS Command Injection** | `os.system` | Only use with static arguments, never with user-controlled input. |
+
+**Format for warnings:**
+```
+⚠️ Security Warning: [Pattern detected]. [Brief explanation]. [Safer alternative].
+```
+
+### Explanatory Output Style (Auto-Invoke)
+
+**Provide educational insights about implementation choices as you help with tasks.**
+
+When writing or modifying code, include brief educational explanations using this format:
+
+```
+★ Insight ─────────────────────────────────────
+[2-3 key educational points about the implementation]
+─────────────────────────────────────────────────
+```
+
+Focus on:
+- Specific implementation choices for THIS codebase
+- Patterns and conventions in the existing code
+- Trade-offs and design decisions
+- Codebase-specific details (not general programming concepts)
+
+Provide insights as you write code, not just at the end.
+
 ---
 
 ## Code Style
