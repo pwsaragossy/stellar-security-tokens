@@ -57,10 +57,7 @@ export function Register() {
     // Step 2: Verify code
     const handleVerifyCode = async () => {
         const fullCode = code.join('');
-        if (fullCode.length !== 6) {
-            setError('Please enter the complete 6-digit code');
-            return;
-        }
+        if (fullCode.length !== 6) return; // Silently return if incomplete
 
         setIsLoading(true);
         setError('');
@@ -83,8 +80,32 @@ export function Register() {
     const handleCodeChange = (index: number, value: string) => {
         if (!/^\d*$/.test(value)) return; // Only digits
 
+        // Clear any previous error when user starts typing
+        if (error) setError('');
+
         const newCode = [...code];
-        newCode[index] = value.slice(-1); // Only last character
+
+        // Handle multi-character paste (paste into single input)
+        if (value.length > 1) {
+            // Distribute characters across inputs starting from current index
+            const chars = value.replace(/\D/g, '').slice(0, 6 - index);
+            for (let i = 0; i < chars.length; i++) {
+                if (index + i < 6) {
+                    newCode[index + i] = chars[i];
+                }
+            }
+            setCode(newCode);
+            // Focus last filled or next empty
+            const nextIndex = Math.min(index + chars.length, 5);
+            codeInputRefs.current[nextIndex]?.focus();
+            // Auto-submit if all filled
+            if (newCode.every(c => c)) {
+                setTimeout(handleVerifyCode, 100);
+            }
+            return;
+        }
+
+        newCode[index] = value.slice(-1); // Only last character for single input
         setCode(newCode);
 
         // Auto-focus next input
@@ -93,7 +114,32 @@ export function Register() {
         }
 
         // Auto-submit when complete
-        if (newCode.every(c => c) && index === 5) {
+        if (newCode.every(c => c) && newCode.join('').length === 6) {
+            setTimeout(handleVerifyCode, 100);
+        }
+    };
+
+    // Handle paste event for the entire code section
+    const handleCodePaste = (e: React.ClipboardEvent) => {
+        e.preventDefault();
+        const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+        if (pastedData.length === 0) return;
+
+        // Clear error on paste
+        if (error) setError('');
+
+        const newCode = [...code];
+        for (let i = 0; i < pastedData.length; i++) {
+            newCode[i] = pastedData[i];
+        }
+        setCode(newCode);
+
+        // Focus appropriate input
+        const focusIndex = Math.min(pastedData.length, 5);
+        codeInputRefs.current[focusIndex]?.focus();
+
+        // Auto-submit if complete
+        if (pastedData.length === 6) {
             setTimeout(handleVerifyCode, 100);
         }
     };
@@ -260,17 +306,18 @@ export function Register() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            <div className="flex justify-center gap-2">
+                            <div className="flex justify-center gap-2" onPaste={handleCodePaste}>
                                 {code.map((digit, index) => (
                                     <Input
                                         key={index}
                                         ref={el => { codeInputRefs.current[index] = el; }}
                                         type="text"
                                         inputMode="numeric"
-                                        maxLength={1}
+                                        maxLength={6}
                                         value={digit}
                                         onChange={(e) => handleCodeChange(index, e.target.value)}
                                         onKeyDown={(e) => handleCodeKeyDown(index, e)}
+                                        onPaste={handleCodePaste}
                                         className="w-12 h-14 text-center text-2xl font-bold bg-slate-950 border-slate-700 text-white focus:border-blue-500"
                                         autoFocus={index === 0}
                                     />
