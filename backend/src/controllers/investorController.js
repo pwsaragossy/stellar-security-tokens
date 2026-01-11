@@ -6,6 +6,8 @@ import { EmailService } from '../services/email.service.js';
 import { generateToken } from '../middleware/auth.js';
 import prisma from '../config/prisma.js';
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import { generate6DigitCode, storeEmailCode, verifyEmailCode as redisVerifyEmailCode } from '../config/redis.js';
 
 
 
@@ -339,43 +341,217 @@ export const getInvestorMetrics = async (req, res, next) => {
 };
 
 // ============================================================================
-// PASSKEY WALLET REGISTRATION FLOW
+// EMAIL-FIRST REGISTRATION FLOW (NEW)
 // ============================================================================
 
-/**
- * Register investor with email verification (Step 1 of Passkey Wallet flow)
- * Does NOT create Stellar account - that happens after email verification
- */
-/**
- * Single-step passkey registration
- * Frontend creates WebAuthn passkey FIRST, then calls this endpoint
- * 
- * Flow:
- * 1. Deploy smart wallet with passkey
- * 2. Create investor (emailVerified: false, kycStatus: 'pending')
- * 3. Send verification email (async, non-blocking)
- * 4. Return JWT token (user can login immediately)
- * 
- * User restrictions until email verified + KYC approved:
- * - Can't invest (blocked by requireEmailVerified + requireKyc middleware)
- * - Can't start KYC (blocked by requireEmailVerified)
- * - CAN browse offers, see dashboard
- */
-export const registerInvestorWithPasskey = async (req, res, next) => {
-  try {
-    const { name, email, document, credentialId, publicKey, contractId } = req.body;
 
-    // Validate required fields
-    // contractId is now provided by frontend (wallet deployed client-side via Launchtube)
-    if (!name || !email || !document || !credentialId || !contractId) {
+/**
+ * Step 1: Initiate registration by sending 6-digit verification code
+ * POST /api/investors/initiate-registration
+ */
+export const initiateRegistration = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
       return res.status(400).json({
         success: false,
-        error: 'Name, email, document, credentialId, and contractId are required',
+        error: 'Email is required',
       });
     }
 
-    // Check for existing investor
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email format',
+      });
+    }
+
+    // Check if email already registered
     const existingInvestor = await Investor.findByEmail(email);
+    if (existingInvestor) {
+      return res.status(409).json({
+        success: false,
+        error: 'An account with this email already exists. Please log in instead.',
+      });
+    }
+
+    // Generate and store 6-digit code
+    const code = generate6DigitCode();
+    const stored = await storeEmailCode(email, code);
+
+    if (!stored) {
+      console.warn('[initiateRegistration] Redis unavailable, code storage failed');
+      // Continue anyway - email service will log code in dev mode
+    }
+
+    // Send verification email
+    await EmailService.send6DigitVerificationCode(email, code);
+
+    res.json({
+      success: true,
+      message: 'Verification code sent to your email',
+      data: {
+        email,
+        expiresIn: '10 minutes',
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Step 2: Verify email code and return registration token
+ * POST /api/investors/verify-email-code
+ */
+export const verifyEmailCode = async (req, res, next) => {
+  try {
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and code are required',
+      });
+    }
+
+    // Verify code from Redis
+    const result = await redisVerifyEmailCode(email, code);
+
+    if (!result.valid) {
+      return res.status(400).json({
+        success: false,
+        error: result.error || 'Invalid verification code',
+      });
+    }
+
+    // Generate registration token (JWT valid for 30 minutes)
+    const registrationToken = jwt.sign(
+      {
+        email: email.toLowerCase(),
+        purpose: 'registration',
+        verified: true,
+      },
+      process.env.JWT_SECRET || 'stellar-tokens-secret',
+      { expiresIn: '30m' }
+    );
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully',
+      data: {
+        email,
+        registrationToken,
+        expiresIn: '30 minutes',
+        nextStep: 'Complete registration with your details and create a passkey',
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Resend verification code
+ * POST /api/investors/resend-code
+ */
+export const resendVerificationCode = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is required',
+      });
+    }
+
+    // Check if email already registered
+    const existingInvestor = await Investor.findByEmail(email);
+    if (existingInvestor) {
+      return res.status(409).json({
+        success: false,
+        error: 'An account with this email already exists',
+      });
+    }
+
+    // Generate new code
+    const code = generate6DigitCode();
+    await storeEmailCode(email, code);
+
+    // Send verification email
+    await EmailService.send6DigitVerificationCode(email, code);
+
+    res.json({
+      success: true,
+      message: 'New verification code sent',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================================================
+// PASSKEY WALLET REGISTRATION FLOW (UPDATED)
+// ============================================================================
+
+/**
+ * Register investor with verified email + passkey (Step 3 of email-first flow)
+ * Frontend creates WebAuthn passkey FIRST, then calls this endpoint
+ * 
+ * REQUIRES: registrationToken from verify-email-code endpoint
+ * 
+ * Flow:
+ * 1. Validate registrationToken → extract verified email
+ * 2. Create investor with emailVerified: true
+ * 3. Return JWT token (user can login immediately)
+ */
+export const registerInvestorWithPasskey = async (req, res, next) => {
+  try {
+    const { name, document, credentialId, publicKey, contractId, registrationToken } = req.body;
+
+    // Validate required fields
+    if (!name || !document || !credentialId || !contractId || !registrationToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name, document, credentialId, contractId, and registrationToken are required',
+      });
+    }
+
+    // Validate registration token and extract verified email
+    let verifiedEmail;
+    try {
+      const decoded = jwt.verify(
+        registrationToken,
+        process.env.JWT_SECRET || 'stellar-tokens-secret'
+      );
+
+      if (decoded.purpose !== 'registration' || !decoded.verified) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid registration token',
+        });
+      }
+
+      verifiedEmail = decoded.email;
+    } catch (jwtError) {
+      if (jwtError.name === 'TokenExpiredError') {
+        return res.status(401).json({
+          success: false,
+          error: 'Registration token expired. Please verify your email again.',
+        });
+      }
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid registration token',
+      });
+    }
+
+    // Check for existing investor (double-check even though we verified earlier)
+    const existingInvestor = await Investor.findByEmail(verifiedEmail);
     if (existingInvestor) {
       return res.status(409).json({
         success: false,
@@ -397,31 +573,26 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
       ? (Buffer.isBuffer(publicKey) ? publicKey : Buffer.from(publicKey, 'base64'))
       : null;
 
-    // Generate verification token
-    const verificationToken = EmailService.generateVerificationToken();
-    const verificationExpiry = EmailService.getVerificationExpiry();
-
-    // Create investor with wallet contract ID from frontend
+    // Create investor with wallet contract ID from frontend - email already verified!
     const investor = await prisma.investor.create({
       data: {
         name,
-        email,
+        email: verifiedEmail, // Use verified email from token
         document,
         stellarContractId: contractId, // From client-side deployment
         passkeyCredentialId: credentialId,
         passkeyPublicKey: publicKeyBuffer,
         kycStatus: 'pending',
-        emailVerified: false, // User must verify email to proceed
-        emailVerificationToken: verificationToken,
-        emailVerificationExpiry: verificationExpiry,
+        emailVerified: true, // Email was verified before passkey creation!
+        emailVerificationToken: null,
+        emailVerificationExpiry: null,
       },
     });
 
-    // Send verification email (async, don't wait)
-    EmailService.sendVerificationEmail(email, name, verificationToken)
+    // Send welcome email (async, don't wait)
+    EmailService.sendWelcomeEmail(verifiedEmail, name, contractId)
       .catch(error => {
-        console.error('Failed to send verification email:', error);
-        // Don't block registration if email fails
+        console.error('Failed to send welcome email:', error);
       });
 
     // Generate JWT token for immediate login
@@ -434,7 +605,7 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful. Please verify your email to complete KYC and invest.',
+      message: 'Registration successful! Your email is verified and wallet is ready.',
       data: {
         token,
         investor: {
