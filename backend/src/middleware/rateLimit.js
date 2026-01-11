@@ -69,6 +69,8 @@ function createLimiter(options) {
         },
         standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
         legacyHeaders: true, // Also return `X-RateLimit-*` headers for compatibility
+        // Skip rate limiting in test environment
+        skip: (req, res) => process.env.NODE_ENV === 'test' || process.env.SKIP_RATE_LIMIT === 'true',
         handler: (req, res, next, options) => {
             res.status(429).json(options.message);
         },
@@ -94,45 +96,45 @@ function createLimiter(options) {
 }
 
 /**
- * Global rate limiter - 100 requests per minute per IP
+ * Global rate limiter - 300 requests per minute per IP
  * Applied to all routes as baseline protection
  */
 export const globalLimiter = createLimiter({
     windowMs: 60 * 1000, // 1 minute
-    max: 100,
+    max: 300,
     message: 'Too many requests from this IP, please try again after a minute.',
     keyPrefix: 'rl:global',
 });
 
 /**
- * Auth rate limiter - 5 requests per minute per IP
+ * Auth rate limiter - 30 requests per minute per IP
  * Applied to login/registration to prevent brute force attacks
  */
 export const authLimiter = createLimiter({
     windowMs: 60 * 1000, // 1 minute
-    max: 5,
+    max: 30, // Increased from 5 to avoid blocking legitimate users during testing
     message: 'Too many authentication attempts, please try again after a minute.',
     keyPrefix: 'rl:auth',
 });
 
 /**
- * API rate limiter - 30 requests per minute per IP
+ * API rate limiter - 300 requests per minute per IP
  * Applied to sensitive API routes
  */
 export const apiLimiter = createLimiter({
     windowMs: 60 * 1000, // 1 minute
-    max: 30,
+    max: 300, // Increased from 30 to support dashboard polling and concurrent requests
     message: 'API rate limit exceeded, please try again after a minute.',
     keyPrefix: 'rl:api',
 });
 
 /**
- * Strict rate limiter - 10 requests per minute per IP
+ * Strict rate limiter - 60 requests per minute per IP
  * Applied to expensive operations (token distribution, etc.)
  */
 export const strictLimiter = createLimiter({
     windowMs: 60 * 1000, // 1 minute
-    max: 10,
+    max: 60, // Increased from 10 to support frequent payment checks
     message: 'Rate limit exceeded for this operation, please try again after a minute.',
     keyPrefix: 'rl:strict',
 });

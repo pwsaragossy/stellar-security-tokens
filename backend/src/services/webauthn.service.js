@@ -28,7 +28,7 @@ export class WebAuthnService {
     // Converter userId para Buffer (máximo 64 bytes)
     // O userID deve ser um identificador único do usuário
     const userIdBuffer = Buffer.from(userId.toString(), 'utf8');
-    
+
     const options = await generateRegistrationOptions({
       rpName,
       rpID,
@@ -45,7 +45,8 @@ export class WebAuthnService {
       authenticatorSelection: {
         authenticatorAttachment: 'platform',
         userVerification: 'required',
-        requireResidentKey: false,
+        residentKey: 'required',
+        requireResidentKey: true,
       },
       supportedAlgorithmIDs: [-7, -257],
     });
@@ -119,6 +120,56 @@ export class WebAuthnService {
   }
 
   /**
+   * Gera opções de autenticação para login sem username (discoverable credentials)
+   * @returns {Promise<Object>} Opções de autenticação WebAuthn
+   */
+  static async generateDiscoverableAuthOptions() {
+    const options = await generateAuthenticationOptions({
+      rpID,
+      timeout: 60000,
+      allowCredentials: [], // Empty = browser shows all discoverable credentials
+      userVerification: 'required',
+    });
+
+    return options;
+  }
+
+  /**
+   * Encontra usuário pelo userHandle (userId encoded durante registro)
+   * @param {string} userHandle - Base64url encoded user ID
+   * @returns {Promise<Object|null>} User info or null
+   */
+  static async findUserByHandle(userHandle) {
+    // userHandle is the userId we encoded during registration
+    const userIdStr = Buffer.from(userHandle, 'base64url').toString('utf8');
+    const userId = parseInt(userIdStr, 10);
+
+    if (isNaN(userId)) return null;
+
+    // Try to find in investors first
+    let user = await prisma.investor.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, kycStatus: true, stellarContractId: true }
+    });
+
+    if (user) {
+      return { ...user, userType: 'investor' };
+    }
+
+    // Try company users
+    user = await prisma.companyUser.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, role: true, companyId: true, stellarContractId: true }
+    });
+
+    if (user) {
+      return { ...user, userType: 'company' };
+    }
+
+    return null;
+  }
+
+  /**
    * Verifica resposta de autenticação
    * @param {string} userType - Tipo de usuário
    * @param {number} userId - ID do usuário
@@ -181,7 +232,7 @@ export class WebAuthnService {
         lastUsedAt: true,
       },
     });
-    
+
     // Convert to legacy format for compatibility
     return credentials.map(cred => ({
       ...cred,
@@ -208,9 +259,9 @@ export class WebAuthnService {
         deviceName: true,
       },
     });
-    
+
     if (!credential) return null;
-    
+
     // Convert to legacy format for compatibility
     return {
       ...credential,

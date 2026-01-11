@@ -1,64 +1,11 @@
 
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle2, AlertTriangle, ArrowRight, ShieldCheck } from 'lucide-react';
-import { passkeyClient } from '@/lib/passkey';
+import { CheckCircle2, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export function RegistrationSuccess() {
     const navigate = useNavigate();
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState('');
-
-    const handleVerifyLogin = async () => {
-        setIsLoading(true);
-        setError('');
-        try {
-            // Retrieve email from stored user data (set during registration)
-            const storedUserStr = localStorage.getItem('user');
-            const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
-            const email = storedUser?.email;
-
-            if (!email) {
-                throw new Error("User email not found. Please try logging in from the main page.");
-            }
-
-            // Force a login attempt to verify the passkey was saved correctly
-            // passkeyClient.login() performs the full authentication flow (challenge -> sign -> verify with backend)
-            const result = await passkeyClient.login(email);
-
-            if (!result.success) {
-                throw new Error(result.message || 'Verification failed');
-            }
-
-            // If successful, store session and redirect based on user type
-            if (result.data && result.data.token) {
-                localStorage.setItem('token', result.data.token);
-                localStorage.setItem('user', JSON.stringify(result.data.user));
-
-                // Determine user type
-                const userType = result.data.user?.role === 'company_admin' || result.data.user?.role === 'company_user' ? 'company' : 'investor';
-                localStorage.setItem('userType', userType);
-
-                if (userType === 'company') {
-                    // Check status for company
-                    if (result.data.user.status === 'pending') {
-                        navigate('/company/pending-approval');
-                    } else {
-                        navigate('/company/dashboard');
-                    }
-                } else {
-                    navigate('/dashboard');
-                }
-            }
-        } catch (err: any) {
-            console.error("Verification failed", err);
-            setError("We couldn't verify your passkey. It seems it wasn't saved correctly. Please try again or re-register.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
@@ -72,46 +19,36 @@ export function RegistrationSuccess() {
                         </div>
                     </div>
                     <h1 className="text-3xl font-bold tracking-tighter text-white">Account Created!</h1>
-                    <p className="text-muted-foreground">Now, let's verify everything works.</p>
+                    <p className="text-muted-foreground">Your smart wallet is ready to use.</p>
                 </div>
 
                 <Card className="border-slate-800 bg-slate-900/90 backdrop-blur-xl">
                     <CardHeader>
-                        <CardTitle className="text-white">One Last Step: The Practice Run</CardTitle>
+                        <CardTitle className="text-white">Welcome to Stellar Tokens</CardTitle>
                         <CardDescription className="text-slate-400">
-                            We need to confirm your device successfully saved your Passkey before you can access your account.
+                            Your account has been created successfully. Now let's make sure your passkey works.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="p-4 bg-teal-500/10 border border-teal-500/30 rounded-lg flex gap-3">
                             <ShieldCheck className="w-6 h-6 text-teal-400 flex-shrink-0" />
                             <div className="space-y-1">
-                                <p className="text-sm font-medium text-teal-200">Why are we doing this?</p>
+                                <p className="text-sm font-medium text-teal-200">Important!</p>
                                 <p className="text-xs text-teal-200/70">
-                                    If your passkey wasn't saved securely (e.g. you are in Incognito mode or cancelled the prompt),
-                                    you would lose access to your funds later. We check this NOW to keep you safe.
+                                    Please log in now to confirm your passkey was saved correctly.
+                                    This ensures you won't lose access to your wallet.
                                 </p>
                             </div>
                         </div>
-
-                        {error && (
-                            <div className="p-3 bg-red-900/20 border border-red-500/30 rounded flex items-start gap-2 text-red-200 text-sm">
-                                <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                                <p>{error}</p>
-                            </div>
-                        )}
                     </CardContent>
                     <CardFooter>
                         <Button
-                            onClick={handleVerifyLogin}
-                            disabled={isLoading}
+                            onClick={() => navigate('/login')}
                             className="w-full bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/20 h-12 text-lg"
                         >
-                            {isLoading ? 'Verifying Key...' : (
-                                <span className="flex items-center gap-2">
-                                    Verify & Log In <ArrowRight className="w-5 h-5" />
-                                </span>
-                            )}
+                            <span className="flex items-center gap-2">
+                                Go to Login <ArrowRight className="w-5 h-5" />
+                            </span>
                         </Button>
                     </CardFooter>
                 </Card>

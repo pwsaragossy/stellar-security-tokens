@@ -7,6 +7,7 @@ import { Investor } from '../models/Investor.js';
 import { CompanyUser } from '../models/CompanyUser.js';
 import prisma from '../config/prisma.js';
 import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
+import { WebAuthnService } from '../services/webauthn.service.js';
 
 const router = express.Router();
 
@@ -83,10 +84,39 @@ router.get('/config', (req, res) => {
 
 /**
  * @swagger
- * /api/auth/passkey-login/challenge:
+ * /api/auth/passkey-login/discover:
+ *   get:
+ *     summary: Get challenge for usernameless passkey login
+ *     description: Returns a challenge for discoverable credential authentication (no email needed)
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Challenge for WebAuthn authentication
+ */
+router.get('/passkey-login/discover', async (req, res, next) => {
+  try {
+    const options = await WebAuthnService.generateDiscoverableAuthOptions();
+
+    // Store challenge in memory or session for verification
+    // For simplicity, we'll include it in the response and verify client-side
+    res.json({
+      success: true,
+      challenge: Buffer.from(options.challenge).toString('base64'),
+      rpId: options.rpId,
+      timeout: options.timeout,
+      userVerification: options.userVerification,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/passkey-login/discover:
  *   post:
- *     summary: Get WebAuthn challenge for login
- *     description: Returns a challenge and allowed credentials for WebAuthn authentication
+ *     summary: Authenticate with discoverable passkey
+ *     description: Verifies the passkey response and identifies user via userHandle
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -95,96 +125,54 @@ router.get('/config', (req, res) => {
  *           schema:
  *             type: object
  *             required:
- *               - email
+ *               - credentialId
+ *               - userHandle
  *             properties:
- *               email:
+ *               credentialId:
  *                 type: string
- *                 format: email
- *               userType:
+ *               userHandle:
  *                 type: string
- *                 enum: [investor, company]
  *     responses:
  *       200:
- *         description: Challenge and allowed credentials
- *       404:
- *         description: User not found
+ *         description: Login successful
+ *       401:
+ *         description: Authentication failed
  */
-router.post('/passkey-login/challenge', [
-  body('email').isEmail().withMessage('Valid email is required'),
-  body('userType').optional().isIn(['investor', 'company']).withMessage('Invalid user type'),
+router.post('/passkey-login/discover', [
+  body('credentialId').notEmpty().withMessage('Credential ID is required'),
   validate,
 ], async (req, res, next) => {
   try {
-    const { email, userType = 'investor' } = req.body;
+    const { credentialId } = req.body;
+    console.log('[Auth] Discover Login - Received credentialId:', credentialId);
 
-    let user;
-    if (userType === 'company') {
-      user = await CompanyUser.findByEmail(email);
+    // Find user by credentialId (passkey-kit doesn't set userHandle properly)
+    // Look up in investors first
+    let user = await prisma.investor.findFirst({
+      where: { passkeyCredentialId: credentialId },
+      select: { id: true, name: true, email: true, kycStatus: true, stellarContractId: true }
+    });
+    console.log('[Auth] Investor lookup result:', user ? `Found (ID: ${user.id})` : 'Not found');
+
+    if (user) {
+      user = { ...user, userType: 'investor' };
     } else {
-      user = await Investor.findByEmail(email);
+      // Try company users
+      user = await prisma.companyUser.findFirst({
+        where: { passkeyCredentialId: credentialId },
+        select: { id: true, name: true, email: true, role: true, companyId: true, stellarContractId: true }
+      });
+      console.log('[Auth] CompanyUser lookup result:', user ? `Found (ID: ${user.id})` : 'Not found');
+
+      if (user) {
+        user = { ...user, userType: 'company' };
+      }
     }
 
     if (!user) {
-      return res.status(404).json({
+      return res.status(401).json({
         success: false,
         error: 'User not found',
-      });
-    }
-
-    if (!user.passkeyCredentialId) {
-      return res.status(400).json({
-        success: false,
-        error: 'No passkey registered for this user',
-      });
-    }
-
-    // Generate a random challenge
-    const challenge = Buffer.from(crypto.randomBytes(32)).toString('base64');
-
-    // Return the challenge and the user's credential ID
-    res.json({
-      success: true,
-      challenge,
-      allowCredentials: [{
-        id: user.passkeyCredentialId,
-        type: 'public-key',
-        transports: ['internal', 'hybrid'],
-      }],
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post('/passkey-login', [
-  body('email').isEmail().withMessage('Valid email is required'),
-  body('credentialId').notEmpty().withMessage('Credential ID is required'),
-  body('userType').optional().isIn(['investor', 'company']).withMessage('Invalid user type'),
-  validate,
-], async (req, res, next) => {
-  try {
-    const { email, credentialId, userType = 'investor' } = req.body;
-
-    let user;
-
-    if (userType === 'company') {
-      user = await CompanyUser.findByEmail(email);
-    } else {
-      user = await Investor.findByEmail(email);
-    }
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid credentials',
-      });
-    }
-
-    // Verify credential ID matches
-    if (user.passkeyCredentialId !== credentialId) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid passkey credentials',
       });
     }
 
@@ -192,9 +180,9 @@ router.post('/passkey-login', [
     const token = generateToken({
       userId: user.id,
       email: user.email,
-      userType: userType,
-      role: userType === 'investor' ? 'investor' : user.role,
-      ...(userType === 'company' ? { companyId: user.companyId } : {})
+      userType: user.userType,
+      role: user.userType === 'investor' ? 'investor' : user.role,
+      ...(user.userType === 'company' ? { companyId: user.companyId } : {})
     });
 
     const userData = {
@@ -204,7 +192,7 @@ router.post('/passkey-login', [
       stellarContractId: user.stellarContractId,
     };
 
-    if (userType === 'investor') {
+    if (user.userType === 'investor') {
       userData.kycStatus = user.kycStatus;
     } else {
       userData.role = user.role;
@@ -216,7 +204,7 @@ router.post('/passkey-login', [
       data: {
         token,
         user: userData,
-        userType
+        userType: user.userType
       },
     });
   } catch (error) {

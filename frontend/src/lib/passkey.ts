@@ -10,6 +10,7 @@ export interface AuthResponse {
         token: string;
         investor?: any;
         user?: any;
+        userType?: 'investor' | 'company';
     };
 }
 
@@ -45,37 +46,28 @@ export class PasskeyClient {
     }
 
     /**
-     * Login with Passkey
-     * Uses WebAuthn directly to prompt for passkey selection
+     * Login with Passkey (Usernameless / Discoverable Credentials)
+     * No email required - browser shows all available passkeys for this site
      */
-    async login(email: string, userType: 'investor' | 'company' = 'investor'): Promise<AuthResponse> {
+    async discoverLogin(): Promise<AuthResponse> {
         try {
-            // 1. First, get the user's credential ID from the backend
-            // The backend needs to tell us which credential to expect
-            const configResponse = await fetch(`${this.baseUrl}/auth/passkey-login/challenge`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, userType }),
-            });
+            // 1. Get challenge from backend
+            const challengeResponse = await fetch(`${this.baseUrl}/auth/passkey-login/discover`);
 
-            if (!configResponse.ok) {
-                const errorData = await configResponse.json();
-                throw new Error(errorData.error || 'Failed to get login challenge');
+            if (!challengeResponse.ok) {
+                throw new Error('Failed to get login challenge');
             }
 
-            const { challenge, allowCredentials } = await configResponse.json();
+            const { challenge } = await challengeResponse.json();
 
-            // 2. Trigger Browser WebAuthn Prompt
+            // 2. Trigger WebAuthn with empty allowCredentials
+            // This prompts the browser to show all discoverable credentials for this RP
             const credential = await navigator.credentials.get({
                 publicKey: {
                     challenge: Uint8Array.from(atob(challenge), c => c.charCodeAt(0)),
-                    allowCredentials: allowCredentials?.map((cred: any) => ({
-                        id: Uint8Array.from(atob(cred.id.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
-                        type: 'public-key' as const,
-                        transports: cred.transports || ['internal', 'hybrid'],
-                    })),
+                    allowCredentials: [], // Empty = show all discoverable credentials
                     timeout: 60000,
-                    userVerification: 'preferred',
+                    userVerification: 'required',
                 },
             }) as PublicKeyCredential;
 
@@ -87,27 +79,25 @@ export class PasskeyClient {
             const credentialIdBase64 = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)))
                 .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 
-            // 3. Authenticate with Backend using the simple endpoint
-            const response = await fetch(`${this.baseUrl}/auth/passkey-login`, {
+            // 3. Authenticate with Backend using discover endpoint
+            // Backend looks up user by credentialId
+            const authResponse = await fetch(`${this.baseUrl}/auth/passkey-login/discover`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    email,
                     credentialId: credentialIdBase64,
-                    userType,
                 }),
             });
 
-            const data = await response.json();
+            const data = await authResponse.json();
 
-            if (!response.ok || !data.success) {
+            if (!authResponse.ok || !data.success) {
                 throw new Error(data.error || 'Authentication failed');
             }
 
             return data;
         } catch (error: any) {
-            console.error('Login error:', error);
-            // Provide better error messages
+            console.error('Discover login error:', error);
             if (error.name === 'NotAllowedError') {
                 throw new Error('Passkey authentication was cancelled or timed out');
             }

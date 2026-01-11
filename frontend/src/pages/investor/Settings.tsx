@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, User, Key, Mail, Shield, Check, Pencil, Save, X, ArrowUpRight, Copy, ExternalLink } from 'lucide-react';
+import { Loader2, User, Key, Mail, Shield, Check, Pencil, Save, X, ArrowUpRight, ArrowDownLeft, Copy, ExternalLink } from 'lucide-react';
 import { api } from '@/lib/api';
 import { passkeyClient } from '@/lib/passkey';
 import {
@@ -16,6 +16,7 @@ import {
     DialogTrigger,
     DialogFooter,
 } from "@/components/ui/dialog";
+import { DepositDialog } from '@/components/wallet/DepositDialog';
 
 interface WalletStatus {
     hasWallet: boolean;
@@ -140,6 +141,7 @@ export function Settings() {
 
     // Withdrawal State
     const [withdrawOpen, setWithdrawOpen] = useState(false);
+    const [depositOpen, setDepositOpen] = useState(false);
     const [withdrawStep, setWithdrawStep] = useState<'form' | 'review' | 'processing' | 'success'>('form');
     const [withdrawData, setWithdrawData] = useState({ amount: '', destination: '', asset: 'USDC' });
     const [withdrawTx, setWithdrawTx] = useState<{ xdr: string; networkPassphrase: string } | null>(null);
@@ -451,6 +453,18 @@ export function Settings() {
                                         <ExternalLink className="w-4 h-4" />
                                         <span className="text-xs">Explorer</span>
                                     </Button>
+                                    <Dialog open={depositOpen} onOpenChange={setDepositOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button
+                                                size="sm"
+                                                className="h-14 px-6 bg-emerald-600 hover:bg-emerald-700 flex flex-col items-center justify-center gap-1"
+                                            >
+                                                <ArrowDownLeft className="w-4 h-4" />
+                                                <span className="text-xs">Deposit</span>
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DepositDialog walletAddress={walletStatus.walletAddress!} />
+                                    </Dialog>
                                     <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
                                         <DialogTrigger asChild>
                                             <Button

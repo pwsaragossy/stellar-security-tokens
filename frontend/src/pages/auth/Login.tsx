@@ -3,42 +3,37 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { passkeyClient } from '@/lib/passkey';
-import { Building2, User, Wallet } from 'lucide-react';
+import { Building2, User, Fingerprint } from 'lucide-react';
 
 export function Login() {
-    const [email, setEmail] = useState('');
     const [userType, setUserType] = useState<'investor' | 'company'>('investor');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleLogin = async () => {
         setIsLoading(true);
         setError('');
 
         try {
-            // Authenticate with Passkey
-            const result = await passkeyClient.login(email, userType);
+            const result = await passkeyClient.discoverLogin();
 
             // Save Session
             localStorage.setItem('token', result.data.token);
             const user = result.data.user || result.data.investor;
             localStorage.setItem('user', JSON.stringify(user));
-            localStorage.setItem('userType', userType);
+            localStorage.setItem('userType', result.data.userType || 'investor');
 
             console.log('Login successful:', user.email);
 
-            // Redirect to appropriate Dashboard based on user type
-            if (userType === 'company') {
+            // Redirect based on user type
+            if (result.data.userType === 'company') {
                 navigate('/company/dashboard');
             } else {
                 navigate('/dashboard');
             }
-
         } catch (err: any) {
             console.error(err);
             setError(err.message || 'Failed to authenticate');
@@ -50,7 +45,7 @@ export function Login() {
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
             <div className="w-full max-w-md space-y-8 relative">
-                {/* Background Glow Effect - changes color based on userType */}
+                {/* Background Glow Effect */}
                 <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full blur-3xl -z-10 transition-colors duration-500 ${userType === 'investor' ? 'bg-blue-500/20' : 'bg-teal-500/20'}`} />
 
                 <div className="text-center space-y-2">
@@ -62,63 +57,48 @@ export function Login() {
                     <CardHeader>
                         <CardTitle className="text-white">Welcome Back</CardTitle>
                         <CardDescription className="text-slate-400">
-                            Select your role to log in.
+                            Sign in with your passkey to continue.
                         </CardDescription>
                     </CardHeader>
 
-                    <CardContent>
+                    <CardContent className="space-y-6">
+                        <Button
+                            onClick={handleLogin}
+                            className="w-full h-14 text-white font-semibold shadow-lg bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400"
+                            disabled={isLoading}
+                        >
+                            <Fingerprint className="w-5 h-5 mr-2" />
+                            {isLoading ? 'Authenticating...' : 'Login with Passkey'}
+                        </Button>
+
+                        {error && (
+                            <div className="text-sm text-red-400 bg-red-900/20 p-3 rounded-lg">
+                                {error}
+                            </div>
+                        )}
+
+                        <div className="p-3 bg-slate-800/50 border border-white/5 rounded-lg">
+                            <p className="text-xs text-slate-400 text-center">
+                                <strong>📱 Tip:</strong> Your device will show available accounts. Select yours and authenticate with biometrics.
+                            </p>
+                        </div>
+                    </CardContent>
+
+                    {/* Registration CTA */}
+                    <div className="px-6 pb-6">
                         <Tabs defaultValue="investor" onValueChange={(v) => setUserType(v as 'investor' | 'company')} className="w-full">
-                            <TabsList className="grid w-full grid-cols-2 mb-6 bg-white/5">
-                                <TabsTrigger value="investor" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
-                                    <User className="w-4 h-4 mr-2" />
+                            <TabsList className="grid w-full grid-cols-2 mb-4 bg-white/5">
+                                <TabsTrigger value="investor" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-xs">
+                                    <User className="w-3 h-3 mr-1" />
                                     Investor
                                 </TabsTrigger>
-                                <TabsTrigger value="company" className="data-[state=active]:bg-teal-600 data-[state=active]:text-white">
-                                    <Building2 className="w-4 h-4 mr-2" />
+                                <TabsTrigger value="company" className="data-[state=active]:bg-teal-600 data-[state=active]:text-white text-xs">
+                                    <Building2 className="w-3 h-3 mr-1" />
                                     Company
                                 </TabsTrigger>
                             </TabsList>
-
-                            <form onSubmit={handleLogin}>
-                                <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Input
-                                            type="email"
-                                            placeholder={userType === 'investor' ? "investor@example.com" : "company@domain.com"}
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            required
-                                            className={`bg-white/5 border-white/10 transition-colors ${userType === 'investor' ? 'focus:border-blue-500/50' : 'focus:border-teal-500/50'}`}
-                                        />
-                                    </div>
-                                    {error && (
-                                        <div className="text-sm text-red-400 bg-red-900/20 p-2 rounded">
-                                            {error}
-                                        </div>
-                                    )}
-
-                                    {/* Passkey disclaimer */}
-                                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                                        <p className="text-xs text-amber-200/80">
-                                            <strong>📱 Important:</strong> You must log in from the same device where you created your account. Your passkey is securely stored on that device.
-                                        </p>
-                                    </div>
-
-                                    <Button
-                                        type="submit"
-                                        className={`w-full text-white font-semibold shadow-lg transition-colors ${userType === 'investor' ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20' : 'bg-teal-600 hover:bg-teal-500 shadow-teal-900/20'}`}
-                                        disabled={isLoading}
-                                    >
-                                        <Wallet className="w-4 h-4 mr-2" />
-                                        {isLoading ? 'Logging in...' : 'Login with Passkey'}
-                                    </Button>
-                                </div>
-                            </form>
                         </Tabs>
-                    </CardContent>
 
-                    {/* Distinct Registration CTAs based on userType */}
-                    <div className="px-6 pb-6">
                         <div className={`p-4 rounded-lg border transition-colors ${userType === 'investor' ? 'bg-blue-500/5 border-blue-500/20' : 'bg-teal-500/5 border-teal-500/20'}`}>
                             <p className="text-sm text-center text-slate-300 mb-3">
                                 {userType === 'investor'
@@ -152,4 +132,3 @@ export function Login() {
         </div>
     );
 }
-
