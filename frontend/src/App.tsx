@@ -12,6 +12,7 @@ import { OfferDetails } from './pages/investor/OfferDetails';
 import { Portfolio } from './pages/investor/Portfolio';
 import { Transactions } from './pages/investor/Transactions';
 import { Settings } from './pages/investor/Settings';
+import { Wallet } from './pages/investor/Wallet';
 
 // Admin imports
 import { AdminLayout } from './layouts/AdminLayout';
@@ -31,6 +32,8 @@ import { PayInvestors } from './pages/company/PayInvestors';
 import { Reports } from './pages/company/Reports';
 import { Settings as CompanySettings } from './pages/company/Settings';
 import { DefaultCases } from './pages/admin/DefaultCases';
+import { AdminSettings } from './pages/admin/Settings';
+import { Companies } from './pages/admin/Companies';
 
 function App() {
   return (
@@ -51,6 +54,7 @@ function App() {
           <Route path="market" element={<Marketplace />} />
           <Route path="market/:id" element={<OfferDetails />} />
           <Route path="transactions" element={<Transactions />} />
+          <Route path="wallet" element={<Wallet />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 
@@ -72,9 +76,11 @@ function App() {
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="users" element={<UserManagement />} />
+          <Route path="companies" element={<Companies />} />
           <Route path="wallets" element={<Wallets />} />
           <Route path="fees" element={<FeeConfig />} />
           <Route path="defaults" element={<DefaultCases />} />
+          <Route path="settings" element={<AdminSettings />} />
         </Route>
       </Routes>
     </BrowserRouter>

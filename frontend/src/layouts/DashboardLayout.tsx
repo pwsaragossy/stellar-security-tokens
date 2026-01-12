@@ -1,5 +1,5 @@
 import { Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, PieChart, ArrowLeftRight, Settings, LogOut, Wallet } from 'lucide-react';
+import { LayoutDashboard, PieChart, ArrowLeftRight, Settings, LogOut, Wallet, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
@@ -20,8 +20,9 @@ export function DashboardLayout() {
     const navItems = [
         { id: 'dashboard', label: 'Overview', icon: LayoutDashboard, path: '/dashboard' },
         { id: 'portfolio', label: 'My Portfolio', icon: PieChart, path: '/portfolio' },
-        { id: 'market', label: 'Marketplace', icon: Wallet, path: '/market' },
+        { id: 'market', label: 'Marketplace', icon: Store, path: '/market' },
         { id: 'transactions', label: 'Transactions', icon: ArrowLeftRight, path: '/transactions' },
+        { id: 'wallet', label: 'Wallet', icon: Wallet, path: '/wallet' },
         { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
     ];
 

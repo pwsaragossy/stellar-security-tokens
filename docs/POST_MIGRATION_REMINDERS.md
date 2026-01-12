@@ -52,4 +52,29 @@ This document tracks items that need to be addressed **after** the initial Mainn
 - [x] **Memo Validation**: Enforced unique Memo checks for all deposits. Backend now relaxes sender validation if Memo matches (supporting Exchanges).
 - [ ] **Channel Accounts (Worker Pool)**: Implement Channel Accounts for the `Distributor` wallet to prevent `Bad Sequence Number` errors during high-volume token distributions.
 
+## 6. Key Management (Pre-Mainnet Critical)
+
+> ⚠️ **Current State**: Keys stored in `.env` file - OK for testing, NOT for production.
+
+### The Problem
+- Single point of failure (if `.env` is compromised, all funds at risk)
+- No operational security (one person can drain treasury)
+- Not suitable for production with real funds
+
+### Recommended Solution: Stellar Native Multisig
+
+**Phase 1 (Before Mainnet)**:
+- [ ] Convert Treasury account to **2-of-2 multisig** requiring both Pedro & Gabriel signatures
+- [ ] Remove `TREASURY_SECRET_KEY` from `.env` after conversion
+- [ ] Queue Treasury transactions via admin UI, require second admin passkey confirmation
+- [ ] Same for Issuer account if token operations need governance
+
+**Phase 2 (Growth)**:
+- [ ] Consider **Ledger hardware wallets** as signers for added security
+- [ ] Evaluate **MPC solutions** (Fireblocks, Fordefi) if institutional requirements arise
+
+### Implementation Notes
+- Your codebase already has `multisig_transactions` table infrastructure
+- Admin passkeys can serve as signer authorization mechanism
+- No external dependencies needed - pure Stellar native feature
 

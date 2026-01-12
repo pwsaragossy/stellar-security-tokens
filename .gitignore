@@ -16,3 +16,4 @@ coverage/
 .obsidian/core-plugins.json
 .obsidian/workspace.json
 backend/tests/integration/models/PlatformAdmin.test.js
+docs/ADMIN_CREDENTIALS.md

@@ -1,5 +1,5 @@
 import { PasskeyServer } from 'passkey-kit';
-import { getNetworkPassphrase, getIssuerKeypair, getSorobanRpcUrl, isTestnet } from '../config/stellar.js';
+import { getNetworkPassphrase, getIssuerKeypair, getSorobanRpcUrl, isTestnet, getTreasuryKeypair } from '../config/stellar.js';
 import prisma from '../config/prisma.js';
 import {
   Contract,
@@ -8,7 +8,8 @@ import {
   xdr,
   StrKey,
   hash,
-  Address
+  Address,
+  Account
 } from '@stellar/stellar-sdk';
 
 /**
@@ -504,28 +505,124 @@ export class PasskeyWalletService {
     // Fetch balances if wallet exists
     if (hasWallet && user.stellarContractId) {
       try {
-        const { StellarService } = await import('./stellar.service.js');
-        const accountInfo = await StellarService.getAccountInfo(user.stellarContractId);
+        // Detect if this is a Soroban contract (starts with C) vs classic account (starts with G)
+        const isContractAddress = user.stellarContractId.startsWith('C');
 
-        const xlmBalance = accountInfo.balances.find(b => b.asset_type === 'native')?.balance || '0';
-        // Assuming USDC has asset code 'USDC' - looking for any asset with code 'USDC'
-        const usdcBalance = accountInfo.balances.find(b => b.asset_code === 'USDC')?.balance || '0';
+        if (isContractAddress) {
+          // Use Soroban RPC to query SAC token balances
+          const balances = await this.getSorobanWalletBalances(user.stellarContractId);
+          result.balances = balances;
 
-        result.balances = {
-          xlm: xlmBalance,
-          usdc: usdcBalance
-        };
+          // Explorer link for contracts
+          result.explorer = `https://stellar.expert/explorer/${isTestnet() ? 'testnet' : 'public'}/contract/${user.stellarContractId}`;
+        } else {
+          // Classic account - use Horizon API
+          const { StellarService } = await import('./stellar.service.js');
+          const accountInfo = await StellarService.getAccountInfo(user.stellarContractId);
 
-        // Add explorer link (using testnet for now as per env)
-        result.explorer = `https://stellar.expert/explorer/${isTestnet() ? 'testnet' : 'public'}/account/${user.stellarContractId}`;
+          const xlmBalance = accountInfo.balances.find(b => b.asset_type === 'native')?.balance || '0';
+          const usdcBalance = accountInfo.balances.find(b => b.asset_code === 'USDC')?.balance || '0';
+
+          result.balances = {
+            xlm: xlmBalance,
+            usdc: usdcBalance
+          };
+
+          result.explorer = `https://stellar.expert/explorer/${isTestnet() ? 'testnet' : 'public'}/account/${user.stellarContractId}`;
+        }
       } catch (error) {
         console.error('Failed to fetch wallet balances:', error);
-        // Don't fail the whole request, just omit balances
-        result.balancesError = 'Could not fetch on-chain balances';
+        // Don't fail the whole request, return zeros instead of error
+        result.balances = {
+          xlm: '0',
+          usdc: '0'
+        };
+        result.balancesNote = 'Balance query pending';
       }
     }
 
     return result;
+  }
+
+  /**
+   * Query Soroban token balances for a smart wallet contract
+   * Uses Soroban RPC to simulate balance() calls on SAC token contracts
+   * 
+   * @param {string} walletContractId - The smart wallet contract address (C...)
+   * @returns {Promise<Object>} Object with xlm and usdc balance strings
+   */
+  static async getSorobanWalletBalances(walletContractId) {
+    const { rpc, scValToNative, nativeToScVal } = await import('@stellar/stellar-sdk');
+    const rpcUrl = getSorobanRpcUrl();
+    const server = new rpc.Server(rpcUrl, { allowHttp: true });
+
+    const balances = {
+      xlm: '0',
+      usdc: '0'
+    };
+
+    // SAC contract IDs for testnet
+    // Native XLM SAC: CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC (testnet)
+    // These are deterministic based on asset + network
+    const xlmSacContractId = process.env.XLM_SAC_CONTRACT_ID;
+    const usdcSacContractId = process.env.USDC_SAC_CONTRACT_ID;
+
+    // Helper to query SAC balance
+    const querySacBalance = async (sacContractId, walletAddress) => {
+      console.log(`[Balance Debug] Querying SAC: ${sacContractId} for wallet ${walletAddress}`);
+      if (!sacContractId) {
+        console.log('[Balance Debug] Missing SAC Contract ID');
+        return '0';
+      }
+
+      try {
+        const contract = new Contract(sacContractId);
+        const walletScVal = nativeToScVal(walletAddress, { type: 'address' });
+
+        // Build the balance call
+        const balanceOp = contract.call('balance', walletScVal);
+
+        // Simulate the transaction to get the result
+        // Use Treasury as source account (must be a valid G-address for simulation context)
+        const sourceAccount = new Account(getTreasuryKeypair().publicKey(), '0');
+
+        const simResult = await server.simulateTransaction(
+          new TransactionBuilder(
+            sourceAccount,
+            { fee: BASE_FEE, networkPassphrase: getNetworkPassphrase() }
+          )
+            .addOperation(balanceOp)
+            .setTimeout(30)
+            .build()
+        );
+
+        if (simResult.result) {
+          // Parse the i128 result to a string
+          const balanceScVal = simResult.result.retval;
+          const balanceRaw = scValToNative(balanceScVal);
+          // Convert from stroops (7 decimals) to display value
+          const balance = (Number(balanceRaw) / 10_000_000).toFixed(7);
+          console.log(`[Balance Debug] Success. Raw: ${balanceRaw}, Formatted: ${balance}`);
+          return balance;
+        } else {
+          console.log('[Balance Debug] Simulation returned no result:', JSON.stringify(simResult));
+        }
+      } catch (err) {
+        console.log(`SAC balance query failed for ${sacContractId}:`, err.message);
+      }
+      return '0';
+    };
+
+    // Query both balances in parallel
+    const [xlmBalance, usdcBalance] = await Promise.all([
+      querySacBalance(xlmSacContractId, walletContractId),
+      querySacBalance(usdcSacContractId, walletContractId)
+    ]);
+
+    balances.xlm = xlmBalance;
+    balances.usdc = usdcBalance;
+
+    return balances;
   }
 
 

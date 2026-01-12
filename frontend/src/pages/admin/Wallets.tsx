@@ -112,7 +112,7 @@ export function Wallets() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-white">System Water Management</h2>
+                    <h2 className="text-2xl font-bold tracking-tight text-white">System Wallet Management</h2>
                     <p className="text-muted-foreground">Monitor and control Treasury, Issuer, and Distributor wallets.</p>
                 </div>
             </div>

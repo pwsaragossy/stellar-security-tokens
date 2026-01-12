@@ -4,34 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, User, Key, Mail, Shield, Check, Pencil, Save, X, ArrowUpRight, ArrowDownLeft, Copy, ExternalLink } from 'lucide-react';
+import { Loader2, User, Mail, Check, Pencil, Save, X } from 'lucide-react';
 import { api } from '@/lib/api';
-import { passkeyClient } from '@/lib/passkey';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-    DialogFooter,
-} from "@/components/ui/dialog";
-import { DepositDialog } from '@/components/wallet/DepositDialog';
-
-interface WalletStatus {
-    hasWallet: boolean;
-    walletAddress?: string;
-    passkeyRegistered: boolean;
-    balances?: {
-        xlm: string;
-        usdc: string;
-    };
-    explorer?: string;
-}
 
 export function Settings() {
     const [user, setUser] = useState<any>(null);
-    const [walletStatus, setWalletStatus] = useState<WalletStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const [resending, setResending] = useState(false);
     const [resendMessage, setResendMessage] = useState<string | null>(null);
@@ -48,14 +25,11 @@ export function Settings() {
                 const userStr = localStorage.getItem('user');
                 let storedUser = JSON.parse(userStr || '{}');
 
-                // Fetch fresh user data from API to get current emailVerified status
                 if (storedUser.id) {
                     try {
                         const userResponse = await api.get(`/investors/${storedUser.id}`);
                         const freshUser = userResponse.data || userResponse;
-                        // Merge fresh data with stored data
                         storedUser = { ...storedUser, ...freshUser };
-                        // Update localStorage with fresh data
                         localStorage.setItem('user', JSON.stringify(storedUser));
                     } catch (err) {
                         console.log('Could not fetch fresh user data, using cached');
@@ -64,23 +38,6 @@ export function Settings() {
 
                 setUser(storedUser);
                 setEditForm({ name: storedUser.name || '', document: storedUser.document || '' });
-
-                if (storedUser.id) {
-                    try {
-                        const response = await api.get(`/investors/${storedUser.id}/wallet-status`);
-                        const data = response.data || response;
-                        setWalletStatus({
-                            hasWallet: data.hasWallet || !!data.contractId,
-                            walletAddress: data.contractId || data.walletAddress,
-                            passkeyRegistered: data.passkeyRegistered !== false,
-                        });
-                    } catch {
-                        setWalletStatus({
-                            hasWallet: false,
-                            passkeyRegistered: true,
-                        });
-                    }
-                }
             } catch (err) {
                 console.error('Failed to fetch settings:', err);
             } finally {
@@ -139,96 +96,32 @@ export function Settings() {
         setSaveMessage(null);
     };
 
-    // Withdrawal State
-    const [withdrawOpen, setWithdrawOpen] = useState(false);
-    const [depositOpen, setDepositOpen] = useState(false);
-    const [withdrawStep, setWithdrawStep] = useState<'form' | 'review' | 'processing' | 'success'>('form');
-    const [withdrawData, setWithdrawData] = useState({ amount: '', destination: '', asset: 'USDC' });
-    const [withdrawTx, setWithdrawTx] = useState<{ xdr: string; networkPassphrase: string } | null>(null);
-    const [withdrawError, setWithdrawError] = useState<string | null>(null);
-
-    const handleProposeWithdrawal = async () => {
-        if (!user?.id || !withdrawData.amount || !withdrawData.destination) return;
-
-        setWithdrawStep('processing');
-        setWithdrawError(null);
-
-        try {
-            const response = await api.post(`/investors/${user.id}/withdraw/propose`, {
-                amount: withdrawData.amount,
-                destination: withdrawData.destination,
-                assetCode: withdrawData.asset
-            });
-
-            const { data } = response;
-            setWithdrawTx(data);
-            setWithdrawStep('review');
-        } catch (err: any) {
-            setWithdrawError(err.message || 'Failed to propose withdrawal');
-            setWithdrawStep('form');
-        }
-    };
-
-    const handleSubmitWithdrawal = async () => {
-        if (!withdrawTx) return;
-
-        setWithdrawStep('processing');
-        setWithdrawError(null);
-
-        try {
-            // 1. Sign with Passkey
-            // Note: passkeyClient.signTransaction expects XDR string and returns signed XDR string
-            const signedXdr = await passkeyClient.signTransaction(withdrawTx.xdr);
-
-            // 2. Submit to backend
-            await api.post('/investors/withdraw/submit', { signedXdr });
-
-            setWithdrawStep('success');
-            // Refresh wallet status
-            const statusResponse = await api.get(`/investors/${user.id}/wallet-status`);
-            const statusData = statusResponse.data || statusResponse;
-            setWalletStatus({
-                hasWallet: statusData.hasWallet || !!statusData.contractId,
-                walletAddress: statusData.contractId || statusData.walletAddress,
-                passkeyRegistered: statusData.passkeyRegistered !== false,
-                balances: statusData.balances,
-                explorer: statusData.explorer,
-            });
-        } catch (err: any) {
-            console.error('Withdrawal failed:', err);
-            setWithdrawError(err.message || 'Failed to process withdrawal');
-            // If checking fails, we might stay on review or go back to form
-            // But usually signing failure means we stay directly on processing/review or error state
-            // Let's go back to review to retry
-            setWithdrawStep('review');
-        }
-    };
-
-    const resetWithdrawal = () => {
-        setWithdrawOpen(false);
-        setWithdrawStep('form');
-        setWithdrawData({ amount: '', destination: '', asset: 'USDC' });
-        setWithdrawTx(null);
-        setWithdrawError(null);
-    };
-
     if (loading) {
         return (
             <div className="flex items-center justify-center h-[50vh]">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="w-10 h-10 animate-spin text-[hsl(43_45%_55%)]" />
+                    <p className="text-muted-foreground text-sm">Loading settings...</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="space-y-6 max-w-2xl">
+        <div className="space-y-8 max-w-2xl">
+            {/* Header */}
+            <div className="space-y-1 animate-fade-in">
+                <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
+                <p className="text-muted-foreground">Manage your account and preferences</p>
+            </div>
+
             {/* Account Information */}
-            <Card className="glass-panel border-white/5 bg-white/5">
+            <Card className="glass-panel rounded-2xl animate-fade-in-up animate-delay-1">
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div>
-                            <CardTitle className="flex items-center gap-2">
-                                <User className="w-5 h-5" />
+                            <CardTitle className="text-xl flex items-center gap-2">
+                                <User className="w-5 h-5 text-[hsl(43_45%_55%)]" />
                                 Account Information
                             </CardTitle>
                             <CardDescription>Your personal details</CardDescription>
@@ -238,7 +131,7 @@ export function Settings() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => setIsEditing(true)}
-                                className="border-white/10"
+                                className="rounded-xl"
                             >
                                 <Pencil className="w-4 h-4 mr-2" />
                                 Edit
@@ -249,7 +142,7 @@ export function Settings() {
                                     variant="outline"
                                     size="sm"
                                     onClick={handleCancelEdit}
-                                    className="border-white/10"
+                                    className="rounded-xl"
                                 >
                                     <X className="w-4 h-4 mr-2" />
                                     Cancel
@@ -258,7 +151,7 @@ export function Settings() {
                                     size="sm"
                                     onClick={handleSaveProfile}
                                     disabled={saving}
-                                    className="bg-blue-600 hover:bg-blue-700"
+                                    className="bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_50%)] text-white rounded-xl"
                                 >
                                     {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                                     Save
@@ -269,8 +162,8 @@ export function Settings() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {saveMessage && (
-                        <div className={`p-3 rounded-lg text-sm ${saveMessage.type === 'success'
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        <div className={`p-3 rounded-xl text-sm ${saveMessage.type === 'success'
+                            ? 'bg-[hsl(160_60%_40%/0.1)] text-[hsl(160_60%_40%)] border border-[hsl(160_60%_40%/0.2)]'
                             : 'bg-red-500/10 text-red-400 border border-red-500/20'
                             }`}>
                             {saveMessage.text}
@@ -285,7 +178,7 @@ export function Settings() {
                                     id="name"
                                     value={editForm.name}
                                     onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                                    className="bg-white/5 border-white/10"
+                                    className="bg-muted/30 border-border/50 rounded-xl"
                                 />
                             </div>
                             <div className="space-y-2">
@@ -294,7 +187,7 @@ export function Settings() {
                                     id="email"
                                     value={user?.email || ''}
                                     disabled
-                                    className="bg-white/5 border-white/10 opacity-50"
+                                    className="bg-muted/30 border-border/50 rounded-xl opacity-50"
                                 />
                                 <p className="text-xs text-muted-foreground">Email cannot be changed</p>
                             </div>
@@ -304,15 +197,15 @@ export function Settings() {
                                     id="document"
                                     value={editForm.document}
                                     onChange={(e) => setEditForm({ ...editForm, document: e.target.value })}
-                                    className="bg-white/5 border-white/10"
+                                    className="bg-muted/30 border-border/50 rounded-xl"
                                 />
                             </div>
                             <div className="space-y-1">
                                 <Label>KYC Status</Label>
                                 <div className="pt-2">
-                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${user?.kycStatus === 'approved'
-                                        ? 'bg-emerald-400/10 text-emerald-400'
-                                        : 'bg-yellow-400/10 text-yellow-400'
+                                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border ${user?.kycStatus === 'approved'
+                                        ? 'bg-[hsl(160_60%_40%/0.15)] text-[hsl(160_60%_40%)] border-[hsl(160_60%_40%/0.3)]'
+                                        : 'bg-[hsl(35_90%_50%/0.15)] text-[hsl(35_90%_50%)] border-[hsl(35_90%_50%/0.3)]'
                                         }`}>
                                         {user?.kycStatus === 'approved' && <Check className="w-3 h-3" />}
                                         {user?.kycStatus || 'pending'}
@@ -324,21 +217,21 @@ export function Settings() {
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-1">
                                 <p className="text-sm text-muted-foreground">Name</p>
-                                <p className="font-medium text-white">{user?.name || 'N/A'}</p>
+                                <p className="font-medium">{user?.name || 'N/A'}</p>
                             </div>
                             <div className="space-y-1">
                                 <p className="text-sm text-muted-foreground">Email</p>
-                                <p className="font-medium text-white">{user?.email || 'N/A'}</p>
+                                <p className="font-medium">{user?.email || 'N/A'}</p>
                             </div>
                             <div className="space-y-1">
                                 <p className="text-sm text-muted-foreground">Document</p>
-                                <p className="font-medium text-white">{user?.document || 'N/A'}</p>
+                                <p className="font-medium">{user?.document || 'N/A'}</p>
                             </div>
                             <div className="space-y-1">
                                 <p className="text-sm text-muted-foreground">KYC Status</p>
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${user?.kycStatus === 'approved'
-                                    ? 'bg-emerald-400/10 text-emerald-400'
-                                    : 'bg-yellow-400/10 text-yellow-400'
+                                <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border ${user?.kycStatus === 'approved'
+                                    ? 'bg-[hsl(160_60%_40%/0.15)] text-[hsl(160_60%_40%)] border-[hsl(160_60%_40%/0.3)]'
+                                    : 'bg-[hsl(35_90%_50%/0.15)] text-[hsl(35_90%_50%)] border-[hsl(35_90%_50%/0.3)]'
                                     }`}>
                                     {user?.kycStatus === 'approved' && <Check className="w-3 h-3" />}
                                     {user?.kycStatus || 'pending'}
@@ -350,10 +243,10 @@ export function Settings() {
             </Card>
 
             {/* Email Verification */}
-            <Card className="glass-panel border-white/5 bg-white/5">
+            <Card className="glass-panel rounded-2xl animate-fade-in-up animate-delay-2">
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Mail className="w-5 h-5" />
+                    <CardTitle className="text-xl flex items-center gap-2">
+                        <Mail className="w-5 h-5 text-[hsl(43_45%_55%)]" />
                         Email Verification
                     </CardTitle>
                 </CardHeader>
@@ -361,7 +254,7 @@ export function Settings() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm text-muted-foreground">Status</p>
-                            <span className={`inline-flex items-center gap-1 text-sm ${user?.emailVerified ? 'text-emerald-400' : 'text-yellow-400'
+                            <span className={`inline-flex items-center gap-1 text-sm ${user?.emailVerified ? 'text-[hsl(160_60%_40%)]' : 'text-[hsl(35_90%_50%)]'
                                 }`}>
                                 {user?.emailVerified ? (
                                     <>
@@ -377,7 +270,7 @@ export function Settings() {
                                 size="sm"
                                 onClick={handleResendVerification}
                                 disabled={resending}
-                                className="border-white/10"
+                                className="rounded-xl"
                             >
                                 {resending ? (
                                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -387,255 +280,9 @@ export function Settings() {
                         )}
                     </div>
                     {resendMessage && (
-                        <p className={`text-sm ${resendMessage.includes('sent') ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <p className={`text-sm ${resendMessage.includes('sent') ? 'text-[hsl(160_60%_40%)]' : 'text-red-400'}`}>
                             {resendMessage}
                         </p>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* Connected Wallet & Security */}
-            <Card className="glass-panel border-white/5 bg-white/5">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Key className="w-5 h-5" />
-                        Connected Wallet & Security
-                    </CardTitle>
-                    <CardDescription>Your blockchain wallet and authentication</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    {/* Security Method */}
-                    <div className="flex items-center gap-4 p-4 rounded-lg bg-white/5 border border-white/10">
-                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
-                            <Shield className="w-5 h-5 text-blue-400" />
-                        </div>
-                        <div className="flex-1">
-                            <p className="font-medium text-white">Passkey Authentication</p>
-                            <p className="text-sm text-muted-foreground">
-                                {walletStatus?.passkeyRegistered ? 'Active and secured by device biometric' : 'Not registered'}
-                            </p>
-                        </div>
-                        <span className={`px-2 py-1 rounded-full text-xs ${walletStatus?.passkeyRegistered
-                            ? 'bg-emerald-400/10 text-emerald-400'
-                            : 'bg-red-400/10 text-red-400'
-                            }`}>
-                            {walletStatus?.passkeyRegistered ? 'Active' : 'Inactive'}
-                        </span>
-                    </div>
-
-                    {/* Wallet Details */}
-                    {walletStatus?.walletAddress && (
-                        <div className="space-y-4 pt-4 border-t border-white/10">
-                            <div className="flex items-end justify-between">
-                                <div className="space-y-4">
-                                    <div className="flex gap-4">
-                                        <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                                            <p className="text-xs text-muted-foreground mb-1">USDC Balance</p>
-                                            <p className="text-lg font-semibold text-white">
-                                                ${Number(walletStatus.balances?.usdc || 0).toFixed(2)}
-                                            </p>
-                                        </div>
-                                        <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                                            <p className="text-xs text-muted-foreground mb-1">XLM Balance</p>
-                                            <p className="text-lg font-semibold text-white">
-                                                {Number(walletStatus.balances?.xlm || 0).toFixed(4)} XLM
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-14 px-4 border-white/10 flex flex-col items-center justify-center gap-1"
-                                        onClick={() => window.open(walletStatus.explorer, '_blank')}
-                                    >
-                                        <ExternalLink className="w-4 h-4" />
-                                        <span className="text-xs">Explorer</span>
-                                    </Button>
-                                    <Dialog open={depositOpen} onOpenChange={setDepositOpen}>
-                                        <DialogTrigger asChild>
-                                            <Button
-                                                size="sm"
-                                                className="h-14 px-6 bg-emerald-600 hover:bg-emerald-700 flex flex-col items-center justify-center gap-1"
-                                            >
-                                                <ArrowDownLeft className="w-4 h-4" />
-                                                <span className="text-xs">Deposit</span>
-                                            </Button>
-                                        </DialogTrigger>
-                                        <DepositDialog walletAddress={walletStatus.walletAddress!} />
-                                    </Dialog>
-                                    <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
-                                        <DialogTrigger asChild>
-                                            <Button
-                                                size="sm"
-                                                className="h-14 px-6 bg-blue-600 hover:bg-blue-700 flex flex-col items-center justify-center gap-1"
-                                                onClick={() => setWithdrawStep('form')}
-                                            >
-                                                <ArrowUpRight className="w-4 h-4" />
-                                                <span className="text-xs">Withdraw</span>
-                                            </Button>
-                                        </DialogTrigger>
-                                        <DialogContent className="sm:max-w-md bg-slate-900 border-white/10 text-white">
-                                            <DialogHeader>
-                                                <DialogTitle>Withdraw Funds</DialogTitle>
-                                                <DialogDescription>
-                                                    Send assets from your wallet to another Stellar address.
-                                                </DialogDescription>
-                                            </DialogHeader>
-
-                                            {withdrawStep === 'form' && (
-                                                <div className="space-y-4 py-4">
-                                                    <div className="space-y-2">
-                                                        <Label>Asset</Label>
-                                                        <div className="flex gap-2">
-                                                            <Button
-                                                                variant={withdrawData.asset === 'USDC' ? 'default' : 'outline'}
-                                                                onClick={() => setWithdrawData({ ...withdrawData, asset: 'USDC' })}
-                                                                className={withdrawData.asset === 'USDC' ? 'bg-blue-600' : 'border-white/10'}
-                                                            >
-                                                                USDC
-                                                            </Button>
-                                                            <Button
-                                                                variant={withdrawData.asset === 'XLM' ? 'default' : 'outline'}
-                                                                onClick={() => setWithdrawData({ ...withdrawData, asset: 'XLM' })}
-                                                                className={withdrawData.asset === 'XLM' ? 'bg-blue-600' : 'border-white/10'}
-                                                            >
-                                                                XLM
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <Label htmlFor="amount">Amount</Label>
-                                                        <Input
-                                                            id="amount"
-                                                            type="number"
-                                                            placeholder="0.00"
-                                                            value={withdrawData.amount}
-                                                            onChange={(e) => setWithdrawData({ ...withdrawData, amount: e.target.value })}
-                                                            className="bg-white/5 border-white/10"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <Label htmlFor="destination">Destination Address</Label>
-                                                        <Input
-                                                            id="destination"
-                                                            placeholder="G..."
-                                                            value={withdrawData.destination}
-                                                            onChange={(e) => setWithdrawData({ ...withdrawData, destination: e.target.value })}
-                                                            className="bg-white/5 border-white/10"
-                                                        />
-                                                        <p className="text-xs text-gray-400">Ensure the address accepts {withdrawData.asset}.</p>
-                                                    </div>
-                                                    {withdrawError && (
-                                                        <p className="text-sm text-red-400">{withdrawError}</p>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {withdrawStep === 'review' && (
-                                                <div className="space-y-4 py-4">
-                                                    <div className="p-4 rounded-lg bg-white/5 border border-white/10 space-y-2">
-                                                        <div className="flex justify-between">
-                                                            <span className="text-sm text-gray-400">Asset</span>
-                                                            <span className="font-medium">{withdrawData.asset}</span>
-                                                        </div>
-                                                        <div className="flex justify-between">
-                                                            <span className="text-sm text-gray-400">Amount</span>
-                                                            <span className="font-medium text-lg">{withdrawData.amount}</span>
-                                                        </div>
-                                                        <div className="pt-2 border-t border-white/10">
-                                                            <span className="text-sm text-gray-400 block mb-1">Destination</span>
-                                                            <span className="text-xs font-mono break-all text-gray-300">{withdrawData.destination}</span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 p-3 bg-blue-500/10 text-blue-400 rounded-lg text-sm">
-                                                        <Shield className="w-4 h-4" />
-                                                        You will be asked to sign with your Passkey.
-                                                    </div>
-                                                    {withdrawError && (
-                                                        <p className="text-sm text-red-400">{withdrawError}</p>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {withdrawStep === 'processing' && (
-                                                <div className="py-8 flex flex-col items-center justify-center space-y-4">
-                                                    <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                                                    <p className="text-center text-gray-400">Processing withdrawal...</p>
-                                                </div>
-                                            )}
-
-                                            {withdrawStep === 'success' && (
-                                                <div className="py-8 flex flex-col items-center justify-center space-y-4">
-                                                    <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                                                        <Check className="w-6 h-6 text-emerald-400" />
-                                                    </div>
-                                                    <div className="text-center">
-                                                        <h3 className="font-medium text-lg">Withdrawal Successful</h3>
-                                                        <p className="text-sm text-gray-400">Your funds have been sent.</p>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <DialogFooter className="gap-2 sm:gap-0">
-                                                {withdrawStep === 'form' && (
-                                                    <>
-                                                        <Button variant="ghost" onClick={() => setWithdrawOpen(false)}>Cancel</Button>
-                                                        <Button onClick={handleProposeWithdrawal} disabled={!withdrawData.amount || !withdrawData.destination}>Review</Button>
-                                                    </>
-                                                )}
-                                                {withdrawStep === 'review' && (
-                                                    <>
-                                                        <Button variant="ghost" onClick={() => setWithdrawStep('form')}>Back</Button>
-                                                        <Button onClick={handleSubmitWithdrawal} className="bg-blue-600 hover:bg-blue-700">Confirm & Sign</Button>
-                                                    </>
-                                                )}
-                                                {withdrawStep === 'success' && (
-                                                    <Button onClick={resetWithdrawal} className="w-full">Close</Button>
-                                                )}
-                                            </DialogFooter>
-                                        </DialogContent>
-                                    </Dialog>
-                                </div>
-                            </div>
-
-                            <div className="p-4 rounded-lg bg-white/5 border border-white/10 space-y-3">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <p className="text-sm font-medium text-white">Deposit Address</p>
-                                        <span className="px-2 py-0.5 rounded text-[10px] bg-blue-500/20 text-blue-400">Network: Stellar Testnet</span>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-2 p-3 bg-black/40 rounded-lg border border-white/5">
-                                        <p className="text-xs font-mono text-gray-300 break-all">{walletStatus.walletAddress}</p>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-8 w-8 p-0 hover:bg-white/10"
-                                            onClick={() => navigator.clipboard.writeText(walletStatus.walletAddress!)}
-                                        >
-                                            <span className="sr-only">Copy</span>
-                                            <Copy className="w-4 h-4 text-gray-400" />
-                                        </Button>
-                                    </div>
-                                    <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                                        <div className="flex items-start gap-2">
-                                            <Shield className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                                            <div>
-                                                <p className="font-semibold text-red-400 text-sm">Critical Warning</p>
-                                                <p className="text-xs text-red-300 mt-1">
-                                                    Only send <strong>Stellar Network USDC</strong> (Native).
-                                                    <br />
-                                                    Do <strong>NOT</strong> send USDC from Ethereum, Solana, or Polygon directly.
-                                                    <br />
-                                                    Sending wrong chain assets will result in <strong>permanent loss of funds</strong>.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     )}
                 </CardContent>
             </Card>

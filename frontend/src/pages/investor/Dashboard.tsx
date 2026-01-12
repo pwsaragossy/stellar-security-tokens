@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, DollarSign, Activity, Loader2, Clock } from "lucide-react";
+import { TrendingUp, DollarSign, Activity, Loader2, Clock, Briefcase } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 
 export function InvestorDashboard() {
@@ -8,14 +8,17 @@ export function InvestorDashboard() {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-[50vh]">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="w-10 h-10 animate-spin text-[hsl(43_45%_55%)]" />
+                    <p className="text-muted-foreground text-sm">Loading your portfolio...</p>
+                </div>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="p-4 bg-red-500/10 text-red-400 rounded-lg border border-red-500/20">
+            <div className="p-4 bg-red-500/10 text-red-400 rounded-xl border border-red-500/20 animate-fade-in">
                 Failed to load dashboard data: {error}. Is the backend running?
             </div>
         );
@@ -24,14 +27,16 @@ export function InvestorDashboard() {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8">
             {/* KYC Pending Alert */}
             {user.kycStatus === 'pending' && (
-                <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-center gap-3">
-                    <Clock className="w-5 h-5 text-yellow-500" />
+                <div className="p-4 bg-[hsl(35_90%_50%/0.1)] border border-[hsl(35_90%_50%/0.2)] rounded-xl flex items-center gap-4 animate-fade-in">
+                    <div className="p-2 rounded-lg bg-[hsl(35_90%_50%/0.15)]">
+                        <Clock className="w-5 h-5 text-[hsl(35_90%_50%)]" />
+                    </div>
                     <div>
-                        <h4 className="font-medium text-yellow-500">Account Under Review</h4>
-                        <p className="text-sm text-yellow-500/80">
+                        <h4 className="font-semibold text-[hsl(35_90%_50%)]">Account Under Review</h4>
+                        <p className="text-sm text-[hsl(35_90%_50%/0.8)]">
                             Your account is currently pending approval. You can browse offers but cannot invest until an admin approves your KYC.
                         </p>
                     </div>
@@ -39,78 +44,91 @@ export function InvestorDashboard() {
             )}
 
             {/* Stats Row */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card className="glass-panel border-white/5 bg-white/5">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Invested</CardTitle>
-                        <DollarSign className="h-4 w-4 text-emerald-400" />
+            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+                <Card className="stat-card rounded-2xl animate-fade-in-up animate-delay-1">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Total Invested</CardTitle>
+                        <div className="icon-bg icon-bg-accent">
+                            <DollarSign className="h-5 w-5 text-[hsl(43_45%_55%)]" />
+                        </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">
+                        <div className="text-3xl font-bold value-accent">
                             {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(data?.totalBalance || 0)}
                         </div>
-                        <p className="text-xs text-muted-foreground">Lifetime Investment</p>
+                        <p className="text-xs text-muted-foreground mt-1">Lifetime Investment</p>
                     </CardContent>
                 </Card>
 
-                <Card className="glass-panel border-white/5 bg-white/5">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
-                        <Activity className="h-4 w-4 text-blue-400" />
+                <Card className="stat-card rounded-2xl animate-fade-in-up animate-delay-2">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Active Projects</CardTitle>
+                        <div className="icon-bg icon-bg-primary">
+                            <Activity className="h-5 w-5 text-[hsl(217_91%_60%)]" />
+                        </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{data?.activeInvestmentsCount || 0}</div>
-                        <p className="text-xs text-muted-foreground">Real Estate & Debt</p>
+                        <div className="text-3xl font-bold">{data?.activeInvestmentsCount || 0}</div>
+                        <p className="text-xs text-muted-foreground mt-1">Real Estate & Debt</p>
                     </CardContent>
                 </Card>
 
-                <Card className="glass-panel border-white/5 bg-white/5">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Income</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-purple-400" />
+                <Card className="stat-card rounded-2xl animate-fade-in-up animate-delay-3">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Total Income</CardTitle>
+                        <div className="icon-bg icon-bg-success">
+                            <TrendingUp className="h-5 w-5 text-[hsl(160_60%_40%)]" />
+                        </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">
+                        <div className="text-3xl font-bold value-success">
                             {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(data?.totalIncome || 0)}
                         </div>
-                        <p className="text-xs text-muted-foreground">Dividends Received</p>
+                        <p className="text-xs text-muted-foreground mt-1">Dividends Received</p>
                     </CardContent>
                 </Card>
             </div>
 
             {/* Main Content Area */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <Card className="col-span-4 glass-panel border-white/5 bg-white/5">
+            <div className="grid gap-5 lg:grid-cols-7">
+                <Card className="lg:col-span-4 glass-panel rounded-2xl animate-fade-in-up animate-delay-4">
                     <CardHeader>
-                        <CardTitle>Portfolio Performance</CardTitle>
+                        <CardTitle className="text-xl">Portfolio Performance</CardTitle>
                     </CardHeader>
-                    <CardContent className="pl-2">
-                        <div className="h-[200px] flex items-center justify-center text-muted-foreground border border-dashed border-white/10 rounded">
-                            Chart Coming Soon (Recharts Integration)
+                    <CardContent>
+                        <div className="h-[220px] flex items-center justify-center text-muted-foreground border border-dashed border-white/10 rounded-xl bg-white/[0.02]">
+                            <div className="flex flex-col items-center gap-3">
+                                <Briefcase className="w-10 h-10 opacity-30" />
+                                <span>Chart Coming Soon</span>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="col-span-3 glass-panel border-white/5 bg-white/5">
+                <Card className="lg:col-span-3 glass-panel rounded-2xl animate-fade-in-up animate-delay-5">
                     <CardHeader>
-                        <CardTitle>Recent Activity</CardTitle>
+                        <CardTitle className="text-xl">Recent Activity</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                             {activity && activity.length > 0 ? (
-                                activity.map((item) => (
-                                    <div key={item.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
-                                        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                                            <Clock className="w-4 h-4 text-emerald-400" />
+                                activity.map((item, idx) => (
+                                    <div
+                                        key={item.id}
+                                        className="activity-item flex items-center gap-4 p-4 rounded-xl"
+                                        style={{ animationDelay: `${0.35 + idx * 0.05}s` }}
+                                    >
+                                        <div className="w-10 h-10 rounded-xl bg-[hsl(160_60%_40%/0.15)] flex items-center justify-center">
+                                            <Clock className="w-4 h-4 text-[hsl(160_60%_40%)]" />
                                         </div>
-                                        <div className="flex-1">
-                                            <p className="text-sm font-medium text-white">{item.type}</p>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium truncate">{item.type}</p>
                                             <p className="text-xs text-muted-foreground">
                                                 {new Date(item.date).toLocaleDateString()}
                                             </p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-sm font-semibold text-emerald-400">
+                                            <p className="text-sm font-semibold value-success">
                                                 +{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(item.amount)}
                                             </p>
                                             <p className="text-xs text-muted-foreground capitalize">{item.status}</p>
@@ -118,7 +136,12 @@ export function InvestorDashboard() {
                                     </div>
                                 ))
                             ) : (
-                                <p className="text-sm text-muted-foreground">No recent activity found.</p>
+                                <div className="flex flex-col items-center justify-center py-8 text-center">
+                                    <div className="p-4 rounded-full bg-muted/30 mb-4">
+                                        <Clock className="w-8 h-8 text-muted-foreground/50" />
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">No recent activity found.</p>
+                                </div>
                             )}
                         </div>
                     </CardContent>
@@ -127,4 +150,3 @@ export function InvestorDashboard() {
         </div>
     );
 }
-

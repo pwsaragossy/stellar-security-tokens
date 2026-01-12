@@ -85,6 +85,18 @@ export const platformAdminsApi = {
     return response.data;
   },
 
+  sponsorInvestorWallet: async (id: number, amount: string = '10'): Promise<ApiResponse<{
+    investorId: number;
+    investorName: string;
+    walletAddress: string;
+    amountXLM: number;
+    transactionHash: string;
+    explorer: string;
+  }> & { message?: string }> => {
+    const response = await api.post(`/platform-admins/investors/${id}/sponsor`, { amount });
+    return response.data;
+  },
+
   // Fee Configuration
   getSystemConfig: async (): Promise<ApiResponse<SystemConfig[]>> => {
     const response = await api.get('/platform-admins/system-config');

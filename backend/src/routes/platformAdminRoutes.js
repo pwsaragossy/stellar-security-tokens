@@ -1,10 +1,13 @@
 import express from 'express';
 import { body, param } from 'express-validator';
 import { validate } from '../middleware/validator.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken, generateToken } from '../middleware/auth.js';
 import { requirePlatformAdmin, requireAdminRole } from '../middleware/authorize.js';
 import { PlatformAdminController } from '../controllers/platformAdminController.js';
 import { InvestmentMetricsController } from '../controllers/investmentMetricsController.js';
+import prisma from '../config/prisma.js';
+import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
+import { WebAuthnService } from '../services/webauthn.service.js';
 
 const router = express.Router();
 
@@ -56,6 +59,200 @@ router.post('/login', loginValidation, PlatformAdminController.loginPlatformAdmi
 if (process.env.NODE_ENV !== 'production') {
   router.post('/debug/create', createValidation, PlatformAdminController.createPlatformAdmin);
 }
+
+// ============ Admin Passkey Login Routes (Public) ============
+
+router.post('/passkey/login/options', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const admin = await prisma.platformAdmin.findUnique({ where: { email } });
+    if (!admin) return res.status(404).json({ error: 'Admin not found' });
+
+    const options = await WebAuthnService.generateAuthenticationOptions('platform_admin', admin.id);
+    res.json(options);
+  } catch (error) {
+    console.error('Passkey Auth Options Error:', error);
+    res.status(500).json({ error: 'Failed to generate auth options' });
+  }
+});
+
+router.post('/passkey/login/verify', async (req, res) => {
+  try {
+    const { email, authResponse } = req.body;
+    const admin = await prisma.platformAdmin.findUnique({ where: { email } });
+    if (!admin) return res.status(404).json({ error: 'Admin not found' });
+
+    const result = await WebAuthnService.verifyAuthenticationResponse(
+      'platform_admin',
+      admin.id,
+      authResponse
+    );
+
+    if (result.verified) {
+      // Login successful -> Generate JWT
+      const token = generateToken(admin);
+      res.json({ success: true, token, user: { id: admin.id, name: admin.name, email: admin.email, role: admin.role } });
+    } else {
+      res.status(400).json({ success: false, error: 'Authentication failed' });
+    }
+  } catch (error) {
+    console.error('Passkey Verify Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ Admin Passkey Routes ============
+
+
+/**
+ * POST /api/platform-admins/passkey/register/options
+ * Get passkey registration options (requires password login first)
+ */
+router.post('/passkey/register/options', authenticateToken, requirePlatformAdmin, async (req, res) => {
+  try {
+    const adminId = req.user.userId;
+    const admin = await prisma.platformAdmin.findUnique({
+      where: { id: adminId },
+      select: { id: true, email: true, name: true }
+    });
+
+    if (!admin) {
+      return res.status(404).json({ success: false, error: 'Admin not found' });
+    }
+
+    const options = await WebAuthnService.generateRegistrationOptions(
+      'platform_admin',
+      admin.id,
+      admin.name,
+      admin.email
+    );
+
+    res.json({ success: true, options, challenge: options.challenge });
+  } catch (error) {
+    console.error('[Admin Passkey] Registration options error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/platform-admins/passkey/register
+ * Complete passkey registration
+ */
+router.post('/passkey/register', authenticateToken, requirePlatformAdmin, async (req, res) => {
+  try {
+    const adminId = req.user.userId;
+    const { credential, challenge, deviceName } = req.body;
+
+    if (!credential || !challenge) {
+      return res.status(400).json({ success: false, error: 'Credential and challenge required' });
+    }
+
+    const verification = await WebAuthnService.verifyRegistration(
+      'platform_admin',
+      adminId,
+      credential,
+      challenge,
+      deviceName || 'Admin Device'
+    );
+
+    if (verification.verified) {
+      res.json({
+        success: true,
+        message: 'Passkey registered successfully. You can now login with passkey.'
+      });
+    } else {
+      res.status(400).json({ success: false, error: 'Passkey verification failed' });
+    }
+  } catch (error) {
+    console.error('[Admin Passkey] Registration error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/platform-admins/passkey-login
+ * Get passkey authentication challenge (no auth required)
+ */
+router.get('/passkey-login', async (req, res) => {
+  try {
+    const options = await WebAuthnService.generateDiscoverableAuthOptions();
+    res.json({
+      success: true,
+      challenge: Buffer.from(options.challenge).toString('base64'),
+      rpId: options.rpId,
+      timeout: options.timeout
+    });
+  } catch (error) {
+    console.error('[Admin Passkey] Auth options error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/platform-admins/passkey-login
+ * Authenticate with passkey
+ */
+router.post('/passkey-login', async (req, res) => {
+  try {
+    const { credentialId } = req.body;
+
+    if (!credentialId) {
+      return res.status(400).json({ success: false, error: 'Credential ID required' });
+    }
+
+    // Find admin by credential ID
+    const credential = await prisma.platformAdminWebauthnCredential.findUnique({
+      where: { credentialId },
+      include: {
+        platformAdmin: {
+          select: { id: true, email: true, name: true, role: true, isActive: true }
+        }
+      }
+    });
+
+    if (!credential || !credential.platformAdmin) {
+      return res.status(401).json({ success: false, error: 'Invalid passkey' });
+    }
+
+    const admin = credential.platformAdmin;
+
+    if (!admin.isActive) {
+      return res.status(401).json({ success: false, error: 'Admin account is inactive' });
+    }
+
+    // Update last used
+    await prisma.platformAdminWebauthnCredential.update({
+      where: { id: credential.id },
+      data: { lastUsedAt: new Date() }
+    });
+
+    // Generate JWT
+    const token = generateToken({
+      userId: admin.id,
+      email: admin.email,
+      userType: 'platform_admin',
+      role: admin.role
+    });
+
+    res.json({
+      success: true,
+      data: {
+        token,
+        admin: {
+          id: admin.id,
+          email: admin.email,
+          name: admin.name,
+          role: admin.role
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[Admin Passkey] Login error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 /**
  * @swagger
@@ -322,6 +519,228 @@ router.put('/:id', requirePlatformAdmin, PlatformAdminController.updatePlatformA
  */
 router.get('/investors', authenticateToken, requirePlatformAdmin, PlatformAdminController.getAllInvestors);
 
+// ============ Company Management Routes ============
+
+/**
+ * @swagger
+ * /api/platform-admins/companies:
+ *   get:
+ *     summary: "[Admin] List all companies"
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of companies
+ */
+router.get('/companies', authenticateToken, requirePlatformAdmin, async (req, res) => {
+  try {
+    const companies = await prisma.company.findMany({
+      select: {
+        id: true,
+        name: true,
+        cnpj: true,
+        status: true,
+        stellarContractId: true,
+        createdAt: true,
+        users: {
+          select: { id: true, name: true, email: true, role: true }
+        },
+        offers: {
+          where: { status: 'active' },
+          select: { id: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const result = companies.map(c => ({
+      ...c,
+      walletAddress: c.stellarContractId,
+      activeOffers: c.offers.length,
+      totalInvestments: 0, // Would need aggregation
+    }));
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('[Companies List] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/platform-admins/companies/{id}/details:
+ *   get:
+ *     summary: "[Admin] Get company details"
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Company details
+ *       404:
+ *         description: Company not found
+ */
+router.get('/companies/:id/details', authenticateToken, requirePlatformAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const company = await prisma.company.findUnique({
+      where: { id: parseInt(id) },
+      select: {
+        id: true,
+        name: true,
+        cnpj: true,
+        status: true,
+        stellarContractId: true,
+        createdAt: true,
+        users: {
+          select: { id: true, name: true, email: true, role: true }
+        },
+        offers: {
+          select: {
+            id: true,
+            offerName: true,
+            status: true,
+            totalSupply: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10
+        }
+      }
+    });
+
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+
+    // Get balances if wallet exists
+    let balances = { xlm: '0', usdc: '0' };
+    if (company.stellarContractId) {
+      try {
+        balances = await PasskeyWalletService.getSorobanWalletBalances(company.stellarContractId);
+      } catch (err) {
+        console.log('[Company Details] Balance fetch error:', err.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...company,
+        walletAddress: company.stellarContractId,
+        activeOffers: company.offers.filter(o => o.status === 'active').length,
+        balances,
+      }
+    });
+  } catch (error) {
+    console.error('[Company Details] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/platform-admins/investors/{id}/details:
+ *   get:
+ *     summary: "[Admin] Get complete investor details"
+ *     description: Returns investor profile with wallet, balances, and transaction history
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Investor details
+ *       404:
+ *         description: Investor not found
+ */
+router.get('/investors/:id/details', authenticateToken, requirePlatformAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const investor = await prisma.investor.findUnique({
+      where: { id: parseInt(id) },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        document: true,
+        kycStatus: true,
+        emailVerified: true,
+        stellarContractId: true,
+        createdAt: true,
+        updatedAt: true,
+        investments: {
+          take: 5,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            usdcAmount: true,
+            createdAt: true,
+            status: true,
+            offer: {
+              select: { offerName: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!investor) {
+      return res.status(404).json({ success: false, error: 'Investor not found' });
+    }
+
+    // Get balances from Soroban if wallet exists
+    let balances = { xlm: '0', usdc: '0' };
+    let transactions = [];
+
+    if (investor.stellarContractId) {
+      try {
+        // Use PasskeyWalletService to get balances
+        const balanceResult = await PasskeyWalletService.getSorobanWalletBalances(investor.stellarContractId);
+        balances = balanceResult;
+      } catch (err) {
+        console.log('[Investor Details] Balance fetch error:', err.message);
+      }
+
+      // Map DB investments to transactions for display
+      transactions = investor.investments.map(inv => ({
+        type: inv.offer ? `Investment: ${inv.offer.offerName}` : 'Investment',
+        amount: `$${Number(inv.usdcAmount).toFixed(2)}`,
+        date: new Date(inv.createdAt).toLocaleDateString()
+      }));
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...investor,
+        walletAddress: investor.stellarContractId,
+        balances,
+        transactions,
+      }
+    });
+  } catch (error) {
+    console.error('[Investor Details] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 /**
  * @swagger
  * /api/platform-admins/investors/{id}/approve:
@@ -381,6 +800,200 @@ router.put('/investors/:id/approve', authenticateToken, requirePlatformAdmin, Pl
  *         description: Investidor não encontrado
  */
 router.put('/investors/:id/reject', authenticateToken, requirePlatformAdmin, PlatformAdminController.rejectInvestor);
+
+// ============ Wallet Sponsorship Routes ============
+
+import { getTreasuryKeypair, getNetworkPassphrase, stellarServer } from '../config/stellar.js';
+import { TransactionBuilder, BASE_FEE, Operation, Asset, Keypair } from '@stellar/stellar-sdk';
+
+/**
+ * @swagger
+ * /api/platform-admins/investors/{id}/sponsor:
+ *   post:
+ *     summary: "[Admin] Sponsor investor wallet with XLM"
+ *     description: Sends XLM from Treasury to investor's smart wallet. Requires approved KYC.
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - amount
+ *             properties:
+ *               amount:
+ *                 type: string
+ *                 description: Amount of XLM to send (default 10)
+ *     responses:
+ *       200:
+ *         description: Wallet sponsored successfully
+ *       400:
+ *         description: Invalid request or investor not eligible
+ *       404:
+ *         description: Investor not found
+ */
+router.post('/investors/:id/sponsor', authenticateToken, requirePlatformAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount = '10' } = req.body; // Default 10 XLM
+
+    // Validate amount
+    const xlmAmount = parseFloat(amount);
+    if (isNaN(xlmAmount) || xlmAmount <= 0 || xlmAmount > 10000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Amount must be between 0 and 10000 XLM'
+      });
+    }
+
+    // Get investor
+    const investor = await prisma.investor.findUnique({
+      where: { id: parseInt(id) },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        kycStatus: true,
+        stellarContractId: true,
+        emailVerified: true,
+      }
+    });
+
+    if (!investor) {
+      return res.status(404).json({ success: false, error: 'Investor not found' });
+    }
+
+    if (investor.kycStatus !== 'approved') {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot sponsor wallet: KYC status is '${investor.kycStatus}'. Must be 'approved'.`
+      });
+    }
+
+    if (!investor.stellarContractId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Investor does not have a wallet yet. They must complete passkey registration first.'
+      });
+    }
+
+    console.log(`[Admin Sponsor] Sponsoring wallet for investor ${investor.id} (${investor.email})`);
+    console.log(`[Admin Sponsor] Sending ${xlmAmount} XLM to ${investor.stellarContractId}`);
+
+    // Get Treasury keypair
+    const treasuryKeypair = getTreasuryKeypair();
+    const networkPassphrase = getNetworkPassphrase();
+
+    // Load treasury account
+    const treasuryAccount = await stellarServer.loadAccount(treasuryKeypair.publicKey());
+
+    // Get XLM SAC contract ID
+    const xlmSacContractId = process.env.XLM_SAC_CONTRACT_ID;
+    if (!xlmSacContractId) {
+      return res.status(500).json({
+        success: false,
+        error: 'XLM_SAC_CONTRACT_ID not configured. Cannot sponsor Soroban wallets.'
+      });
+    }
+
+    // Import required modules from stellar-sdk
+    const stellarSdk = await import('@stellar/stellar-sdk');
+    const { Contract, nativeToScVal, rpc } = stellarSdk;
+
+    // Create Soroban RPC server
+    const sorobanRpcUrl = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
+    const sorobanServer = new rpc.Server(sorobanRpcUrl, { allowHttp: true });
+
+    // Build SAC transfer transaction
+    const xlmSac = new Contract(xlmSacContractId);
+    const amountStroops = BigInt(Math.floor(xlmAmount * 10_000_000));
+
+    // Build the transfer operation
+    const transferOp = xlmSac.call(
+      'transfer',
+      nativeToScVal(treasuryKeypair.publicKey(), { type: 'address' }),
+      nativeToScVal(investor.stellarContractId, { type: 'address' }),
+      nativeToScVal(amountStroops, { type: 'i128' })
+    );
+
+    // Build initial transaction
+    let tx = new TransactionBuilder(treasuryAccount, {
+      fee: '100000', // Higher fee for Soroban
+      networkPassphrase
+    })
+      .addOperation(transferOp)
+      .setTimeout(30)
+      .build();
+
+    // Simulate the transaction to get proper footprint and auth
+    console.log('[Admin Sponsor] Simulating transaction...');
+    const simResult = await sorobanServer.simulateTransaction(tx);
+
+    if (rpc.Api.isSimulationError(simResult)) {
+      console.error('[Admin Sponsor] Simulation error:', simResult.error);
+      throw new Error(`Simulation failed: ${simResult.error}`);
+    }
+
+    // Prepare the transaction with simulation results
+    tx = rpc.assembleTransaction(tx, simResult).build();
+
+    // Sign the prepared transaction
+    tx.sign(treasuryKeypair);
+
+    // Submit via Soroban RPC
+    console.log('[Admin Sponsor] Submitting transaction...');
+    const sendResponse = await sorobanServer.sendTransaction(tx);
+
+    if (sendResponse.status === 'ERROR') {
+      throw new Error(sendResponse.errorResultXdr || 'Transaction submission failed');
+    }
+
+    // Poll for transaction result
+    let getResponse;
+    let attempts = 0;
+    while (attempts < 30) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      getResponse = await sorobanServer.getTransaction(sendResponse.hash);
+
+      if (getResponse.status !== 'NOT_FOUND') {
+        break;
+      }
+      attempts++;
+    }
+
+    if (!getResponse || getResponse.status !== 'SUCCESS') {
+      throw new Error(`Transaction failed: ${getResponse?.status || 'TIMEOUT'}`);
+    }
+
+    console.log(`[Admin Sponsor] Success! TX Hash: ${sendResponse.hash}`);
+
+    res.json({
+      success: true,
+      message: `Successfully sent ${xlmAmount} XLM to ${investor.name}'s wallet`,
+      data: {
+        investorId: investor.id,
+        investorName: investor.name,
+        walletAddress: investor.stellarContractId,
+        amountXLM: xlmAmount,
+        transactionHash: sendResponse.hash,
+        explorer: `https://stellar.expert/explorer/testnet/tx/${sendResponse.hash}`
+      }
+    });
+
+  } catch (error) {
+    console.error('[Admin Sponsor] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // ============ Default Management Routes ============
 import { CollateralDistributionService } from '../services/collateralDistribution.service.js';

@@ -79,31 +79,75 @@ export const WalletController = {
                 return res.status(400).json({ error: 'Source wallet not found on network' });
             }
 
-            // Build Transaction (Simplified for now - only XLM payment)
-            // TODO: Support asset transfers and other operations
-            if (assetCode !== 'XLM') {
-                return res.status(400).json({ error: 'Only XLM transfers supported currently' });
+            // Build Transaction
+            let transaction;
+
+            // Check if destination is a Soroban Contract (C...) or Classic Account (G...)
+            if (destination.startsWith('C')) {
+                // Handle Soroban SAC Transfer
+                if (assetCode !== 'XLM') {
+                    return res.status(400).json({ error: 'Only XLM transfers supported for smart wallets currently' });
+                }
+
+                const xlmSacContractId = process.env.XLM_SAC_CONTRACT_ID;
+                if (!xlmSacContractId) {
+                    return res.status(500).json({ error: 'XLM_SAC_CONTRACT_ID not configured' });
+                }
+
+                // Dynamic import for strict Soroban support
+                const { Contract, nativeToScVal, rpc } = await import('@stellar/stellar-sdk');
+                const xlmSac = new Contract(xlmSacContractId);
+                const amountStroops = BigInt(Math.floor(parseFloat(amount) * 10_000_000));
+
+                const transferOp = xlmSac.call(
+                    'transfer',
+                    nativeToScVal(sourceKeypair.publicKey(), { type: 'address' }),
+                    nativeToScVal(destination, { type: 'address' }),
+                    nativeToScVal(amountStroops, { type: 'i128' })
+                );
+
+                // Build initial transaction
+                let tx = new TransactionBuilder(sourceAccount, {
+                    fee: '100000', // Higher fee for Soroban
+                    networkPassphrase: process.env.STELLAR_NETWORK === 'public' ? StellarNetworks.PUBLIC : StellarNetworks.TESTNET,
+                })
+                    .addOperation(transferOp)
+                    .setTimeout(180)
+                    .build();
+
+                // Simulate to get footprint
+                const sorobanRpcUrl = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
+                const server = new rpc.Server(sorobanRpcUrl, { allowHttp: true });
+
+                const simResult = await server.simulateTransaction(tx);
+
+                if (rpc.Api.isSimulationError(simResult)) {
+                    throw new Error(`Simulation failed: ${simResult.error}`);
+                }
+
+                // Assemble with footprint
+                transaction = rpc.assembleTransaction(tx, simResult).build();
+
+            } else {
+                // Classic Payment (G...)
+                if (assetCode !== 'XLM') {
+                    return res.status(400).json({ error: 'Only XLM transfers supported currently' });
+                }
+
+                const paymentOp = Operation.payment({
+                    destination: destination,
+                    asset: Asset.native(),
+                    amount: amount.toString(),
+                });
+
+                transaction = new TransactionBuilder(sourceAccount, {
+                    fee: '100', // Base fee
+                    networkPassphrase: process.env.STELLAR_NETWORK === 'public' ? StellarNetworks.PUBLIC : StellarNetworks.TESTNET,
+                })
+                    .addOperation(paymentOp)
+                    .setTimeout(180)
+                    .build();
             }
-
-            const operations = [{
-                destination,
-                amount,
-            }];
-
-            // Create payment operation
-            const paymentOp = Operation.payment({
-                destination: destination,
-                asset: Asset.native(),
-                amount: amount.toString(),
-            });
-
-            const transaction = new TransactionBuilder(sourceAccount, {
-                fee: '100', // Base fee
-                networkPassphrase: process.env.STELLAR_NETWORK === 'public' ? StellarNetworks.PUBLIC : StellarNetworks.TESTNET,
-            })
-                .addOperation(paymentOp)
-                .setTimeout(180)
-                .build();
 
             const xdr = transaction.toEnvelope().toXDR('base64');
 
