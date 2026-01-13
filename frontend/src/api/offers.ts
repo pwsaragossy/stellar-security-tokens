@@ -52,6 +52,7 @@ export const offersApi = {
     annual_interest_rate?: number;
     payment_type?: 'monthly' | 'quarterly' | 'semi_annual' | 'annual' | 'bullet';
     payment_day?: number;
+    maturity_date?: string; // Required for bullet payments
     offer_type: 'collateral' | 'sale';
     offer_rules: Record<string, any>;
     legal_documents?: Record<string, any>; // Metadata if any, but files passed separately
@@ -79,6 +80,10 @@ export const offersApi = {
 
     if (data.payment_day !== undefined) {
       formData.append('payment_day', data.payment_day.toString());
+    }
+
+    if (data.maturity_date !== undefined) {
+      formData.append('maturity_date', data.maturity_date);
     }
 
     // Append complex objects as JSON strings

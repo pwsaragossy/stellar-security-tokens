@@ -14,8 +14,21 @@ const createOfferValidation = [
   body('total_supply').isNumeric().withMessage('Total supply must be a number'),
   body('annual_interest_rate').optional().isNumeric().withMessage('Annual interest rate must be a number'),
   body('offer_type').isIn(['collateral', 'sale']).withMessage('Offer type must be "collateral" or "sale"'),
-  body('offer_rules').optional().isObject().withMessage('Offer rules must be an object'),
-  body('legal_documents').optional().isObject().withMessage('Legal documents must be an object'),
+  // Allow object or JSON string (multipart/form-data sends objects as strings)
+  body('offer_rules').optional().custom((value) => {
+    if (typeof value === 'object') return true;
+    if (typeof value === 'string') {
+      try { JSON.parse(value); return true; } catch { return false; }
+    }
+    return false;
+  }).withMessage('Offer rules must be an object or valid JSON string'),
+  body('legal_documents').optional().custom((value) => {
+    if (typeof value === 'object') return true;
+    if (typeof value === 'string') {
+      try { JSON.parse(value); return true; } catch { return false; }
+    }
+    return false;
+  }).withMessage('Legal documents must be an object or valid JSON string'),
   validate,
 ];
 

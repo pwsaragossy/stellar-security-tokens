@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, ArrowRight, Check, FileText, Upload, Loader2, Landmark, TrendingUp, X, AlertTriangle, Calendar } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, FileText, Upload, Loader2, Landmark, TrendingUp, X, AlertTriangle, Calendar, Eye, Trash2 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { offersApi } from "@/api/offers";
 
@@ -17,6 +17,7 @@ interface OfferFormData {
     max_investment: string;
     payment_type: 'monthly' | 'quarterly' | 'semi_annual' | 'annual' | 'bullet';
     payment_day: string;
+    maturity_date: string; // Required for bullet payments
     // Legal documents will be handled separately via IPFS
     legal_documents: {
         contract?: { name: string; file?: File };
@@ -36,8 +37,17 @@ const initialFormData: OfferFormData = {
     max_investment: '',
     payment_type: 'monthly',
     payment_day: '1',
+    maturity_date: '',
     legal_documents: {},
 };
+
+const STORAGE_KEY = 'createOffer_draft';
+
+interface StoredDraft {
+    formData: Omit<OfferFormData, 'legal_documents'>;
+    step: number;
+    offerType: 'collateral' | 'sale';
+}
 
 export function CreateOffer() {
     const navigate = useNavigate();
@@ -50,6 +60,47 @@ export function CreateOffer() {
     // Get offer type from URL params
     const offerType = searchParams.get('type') as 'collateral' | 'sale' | null;
 
+    // Track if we've restored the draft to prevent re-running
+    const [draftRestored, setDraftRestored] = useState(false);
+
+    // Load saved draft from sessionStorage when offerType is available
+    useEffect(() => {
+        if (draftRestored || !offerType) return;
+
+        const savedDraft = sessionStorage.getItem(STORAGE_KEY);
+        if (savedDraft) {
+            try {
+                const parsed: StoredDraft = JSON.parse(savedDraft);
+                // Only restore if the offer type matches
+                if (parsed.offerType === offerType) {
+                    setFormData(prev => ({
+                        ...prev,
+                        ...parsed.formData,
+                        offer_type: parsed.offerType,
+                        legal_documents: {} // Files can't be persisted
+                    }));
+                    setStep(parsed.step);
+                }
+            } catch (e) {
+                console.error('Failed to parse saved draft:', e);
+            }
+        }
+        setDraftRestored(true);
+    }, [offerType, draftRestored]);
+
+    // Save draft to sessionStorage whenever formData or step changes
+    useEffect(() => {
+        if (offerType) {
+            const { legal_documents, ...formDataWithoutFiles } = formData;
+            const draft: StoredDraft = {
+                formData: formDataWithoutFiles,
+                step,
+                offerType: offerType,
+            };
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+        }
+    }, [formData, step, offerType]);
+
     // Initialize offer type from URL or redirect if not provided
     useEffect(() => {
         if (!offerType) {
@@ -61,9 +112,15 @@ export function CreateOffer() {
         }
     }, [offerType, navigate]);
 
-    // Total steps is 6: Step 1 is SelectOfferType page, Steps 2-6 are here.
-    // We display step + 1 to account for the type selection being step 1.
-    const totalSteps = 6;
+    // Clear draft and navigate away
+    const handleClose = () => {
+        sessionStorage.removeItem(STORAGE_KEY);
+        navigate('/company/offers');
+    };
+
+    // Total steps is 5: Step 1 is SelectOfferType page, Steps 2-5 are here.
+    // Step 5 (displayStep) = Review & Submit. The confirmation screen after is not a numbered step.
+    const totalSteps = 5;
     const displayStep = step + 1;
 
     const updateFormData = (updates: Partial<OfferFormData>) => {
@@ -108,9 +165,10 @@ export function CreateOffer() {
                 annual_interest_rate: formData.offer_type === 'collateral' ? parseFloat(formData.annual_interest_rate) : undefined,
                 payment_type: formData.offer_type === 'collateral' ? formData.payment_type : undefined,
                 payment_day: formData.offer_type === 'collateral' && formData.payment_type !== 'bullet' ? parseInt(formData.payment_day) : undefined,
+                maturity_date: formData.offer_type === 'collateral' && formData.payment_type === 'bullet' && formData.maturity_date ? formData.maturity_date : undefined,
                 offer_rules: {
-                    min_investment: formData.min_investment,
-                    max_investment: formData.max_investment || undefined,
+                    min_investment: formData.min_investment ? Number(formData.min_investment) : undefined,
+                    max_investment: formData.max_investment ? Number(formData.max_investment) : undefined,
                 },
                 legal_documents: {}, // Metadata is optional, relying on file fields
                 contract: formData.legal_documents.contract?.file,
@@ -119,6 +177,8 @@ export function CreateOffer() {
             });
 
             if (response.success) {
+                // Clear draft from storage on success
+                sessionStorage.removeItem(STORAGE_KEY);
                 // Move to confirmation step (step 5 internal = displayStep 6)
                 setStep(5);
             } else {
@@ -172,7 +232,7 @@ export function CreateOffer() {
                 <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => navigate('/company/offers')}
+                    onClick={handleClose}
                     className="text-muted-foreground hover:text-white"
                 >
                     <X className="w-5 h-5" />
@@ -359,6 +419,22 @@ export function CreateOffer() {
                                 </div>
                             )}
 
+                            {formData.offer_type === 'collateral' && formData.payment_type === 'bullet' && (
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-white">Maturity Date *</label>
+                                    <Input
+                                        type="date"
+                                        value={formData.maturity_date}
+                                        onChange={(e) => updateFormData({ maturity_date: e.target.value })}
+                                        className="glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-foreground"
+                                        min={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Date when principal and interest are paid in one lump sum
+                                    </p>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-white">Minimum Investment (USD)</label>
@@ -400,21 +476,27 @@ export function CreateOffer() {
                         <CardContent className="space-y-6">
                             <div className="space-y-4">
                                 {(['contract', 'terms', 'prospectus'] as const).map((docType) => (
-                                    <div key={docType} className="p-4 border border-dashed border-white/20 rounded-lg">
+                                    <div key={docType} className={`p-4 rounded-xl border transition-colors ${formData.legal_documents[docType] ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-dashed border-white/20'}`}>
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
-                                                <FileText className="w-5 h-5 text-muted-foreground" />
+                                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${formData.legal_documents[docType] ? 'bg-emerald-500/15' : 'bg-muted/30'}`}>
+                                                    {formData.legal_documents[docType] ? (
+                                                        <Check className="w-5 h-5 text-emerald-400" />
+                                                    ) : (
+                                                        <FileText className="w-5 h-5 text-muted-foreground" />
+                                                    )}
+                                                </div>
                                                 <div>
-                                                    <p className="text-sm font-medium text-white capitalize">
+                                                    <p className={`text-sm font-medium ${formData.legal_documents[docType] ? 'text-emerald-300' : 'text-white'}`}>
                                                         {docType === 'contract' ? 'Investment Contract' :
                                                             docType === 'terms' ? 'Terms & Conditions' : 'Prospectus'}
                                                     </p>
-                                                    <p className="text-xs text-muted-foreground">
+                                                    <p className="text-xs text-muted-foreground truncate max-w-[200px]">
                                                         {formData.legal_documents[docType]?.name || 'No file selected'}
                                                     </p>
                                                 </div>
                                             </div>
-                                            <div className="relative">
+                                            <div className="relative flex items-center gap-2">
                                                 <input
                                                     type="file"
                                                     id={`file-${docType}`}
@@ -422,25 +504,46 @@ export function CreateOffer() {
                                                     onChange={(e) => handleFileChange(docType, e.target.files?.[0])}
                                                     accept=".pdf,.doc,.docx"
                                                 />
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="border-white/10 hover:bg-white/5 cursor-pointer"
-                                                    asChild
-                                                >
-                                                    <label htmlFor={`file-${docType}`}>
-                                                        <Upload className="w-4 h-4 mr-2" />
-                                                        Upload
-                                                    </label>
-                                                </Button>
+                                                {formData.legal_documents[docType] ? (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                                        onClick={() => {
+                                                            const newDocs = { ...formData.legal_documents };
+                                                            delete newDocs[docType];
+                                                            updateFormData({ legal_documents: newDocs });
+                                                        }}
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                ) : (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="icon"
+                                                        className="border-white/10 hover:bg-white/5 cursor-pointer h-8 w-8"
+                                                        onClick={() => document.getElementById(`file-${docType}`)?.click()}
+                                                    >
+                                                        <Upload className="w-4 h-4" />
+                                                    </Button>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                            <p className="text-xs text-muted-foreground text-center">
-                                Documents will be stored on IPFS for immutability and transparency
-                            </p>
+                            <div className="text-center space-y-1 pt-2">
+                                <p className="text-xs text-muted-foreground">
+                                    Documents will be stored on IPFS for immutability and transparency
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/company/ipfs-info')}
+                                    className="text-xs text-primary hover:text-primary/80 underline underline-offset-2 transition-colors"
+                                >
+                                    Learn more about IPFS and document privacy →
+                                </button>
+                            </div>
                         </CardContent>
                     </>
                 )}
@@ -560,17 +663,55 @@ export function CreateOffer() {
                                         Legal Documents
                                     </h4>
                                     {Object.entries(formData.legal_documents).length > 0 ? (
-                                        <div className="space-y-2">
+                                        <div className="space-y-3">
                                             {Object.entries(formData.legal_documents).map(([key, doc]) => (
-                                                <div key={key} className="flex items-center gap-3 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                                                    <Check className="w-4 h-4 text-emerald-400" />
-                                                    <span className="text-sm text-white capitalize">{key}</span>
-                                                    <span className="text-xs text-muted-foreground ml-auto truncate max-w-[150px]">{doc?.name}</span>
+                                                <div
+                                                    key={key}
+                                                    className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-colors"
+                                                >
+                                                    <div className="w-10 h-10 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
+                                                        <FileText className="w-5 h-5 text-emerald-400" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium text-white capitalize">{key}</p>
+                                                        <p className="text-xs text-muted-foreground truncate">{doc?.name}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        {doc?.file && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    // Create a temporary URL for the file and open it
+                                                                    const url = URL.createObjectURL(doc.file!);
+                                                                    window.open(url, '_blank');
+                                                                    // Clean up URL after a short delay
+                                                                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                                                                }}
+                                                                className="h-8 px-3 text-xs gap-1.5"
+                                                            >
+                                                                <Eye className="w-3.5 h-3.5" />
+                                                                Review
+                                                            </Button>
+                                                        )}
+                                                        <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                                                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             ))}
+                                            <p className="text-xs text-muted-foreground pt-2">
+                                                Click "Review" to preview each document before submitting
+                                            </p>
                                         </div>
                                     ) : (
-                                        <p className="text-sm text-muted-foreground italic">No documents uploaded (optional)</p>
+                                        <div className="flex flex-col items-center justify-center py-6 text-center">
+                                            <div className="w-12 h-12 rounded-xl bg-muted/30 flex items-center justify-center mb-3">
+                                                <FileText className="w-6 h-6 text-muted-foreground/50" />
+                                            </div>
+                                            <p className="text-sm text-muted-foreground">No documents uploaded</p>
+                                            <p className="text-xs text-muted-foreground/70 mt-1">Documents are optional for submission</p>
+                                        </div>
                                     )}
                                 </div>
                             </div>

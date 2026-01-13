@@ -32,6 +32,10 @@ export class Offer {
       offer_type,
       offer_rules = {},
       legal_documents = {},
+      payment_type,
+      maturity_date,
+      bullet_payment_amount,
+      payment_frequency,
       // Collateral
       collateral_type,
       collateral_description,
@@ -52,6 +56,10 @@ export class Offer {
         offerRules: offer_rules,
         legalDocuments: legal_documents,
         status: 'pending_review',
+        paymentType: payment_type || 'monthly',
+        maturityDate: maturity_date ? new Date(maturity_date) : null,
+        bulletPaymentAmount: bullet_payment_amount,
+        paymentFrequency: payment_frequency || 1,
         // Collateral
         collateralType: collateral_type,
         collateralDescription: collateral_description,

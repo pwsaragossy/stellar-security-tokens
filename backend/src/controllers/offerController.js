@@ -5,6 +5,8 @@ import { StellarService } from '../services/stellar.service.js';
 import { OfferService } from '../services/offer.service.js';
 import { ipfsService } from '../services/ipfs.service.js';
 import { StellarTomlService } from '../services/stellarToml.service.js';
+import { CompanyUser } from '../models/CompanyUser.js';
+import { Keypair } from '@stellar/stellar-sdk';
 
 /**
  * Controller para gerenciar ofertas de tokenização
@@ -217,7 +219,40 @@ export class OfferController {
       }
 
       const companyId = req.user.companyId;
-      const requestedBy = req.user.userId;
+      let requestedBy = req.user.userId;
+
+      // Fix for Foreign Key violation when logged in as Company (userType='company')
+      // The 'requested_by' field must point to a valid record in 'company_users' table,
+      // but 'req.user.userId' is the Company ID (from companies table) in this case.
+      if (req.user.userType === 'company') {
+        const companyUsers = await CompanyUser.findByCompany(companyId); // Get users sorted by createdAt desc
+        if (companyUsers && companyUsers.length > 0) {
+          // Use the most recent user (or first found) as the proxy requester
+          requestedBy = companyUsers[0].id;
+        } else {
+          // Create a default admin user for this company if none exists (Lazy creation)
+          try {
+            const randomKeypair = Keypair.random();
+            const newUser = await CompanyUser.create({
+              company_id: companyId,
+              email: `admin+${companyId}@system.local`, // System generated email
+              password: randomKeypair.secret(), // Random password
+              name: 'Company Admin (System)',
+              stellarPublicKey: randomKeypair.publicKey(),
+              role: 'admin'
+            });
+            requestedBy = newUser.id;
+            console.log(`[OfferController] Created system user for Company ${companyId}: ID ${newUser.id}`);
+          } catch (err) {
+            console.error('[OfferController] Failed to create system user:', err);
+            return res.status(400).json({
+              success: false,
+              error: 'Cannot create offer: No company users found and failed to create default user.',
+              details: err.message
+            });
+          }
+        }
+      }
 
       // Processar uploads de arquivos para IPFS
       let legal_documents = {};

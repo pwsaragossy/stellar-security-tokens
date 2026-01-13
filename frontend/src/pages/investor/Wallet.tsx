@@ -44,6 +44,8 @@ export function Wallet() {
     const [user, setUser] = useState<any>(null);
     const [walletStatus, setWalletStatus] = useState<WalletStatus | null>(null);
     const [loading, setLoading] = useState(true);
+    const [balanceLoading, setBalanceLoading] = useState(true);
+    const [balanceError, setBalanceError] = useState(false);
     const [tokenizedAssets, setTokenizedAssets] = useState<TokenizedAsset[]>([]);
 
     // Withdrawal State
@@ -54,6 +56,34 @@ export function Wallet() {
     const [withdrawTx, setWithdrawTx] = useState<{ xdr: string; networkPassphrase: string } | null>(null);
     const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
+    // Cache key for localStorage
+    const getCacheKey = (userId: number | string) => `wallet_balance_cache_${userId}`;
+
+    // Get cached balance from localStorage
+    const getCachedBalance = (userId: number | string) => {
+        try {
+            const cached = localStorage.getItem(getCacheKey(userId));
+            if (cached) {
+                return JSON.parse(cached);
+            }
+        } catch {
+            // Ignore parse errors
+        }
+        return null;
+    };
+
+    // Save balance to localStorage cache
+    const setCachedBalance = (userId: number | string, balances: { xlm: string; usdc: string }) => {
+        try {
+            localStorage.setItem(getCacheKey(userId), JSON.stringify({
+                balances,
+                cachedAt: Date.now()
+            }));
+        } catch {
+            // Ignore storage errors
+        }
+    };
+
     useEffect(() => {
         async function fetchWalletStatus() {
             try {
@@ -62,9 +92,21 @@ export function Wallet() {
                 setUser(storedUser);
 
                 if (storedUser.id) {
+                    // Get cached balance first for immediate display
+                    const cachedData = getCachedBalance(storedUser.id);
+
                     try {
+                        setBalanceLoading(true);
+                        setBalanceError(false);
+
                         const response = await api.get(`/investors/${storedUser.id}/wallet-status`);
                         const data = response.data || response;
+
+                        // Cache the fresh balance
+                        if (data.balances) {
+                            setCachedBalance(storedUser.id, data.balances);
+                        }
+
                         setWalletStatus({
                             hasWallet: data.hasWallet || !!data.contractId,
                             walletAddress: data.contractId || data.walletAddress,
@@ -72,11 +114,26 @@ export function Wallet() {
                             balances: data.balances,
                             explorer: data.explorer,
                         });
+                        setBalanceLoading(false);
                     } catch {
-                        setWalletStatus({
-                            hasWallet: false,
-                            passkeyRegistered: true,
-                        });
+                        // On error, use cached balance if available
+                        if (cachedData?.balances) {
+                            setWalletStatus({
+                                hasWallet: true,
+                                walletAddress: cachedData.walletAddress,
+                                passkeyRegistered: true,
+                                balances: cachedData.balances,
+                            });
+                            setBalanceError(true); // Mark that we're showing cached data
+                        } else {
+                            // No cache, show wallet without balance (will show loading indicator)
+                            setWalletStatus({
+                                hasWallet: false,
+                                passkeyRegistered: true,
+                                // Don't set balances - this will trigger the loading state
+                            });
+                        }
+                        setBalanceLoading(false);
                     }
 
                     // Fetch tokenized assets (portfolio)
@@ -191,22 +248,64 @@ export function Wallet() {
                 <div className="grid gap-5 md:grid-cols-2 animate-fade-in-up animate-delay-1">
                     <Card className="stat-card rounded-2xl">
                         <CardHeader className="pb-3">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">USDC Balance</CardTitle>
+                            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                USDC Balance
+                                {balanceError && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">
+                                        cached
+                                    </span>
+                                )}
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-4xl font-bold value-accent">
-                                ${Number(walletStatus.balances?.usdc || 0).toFixed(2)}
+                                {balanceLoading && !walletStatus.balances ? (
+                                    <span className="inline-flex items-center gap-1">
+                                        <span className="animate-pulse">•</span>
+                                        <span className="animate-pulse animation-delay-150">•</span>
+                                        <span className="animate-pulse animation-delay-300">•</span>
+                                    </span>
+                                ) : walletStatus.balances?.usdc !== undefined ? (
+                                    `$${Number(walletStatus.balances.usdc).toFixed(2)}`
+                                ) : (
+                                    <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                        <span className="animate-pulse">•</span>
+                                        <span className="animate-pulse animation-delay-150">•</span>
+                                        <span className="animate-pulse animation-delay-300">•</span>
+                                    </span>
+                                )}
                             </div>
                             <p className="text-xs text-muted-foreground mt-2">Available for investment</p>
                         </CardContent>
                     </Card>
                     <Card className="stat-card rounded-2xl">
                         <CardHeader className="pb-3">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">XLM Balance</CardTitle>
+                            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                XLM Balance
+                                {balanceError && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">
+                                        cached
+                                    </span>
+                                )}
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-4xl font-bold">
-                                {Number(walletStatus.balances?.xlm || 0).toFixed(4)}
+                                {balanceLoading && !walletStatus.balances ? (
+                                    <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                        <span className="animate-pulse">•</span>
+                                        <span className="animate-pulse animation-delay-150">•</span>
+                                        <span className="animate-pulse animation-delay-300">•</span>
+                                    </span>
+                                ) : walletStatus.balances?.xlm !== undefined ? (
+                                    Number(walletStatus.balances.xlm).toFixed(4)
+                                ) : (
+                                    <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                        <span className="animate-pulse">•</span>
+                                        <span className="animate-pulse animation-delay-150">•</span>
+                                        <span className="animate-pulse animation-delay-300">•</span>
+                                    </span>
+                                )}
                             </div>
                             <p className="text-xs text-muted-foreground mt-2">Network fees</p>
                         </CardContent>

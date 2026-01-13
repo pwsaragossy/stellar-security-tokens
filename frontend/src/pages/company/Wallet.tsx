@@ -36,6 +36,8 @@ export function Wallet() {
     const [user, setUser] = useState<any>(null);
     const [walletStatus, setWalletStatus] = useState<WalletStatus | null>(null);
     const [loading, setLoading] = useState(true);
+    const [balanceLoading, setBalanceLoading] = useState(true);
+    const [balanceError, setBalanceError] = useState(false);
 
     // Withdrawal State
     const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -45,6 +47,23 @@ export function Wallet() {
     const [withdrawTx, setWithdrawTx] = useState<{ xdr: string; networkPassphrase: string } | null>(null);
     const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
+    // Cache functions for localStorage
+    const getCacheKey = (userId: number | string) => `company_wallet_cache_${userId}`;
+
+    const getCachedBalance = (userId: number | string) => {
+        try {
+            const cached = localStorage.getItem(getCacheKey(userId));
+            if (cached) return JSON.parse(cached);
+        } catch { /* ignore */ }
+        return null;
+    };
+
+    const setCachedBalance = (userId: number | string, balances: { xlm: string; usdc: string }, walletAddress?: string) => {
+        try {
+            localStorage.setItem(getCacheKey(userId), JSON.stringify({ balances, walletAddress, cachedAt: Date.now() }));
+        } catch { /* ignore */ }
+    };
+
     useEffect(() => {
         async function fetchWalletStatus() {
             try {
@@ -52,15 +71,25 @@ export function Wallet() {
                 const storedUser = JSON.parse(userStr || '{}');
                 setUser(storedUser);
 
+                const userId = storedUser.companyId || storedUser.id;
+                const cachedData = getCachedBalance(userId);
+
                 // Company users store their stellarContractId directly from the Company entity
                 // (set during login via /auth/passkey-login/discover)
                 if (storedUser.stellarContractId) {
                     // We have a wallet - fetch balances
                     try {
-                        // Use companies endpoint for wallet status (not company-users)
-                        // The companyId is the user's id when logged in as company
-                        const response = await api.get(`/companies/${storedUser.companyId || storedUser.id}/wallet-status`);
+                        setBalanceLoading(true);
+                        setBalanceError(false);
+
+                        const response = await api.get(`/companies/${userId}/wallet-status`);
                         const data = response.data || response;
+
+                        // Cache fresh balance
+                        if (data.balances) {
+                            setCachedBalance(userId, data.balances, storedUser.stellarContractId);
+                        }
+
                         setWalletStatus({
                             hasWallet: true,
                             walletAddress: storedUser.stellarContractId,
@@ -68,21 +97,43 @@ export function Wallet() {
                             balances: data.balances,
                             explorer: data.explorer,
                         });
+                        setBalanceLoading(false);
                     } catch {
-                        // API might not exist or fail - use what we know from localStorage
-                        setWalletStatus({
-                            hasWallet: true,
-                            walletAddress: storedUser.stellarContractId,
-                            passkeyRegistered: true,
-                            balances: { xlm: '0', usdc: '0' },
-                            explorer: `https://stellar.expert/explorer/testnet/contract/${storedUser.stellarContractId}`,
-                        });
+                        // Use cached balance if available, never fall back to 0
+                        if (cachedData?.balances) {
+                            setWalletStatus({
+                                hasWallet: true,
+                                walletAddress: storedUser.stellarContractId,
+                                passkeyRegistered: true,
+                                balances: cachedData.balances,
+                                explorer: `https://stellar.expert/explorer/testnet/contract/${storedUser.stellarContractId}`,
+                            });
+                            setBalanceError(true);
+                        } else {
+                            // No cache - show wallet but no balances (loading state)
+                            setWalletStatus({
+                                hasWallet: true,
+                                walletAddress: storedUser.stellarContractId,
+                                passkeyRegistered: true,
+                                // Don't set balances - will show loading indicator
+                                explorer: `https://stellar.expert/explorer/testnet/contract/${storedUser.stellarContractId}`,
+                            });
+                        }
+                        setBalanceLoading(false);
                     }
                 } else if (storedUser.id) {
                     // Fallback: try company-users endpoint (for actual CompanyUser records)
                     try {
+                        setBalanceLoading(true);
+                        setBalanceError(false);
+
                         const response = await api.get(`/company-users/${storedUser.id}/wallet-status`);
                         const data = response.data || response;
+
+                        if (data.balances) {
+                            setCachedBalance(storedUser.id, data.balances, data.contractId || data.walletAddress);
+                        }
+
                         setWalletStatus({
                             hasWallet: data.hasWallet || !!data.contractId,
                             walletAddress: data.contractId || data.walletAddress,
@@ -90,11 +141,23 @@ export function Wallet() {
                             balances: data.balances,
                             explorer: data.explorer,
                         });
+                        setBalanceLoading(false);
                     } catch {
-                        setWalletStatus({
-                            hasWallet: false,
-                            passkeyRegistered: true,
-                        });
+                        if (cachedData?.balances) {
+                            setWalletStatus({
+                                hasWallet: true,
+                                walletAddress: cachedData.walletAddress,
+                                passkeyRegistered: true,
+                                balances: cachedData.balances,
+                            });
+                            setBalanceError(true);
+                        } else {
+                            setWalletStatus({
+                                hasWallet: false,
+                                passkeyRegistered: true,
+                            });
+                        }
+                        setBalanceLoading(false);
                     }
                 }
             } catch (err) {
@@ -192,22 +255,64 @@ export function Wallet() {
                 <div className="grid gap-5 md:grid-cols-2 animate-fade-in-up animate-delay-1">
                     <Card className="stat-card rounded-2xl">
                         <CardHeader className="pb-3">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">USDC Balance</CardTitle>
+                            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                USDC Balance
+                                {balanceError && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">
+                                        cached
+                                    </span>
+                                )}
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-4xl font-bold value-accent">
-                                ${Number(walletStatus.balances?.usdc || 0).toFixed(2)}
+                                {balanceLoading && !walletStatus.balances ? (
+                                    <span className="inline-flex items-center gap-1">
+                                        <span className="animate-pulse">•</span>
+                                        <span className="animate-pulse animation-delay-150">•</span>
+                                        <span className="animate-pulse animation-delay-300">•</span>
+                                    </span>
+                                ) : walletStatus.balances?.usdc !== undefined ? (
+                                    `$${Number(walletStatus.balances.usdc).toFixed(2)}`
+                                ) : (
+                                    <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                        <span className="animate-pulse">•</span>
+                                        <span className="animate-pulse animation-delay-150">•</span>
+                                        <span className="animate-pulse animation-delay-300">•</span>
+                                    </span>
+                                )}
                             </div>
                             <p className="text-xs text-muted-foreground mt-2">Available for operations</p>
                         </CardContent>
                     </Card>
                     <Card className="stat-card rounded-2xl">
                         <CardHeader className="pb-3">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">XLM Balance</CardTitle>
+                            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                XLM Balance
+                                {balanceError && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">
+                                        cached
+                                    </span>
+                                )}
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-4xl font-bold">
-                                {Number(walletStatus.balances?.xlm || 0).toFixed(4)}
+                                {balanceLoading && !walletStatus.balances ? (
+                                    <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                        <span className="animate-pulse">•</span>
+                                        <span className="animate-pulse animation-delay-150">•</span>
+                                        <span className="animate-pulse animation-delay-300">•</span>
+                                    </span>
+                                ) : walletStatus.balances?.xlm !== undefined ? (
+                                    Number(walletStatus.balances.xlm).toFixed(4)
+                                ) : (
+                                    <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                        <span className="animate-pulse">•</span>
+                                        <span className="animate-pulse animation-delay-150">•</span>
+                                        <span className="animate-pulse animation-delay-300">•</span>
+                                    </span>
+                                )}
                             </div>
                             <p className="text-xs text-muted-foreground mt-2">Network fees</p>
                         </CardContent>

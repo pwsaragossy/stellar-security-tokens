@@ -33,6 +33,7 @@ import { Reports } from './pages/company/Reports';
 import { Settings as CompanySettings } from './pages/company/Settings';
 import { Wallet as CompanyWallet } from './pages/company/Wallet';
 import { SelectOfferType } from './pages/company/SelectOfferType';
+import { IPFSInfo } from './pages/company/IPFSInfo';
 import { DefaultCases } from './pages/admin/DefaultCases';
 import { AdminSettings } from './pages/admin/Settings';
 import { Companies } from './pages/admin/Companies';
@@ -73,6 +74,7 @@ function App() {
           <Route path="wallet" element={<CompanyWallet />} />
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<CompanySettings />} />
+          <Route path="ipfs-info" element={<IPFSInfo />} />
         </Route>
 
         {/* Admin Routes */}
