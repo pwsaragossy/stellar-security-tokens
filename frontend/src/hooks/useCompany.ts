@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { companiesApi } from '@/api/companies';
 import { offersApi } from '@/api/offers';
-import { notificationsApi, type Notification } from '@/api/notifications';
+
 import type { Company, Offer } from '@/types';
 
 interface CompanyStats {
@@ -11,11 +11,7 @@ interface CompanyStats {
     pendingPayments: number;
 }
 
-interface CompanyWallet {
-    hasWallet: boolean;
-    address?: string;
-    balances: { xlm: string; usdc: string };
-}
+
 
 // Dashboard Metrics Types
 export interface DashboardData {
@@ -32,8 +28,6 @@ export interface UseCompanyReturn {
     company: Company | null;
     offers: Offer[];
     stats: CompanyStats;
-    wallet: CompanyWallet | null;
-    notifications: Notification[];
     dashboardData: DashboardData | null;
     loading: boolean;
     error: string | null;
@@ -49,8 +43,7 @@ export function useCompany(): UseCompanyReturn {
         totalInvestors: 0,
         pendingPayments: 0,
     });
-    const [wallet, setWallet] = useState<CompanyWallet | null>(null);
-    const [notifications, setNotifications] = useState<Notification[]>([]);
+
     const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -144,10 +137,8 @@ export function useCompany(): UseCompanyReturn {
                 setCompany(companyData);
 
                 // Parallel data fetching for efficiency
-                const [offersResponse, walletResponse, notificationsResponse] = await Promise.all([
-                    offersApi.getCompanyOffers(),
-                    companiesApi.getWalletStatus(companyData.id),
-                    notificationsApi.getAll({ limit: 5, userType: 'company_user' })
+                const [offersResponse] = await Promise.all([
+                    offersApi.getCompanyOffers()
                 ]);
 
                 if (offersResponse.success && offersResponse.data) {
@@ -168,17 +159,6 @@ export function useCompany(): UseCompanyReturn {
                     calculateDashboardMetrics(offersList);
                 }
 
-                if (walletResponse.success && walletResponse.data) {
-                    setWallet({
-                        hasWallet: walletResponse.data.hasWallet,
-                        address: walletResponse.data.walletAddress,
-                        balances: walletResponse.data.balances || { xlm: '0', usdc: '0' }
-                    });
-                }
-
-                if (notificationsResponse.success && Array.isArray(notificationsResponse.data)) {
-                    setNotifications(notificationsResponse.data);
-                }
             }
         } catch (err: any) {
             console.error('Failed to fetch company data:', err);
@@ -196,8 +176,6 @@ export function useCompany(): UseCompanyReturn {
         company,
         offers,
         stats,
-        wallet,
-        notifications,
         dashboardData,
         loading,
         error,

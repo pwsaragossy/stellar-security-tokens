@@ -28,16 +28,16 @@ export function Reports() {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-bold text-white">Reports</h2>
+            <div className="animate-fade-in">
+                <h2 className="text-2xl font-bold font-heading text-white">Reports</h2>
                 <p className="text-muted-foreground">Overview of your company's performance</p>
             </div>
 
             {/* Summary Stats */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-fade-in-up animate-delay-1">
                 <Card className="glass-panel border-white/5 bg-white/5">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Supply</CardTitle>
+                        <CardTitle className="text-sm font-medium font-heading">Total Supply</CardTitle>
                         <TrendingUp className="h-4 w-4 text-success" />
                     </CardHeader>
                     <CardContent>
@@ -50,7 +50,7 @@ export function Reports() {
 
                 <Card className="glass-panel border-white/5 bg-white/5">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Offers</CardTitle>
+                        <CardTitle className="text-sm font-medium font-heading">Total Offers</CardTitle>
                         <FileText className="h-4 w-4 text-primary" />
                     </CardHeader>
                     <CardContent>
@@ -61,7 +61,7 @@ export function Reports() {
 
                 <Card className="glass-panel border-white/5 bg-white/5">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Offers</CardTitle>
+                        <CardTitle className="text-sm font-medium font-heading">Active Offers</CardTitle>
                         <BarChart3 className="h-4 w-4 text-primary" />
                     </CardHeader>
                     <CardContent>
@@ -72,7 +72,7 @@ export function Reports() {
 
                 <Card className="glass-panel border-white/5 bg-white/5">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Investors</CardTitle>
+                        <CardTitle className="text-sm font-medium font-heading">Investors</CardTitle>
                         <Users className="h-4 w-4 text-accent" />
                     </CardHeader>
                     <CardContent>
@@ -83,9 +83,9 @@ export function Reports() {
             </div>
 
             {/* Offers by Status */}
-            <Card className="glass-panel border-white/5 bg-white/5">
+            <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in-up animate-delay-2">
                 <CardHeader>
-                    <CardTitle>Offers by Status</CardTitle>
+                    <CardTitle className="font-heading">Offers by Status</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="space-y-4">
@@ -103,9 +103,9 @@ export function Reports() {
             </Card>
 
             {/* Offers Table */}
-            <Card className="glass-panel border-white/5 bg-white/5">
+            <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in-up animate-delay-3">
                 <CardHeader>
-                    <CardTitle>All Offers Summary</CardTitle>
+                    <CardTitle className="font-heading">All Offers Summary</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {offers.length > 0 ? (

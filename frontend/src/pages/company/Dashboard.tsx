@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, Clock, Loader2, Plus, ArrowUpRight, Wallet, Activity, Users, DollarSign, PieChart as PieChartIcon, BarChart3 } from "lucide-react";
+import { TrendingUp, Clock, Loader2, Plus, Users, DollarSign, PieChart as PieChartIcon, BarChart3, ArrowUpRight } from "lucide-react";
 import { useCompany } from "@/hooks/useCompany";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -8,7 +8,7 @@ import { offersApi } from "@/api/offers";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 export function CompanyDashboard() {
-    const { company, offers, stats, wallet, notifications, dashboardData, loading, error } = useCompany();
+    const { company, offers, stats, dashboardData, loading, error } = useCompany();
     const navigate = useNavigate();
     const [activeOfferStats, setActiveOfferStats] = useState<Record<number, { sold: number, investors: number }>>({});
 
@@ -234,94 +234,6 @@ export function CompanyDashboard() {
                 </Card>
             </div>
 
-            {/* Wallet & Activity Section - Asymmetric Grid */}
-            <div className="grid gap-6 md:grid-cols-3 pb-8 animate-fade-in-up animate-delay-2">
-                {/* Company Wallet - Takes 2/3 width */}
-                <Card className="glass-panel md:col-span-2 relative overflow-hidden p-6 group">
-                    <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity duration-500">
-                        <Wallet className="w-64 h-64 -mr-12 -mt-12 text-foreground" />
-                    </div>
-
-                    <div className="relative z-10 space-y-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="text-xl font-bold font-heading">Operational Wallet</h3>
-                                <p className="text-sm text-muted-foreground font-mono mt-1 opacity-70">
-                                    {wallet?.address ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-6)}` : 'No Wallet Connected'}
-                                </p>
-                            </div>
-                            <Button variant="outline" size="sm" className="rounded-full border-white/10 hover:bg-white/5 transition-colors">
-                                <ArrowUpRight className="w-4 h-4 mr-2" />
-                                View in Explorer
-                            </Button>
-                        </div>
-
-                        <div className="grid sm:grid-cols-2 gap-4">
-                            <div className="p-5 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/10 hover:border-primary/30 transition-colors">
-                                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">USDC Balance</span>
-                                <div className="flex items-baseline gap-2 mt-2">
-                                    <span className="text-4xl font-bold font-heading text-foreground">
-                                        {wallet ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(parseFloat(wallet.balances.usdc)) : '$0.00'}
-                                    </span>
-                                    <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">USDC</span>
-                                </div>
-                            </div>
-
-                            <div className="p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 transition-colors">
-                                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Gas Balance</span>
-                                <div className="flex items-baseline gap-2 mt-2">
-                                    <span className="text-4xl font-bold font-heading text-foreground">
-                                        {wallet ? parseFloat(wallet.balances.xlm).toFixed(2) : '0.00'}
-                                    </span>
-                                    <span className="text-xs font-bold text-foreground/50 bg-white/10 px-2 py-0.5 rounded">XLM</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-3">
-                            <Button className="flex-1 bg-white/5 hover:bg-white/10 text-foreground border border-white/10 hover:border-white/20 backdrop-blur-sm transition-all h-12 text-sm font-medium tracking-wide uppercase">
-                                Deposit Funds
-                            </Button>
-                            <Button className="flex-1 bg-white/5 hover:bg-white/10 text-foreground border border-white/10 hover:border-white/20 backdrop-blur-sm transition-all h-12 text-sm font-medium tracking-wide uppercase">
-                                Create Transaction
-                            </Button>
-                        </div>
-                    </div>
-                </Card>
-
-                {/* Activity Feed - Takes 1/3 width */}
-                <Card className="glass-panel md:col-span-1 p-6 flex flex-col h-full bg-gradient-to-b from-card/50 to-transparent">
-                    <div className="flex items-center gap-2 mb-6">
-                        <Activity className="w-5 h-5 text-accent" />
-                        <h3 className="font-bold font-heading">Recent Activity</h3>
-                    </div>
-
-                    <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                        {notifications.length > 0 ? (
-                            notifications.map((notif) => (
-                                <div key={notif.id} className="relative pl-6 pb-0 border-l border-white/10">
-                                    <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-card border border-accent shadow-[0_0_10px_rgba(255,215,0,0.3)]"></div>
-                                    <p className="text-sm font-medium leading-tight mb-1">{notif.title}</p>
-                                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{notif.message}</p>
-                                    <span className="text-[10px] text-muted-foreground/40 mt-2 block font-mono">
-                                        {new Date(notif.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground text-sm opacity-50">
-                                <Activity className="w-8 h-8 mb-2 opacity-20" />
-                                No recent activity
-                            </div>
-                        )}
-                    </div>
-
-                    <Button variant="ghost" className="w-full mt-4 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5">
-                        View All Activity
-                    </Button>
-                </Card>
-            </div>
-
             {/* Active Offers Section - Editorial/Magazine Style Layout */}
             <div className="space-y-6 animate-fade-in-up animate-delay-3 pb-12">
                 <div className="flex items-end justify-between border-b border-border/40 pb-4">
@@ -333,103 +245,105 @@ export function CompanyDashboard() {
                     </span>
                 </div>
 
-                {activeOffers.length > 0 ? (
-                    <div className="grid gap-8 md:grid-cols-1 lg:grid-cols-2">
-                        {activeOffers.map((offer, idx) => {
-                            const stats = activeOfferStats[offer.id] || { sold: 0, investors: 0 };
-                            const totalSupply = parseFloat(offer.total_supply || '0');
-                            const progress = totalSupply > 0 ? (stats.sold / totalSupply) * 100 : 0;
+                {
+                    activeOffers.length > 0 ? (
+                        <div className="grid gap-8 md:grid-cols-1 lg:grid-cols-2">
+                            {activeOffers.map((offer, idx) => {
+                                const stats = activeOfferStats[offer.id] || { sold: 0, investors: 0 };
+                                const totalSupply = parseFloat(offer.total_supply || '0');
+                                const progress = totalSupply > 0 ? (stats.sold / totalSupply) * 100 : 0;
 
-                            return (
-                                <Card
-                                    key={offer.id}
-                                    className="group glass-panel rounded-3xl overflow-hidden hover:border-accent/40 transition-all duration-500"
-                                    style={{ animationDelay: `${0.2 + idx * 0.1}s` }}
-                                >
-                                    <div className="p-8 space-y-8">
-                                        <div className="flex justify-between items-start">
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-primary/10 text-primary border border-primary/20">
-                                                        Series A
-                                                    </span>
-                                                    <StatusBadge status={offer.status} />
+                                return (
+                                    <Card
+                                        key={offer.id}
+                                        className="group glass-panel rounded-3xl overflow-hidden hover:border-accent/40 transition-all duration-500"
+                                        style={{ animationDelay: `${0.2 + idx * 0.1}s` }}
+                                    >
+                                        <div className="p-8 space-y-8">
+                                            <div className="flex justify-between items-start">
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-primary/10 text-primary border border-primary/20">
+                                                            Series A
+                                                        </span>
+                                                        <StatusBadge status={offer.status} />
+                                                    </div>
+                                                    <h4 className="text-2xl font-bold font-heading group-hover:text-accent transition-colors duration-300">
+                                                        {offer.offer_name}
+                                                    </h4>
+                                                    <p className="text-sm text-muted-foreground font-mono tracking-wide opacity-70">
+                                                        {offer.asset_code}
+                                                    </p>
                                                 </div>
-                                                <h4 className="text-2xl font-bold font-heading group-hover:text-accent transition-colors duration-300">
-                                                    {offer.offer_name}
-                                                </h4>
-                                                <p className="text-sm text-muted-foreground font-mono tracking-wide opacity-70">
-                                                    {offer.asset_code}
-                                                </p>
+                                                <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center group-hover:bg-accent group-hover:text-black transition-all duration-300 transform group-hover:rotate-45">
+                                                    <ArrowUpRight className="w-5 h-5" />
+                                                </div>
                                             </div>
-                                            <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center group-hover:bg-accent group-hover:text-black transition-all duration-300 transform group-hover:rotate-45">
-                                                <ArrowUpRight className="w-5 h-5" />
-                                            </div>
-                                        </div>
 
-                                        <div className="grid grid-cols-2 gap-8 py-6 border-y border-white/5 relative">
-                                            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-white/10 to-transparent"></div>
-                                            <div>
-                                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Capital Raised</p>
-                                                <p className="text-2xl font-bold font-heading text-success">
-                                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: "compact" }).format(stats.sold)}
-                                                </p>
+                                            <div className="grid grid-cols-2 gap-8 py-6 border-y border-white/5 relative">
+                                                <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-white/10 to-transparent"></div>
+                                                <div>
+                                                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Capital Raised</p>
+                                                    <p className="text-2xl font-bold font-heading text-success">
+                                                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: "compact" }).format(stats.sold)}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Target</p>
+                                                    <p className="text-2xl font-bold font-heading text-muted-foreground/80">
+                                                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: "compact" }).format(totalSupply)}
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <div className="text-right">
-                                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Target</p>
-                                                <p className="text-2xl font-bold font-heading text-muted-foreground/80">
-                                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: "compact" }).format(totalSupply)}
-                                                </p>
-                                            </div>
-                                        </div>
 
-                                        <div className="space-y-3">
-                                            <div className="flex justify-between text-sm items-end">
-                                                <span className="text-muted-foreground font-medium">{stats.investors} Investors</span>
-                                                <span className="font-bold text-2xl font-heading tabular-nums">{progress.toFixed(1)}%</span>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between text-sm items-end">
+                                                    <span className="text-muted-foreground font-medium">{stats.investors} Investors</span>
+                                                    <span className="font-bold text-2xl font-heading tabular-nums">{progress.toFixed(1)}%</span>
+                                                </div>
+                                                <div className="h-2 w-full bg-secondary/30 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-gradient-to-r from-accent to-primary relative overflow-hidden"
+                                                        style={{ width: `${progress}%` }}
+                                                    >
+                                                        <div className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite]"></div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="h-2 w-full bg-secondary/30 rounded-full overflow-hidden">
-                                                <div
-                                                    className="h-full bg-gradient-to-r from-accent to-primary relative overflow-hidden"
-                                                    style={{ width: `${progress}%` }}
+
+                                            <div className="pt-2 flex items-center justify-between">
+                                                <span className="text-xs text-muted-foreground">
+                                                    Started {new Date(offer.created_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                                                </span>
+                                                <Button
+                                                    variant="ghost"
+                                                    className="hover:bg-accent hover:text-accent-foreground rounded-full px-6 transition-all duration-300"
+                                                    onClick={() => navigate(`/company/offers/${offer.id}`)}
                                                 >
-                                                    <div className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite]"></div>
-                                                </div>
+                                                    Manage Asset
+                                                </Button>
                                             </div>
                                         </div>
-
-                                        <div className="pt-2 flex items-center justify-between">
-                                            <span className="text-xs text-muted-foreground">
-                                                Started {new Date(offer.created_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
-                                            </span>
-                                            <Button
-                                                variant="ghost"
-                                                className="hover:bg-accent hover:text-accent-foreground rounded-full px-6 transition-all duration-300"
-                                                onClick={() => navigate(`/company/offers/${offer.id}`)}
-                                            >
-                                                Manage Asset
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </Card>
-                            );
-                        })}
-                    </div>
-                ) : (
-                    <div className="flex items-center justify-center py-24 glass-panel rounded-3xl border-dashed border-2 border-white/10 hover:border-accent/30 transition-colors group cursor-pointer" onClick={() => navigate('/company/offers/new')}>
-                        <div className="text-center space-y-4">
-                            <div className="w-16 h-16 rounded-full bg-secondary/50 flex items-center justify-center mx-auto group-hover:bg-accent group-hover:text-black transition-all duration-500">
-                                <Plus className="w-8 h-8" />
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-bold font-heading mb-2">Initialize New Offering</h3>
-                                <p className="text-muted-foreground max-w-sm mx-auto">
-                                    Begin the process of creating a new security token offering.
-                                </p>
+                                    </Card>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="flex items-center justify-center py-24 glass-panel rounded-3xl border-dashed border-2 border-white/10 hover:border-accent/30 transition-colors group cursor-pointer" onClick={() => navigate('/company/offers/new')}>
+                            <div className="text-center space-y-4">
+                                <div className="w-16 h-16 rounded-full bg-secondary/50 flex items-center justify-center mx-auto group-hover:bg-accent group-hover:text-black transition-all duration-500">
+                                    <Plus className="w-8 h-8" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold font-heading mb-2">Initialize New Offering</h3>
+                                    <p className="text-muted-foreground max-w-sm mx-auto">
+                                        Begin the process of creating a new security token offering.
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )
+                }
             </div>
         </div>
     );

@@ -48,14 +48,14 @@ export function Offers() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
                 <div>
-                    <h2 className="text-2xl font-bold text-white">My Offers</h2>
+                    <h2 className="text-3xl font-bold font-heading text-foreground">My Offers</h2>
                     <p className="text-muted-foreground">Manage your tokenized asset offers</p>
                 </div>
                 <Button
                     onClick={() => navigate('/company/offers/new')}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 rounded-full px-6 transition-all hover:scale-105 btn-glow"
                 >
                     <Plus className="w-4 h-4 mr-2" />
                     Create New Offer
@@ -63,14 +63,14 @@ export function Offers() {
             </div>
 
             {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 animate-fade-in-up animate-delay-1">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                         placeholder="Search offers..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-foreground"
+                        className="pl-10 glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-foreground transition-all focus:bg-black/30"
                     />
                 </div>
                 <div className="flex gap-2">
@@ -79,7 +79,7 @@ export function Offers() {
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
-                            className="pl-10 pr-8 py-2 rounded-md glass-panel bg-black/20 border border-white/10 text-white appearance-none cursor-pointer focus:border-primary/50 focus:outline-none"
+                            className="pl-10 pr-8 py-2 rounded-md glass-panel bg-black/20 border border-white/10 text-white appearance-none cursor-pointer focus:border-primary/50 focus:outline-none transition-all hover:bg-black/30"
                         >
                             {statusOptions.map(option => (
                                 <option key={option.value} value={option.value} className="bg-slate-900">
@@ -92,7 +92,7 @@ export function Offers() {
             </div>
 
             {/* Offers Table */}
-            <Card className="glass-panel border-white/5 bg-white/5 overflow-hidden">
+            <Card className="glass-panel border-white/5 bg-white/5 overflow-hidden animate-fade-in-up animate-delay-2">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>

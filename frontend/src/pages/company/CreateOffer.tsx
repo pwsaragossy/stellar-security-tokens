@@ -227,19 +227,19 @@ export function CreateOffer() {
         <div className="max-w-3xl mx-auto space-y-6">
             {/* Header */}
             {/* ... */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between animate-fade-in">
                 <div className="flex items-center gap-4">
                     <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => step > 1 ? setStep(step - 1) : navigate('/company/offers/new')}
-                        className="text-muted-foreground hover:text-white"
+                        className="text-muted-foreground hover:text-white transition-transform hover:scale-110"
                         disabled={isSuccess}
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </Button>
                     <div>
-                        <h2 className="text-2xl font-bold text-white">Create New Offer</h2>
+                        <h2 className="text-2xl font-bold font-heading text-white">Create New Offer</h2>
                         {!isSuccess && <p className="text-muted-foreground">Step {displayStep} of {totalSteps}</p>}
                     </div>
                 </div>
@@ -247,7 +247,7 @@ export function CreateOffer() {
                     variant="ghost"
                     size="icon"
                     onClick={handleClose}
-                    className="text-muted-foreground hover:text-white"
+                    className="text-muted-foreground hover:text-white transition-transform hover:scale-110"
                 >
                     <X className="w-5 h-5" />
                 </Button>
@@ -255,7 +255,7 @@ export function CreateOffer() {
 
             {/* Progress Indicator */}
             {!isSuccess && (
-                <div className="flex gap-2">
+                <div className="flex gap-2 animate-fade-in-up animate-delay-1">
                     {Array.from({ length: totalSteps }, (_, i) => (
                         <div
                             key={i}
@@ -266,7 +266,7 @@ export function CreateOffer() {
             )}
 
             {/* Form Content */}
-            <Card className="glass-panel border-white/5 bg-white/5">
+            <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in-up animate-delay-2">
                 {step === 1 && (
                     <>
                         <CardHeader>
