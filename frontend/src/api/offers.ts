@@ -147,5 +147,10 @@ export const offersApi = {
     const response = await api.post(`/admin/offers/${id}/activate`);
     return response.data;
   },
+
+  getInvestors: async (id: number): Promise<ApiResponse> => {
+    const response = await api.get(`/companies/offers/${id}/investors`);
+    return response.data;
+  },
 };
 

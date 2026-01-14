@@ -61,5 +61,16 @@ export const companiesApi = {
     const response = await api.get('/companies/profile');
     return response.data;
   },
+
+  getWalletStatus: async (companyId: number): Promise<ApiResponse<{
+    hasWallet: boolean;
+    walletAddress?: string;
+    passkeyRegistered: boolean;
+    balances?: { xlm: string; usdc: string };
+    explorer?: string;
+  }>> => {
+    const response = await api.get(`/companies/${companyId}/wallet-status`);
+    return response.data;
+  },
 };
 

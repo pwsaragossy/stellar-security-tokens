@@ -372,7 +372,9 @@ export class OfferService {
             id: true,
             name: true,
             email: true,
-            stellarContractId: true
+            stellarContractId: true,
+            kycStatus: true,
+            createdAt: true // Investor registration date
           }
         }
       }
@@ -383,17 +385,24 @@ export class OfferService {
     for (const inv of investments) {
       if (!capTable[inv.investorId]) {
         capTable[inv.investorId] = {
-          investorId: inv.investorId,
+          investor_id: inv.investorId,
           name: inv.investor.name,
           email: inv.investor.email,
-          walletAddress: inv.investor.stellarContractId,
-          totalTokens: 0,
-          totalInvested: 0,
-          investedAt: inv.createdAt // First investment date
+          wallet_address: inv.investor.stellarContractId,
+          kyc_status: inv.investor.kycStatus,
+          registered_at: inv.investor.createdAt,
+          total_tokens: 0,
+          total_invested: 0,
+          invested_at: inv.createdAt // First investment date (for this record)
         };
       }
-      capTable[inv.investorId].totalTokens += parseFloat(inv.tokenAmount);
-      capTable[inv.investorId].totalInvested += parseFloat(inv.usdcAmount);
+      capTable[inv.investorId].total_tokens += parseFloat(inv.tokenAmount);
+      capTable[inv.investorId].total_invested += parseFloat(inv.usdcAmount);
+
+      // Keep easiest investment date if multiple
+      if (new Date(inv.createdAt) < new Date(capTable[inv.investorId].invested_at)) {
+        capTable[inv.investorId].invested_at = inv.createdAt;
+      }
     }
 
     return Object.values(capTable);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileText, Plus, Search, Filter, Loader2 } from "lucide-react";
@@ -91,85 +91,84 @@ export function Offers() {
                 </div>
             </div>
 
-            {/* Offers Grid */}
-            {filteredOffers.length > 0 ? (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {filteredOffers.map((offer) => (
-                        <Card
-                            key={offer.id}
-                            className="glass-panel border-white/5 bg-white/5 cursor-pointer hover:bg-white/10 transition-all hover:border-teal-500/30"
-                            onClick={() => navigate(`/company/offers/${offer.id}`)}
-                        >
-                            <CardHeader className="pb-3">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                            <FileText className="w-5 h-5 text-primary" />
-                                        </div>
-                                        <div>
-                                            <CardTitle className="text-base">{offer.offer_name}</CardTitle>
-                                            <p className="text-xs text-muted-foreground font-mono">{offer.asset_code}</p>
-                                        </div>
-                                    </div>
-                                    <StatusBadge status={offer.status} />
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-                                    {offer.description || 'No description provided'}
-                                </p>
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <p className="text-muted-foreground">Type</p>
-                                        <p className="text-white capitalize">{offer.offer_type}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-muted-foreground">Supply</p>
-                                        <p className="text-white">
-                                            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(parseFloat(offer.total_supply || '0'))}
-                                        </p>
-                                    </div>
-                                    {offer.annual_interest_rate && (
-                                        <div>
-                                            <p className="text-muted-foreground">Interest Rate</p>
-                                            <p className="text-success">{offer.annual_interest_rate}% APY</p>
-                                        </div>
-                                    )}
-                                    <div>
-                                        <p className="text-muted-foreground">Created</p>
-                                        <p className="text-white">
+            {/* Offers Table */}
+            <Card className="glass-panel border-white/5 bg-white/5 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="border-b border-white/10 bg-white/5">
+                                <th className="p-4 text-xs font-medium uppercase tracking-wider text-muted-foreground w-[100px]">Asset</th>
+                                <th className="p-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">Name</th>
+                                <th className="p-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">Type</th>
+                                <th className="p-4 text-xs font-medium uppercase tracking-wider text-muted-foreground text-right">Supply</th>
+                                <th className="p-4 text-xs font-medium uppercase tracking-wider text-muted-foreground text-right">APY</th>
+                                <th className="p-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">Created</th>
+                                <th className="p-4 text-xs font-medium uppercase tracking-wider text-muted-foreground text-right">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {filteredOffers.length > 0 ? (
+                                filteredOffers.map((offer) => (
+                                    <tr
+                                        key={offer.id}
+                                        onClick={() => navigate(`/company/offers/${offer.id}`)}
+                                        className="group hover:bg-white/5 transition-colors cursor-pointer"
+                                    >
+                                        <td className="p-4 font-mono text-sm font-bold text-accent">
+                                            {offer.asset_code}
+                                        </td>
+                                        <td className="p-4 text-sm font-medium text-foreground">
+                                            {offer.offer_name}
+                                        </td>
+                                        <td className="p-4 text-sm text-muted-foreground capitalize">
+                                            {offer.offer_type}
+                                        </td>
+                                        <td className="p-4 text-sm text-foreground text-right font-mono">
+                                            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(parseFloat(offer.total_supply || '0'))}
+                                        </td>
+                                        <td className="p-4 text-sm text-success text-right font-mono">
+                                            {offer.annual_interest_rate ? `${offer.annual_interest_rate}%` : '-'}
+                                        </td>
+                                        <td className="p-4 text-sm text-muted-foreground">
                                             {new Date(offer.created_at).toLocaleDateString()}
-                                        </p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <div className="flex justify-end">
+                                                <StatusBadge status={offer.status} />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={7} className="p-12 text-center text-muted-foreground">
+                                        <div className="flex flex-col items-center justify-center gap-4">
+                                            <FileText className="w-12 h-12 opacity-20" />
+                                            <div>
+                                                <p className="font-medium text-foreground">No offers found</p>
+                                                <p className="text-sm opacity-70">
+                                                    {searchTerm || statusFilter !== 'all'
+                                                        ? 'Try adjusting your filters'
+                                                        : 'Create your first offer to get started'}
+                                                </p>
+                                            </div>
+                                            {!searchTerm && statusFilter === 'all' && (
+                                                <Button
+                                                    onClick={(e) => { e.stopPropagation(); navigate('/company/offers/new'); }}
+                                                    variant="outline"
+                                                    className="mt-2 border-white/10 hover:bg-white/5 hover:text-white"
+                                                >
+                                                    Create Offer
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
-            ) : (
-                <Card className="glass-panel border-white/5 bg-white/5">
-                    <CardContent className="py-12 text-center">
-                        <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                        <h3 className="text-lg font-medium text-white mb-2">
-                            {searchTerm || statusFilter !== 'all' ? 'No offers found' : 'No offers yet'}
-                        </h3>
-                        <p className="text-muted-foreground mb-6">
-                            {searchTerm || statusFilter !== 'all'
-                                ? 'Try adjusting your search or filters'
-                                : 'Create your first tokenized asset offer to get started'}
-                        </p>
-                        {!searchTerm && statusFilter === 'all' && (
-                            <Button
-                                onClick={() => navigate('/company/offers/new')}
-                                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                            >
-                                <Plus className="w-4 h-4 mr-2" />
-                                Create Your First Offer
-                            </Button>
-                        )}
-                    </CardContent>
-                </Card>
-            )}
+            </Card>
         </div>
     );
 }
