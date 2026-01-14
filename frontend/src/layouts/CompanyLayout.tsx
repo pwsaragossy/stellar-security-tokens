@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, BarChart3, Settings, LogOut, Building2, Wallet } from 'lucide-react';
+import { LayoutDashboard, FileText, BarChart3, Settings, LogOut, Building2, Wallet, Files } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -31,6 +31,7 @@ export function CompanyLayout() {
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/company/dashboard' },
         { id: 'offers', label: 'My Offers', icon: FileText, path: '/company/offers' },
         { id: 'wallet', label: 'Wallet', icon: Wallet, path: '/company/wallet' },
+        { id: 'documents', label: 'Documents', icon: Files, path: '/company/documents' },
         { id: 'reports', label: 'Reports', icon: BarChart3, path: '/company/reports' },
         { id: 'settings', label: 'Settings', icon: Settings, path: '/company/settings' },
     ];
