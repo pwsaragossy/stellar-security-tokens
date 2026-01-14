@@ -13,23 +13,23 @@ export function SelectOfferType() {
     return (
         <div className="space-y-6 animate-fade-in">
             {/* Header */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 animate-fade-in">
                 <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => navigate('/company/offers')}
-                    className="rounded-xl"
+                    className="rounded-xl transition-transform hover:scale-110"
                 >
                     <ArrowLeft className="w-5 h-5" />
                 </Button>
                 <div>
-                    <h2 className="text-2xl font-bold text-white">Choose Offer Type</h2>
+                    <h2 className="text-2xl font-bold font-heading text-white">Choose Offer Type</h2>
                     <p className="text-muted-foreground">Step 1 of 5 — Select the type of financial instrument</p>
                 </div>
             </div>
 
             {/* Options Grid */}
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid md:grid-cols-2 gap-6 animate-fade-in-up animate-delay-1">
                 {/* Collateral (Debt) Option */}
                 <Card
                     className="glass-panel border-white/10 bg-white/5 hover:border-primary/50 transition-all duration-300 cursor-pointer group relative overflow-hidden"
@@ -45,7 +45,7 @@ export function SelectOfferType() {
                                 Debt Instrument
                             </span>
                         </div>
-                        <CardTitle className="text-xl mt-4">Collateral (Debt)</CardTitle>
+                        <CardTitle className="text-xl mt-4 font-heading">Collateral (Debt)</CardTitle>
                         <CardDescription className="text-muted-foreground">
                             Fixed income security with guaranteed interest payments
                         </CardDescription>
@@ -92,7 +92,7 @@ export function SelectOfferType() {
                             </ol>
                         </div>
 
-                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all hover:scale-[1.02] shadow-lg shadow-blue-500/20">
                             Create Debt Offering
                         </Button>
                     </CardContent>
@@ -113,7 +113,7 @@ export function SelectOfferType() {
                                 Equity Instrument
                             </span>
                         </div>
-                        <CardTitle className="text-xl mt-4">Sale (Equity)</CardTitle>
+                        <CardTitle className="text-xl mt-4 font-heading">Sale (Equity)</CardTitle>
                         <CardDescription className="text-muted-foreground">
                             Ownership stake with potential dividends based on performance
                         </CardDescription>
@@ -160,7 +160,7 @@ export function SelectOfferType() {
                             </ol>
                         </div>
 
-                        <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
+                        <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all hover:scale-[1.02] shadow-lg shadow-emerald-500/20">
                             Create Equity Offering
                         </Button>
                     </CardContent>
@@ -168,7 +168,7 @@ export function SelectOfferType() {
             </div>
 
             {/* Important Notice */}
-            <Card className="glass-panel border-yellow-500/20 bg-yellow-500/5">
+            <Card className="glass-panel border-yellow-500/20 bg-yellow-500/5 animate-fade-in-up animate-delay-2">
                 <CardContent className="p-4 flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
                     <div className="text-sm">

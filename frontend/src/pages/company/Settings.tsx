@@ -100,20 +100,20 @@ export function Settings() {
 
     return (
         <div className="max-w-4xl space-y-6">
-            <div>
-                <h2 className="text-2xl font-bold text-white">Settings</h2>
+            <div className="animate-fade-in">
+                <h2 className="text-2xl font-bold font-heading text-white">Settings</h2>
                 <p className="text-muted-foreground">Manage your company profile and settings</p>
             </div>
 
             {saveSuccess && (
-                <div className="p-4 bg-success/10 border border-success/20 rounded-lg flex items-center gap-3">
+                <div className="p-4 bg-success/10 border border-success/20 rounded-lg flex items-center gap-3 animate-fade-in">
                     <CheckCircle className="w-5 h-5 text-success" />
                     <p className="text-success">Changes saved successfully!</p>
                 </div>
             )}
 
             {/* Company Status Cards */}
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 animate-fade-in-up animate-delay-1">
                 <Card className={`border ${getStatusColor(company?.status)}`}>
                     <CardContent className="p-4">
                         <div className="flex items-center gap-3">
@@ -140,10 +140,10 @@ export function Settings() {
             </div>
 
             {/* Company Profile */}
-            <Card className="glass-panel border-white/5 bg-white/5">
+            <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in-up animate-delay-2">
                 <CardHeader className="flex flex-row items-center justify-between">
                     <div>
-                        <CardTitle>Company Profile</CardTitle>
+                        <CardTitle className="font-heading">Company Profile</CardTitle>
                         <CardDescription>Your company information on the platform</CardDescription>
                     </div>
                     {!isEditing && (
@@ -245,9 +245,9 @@ export function Settings() {
             </Card>
 
             {/* Registration Info */}
-            <Card className="glass-panel border-white/5 bg-white/5">
+            <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in-up animate-delay-3">
                 <CardHeader>
-                    <CardTitle className="text-base">Registration Information</CardTitle>
+                    <CardTitle className="text-base font-heading">Registration Information</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="grid gap-4 md:grid-cols-2 text-sm">

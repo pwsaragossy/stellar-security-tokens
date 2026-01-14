@@ -66,19 +66,19 @@ export function OfferDetails() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between animate-fade-in">
                 <div className="flex items-center gap-4">
                     <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => navigate('/company/offers')}
-                        className="text-muted-foreground hover:text-white"
+                        className="text-muted-foreground hover:text-white transition-transform hover:scale-110"
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </Button>
                     <div>
                         <div className="flex items-center gap-3">
-                            <h2 className="text-2xl font-bold text-white">{offer.offer_name}</h2>
+                            <h2 className="text-3xl font-bold font-heading text-white">{offer.offer_name}</h2>
                             <StatusBadge status={offer.status} />
                         </div>
                         <p className="text-muted-foreground font-mono">{offer.asset_code}</p>
@@ -88,14 +88,14 @@ export function OfferDetails() {
                     {offer.status === 'active' && offer.offer_type === 'collateral' && (
                         <Button
                             onClick={() => navigate(`/company/payments/${offer.id}`)}
-                            className="bg-success hover:bg-success/90 text-success-foreground"
+                            className="bg-success hover:bg-success/90 text-success-foreground shadow-lg shadow-success/10 btn-glow"
                         >
                             <DollarSign className="w-4 h-4 mr-2" />
                             Pay Investors
                         </Button>
                     )}
                     {canEdit && (
-                        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 btn-glow">
                             <Edit className="w-4 h-4 mr-2" />
                             Edit Offer
                         </Button>
@@ -104,9 +104,9 @@ export function OfferDetails() {
             </div>
 
             {/* Status Timeline */}
-            <Card className="glass-panel border-white/5 bg-white/5">
+            <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in-up animate-delay-1">
                 <CardHeader>
-                    <CardTitle className="text-base">Status Timeline</CardTitle>
+                    <CardTitle className="text-base font-heading">Status Timeline</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="flex items-center gap-4">
@@ -149,16 +149,16 @@ export function OfferDetails() {
             </Card>
 
             {/* Main Content */}
-            <div className="grid gap-6 md:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-3 animate-fade-in-up animate-delay-2">
                 {/* Offer Details */}
                 <Card className="md:col-span-2 glass-panel border-white/5 bg-white/5">
                     <CardHeader>
-                        <CardTitle>Offer Details</CardTitle>
+                        <CardTitle className="font-heading">Offer Details</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <div>
                             <h4 className="text-sm font-medium text-muted-foreground mb-2">Description</h4>
-                            <p className="text-white">{offer.description || 'No description provided'}</p>
+                            <p className="text-white leading-relaxed">{offer.description || 'No description provided'}</p>
                         </div>
 
                         <div className="grid grid-cols-2 gap-6">
@@ -168,14 +168,14 @@ export function OfferDetails() {
                             </div>
                             <div>
                                 <h4 className="text-sm font-medium text-muted-foreground mb-2">Total Supply</h4>
-                                <p className="text-white">
+                                <p className="text-white font-mono">
                                     {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(parseFloat(offer.total_supply || '0'))}
                                 </p>
                             </div>
                             {offer.annual_interest_rate && (
                                 <div>
                                     <h4 className="text-sm font-medium text-muted-foreground mb-2">Annual Interest Rate</h4>
-                                    <p className="text-success">{offer.annual_interest_rate}% APY</p>
+                                    <p className="text-success font-mono">{offer.annual_interest_rate}% APY</p>
                                 </div>
                             )}
                             <div>
@@ -193,17 +193,17 @@ export function OfferDetails() {
                         {offer.offer_rules && Object.keys(offer.offer_rules).length > 0 && (
                             <div>
                                 <h4 className="text-sm font-medium text-muted-foreground mb-2">Investment Rules</h4>
-                                <div className="grid grid-cols-2 gap-4 p-4 bg-white/5 rounded-lg">
+                                <div className="grid grid-cols-2 gap-4 p-4 bg-white/5 rounded-lg border border-white/5">
                                     {offer.offer_rules.min_investment && (
                                         <div>
-                                            <p className="text-xs text-muted-foreground">Minimum Investment</p>
-                                            <p className="text-white">${offer.offer_rules.min_investment}</p>
+                                            <p className="text-xs text-muted-foreground uppercase tracking-wider">Minimum Investment</p>
+                                            <p className="text-white font-mono mt-1">${offer.offer_rules.min_investment}</p>
                                         </div>
                                     )}
                                     {offer.offer_rules.max_investment && (
                                         <div>
-                                            <p className="text-xs text-muted-foreground">Maximum Investment</p>
-                                            <p className="text-white">${offer.offer_rules.max_investment}</p>
+                                            <p className="text-xs text-muted-foreground uppercase tracking-wider">Maximum Investment</p>
+                                            <p className="text-white font-mono mt-1">${offer.offer_rules.max_investment}</p>
                                         </div>
                                     )}
                                 </div>

@@ -121,15 +121,15 @@ export function PayInvestors() {
 
     if (success) {
         return (
-            <div className="max-w-2xl mx-auto space-y-6">
+            <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
                 <Card className="glass-panel border-success/20 bg-success/5">
                     <CardContent className="p-8 text-center">
                         <CheckCircle className="w-16 h-16 text-success mx-auto mb-4" />
-                        <h2 className="text-2xl font-bold text-white mb-2">Payment Successful!</h2>
+                        <h2 className="text-2xl font-bold text-white mb-2 font-heading">Payment Successful!</h2>
                         <p className="text-muted-foreground mb-6">
                             All investors have been paid successfully.
                         </p>
-                        <Button onClick={() => navigate('/company/offers')} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                        <Button onClick={() => navigate('/company/offers')} className="bg-primary hover:bg-primary/90 text-primary-foreground btn-glow">
                             Back to Offers
                         </Button>
                     </CardContent>
@@ -141,28 +141,28 @@ export function PayInvestors() {
     return (
         <div className="max-w-3xl mx-auto space-y-6">
             {/* Header */}
-            <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground hover:text-white">
+            <div className="flex items-center gap-4 animate-fade-in">
+                <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground hover:text-white transition-transform hover:scale-110">
                     <ArrowLeft className="w-5 h-5" />
                 </Button>
                 <div className="flex-1">
-                    <h2 className="text-2xl font-bold text-white">Pay Investors</h2>
+                    <h2 className="text-2xl font-bold text-white font-heading">Pay Investors</h2>
                     <p className="text-muted-foreground">{paymentDetails?.offerName || 'Loading...'}</p>
                 </div>
                 {getStatusBadge()}
             </div>
 
             {error && (
-                <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
+                <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive animate-fade-in">
                     <AlertTriangle className="w-4 h-4 inline mr-2" />
                     {error}
                 </div>
             )}
 
             {/* Payment Summary Card */}
-            <Card className="glass-panel border-white/5 bg-white/5">
+            <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in-up animate-delay-1">
                 <CardHeader>
-                    <CardTitle>Payment Summary</CardTitle>
+                    <CardTitle className="font-heading">Payment Summary</CardTitle>
                     <CardDescription>
                         {isBulletPayment ? 'Bullet payment at maturity' : `${paymentDetails?.paymentType} yield payment`}
                     </CardDescription>
@@ -247,7 +247,7 @@ export function PayInvestors() {
 
             {/* Consequences Warning */}
             {(paymentDetails as PaymentDetails)?.paymentDueStatus === 'overdue' && (
-                <Card className="glass-panel border-destructive/20 bg-destructive/5">
+                <Card className="glass-panel border-destructive/20 bg-destructive/5 animate-fade-in-up animate-delay-2">
                     <CardContent className="p-4">
                         <div className="flex items-start gap-3">
                             <AlertTriangle className="w-5 h-5 text-destructive mt-0.5" />
@@ -265,12 +265,12 @@ export function PayInvestors() {
             )}
 
             {/* Action Buttons */}
-            <div className="flex gap-4">
+            <div className="flex gap-4 animate-fade-in-up animate-delay-3">
                 {!preparedTx ? (
                     <Button
                         onClick={handlePreparePayment}
                         disabled={submitting || totalOwed === 0}
-                        className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground py-6 text-lg"
+                        className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground py-6 text-lg btn-glow shadow-lg shadow-primary/20"
                     >
                         {submitting ? (
                             <>
@@ -302,7 +302,7 @@ export function PayInvestors() {
                             <Button
                                 onClick={handleSignAndSubmit}
                                 disabled={submitting}
-                                className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
+                                className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground btn-glow"
                             >
                                 {submitting ? (
                                     <>
