@@ -184,9 +184,10 @@ export function CompanyRegister() {
             const cleanTaxId = formData.taxId ? formData.taxId.replace(/\D/g, '') : undefined;
 
             // 1. Create Passkey AND Deploy Smart Wallet
-            const { credentialId, publicKey, contractId } = await passkeyClient.register(formData.companyName);
+            const { credentialId, contractId } = await passkeyClient.register(formData.companyName);
 
             // 2. Send to Backend with registrationToken
+            // Note: publicKey is no longer needed - wallet is already deployed by passkey-kit
             const response = await api.post('/companies/register', {
                 name: formData.companyName,
                 legal_representative: formData.legalRepresentative || undefined,
@@ -197,7 +198,6 @@ export function CompanyRegister() {
                 phone: formData.phone || undefined,
                 registrationToken,
                 credentialId,
-                publicKey,
                 contractId,
             });
 

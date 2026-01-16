@@ -513,11 +513,28 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
   try {
     const { name, document, credentialId, publicKey, contractId, registrationToken } = req.body;
 
+    // Debug logging
+    console.log('[Registration] Received registration request:', {
+      name,
+      email: registrationToken ? 'present' : 'missing',
+      hasCredentialId: !!credentialId,
+      hasPublicKey: !!publicKey,
+      publicKeyType: typeof publicKey,
+      hasContractId: !!contractId,
+    });
+
     // Validate required fields
-    if (!name || !document || !credentialId || !contractId || !registrationToken) {
+    // Note: contractId is optional - backend deploys and generates contractId
+    if (!name || !document || !credentialId || !registrationToken) {
+      const missing = [];
+      if (!name) missing.push('name');
+      if (!document) missing.push('document');
+      if (!credentialId) missing.push('credentialId');
+      if (!registrationToken) missing.push('registrationToken');
+
       return res.status(400).json({
         success: false,
-        error: 'Name, document, credentialId, contractId, and registrationToken are required',
+        error: `Required fields missing: ${missing.join(', ')}`,
       });
     }
 
@@ -568,20 +585,25 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
       });
     }
 
-    // Convert publicKey from base64 to Buffer if provided
-    const publicKeyBuffer = publicKey
-      ? (Buffer.isBuffer(publicKey) ? publicKey : Buffer.from(publicKey, 'base64'))
-      : null;
+    // Validate that contractId was provided (wallet deployed by frontend via passkey-kit)
+    if (!contractId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Contract ID is required - wallet should be deployed by the frontend',
+      });
+    }
 
-    // Create investor with wallet contract ID from frontend - email already verified!
+    console.log(`[Registration] Creating investor for ${verifiedEmail} with wallet ${contractId}`);
+
+    // Create investor with wallet contract ID from frontend - wallet already deployed!
     const investor = await prisma.investor.create({
       data: {
         name,
         email: verifiedEmail, // Use verified email from token
         document,
-        stellarContractId: contractId, // From client-side deployment
+        stellarContractId: contractId, // Use the contract ID from frontend
         passkeyCredentialId: credentialId,
-        passkeyPublicKey: publicKeyBuffer,
+        passkeyPublicKey: null, // No longer tracked separately - embedded in wallet contract
         kycStatus: 'pending',
         emailVerified: true, // Email was verified before passkey creation!
         emailVerificationToken: null,

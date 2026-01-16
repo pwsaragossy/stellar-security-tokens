@@ -9,7 +9,10 @@ import {
   StrKey,
   hash,
   Address,
-  Account
+  Account,
+  Networks,
+  Transaction,
+  FeeBumpTransaction
 } from '@stellar/stellar-sdk';
 
 /**
@@ -102,6 +105,9 @@ export class PasskeyWalletService {
       const issuerKeypair = getIssuerKeypair();
 
       // 1. Prepare Arguments
+      if (!credentialId) throw new Error('Credential ID is required for deployment');
+      if (!publicKey) throw new Error('Public key is required for deployment');
+
       const credentialIdBuffer = Buffer.from(credentialId, 'base64');
       const publicKeyBuffer = Buffer.isBuffer(publicKey) ? publicKey : Buffer.from(publicKey, 'base64');
 
@@ -408,8 +414,59 @@ export class PasskeyWalletService {
         ledger: result.ledger,
       };
     } catch (error) {
-      console.error('Error sending transaction:', error);
-      throw new Error(`Transaction submission failed: ${error.message}`);
+      console.error('Error sending transaction via Launchtube:', error.message);
+      // Fallback to self-sponsorship if Launchtube fails
+      console.log('[PasskeyWalletService] Launchtube failed or unreachable, attempting self-sponsorship fallback...');
+      return this.submitWithSponsorship(transaction);
+    }
+  }
+
+  /**
+   * Submit a transaction with backend sponsorship (Fee Bump)
+   * This is used as a fallback for Launchtube
+   * 
+   * @param {string} xdr - The signed transaction XDR
+   * @returns {Promise<Object>} Transaction result
+   */
+  static async submitWithSponsorship(xdrString) {
+    try {
+      const { stellarServer, getNetworkPassphrase, getOperationsKeypair } = await import('../config/stellar.js');
+      const networkPassphrase = getNetworkPassphrase();
+      const operationsKeypair = getOperationsKeypair();
+
+      // 1. Parse the inner transaction
+      const innerTx = TransactionBuilder.fromXDR(xdrString, networkPassphrase);
+
+      // 2. Wrap in Fee Bump Transaction
+      // Note: We use a slightly higher fee or double the base fee to ensure priority
+      const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
+        operationsKeypair.publicKey(),
+        (parseInt(BASE_FEE) * 2).toString(),
+        innerTx,
+        networkPassphrase
+      );
+
+      // 3. Sign the outer Fee Bump Transaction
+      feeBumpTx.sign(operationsKeypair);
+
+      // 4. Submit directly to Horizon
+      console.log('[PasskeyWalletService] Submitting self-sponsored fee bump to Horizon...');
+      const result = await stellarServer.submitTransaction(feeBumpTx);
+
+      return {
+        success: true,
+        hash: result.hash,
+        ledger: result.ledger,
+        sponsored: true
+      };
+    } catch (error) {
+      console.error('Self-sponsorship failed:', error);
+      if (error.response && error.response.data) {
+        const resultCodes = error.response.data.extras?.result_codes;
+        const detail = error.response.data.detail || JSON.stringify(resultCodes);
+        throw new Error(`Sponsorship failed: ${detail} Codes: ${JSON.stringify(resultCodes)}`);
+      }
+      throw new Error(`Sponsorship failed: ${error.message}`);
     }
   }
 

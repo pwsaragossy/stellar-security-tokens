@@ -107,26 +107,53 @@ export class PasskeyClient {
 
     /**
      * Register a new passkey and deploy smart wallet
-     * Uses createWallet which handles both passkey creation AND wallet deployment
+     * Uses createWallet which handles passkey creation, builds deployment tx, and signs it.
+     * We then submit the signed tx to actually deploy on-chain.
      */
-    async register(username: string): Promise<{ credentialId: string; publicKey: string; contractId: string }> {
+    async register(username: string): Promise<{ credentialId: string; contractId: string }> {
         await this.init();
         if (!this.kit) throw new Error('PasskeyKit not initialized');
 
         try {
-            // createWallet creates the passkey AND deploys the smart wallet
+            // createWallet creates the passkey, builds the deploy tx, and signs it
+            // But it does NOT submit the transaction - we need to do that
             const result = await this.kit.createWallet('Stellar Tokens', username);
 
-            if (!result || !result.keyIdBase64 || !result.contractId) {
-                throw new Error('Failed to create wallet');
+            if (!result || !result.keyIdBase64 || !result.contractId || !result.signedTx) {
+                throw new Error('Failed to create wallet - missing required data');
             }
+
+            console.log('[Passkey] Wallet created, submitting deployment transaction...');
+            console.log('[Passkey] Contract ID:', result.contractId);
+
+            // Submit the signed transaction to deploy the wallet on-chain
+            // Convert the Tx to XDR string (base64)
+            // @ts-ignore - toXDR may accept encoding parameter
+            const xdrString = result.signedTx.toXDR('base64');
+
+            console.log('[Passkey] XDR length:', xdrString?.length);
+
+            // Submit via Launchtube endpoint (backend proxy)
+            const submitResponse = await fetch(`${this.baseUrl}/wallets/submit-tx`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ xdr: xdrString }),
+            });
+
+            const submitResult = await submitResponse.json().catch(() => ({ success: false, error: 'Failed to parse response' }));
+
+            if (!submitResponse.ok || !submitResult.success) {
+                console.error('[Passkey] Transaction submission failed:', submitResult);
+                throw new Error(`Wallet deployment failed: ${submitResult.error || 'Unknown error'}`);
+            }
+
+            console.log('[Passkey] Transaction submitted successfully:', submitResult);
 
             return {
                 credentialId: result.keyIdBase64,
-                publicKey: '', // Public key is embedded in the deployed contract
                 contractId: result.contractId
             };
-        } catch (error) {
+        } catch (error: any) {
             console.error('Registration error:', error);
             throw error;
         }
@@ -141,8 +168,9 @@ export class PasskeyClient {
 
         try {
             const signedTx = await this.kit.sign(xdr);
-            return signedTx.toXDR();
-        } catch (error) {
+            // @ts-ignore - toXDR may accept encoding parameter
+            return signedTx.toXDR('base64');
+        } catch (error: any) {
             console.error('Signing error:', error);
             throw error;
         }

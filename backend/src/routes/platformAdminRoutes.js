@@ -1244,8 +1244,16 @@ router.post('/investors/:id/sponsor', authenticateToken, requirePlatformAdmin, a
     const treasuryKeypair = getTreasuryKeypair();
     const networkPassphrase = getNetworkPassphrase();
 
-    // Load treasury account
-    const treasuryAccount = await stellarServer.loadAccount(treasuryKeypair.publicKey());
+    // Import required modules from stellar-sdk
+    const stellarSdk = await import('@stellar/stellar-sdk');
+    const { Contract, nativeToScVal, rpc } = stellarSdk;
+
+    // Create Soroban RPC server
+    const sorobanRpcUrl = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
+    const sorobanServer = new rpc.Server(sorobanRpcUrl, { allowHttp: true });
+
+    // Load treasury account from Soroban RPC (not Horizon!)
+    const treasuryAccount = await sorobanServer.getAccount(treasuryKeypair.publicKey());
 
     // Get XLM SAC contract ID
     const xlmSacContractId = process.env.XLM_SAC_CONTRACT_ID;
@@ -1255,14 +1263,6 @@ router.post('/investors/:id/sponsor', authenticateToken, requirePlatformAdmin, a
         error: 'XLM_SAC_CONTRACT_ID not configured. Cannot sponsor Soroban wallets.'
       });
     }
-
-    // Import required modules from stellar-sdk
-    const stellarSdk = await import('@stellar/stellar-sdk');
-    const { Contract, nativeToScVal, rpc } = stellarSdk;
-
-    // Create Soroban RPC server
-    const sorobanRpcUrl = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
-    const sorobanServer = new rpc.Server(sorobanRpcUrl, { allowHttp: true });
 
     // Build SAC transfer transaction
     const xlmSac = new Contract(xlmSacContractId);

@@ -86,6 +86,7 @@ export class CompanyUserController {
     try {
       const { email, password } = req.body;
 
+      // Basic validation
       if (!email || !password) {
         return res.status(400).json({
           success: false,
@@ -250,9 +251,13 @@ export class CompanyUserController {
 
       // Validate required fields
       if (!company_id || !email || !name) {
+        const missing = [];
+        if (!company_id) missing.push('company_id');
+        if (!email) missing.push('email');
+        if (!name) missing.push('name');
         return res.status(400).json({
           success: false,
-          error: 'company_id, email, and name are required',
+          error: `Required fields missing: ${missing.join(', ')}`,
         });
       }
 
@@ -283,25 +288,23 @@ export class CompanyUserController {
 
       // Single-step flow (frontend already created passkey and deployed wallet)
       if (credentialId && contractId) {
-        // Convert publicKey from base64 to Buffer if provided
-        const publicKeyBuffer = publicKey
-          ? (Buffer.isBuffer(publicKey) ? publicKey : Buffer.from(publicKey, 'base64'))
-          : null;
+        // Wallet is already deployed by frontend via passkey-kit
+        console.log(`[CompanyRegistration] Creating company user for ${email} with wallet ${contractId}`);
 
         // Generate verification token for email
         const verificationToken = EmailService.generateVerificationToken();
         const verificationExpiry = EmailService.getVerificationExpiry();
 
-        // Create company user with passkey data
+        // Create company user with passkey data - wallet already deployed!
         const user = await prisma.companyUser.create({
           data: {
             companyId: company_id,
             email,
             name,
             role,
-            stellarContractId: contractId,
+            stellarContractId: contractId, // Use the contract ID from frontend
             passkeyCredentialId: credentialId,
-            passkeyPublicKey: publicKeyBuffer,
+            passkeyPublicKey: null, // No longer tracked separately - embedded in wallet contract
             emailVerified: false,
             emailVerificationToken: verificationToken,
             emailVerificationExpiry: verificationExpiry,

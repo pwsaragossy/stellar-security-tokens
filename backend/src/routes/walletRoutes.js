@@ -4,10 +4,77 @@ import { WalletController } from '../controllers/walletController.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requirePlatformAdmin } from '../middleware/authorize.js';
 import { validate } from '../middleware/validator.js';
+import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
 
 const router = express.Router();
 
-// All routes require Platform Admin access
+/**
+ * @swagger
+ * /api/wallets/submit-tx:
+ *   post:
+ *     summary: Submit a signed transaction to the network (public endpoint for passkey wallet deployment)
+ *     tags: [Wallets]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [xdr]
+ *             properties:
+ *               xdr:
+ *                 type: string
+ *                 description: The signed transaction XDR
+ *     responses:
+ *       200:
+ *         description: Transaction submitted successfully
+ *       400:
+ *         description: Invalid transaction
+ *       500:
+ *         description: Submission failed
+ */
+router.post('/submit-tx',
+    body('xdr').isString().notEmpty().withMessage('xdr is required'),
+    validate,
+    async (req, res, next) => {
+        try {
+            const { xdr } = req.body;
+            console.log('[WalletRoutes] Submitting transaction from frontend (XDR length:', xdr.length, ')');
+
+            // Use the service method which has the sponsorship fallback
+            const result = await PasskeyWalletService.sendTransaction(xdr);
+
+            console.log('[WalletRoutes] Submission result:', JSON.stringify(result));
+
+            // Check if submission returned an error or failure
+            if (result && (result.status === 'ERROR' || result.status === 'FAILED' || !result.hash)) {
+                console.error('[WalletRoutes] Transaction failed:', result);
+                return res.status(400).json({
+                    success: false,
+                    error: result.error || result.message || 'Transaction failed',
+                    details: result
+                });
+            }
+
+            console.log('[WalletRoutes] Transaction successful:', result.hash);
+
+            res.json({
+                success: true,
+                hash: result.hash,
+                message: 'Transaction submitted successfully',
+                sponsored: result.sponsored || false
+            });
+        } catch (error) {
+            console.error('[WalletRoutes] Transaction submission error:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message || 'Failed to submit transaction'
+            });
+        }
+    }
+);
+
+// All routes below require Platform Admin access
 router.use(authenticateToken, requirePlatformAdmin);
 
 /**
