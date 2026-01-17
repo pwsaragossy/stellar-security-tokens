@@ -1,0 +1,39 @@
+# Stellar Stack
+
+The Stellar stack is made up of the following components: the networks (Mainnet, Testnet, and Futurenet), Stellar Core, Stellar RPC, and SDKs, each of which plays a specific part in providing financial infrastructure that is resilient to failures, available to anyone, and fast and cheap enough to serve real-world use cases.
+
+![Stellar Stack](/assets/images/stellar-tech-stack-f023ca7a0dfa83f76373c845697f6294.png)
+
+## Networks[](#networks "Direct link to Networks")
+
+Stellar has three networks: the public network (Mainnet, also called Pubnet or the Public Network), the test network (Testnet), and a dev network (Futurenet). Mainnet is the main network used by applications in production. The Testnet is a smaller, free-to-use network maintained by SDF that functions like the Mainnet but doesnt connect to real money and is the best place for developers to test their applications. Futurenet is a dev network you can use to test more bleeding edge features.
+
+Read more about the different networks in the [Networks section](/docs/networks.md).
+
+## Stellar Core[](#stellar-core "Direct link to Stellar Core")
+
+Stellar Core is the program used by the individual nodes (or computers) that make up the network. Stellar Core keeps a common distributed ledger and engages in consensus to validate and process transactions. Generally, nodes reach consensus, apply a transaction set, and update the ledger every 5-7 seconds.
+
+Nodes reach consensus using the Stellar Consensus Protocol, which can you can learn more about here: [Stellar Consensus Protocol](/docs/learn/fundamentals/stellar-consensus-protocol.md)
+
+Anyone can run a Stellar Core node, but you dont have to in order to build on Stellar. We recommend you do so if you issue an asset and want to ensure the accuracy of the ledger, if you want to participate in network governance by voting on protocol version, minimum fees, and resource and ledger limits, and/or if you want to contribute to Stellars overall health and decentralization. Check out our tutorial on installing, configuring, and maintaining your own node here: [Run a Validator Node Tutorial](/docs/validators.md).
+
+## RPC[](#rpc "Direct link to RPC")
+
+Stellar's RPC is a JSON RPC server that provides an interface for users and applications to interact with smart contracts on the Stellar blockchain. When an application would like to interact with smart contracts, it sends a request to the RPC server. The server interprets these requests, translates them into a format understandable by the blockchain nodes, and forwards them. After processing the requests, the blockchain nodes send back the results. The RPC server receives these results and sends them back to the requesting application.
+
+SDF has RPC endpoints available for Futurenet and Testnet. These services are free to use, and are suitable for development and testing.
+
+SDF does not provide a publicly available RPC endpoint for Mainnet. Developers should [select an ecosystem provider](/docs/data/apis/rpc/providers.md) that works for their project before migrating to Mainnet. In some cases, projects may choose to run their own RPC instance.
+
+## Horizon[](#horizon "Direct link to Horizon")
+
+> **Warning:** Horizon is nearing end-of-life and will eventually be deprecated in favor of Stellar RPC and [Portfolio APIs](/docs/data/indexers.md). While it will continue to receive updates to maintain compatibility with upcoming protocol releases, it won't receive new feature development.
+
+Horizon is the client-facing RESTful HTTP API server in the platform layer which allows programmatic access to submit transactions and query the networks historical data. It acts as the interface for applications that want to access the Stellar network. You can communicate with Horizon using an SDK, a web browser, or with simple command tools like cURL.
+
+## SDKs[](#sdks "Direct link to SDKs")
+
+SDKs simplify some of the work of accessing Horizon and the Stellar RPC by converting the data into friendlier formats and allowing you to program in the language of your choice. Stellars SDKs show you how to request data and create and submit transactions. Soroban's SDKs allow you to write smart contracts in Rust and interact with smart contracts in a myriad of other languages.
+
+View Stellar's [SDK library](/docs/tools/sdks.md) to access our SDKs and their documentation.

@@ -1,0 +1,103 @@
+# Assets
+
+> **Info:** The term "custom token" has been deprecated in favor of "contract token". View the conversation in the [Stellar Developer Discord](https://discord.com/channels/897514728459468821/966788672164855829/1359276952971640953).
+
+# Assets
+
+Accounts on the Stellar network can be used to track, hold, and transfer any type of asset. Assets can represent many things: cryptocurrencies (such as bitcoin or ether), fiat currencies (such as dollars or pesos), other tokens of value (such as NFTs), pool shares, or bonds and equity.
+
+> **Note:** Assets exist in two forms on Stellar:
+
+"Classic" assets issued by Stellar accounts (`G...` addresses) and their built-in Stellar Asset Contract (SAC) implementation, and contract tokens issued by a deployed Wasm contract (`C...` addresses).
+
+Learn more about the differences in the [Assets and Tokens section](/docs/tokens.md).
+
+Classic assets on Stellar have two identifying characteristics: the asset code and the issuer. Since more than one organization can issue a credit representing the same asset, asset codes often overlap (for example, multiple companies offer a USD token on Stellar). Assets are uniquely identified by the combination of their asset code and issuer.
+
+## Asset components[](#asset-components "Direct link to Asset components")
+
+### Asset code[](#asset-code "Direct link to Asset code")
+
+An assets identifying code. There are three different formats: Alphanumeric 4, Alphanumeric 12, and liquidity pool shares.
+
+Learn about liquidity pool shares in the [Liquidity Pool section](/docs/learn/fundamentals/liquidity-on-stellar-sdex-liquidity-pools.md).
+
+Learn more about asset codes in the [Naming an Asset section](/docs/tokens/control-asset-access.md)
+
+### Issuer[](#issuer "Direct link to Issuer")
+
+There is no dedicated operation to create an asset on Stellar. Instead, assets are created with a payment operation: an issuing account makes a payment using the asset its issuing, and that payment creates the asset on the network.
+
+The public key of the issuing account is linked on the ledger to the asset. Responsibility for and control over an asset resides with the issuing account. Since settings are stored at the account level on the ledger, the issuing account is where you use set\_options operations to link to meta-information about an asset and set authorization flags.
+
+Learn how to issue an asset in the [Issuing Assets Tutorial](/docs/tokens/how-to-issue-an-asset.md).
+
+## Representation[](#representation "Direct link to Representation")
+
+In Horizon, assets are represented in a JSON object:
+
+* JSON5
+
+```
+{  
+  asset_code: "AstroDollar",  
+  asset_issuer: "GC2BKLYOOYPDEFJKLKY6FNNRQMGFLVHJKQRGNSSRRGSMPGF32LHCQVGF",  
+  // `asset_type` is used to determine how asset data is stored.  
+  // It can be `native` (lumens), `credit_alphanum4`, or `credit_alphanum12`.  
+  asset_type: "credit_alphanum12",  
+}
+```
+
+In the Stellar SDKs, theyre represented with the asset class:
+
+* JavaScript
+* Java
+* Python
+
+```
+var astroDollar = new StellarSdk.Asset(  
+  "AstroDollar",  
+  "GC2BKLYOOYPDEFJKLKY6FNNRQMGFLVHJKQRGNSSRRGSMPGF32LHCQVGF",  
+);
+```
+
+```
+KeyPair issuer = KeyPair.fromAccountId("GC2BKLYOOYPDEFJKLKY6FNNRQMGFLVHJKQRGNSSRRGSMPGF32LHCQVGF");  
+Asset astroDollar = Asset.createNonNativeAsset("AstroDollar", issuer.getAccountId());
+```
+
+```
+from stellar_sdk import Asset  
+  
+astro_dollar = Asset("AstroDollar", "GC2BKLYOOYPDEFJKLKY6FNNRQMGFLVHJKQRGNSSRRGSMPGF32LHCQVGF")
+```
+
+## Amount precision[](#amount-precision "Direct link to Amount precision")
+
+Each asset amount is encoded as a signed 64-bit integer in the XDR structures that Stellar uses to encode transactions. The asset amount unit seen by end-users is scaled down by a factor of ten million (10,000,000) to arrive at the native 64-bit integer representation.
+
+For example, the integer amount value 25,123,456 equals 2.5123456 units of the asset. This scaling allows for seven decimal places of precision in human-friendly amount units.
+
+The smallest non-zero amount unit, also known as a stroop, is 0.0000001 (one ten-millionth) represented as an integer value of one. The largest amount unit possible is 2631107\frac{2^{63}-1}{10^7}1072631 (derived from the maximum 64-bit integer, scaled down) which is 922,337,203,685.4775807.
+
+The numbers are represented as int64s. Amount values are stored as only signed integers to avoid bugs that arise from mixing signed and unsigned integers.
+
+## Relevance in Stellar Client Libraries[](#relevance-in-stellar-client-libraries "Direct link to Relevance in Stellar Client Libraries")
+
+In client-side libraries such as js-stellar-sdk, the integer encoded value is abstracted away. Many APIs expect an amount in unit value (the scaled-up amount displayed to end-users). Some programming languages (such as JavaScript) have problems maintaining precision on a number amount. It is recommended to use big number libraries that can record arbitrary-precision decimal numbers without a loss of precision.
+
+## Deleting or burning assets[](#deleting-or-burning-assets "Direct link to Deleting or burning assets")
+
+To delete, or "burn", an asset, you must send it back to the account that issued it.
+
+## Using Stellar assets in smart contracts[](#using-stellar-assets-in-smart-contracts "Direct link to Using Stellar assets in smart contracts")
+
+Assets issued on the Stellar network are accessible to smart contracts. Every Stellar asset has reserved a Stellar Asset Contract (SAC) that can be deployed by anyone who wants to be able to interact with the asset from a contract.
+
+The Stellar CLI can deploy a Stellar Asset Contract for a Stellar asset. Deploying the Stellar Asset Contract for a Stellar asset enables that asset for use with smart contracts.
+
+Learn more in the [SAC section](/docs/tokens/stellar-asset-contract.md).
+
+## Token contracts[](#token-contracts "Direct link to Token contracts")
+
+Token contracts can be deployed on Stellar by deploying a contract that implements the [Token Interface](/docs/tokens/token-interface.md), which is the same interface implemented by the [Stellar Asset Contract (SAC)](/docs/tokens/stellar-asset-contract.md) for Stellar assets.

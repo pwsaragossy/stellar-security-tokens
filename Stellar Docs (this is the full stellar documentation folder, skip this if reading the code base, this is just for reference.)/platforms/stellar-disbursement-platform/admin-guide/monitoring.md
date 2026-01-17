@@ -1,0 +1,49 @@
+# Monitoring
+
+This guide explains how the Stellar Disbursement Platform (SDP) exposes runtime metrics and how to hook those metrics into the Prometheus + Grafana stack.
+
+### Metrics Endpoints[](#metrics-endpoints "Direct link to Metrics Endpoints")
+
+Both the Dashboard API and the Transaction Submission Service (TSS) expose Prometheus-compatible `/metrics` endpoints. The HTTP server is defined in [serve\_metrics.go](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/internal/serve/serve_metrics.go) and is controlled through the following environment variables:
+
+* `METRICS_PORT`  Port used by the Dashboard API metrics server (defaults to [8002](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/dev/docker-compose-sdp.yml)).
+* `METRICS_TYPE`  Monitoring backend in use (currently `PROMETHEUS`).
+* `TSS_METRICS_PORT`  Port used by the TSS metrics server (defaults to [9002](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/dev/docker-compose-tss.yml)).
+* `TSS_METRICS_TYPE`  Monitoring backend for the TSS (defaults to `TSS_PROMETHEUS`).
+
+When the server starts, it mounts the `/metrics` route and surfaces request, database, and TSS-specific counters and histograms that align with the Grafana dashboards provided in [Grafana README](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/resources/grafana/README.md).
+
+### Local Prometheus and Grafana Stack[](#local-prometheus-and-grafana-stack "Direct link to Local Prometheus and Grafana Stack")
+
+We provide a Docker Compose file that boots Prometheus and Grafana pre-wired to scrape the SDP metrics endpoints.
+
+1. From the [repository root](https://github.com/stellar/stellar-disbursement-platform-backend/), run:
+
+```
+cd dev  
+docker compose -p sdp-multi-tenant -f docker-compose-monitoring.yml up -d
+```
+
+This launches Prometheus on port `9090` and Grafana on port `3002` by default [monitoring config](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/dev/docker-compose-monitoring.yml).
+
+2. The Prometheus container loads its configuration from [prometheus config](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/dev/prometheus/prometheus.yml), which targets `host.docker.internal:8002/metrics` by default. Adjust the `targets` list if you run the API on a different host or if you want to scrape the TSS metrics (`host.docker.internal:9002`).
+3. Grafana uses the datasource configuration in [datasource](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/dev/grafana/datasource.yaml), which points to the Prometheus instance above. If you have an existing Prometheus deployment, update this URL accordingly.
+
+To tear down the monitoring stack, run:
+
+```
+cd dev  
+docker compose -p sdp-multi-tenant -f docker-compose-monitoring.yml down
+```
+
+### Load the SDP Grafana Dashboard[](#load-the-sdp-grafana-dashboard "Direct link to Load the SDP Grafana Dashboard")
+
+1. Navigate to <http://localhost:3002> and sign in with the default `admin` / `admin` credentials. ![Grafana Login](/assets/images/SDP42-328351da409c55dc8faf6e3b52f3749a.png)
+2. Click the `+` icon in the top navigation bar (next to the search input), choose `Import dashboard`, and paste the contents of [Grafana Dashboard Json](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/resources/grafana/dashboard.json). ![Import Dashboard](/assets/images/SDP43-5e47a305d7c446130f777760fd4ee94e.png)
+3. Select the `prometheus` datasource provided by [datasource](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/dev/grafana/datasource.yaml). ![Select Datasource](/assets/images/SDP44-c676a502d8a7f551e912822392aa629b.png)
+
+This dashboard visualizes HTTP request volume/latency, database query timings, and TSS transaction statistics, details described in [Grafana README.md](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/resources/grafana/README.md). All panels can be filtered by method, route, tenant, or instance so you can distinguish traffic between multiple deployments.
+
+### Integrating with External Prometheus Instances[](#integrating-with-external-prometheus-instances "Direct link to Integrating with External Prometheus Instances")
+
+If you already operate a Prometheus cluster, add scrape jobs equivalent to the ones in [prometheus config](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/dev/prometheus/prometheus.yml). Each subsystem exposes metrics at `http://<host>:<METRICS_PORT>/metrics` (Dashboard API) and `http://<host>:<TSS_METRICS_PORT>/metrics` (TSS). [Helm](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/helmchart/sdp/values.yaml) deployments expose the same configuration knobs through `sdp.configMap.data.METRICS_*` and `tss.configMap.data.TSS_METRICS_*`. Once the new jobs are present, you can import the same dashboard JSON into your existing Grafana deployment or adapt the PromQL queries to your preferred observability suite.

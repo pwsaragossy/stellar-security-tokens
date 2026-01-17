@@ -1,0 +1,729 @@
+# Issue an Asset Tutorial
+
+In this tutorial, we will walk through the steps to issue an asset on the Stellar test network.
+
+> **Note:** If you'd like to interact with an asset issued on the Stellar network in smart contracts, you can create or deploy the [Stellar Asset Contract](/docs/tokens/stellar-asset-contract.md) for that asset.
+
+## Prerequisites[](#prerequisites "Direct link to Prerequisites")
+
+You must ensure you have the required amount of XLM to create your issuing and distribution accounts and cover the minimum balance and transaction fees. If youre issuing an asset on the testnet, you can fund your account by getting test XLM from friendbot. If youre issuing an asset in production, you will need to acquire XLM from another wallet or exchange.
+
+If youd like to avoid your users having to deal with transaction fees, consider using fee-bump transactions. Read more in our [Fee-Bump Transaction Guide](/docs/build/guides/transactions/fee-bump-transactions.md).
+
+Learn about the testnet and mainnet in our [Networks section](/docs/networks.md).
+
+Learn more about fees in our [Fees, Resource Limits, and Metering section](/docs/learn/fundamentals/fees-resource-limits-metering.md).
+
+## Foundational tools[](#foundational-tools "Direct link to Foundational tools")
+
+### Issuer account keypair[](#issuer-account-keypair "Direct link to Issuer account keypair")
+
+First, you must generate a unique keypair. The public key will act as your [issuing identity](/docs/learn/fundamentals/stellar-data-structures/assets.md) on the network, while you use the secret key to sign transactions.
+
+* JavaScript
+* Python
+* Java
+* Go
+
+```
+const issuerKeypair = StellarSdk.Keypair.random();  
+  
+console.log("Issuer Public Key:", issuerKeypair.publicKey());  
+console.log("Issuer Secret Key:", issuerKeypair.secret());
+```
+
+```
+from stellar_sdk import Keypair  
+  
+issuer_keypair = Keypair.random()  
+  
+print("Issuer Public Key:", issuer_keypair.public_key)  
+print("Issuer Secret Key:", issuer_keypair.secret)
+```
+
+```
+KeyPair issuerKeypair = KeyPair.random();  
+  
+System.out.println("Issuer Public Key: " + issuerKeypair.getAccountId());  
+System.out.println("Issuer Secret Key: " + issuerKeypair.getSecretSeed());
+```
+
+```
+import (  
+  "github.com/stellar/go-stellar-sdk/keypair"  
+  "fmt"  
+)  
+  
+issuerKeypair := keypair.MustRandom()  
+  
+fmt.Println("Issuer Public Key:", issuerKeypair.Address())  
+fmt.Println("Issuer Secret Key:", issuerKeypair.Seed())
+```
+
+> **Info:** Your account address will not change once you issue your asset, even if you modify its [signers](/docs/learn/fundamentals/transactions/signatures-multisig.md). Many issuers employ [vanity public keys](https://github.com/JFWooten4/py-stellar-vanity-toolkit) related to their asset. For instance, you might configure a custom signer in [base32](/docs/learn/glossary.md) like `GASTRO...USD`.
+
+> **Note:** Many users secure their issuing account with cold storage techniques, such as a hardware wallet or multisignature setup. This adds an extra layer of protection by keeping your secret key offline or requiring multiple approvals for transactions.
+
+### Distribution account keypair[](#distribution-account-keypair "Direct link to Distribution account keypair")
+
+Your asset can be issued and transferred between accounts through a payment, contract, or claimable balance. Although it is not required to create a distribution account, it is best practice, so we will do so in this example. Read more in our [Issuing and Distribution Accounts section](/docs/tokens/control-asset-access.md).
+
+#### Three Operations[](#three-operations "Direct link to Three Operations")
+
+##### Generate a new keypair[](#generate-a-new-keypair "Direct link to Generate a new keypair")
+
+* JavaScript
+* Python
+* Java
+* Go
+
+```
+const distributorKeypair = StellarSdk.Keypair.random();
+```
+
+```
+distributor_keypair = Keypair.random()
+```
+
+```
+KeyPair distributorKeypair = KeyPair.random();
+```
+
+```
+distributorKeypair := keypair.MustRandom()
+```
+
+##### Import an existing keypair[](#import-an-existing-keypair "Direct link to Import an existing keypair")
+
+* JavaScript
+* Python
+* Java
+* Go
+
+```
+const distributorKeypair = StellarSdk.Keypair.fromSecret(SCZANGBA5YHTNYVVV4C3U252E2B6P6F5T3U6MM63WBSBZATAQI3EBTQ4)
+```
+
+```
+distributor_keypair = Keypair.from_secret("SCZANGBA5YHTNYVVV4C3U252E2B6P6F5T3U6MM63WBSBZATAQI3EBTQ4")
+```
+
+```
+KeyPair distributorKeypair = KeyPair.fromSecretSeed("SCZANGBA5YHTNYVVV4C3U252E2B6P6F5T3U6MM63WBSBZATAQI3EBTQ4");
+```
+
+```
+distributorKeypair := keypair.MustParseFull("SCZANGBA5YHTNYVVV4C3U252E2B6P6F5T3U6MM63WBSBZATAQI3EBTQ4")
+```
+
+##### Employ [multiple signatures](/docs/learn/fundamentals/transactions/signatures-multisig.md)[](#employ-multiple-signatures "Direct link to employ-multiple-signatures")
+
+danger
+
+Be careful when working with raw secret keys. If you don't have issuer trustline [clawback](/docs/build/guides/transactions/clawbacks.md) enabled, any misstep here could permanently render assets lost. Many users put their first few projects on [testnet](/docs/networks.md) or try out [Quests](/docs/learn/interactive/quest.md) which provide a low-stakes introductory sandbox.
+
+### Local asset object[](#local-asset-object "Direct link to Local asset object")
+
+The asset object is a combination of your [code](/docs/tokens/control-asset-access.md) and your issuing public key. After your issuance, anyone can search the network for your unique asset.
+
+* JavaScript
+* Python
+* Java
+* Go
+
+```
+const astroDollar = new StellarSdk.Asset(  
+  "AstroDollar",  
+  issuerKeypair.publicKey(),  
+);
+```
+
+```
+from stellar_sdk import Keypair, Asset  
+  
+astro_dollar = Asset("AstroDollar", issuer_keypair.public_key)
+```
+
+```
+Asset astroDollar = Asset.createNonNativeAsset("AstroDollar", issuerKeypair.getAccountId());
+```
+
+```
+import (  
+  "github.com/stellar/go-stellar-sdk/keypair"  
+  "github.com/stellar/go-stellar-sdk/txnbuild"  
+)  
+  
+astroDollar := txnbuild.CreditAsset{Code: "AstroDollar", Issuer: issuerKeypair.Address()}
+```
+
+> **Info:** While anyone can create an asset, there may be real-world [compliance](/docs/tokens/anatomy-of-an-asset.md) implications relevant to your use case.
+
+> **Note:** Youll want to make sure you publish information about your asset to establish trust with your users and prevent errors. Learn how to do so with our [Publish Information About Your Asset section](/docs/tokens/publishing-asset-info.md).
+
+## Network transactions[](#network-transactions "Direct link to Network transactions")
+
+### Build transaction to establish distributor trustline[](#build-transaction-to-establish-distributor-trustline "Direct link to Build transaction to establish distributor trustline")
+
+Accounts must establish a [trustline](/docs/learn/fundamentals/stellar-data-structures/accounts.md) with the issuing account to hold that issuers asset. This is true for all assets except for the networks native token, [Lumens](/docs/learn/fundamentals/lumens.md).
+
+> **Note:** If youd like to avoid your users having to deal with trustlines or XLM, consider using sponsored reserves. Read more in our [Sponsored Reserves Encyclopedia Entry](/docs/build/guides/transactions/sponsored-reserves.md).
+
+* JavaScript
+* Python
+* Java
+* Go
+
+```
+const StellarSdk = require("stellar-sdk");  
+const server = new StellarSdk.Horizon.Server(  
+  "https://horizon-testnet.stellar.org",  
+);  
+const account = await server.loadAccount(distributorKeypair.publicKey());  
+  
+// This step only builds the transaction.  It still needs to be signed.  
+const transaction = new StellarSdk.TransactionBuilder(account, {  
+  fee: StellarSdk.BASE_FEE,  
+  networkPassphrase: StellarSdk.Networks.TESTNET,  
+})  
+  // The `changeTrust` operation creates (or alters) a trustline  
+  .addOperation(  
+    StellarSdk.Operation.changeTrust({  
+      asset: astroDollar,  
+      limit: "1000", // optional  
+      source: distributorKeypair.publicKey(),  
+    }),  
+  )  
+  .setTimeout(100)  
+  .build();
+```
+
+```
+from stellar_sdk import Keypair, Asset, Network, Server, TransactionBuilder  
+  
+server = Server("https://horizon-testnet.stellar.org")  
+distributor_account = server.load_account(distributor_keypair.public_key)  
+  
+transaction = (  
+  TransactionBuilder(  
+    source_account=distributor_account,  
+    network_passphrase=Network.TESTNET_NETWORK_PASSPHRASE,  
+    base_fee=100  
+  )  
+  .append_change_trust_op(asset=astro_dollar, limit="1000")  
+  .set_timeout(100)  
+  .build()  
+)
+```
+
+```
+Server server = new Server("https://horizon-testnet.stellar.org");  
+AccountResponse distributorAccount = server.accounts().account(distributorKeypair.getAccountId());  
+  
+Transaction transaction = new Transaction.Builder(distributorAccount, Network.TESTNET)  
+  .addOperation(  
+    new ChangeTrustOperation.Builder(astroDollar, "1000")  
+    .setSourceAccount(distributorKeypair.getAccountId())  
+    .build()  
+  )  
+  .setTimeout(100)  
+  .build();
+```
+
+```
+import (  
+  "github.com/stellar/go-stellar-sdk/clients/horizonclient"  
+  "github.com/stellar/go-stellar-sdk/keypair"  
+  "github.com/stellar/go-stellar-sdk/network"  
+  "github.com/stellar/go-stellar-sdk/txnbuild"  
+)  
+  
+client := horizonclient.DefaultTestNetClient  
+distributorAccountRequest := horizonclient.AccountRequest{AccountID: distributorKeypair.Address()}  
+distributorAccount, _ := client.AccountDetail(distributorAccountRequest)  
+  
+transaction, _ := txnbuild.NewTransaction(  
+  txnbuild.TransactionParams{  
+    SourceAccount:        &distributorAccount,  
+    IncrementSequenceNum: true,  
+    BaseFee:              txnbuild.MinBaseFee,  
+    Operations: []txnbuild.Operation{  
+      &txnbuild.ChangeTrust{  
+        Line:  astroDollar,  
+        Limit: "1000",  
+      },  
+    },  
+    Timebounds: txnbuild.NewInfiniteTimeout(),  
+  },  
+)
+```
+
+### Issuer payment to distributor[](#issuer-payment-to-distributor "Direct link to Issuer payment to distributor")
+
+Payments are the most popular operation to actually issue (or mint) your asset, compared to [other issuances](/docs/learn/fundamentals/transactions/list-of-operations.md). A payment creates the amount of an asset specified, up to [the maximum 64-bit integer](/docs/learn/fundamentals/stellar-data-structures/assets.md). Relevantly, you do not need to scale up the issuing amount of your asset by the XDR [minimum increment](/docs/learn/fundamentals/stellar-data-structures/assets.md).
+
+* JavaScript
+* Python
+* Java
+* Go
+
+```
+// We're using TransactionBuilder(...) as a short-hand here  
+// to show that these operations can be "chained" together.  
+const transaction = new StellarSdk.TransactionBuilder(...)  
+  // The `payment` operation sends the `amount` of the specified  
+  // `asset` to our distributor account  
+  .addOperation(StellarSdk.Operation.payment({  
+    destination: distributorKeypair.publicKey(),  
+    asset: astroDollar,  
+    amount: '1000',  
+    source: issuerKeypair.publicKey()  
+  }))
+```
+
+```
+# We're using TransactionBuilder(...) as a short-hand here  
+# to show that these operations can be "chained" together.  
+transaction = (  
+  TransactionBuilder(...)  
+  .append_payment_op(  
+    destination=distributor_keypair.public_key,  
+    asset=astro_dollar,  
+    amount="1000"  
+  )  
+)
+```
+
+```
+// We're using TransactionBuilder(...) as a short-hand here  
+// to show that these operations can be "chained" together.  
+Transaction transaction = new Transaction.Builder(...)  
+  .addOperation(new PaymentOperation.Builder(  
+    distributorKeypair.getAccountId(),  
+    astroDollar,  
+    "1000"  
+  )  
+  .setSourceAccount(  
+    issuerKeypair.getAccountId()  
+  )
+```
+
+```
+// We're using TransactionBuilder(...) as a short-hand here  
+// to show that these operations can be "chained" together.  
+transaction, _ := txnbuild.NewTransaction(  
+  txnbuild.TransactionParams{  
+    SourceAccount:        &issuerAccount,  
+    IncrementSequenceNum: true,  
+    BaseFee:              txnbuild.MinBaseFee,  
+    Operations: []txnbuild.Operation{  
+      &txnbuild.Payment{  
+        Destination: distributorKeypair.Address(),  
+        Amount:      "1000",  
+        Asset:       astroDollar,  
+      },  
+    },  
+    Timebounds: txnbuild.NewInfiniteTimeout(),  
+  },  
+)
+```
+
+> **Note:** You can also create a market directly from the issuing account and issue tokens via trading.
+
+### Optional transactions[](#optional-transactions "Direct link to Optional transactions")
+
+#### Configure maximum supply[](#configure-maximum-supply "Direct link to Configure maximum supply")
+
+danger
+
+This section details how to lock your account with the purpose of limiting the supply of your issued asset. However, locking your account means youll never be able to do anything with it ever againwhether thats adjusting signers, changing the home domain, claiming any held XLM, or any other operation. Your account will be completely frozen.
+
+You can permanently configure the exact number of an asset that will ever exist. Learn more about asset supply in our section on [Limiting the Supply of an Asset](/docs/tokens/control-asset-access.md)
+
+* JavaScript
+* Python
+* Java
+* Go
+
+```
+const lockAccountTransaction = new StellarSdk.TransactionBuilder(...)  
+  // This `setOptions` operation locks the issuer account  
+  // so there can never be any more of the asset minted  
+  .addOperation(StellarSdk.Operation.setOptions({  
+    masterWeight: 0,  
+    source: issuerKeypair.publicKey()  
+  }))
+```
+
+```
+lock_account_transaction = (  
+  TransactionBuilder(...)  
+  .append_set_options_op(master_weight=0)  
+)
+```
+
+```
+Transaction lockAccountTransaction = new Transaction.Builder(...)  
+  .addOperation(new SetOptionsOperation.Builder()  
+    .setMasterKeyWeight(0)  
+    .setSourceAccount(issuerKeypair.getAccountId())  
+  )
+```
+
+```
+lockAccountTransaction, _ := txnbuild.NewTransaction(  
+  txnbuild.TransactionParams{  
+    SourceAccount:        &issuerAccount,  
+    IncrementSequenceNum: true,  
+    BaseFee:              txnbuild.MinBaseFee,  
+    Operations: []txnbuild.Operation{  
+      &txnbuild.SetOptions{  
+        MasterWeight: txnbuild.NewThreshold(0),  
+      },  
+    },  
+    Timebounds: txnbuild.NewInfiniteTimeout(),  
+  },  
+)
+```
+
+#### Approve distributor trustline[](#approve-distributor-trustline "Direct link to Approve distributor trustline")
+
+If you enable the [authorization flag](/docs/tokens/control-asset-access.md), the issuing account also needs to approve the distributor account's trustline request before the issuing payment. You will need to do this for all new accounts when set for your asset.
+
+* JavaScript
+* Python
+* Java
+* Go
+
+```
+const issuingAccount = await server.loadAccount(issuerKeypair.publicKey());  
+const transaction = new StellarSdk.TransactionBuilder(...)  
+  .addOperation(  
+    StellarSdk.Operation.setTrustLineFlags({  
+      trustor: distributorKeypair.publicKey(),  
+      asset: astroDollar,  
+      flags: {  
+        authorized: true,  
+      },  
+    }),  
+  )  
+  .setTimeout(100)  
+  .build();
+```
+
+```
+from stellar_sdk import Server, Keypair, Network, TransactionBuilder, SetTrustLineFlags  
+  
+server = Server("https://horizon-testnet.stellar.org")  
+issuer_account = server.load_account(issuer_keypair.public_key)  
+  
+transaction = (  
+    TransactionBuilder(...)  
+    .append_set_trust_line_flags_op(  
+        trustor=distributor_keypair.public_key,  
+        asset=astro_dollar,  
+        flags=SetTrustLineFlags.AUTHORIZED_FLAG  
+    )  
+    .set_timeout(100)  
+    .build()  
+)
+```
+
+```
+AccountResponse issuerAccount = server.accounts().account(issuerKeys.getAccountId());  
+Transaction transaction = new Transaction.Builder(...)  
+  .addOperation(new SetTrustLineFlagsOperation.Builder(  
+    distributorKeys.getAccountId(),  
+    astroDollar  
+  ).setAuthorized(true).build())  
+  .setTimeout(100)  
+  .build();
+```
+
+```
+issuerAccountRequest := horizonclient.AccountRequest{AccountID: issuerKeypair.Address()}  
+issuerAccount, _ := client.AccountDetail(issuerAccountRequest)  
+  
+transaction, _ := txnbuild.NewTransaction(  
+  txnbuild.TransactionParams{  
+    SourceAccount:        &issuerAccount,  
+    IncrementSequenceNum: true,  
+    BaseFee:              txnbuild.MinBaseFee,  
+    Operations: []txnbuild.Operation{  
+      &txnbuild.SetTrustLineFlags{  
+        Trustor:   distributorKeypair.Address(),  
+        Asset:     astroDollar,  
+        Authorized: txnbuild.AuthorizeFlag,  
+      },  
+    },  
+    Timebounds: txnbuild.NewInfiniteTimeout(),  
+  },  
+)
+```
+
+## Full Code Sample[](#full-code-sample "Direct link to Full Code Sample")
+
+* JavaScript
+* Python
+* Java
+* Go
+
+```
+var StellarSdk = require("stellar-sdk");  
+var server = new StellarSdk.Horizon.Server(  
+  "https://horizon-testnet.stellar.org",  
+);  
+  
+// Keys for accounts to issue and receive the new asset  
+var issuerKeys = StellarSdk.Keypair.fromSecret(  
+  "SCZANGBA5YHTNYVVV4C3U252E2B6P6F5T3U6MM63WBSBZATAQI3EBTQ4",  
+);  
+var receivingKeys = StellarSdk.Keypair.fromSecret(  
+  "SDSAVCRE5JRAI7UFAVLE5IMIZRD6N6WOJUWKY4GFN34LOBEEUS4W2T2D",  
+);  
+  
+// Create an object to represent the new asset  
+var astroDollar = new StellarSdk.Asset("AstroDollar", issuerKeys.publicKey());  
+  
+// First, the receiving account must trust the asset  
+server  
+  .loadAccount(receivingKeys.publicKey())  
+  .then(function (receiver) {  
+    var transaction = new StellarSdk.TransactionBuilder(receiver, {  
+      fee: 100,  
+      networkPassphrase: StellarSdk.Networks.TESTNET,  
+    })  
+      // The `changeTrust` operation creates (or alters) a trustline  
+      // The `limit` parameter below is optional  
+      .addOperation(  
+        StellarSdk.Operation.changeTrust({  
+          asset: astroDollar,  
+          limit: "1000",  
+        }),  
+      )  
+      // setTimeout is required for a transaction  
+      .setTimeout(100)  
+      .build();  
+    transaction.sign(receivingKeys);  
+    return server.submitTransaction(transaction);  
+  })  
+  .then(console.log)  
+  
+  // Second, the issuing account actually sends a payment using the asset  
+  .then(function () {  
+    return server.loadAccount(issuerKeys.publicKey());  
+  })  
+  .then(function (issuer) {  
+    var transaction = new StellarSdk.TransactionBuilder(issuer, {  
+      fee: 100,  
+      networkPassphrase: StellarSdk.Networks.TESTNET,  
+    })  
+      .addOperation(  
+        StellarSdk.Operation.payment({  
+          destination: receivingKeys.publicKey(),  
+          asset: astroDollar,  
+          amount: "10",  
+        }),  
+      )  
+      // setTimeout is required for a transaction  
+      .setTimeout(100)  
+      .build();  
+    transaction.sign(issuerKeys);  
+    return server.submitTransaction(transaction);  
+  })  
+  .then(console.log)  
+  .catch(function (error) {  
+    console.error("Error!", error);  
+  });
+```
+
+```
+from stellar_sdk import Asset, Keypair, Network, Server, TransactionBuilder  
+  
+# Configure Stellar SDK to talk to the Horizon instance hosted by SDF  
+# To use the live network, set the hostname to horizon_url for mainnet  
+server = Server(horizon_url="https://horizon-testnet.stellar.org")  
+# Use test network, if you need to use public network, please set it to `Network.PUBLIC_NETWORK_PASSPHRASE`  
+network_passphrase = Network.TESTNET_NETWORK_PASSPHRASE  
+  
+# Keys for accounts to issue and receive the new asset  
+issuerKeypair = Keypair.from_secret(  
+    "SCZANGBA5YHTNYVVV4C3U252E2B6P6F5T3U6MM63WBSBZATAQI3EBTQ4"  
+)  
+issuer_public = issuerKeypair.public_key  
+  
+distributor_keypair = Keypair.from_secret(  
+    "SDSAVCRE5JRAI7UFAVLE5IMIZRD6N6WOJUWKY4GFN34LOBEEUS4W2T2D"  
+)  
+distributor_public = distributor_keypair.public_key  
+  
+# Transactions require a valid sequence number that is specific to this account.  
+# We can fetch the current sequence number for the source account from Horizon.  
+distributor_account = server.load_account(distributor_public)  
+  
+# Create an object to represent the new asset  
+astro_dollar = Asset("AstroDollar", issuer_public)  
+  
+# First, the receiving account must trust the asset  
+trust_transaction = (  
+    TransactionBuilder(  
+        source_account=distributor_account,  
+        network_passphrase=network_passphrase,  
+        base_fee=100,  
+    )  
+    #  The `changeTrust` operation creates (or alters) a trustline  
+    #  The `limit` parameter below is optional  
+    .append_change_trust_op(asset=astro_dollar, limit="1000")  
+    .set_timeout(100)  
+    .build()  
+)  
+  
+trust_transaction.sign(distributor_keypair)  
+trust_transaction_resp = server.submit_transaction(trust_transaction)  
+print(f"Change Trust Transaction Resp:\n{trust_transaction_resp}")  
+  
+issuer_account = server.load_account(issuer_public)  
+# Second, the issuing account actually sends a payment using the asset.  
+payment_transaction = (  
+    TransactionBuilder(  
+        source_account=issuer_account,  
+        network_passphrase=network_passphrase,  
+        base_fee=100,  
+    )  
+    .append_payment_op(  
+        destination=distributor_public,  
+        asset=astro_dollar,  
+        amount="10",  
+    )  
+    .build()  
+)  
+payment_transaction.sign(issuerKeypair)  
+payment_transaction_resp = server.submit_transaction(payment_transaction)  
+print(f"Payment Transaction Resp:\n{payment_transaction_resp}")
+```
+
+```
+Server server = new Server("https://horizon-testnet.stellar.org");  
+  
+// Keys for accounts to issue and receive the new asset  
+KeyPair issuerKeys = KeyPair  
+  .fromSecretSeed("SCZANGBA5YHTNYVVV4C3U252E2B6P6F5T3U6MM63WBSBZATAQI3EBTQ4");  
+KeyPair receivingKeys = KeyPair  
+  .fromSecretSeed("SDSAVCRE5JRAI7UFAVLE5IMIZRD6N6WOJUWKY4GFN34LOBEEUS4W2T2D");  
+  
+// Create an object to represent the new asset  
+Asset astroDollar = Asset.createNonNativeAsset("AstroDollar", issuerKeys.getAccountId());  
+  
+// First, the receiving account must trust the asset  
+AccountResponse receiving = server.accounts().account(receivingKeys.getAccountId());  
+Transaction allowAstroDollars = new Transaction.Builder(receiving, Network.TESTNET)  
+  .addOperation(  
+    // The `ChangeTrust` operation creates (or alters) a trustline  
+    // The second parameter limits the amount the account can hold  
+    new ChangeTrustOperation.Builder(astroDollar, "1000").build())  
+  .build();  
+allowAstroDollars.sign(receivingKeys);  
+server.submitTransaction(allowAstroDollars);  
+  
+// Second, the issuing account actually sends a payment using the asset  
+AccountResponse issuer = server.accounts().account(issuerKeys.getAccountId());  
+Transaction sendAstroDollars = new Transaction.Builder(issuer, Network.TESTNET)  
+  .addOperation(  
+    new PaymentOperation.Builder(receivingKeys.getAccountId(), astroDollar, "10").build())  
+  .build();  
+sendAstroDollars.sign(issuerKeys);  
+server.submitTransaction(sendAstroDollars);
+```
+
+```
+package main  
+  
+import (  
+  "github.com/stellar/go-stellar-sdk/clients/horizonclient"  
+  "github.com/stellar/go-stellar-sdk/keypair"  
+  "github.com/stellar/go-stellar-sdk/network"  
+  "github.com/stellar/go-stellar-sdk/txnbuild"  
+  "log"  
+)  
+  
+func main() {  
+  client := horizonclient.DefaultTestNetClient  
+  
+  // Remember, these are just examples, so replace them with your own seeds.  
+  issuerSeed := "SDR4C2CKNCVK4DWMTNI2IXFJ6BE3A6J3WVNCGR6Q3SCMJDTSVHMJGC6U"  
+  distributorSeed := "SBUW3DVYLKLY5ZUJD5PL2ZHOFWJSVWGJA47F6FLO66UUFZLUUA2JVU5U"  
+  
+  /*  
+   * We omit error checks here for brevity, but you should always check your  
+   * return values.  
+   */  
+  
+  // Keys for accounts to issue and distribute the new asset.  
+  issuer, err := keypair.ParseFull(issuerSeed)  
+  distributor, err := keypair.ParseFull(distributorSeed)  
+  
+  request := horizonclient.AccountRequest{AccountID: issuer.Address()}  
+  issuer_account, err := client.AccountDetail(request)  
+  
+  request = horizonclient.AccountRequest{AccountID: distributor.Address()}  
+  distributorAccount, err := client.AccountDetail(request)  
+  
+  // Create an object to represent the new asset  
+  astroDollar := txnbuild.CreditAsset{Code: "AstroDollar", Issuer: issuer.Address()}  
+  
+  // First, the receiving (distribution) account must trust the asset from the  
+  // issuer.  
+  tx, err := txnbuild.NewTransaction(  
+    txnbuild.TransactionParams{  
+      SourceAccount:        distributorAccount.AccountID,  
+      IncrementSequenceNum: true,  
+      BaseFee:              txnbuild.MinBaseFee,  
+      Preconditions: txnbuild.Preconditions{  
+				TimeBounds: txnbuild.NewInfiniteTimeout(),  
+			},  
+      Operations: []txnbuild.Operation{  
+        &txnbuild.ChangeTrust{  
+          Line:  astroDollar,  
+          Limit: "5000",  
+        },  
+      },  
+    },  
+  )  
+  
+  signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributor)  
+  resp, err := client.SubmitTransaction(signedTx)  
+  if err != nil {  
+    log.Fatal(err)  
+  } else {  
+    log.Printf("Trust: %s\n", resp.Hash)  
+  }  
+  
+  // Second, the issuing account actually sends a payment using the asset  
+  tx, err = txnbuild.NewTransaction(  
+    txnbuild.TransactionParams{  
+      SourceAccount:        issuer_account.AccountID,  
+      IncrementSequenceNum: true,  
+      BaseFee:              txnbuild.MinBaseFee,  
+      Preconditions: txnbuild.Preconditions{  
+				TimeBounds: txnbuild.NewInfiniteTimeout(),  
+			},  
+      Operations: []txnbuild.Operation{  
+        &txnbuild.Payment{  
+          Destination: distributor.Address(),  
+          Asset:       astroDollar,  
+          Amount:      "10",  
+        },  
+      },  
+    },  
+  )  
+  
+  signedTx, err = tx.Sign(network.TestNetworkPassphrase, issuer)  
+  resp, err = client.SubmitTransaction(signedTx)  
+  
+  if err != nil {  
+    log.Fatal(err)  
+  } else {  
+    log.Printf("Pay: %s\n", resp.Hash)  
+  }  
+}
+```

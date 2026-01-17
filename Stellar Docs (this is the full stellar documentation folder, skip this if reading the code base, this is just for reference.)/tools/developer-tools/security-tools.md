@@ -1,0 +1,19 @@
+# Security Tools
+
+### [Scout: Bug Fighter](https://www.coinfabrik.com/products/scout/)[](#scout-bug-fighter "Direct link to scout-bug-fighter")
+
+A static code analysis tool built to assist Soroban developers and auditors in identifying potential security threats and applying best practices.
+
+### [Almanax](https://www.almanax.ai/)[](#almanax "Direct link to almanax")
+
+Almanax is an AI security engineer designed to help teams prevent hacks.
+
+Almanax uses LLMs to identify complex security vulnerabilities in both smart contracts and conventional code. It also integrates with CI/CD pipelines to automatically flag issues before code reaches production.
+
+### [Certora Sunbeam](https://docs.certora.com/en/latest/docs/sunbeam/index.html)[](#certora-sunbeam "Direct link to certora-sunbeam")
+
+Sunbeam is a formal verification tool developed by Certora for Soroban smart contracts on the Stellar blockchain. Designed specifically for WebAssembly (Wasm) bytecode, Sunbeam verifies the deployed contract codenot just the Rust sourceeliminating the need to trust the Rust compiler. Developers write correctness properties using a lightweight spec language embedded in Rust, and Sunbeam rigorously checks that the compiled Wasm upholds those properties.
+
+### [The Soroban Security Portal](https://sorobansecurity.com)[](#the-soroban-security-portal "Direct link to the-soroban-security-portal")
+
+The Soroban Security Portal is a security platform developed by Inferara. It is a community-driven solution, based on the constantly maintained database of security audits and vulnerability reports related to Soroban smart contract development. The user experience is enriched with semantic search and other features, enabling smooth search and work with security-related data. The Portal also warps to Stellar ecosystem projects, auditors, tools, and many more.

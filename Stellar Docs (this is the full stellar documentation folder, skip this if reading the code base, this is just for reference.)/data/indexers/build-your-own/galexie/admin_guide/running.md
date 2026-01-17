@@ -1,0 +1,217 @@
+# Running
+
+The commands and arguments described in this document can be configured in the helm chart as well as running them on an instance as described below. The helm chart handles the config file path internally to the chart. The `--config-file` argument should not be added to the arguments variable in the helm chart.
+
+With the Docker image available and the configuration file set up, you're now ready to run Galexie and start exporting Stellar ledger data to the storage bucket.
+
+## Command Line Usage[](#command-line-usage "Direct link to Command Line Usage")
+
+### Append Command[](#append-command "Direct link to Append Command")
+
+This is the primary way of running Galexie. The `append` command operates in two distinct modes:
+
+* In continuous/unbounded mode, it starts exporting from the specified start ledger and continuously exports new ledgers that appear on the network until the process is interrupted.
+* In fixed range mode, it exports the specified range of ledgers and exits when done.
+
+Syntax:
+
+```
+stellar-galexie append --start <start_ledger> [--end <end_ledger>] [--config-file <config_file>]
+```
+
+Arguments:
+
+`--start <start_ledger>` (required)
+
+* The starting ledger sequence number of the range being exported.
+
+`--end <end_ledger>` (optional)
+
+* The ending ledger sequence number of the range being exported. If unspecified or set to 0, the exporter will continuously export new ledgers as they appear on the network.
+
+`--config-file <config_file_path>` (optional)
+
+* The path to the configuration file. If unspecified, the application will look for a file named `config.toml` in the current directory.
+
+Example usage:
+
+```
+docker run --platform linux/amd64 -d \  
+-v "$HOME/.config/gcloud/application_default_credentials.json":/.config/gcp/credentials.json:ro \  
+-e GOOGLE_APPLICATION_CREDENTIALS=/.config/gcp/credentials.json \  
+-v ${PWD}/config.toml:/config.toml \  
+stellar/stellar-galexie \  
+append --start 350000 --end 450000 --config-file config.toml
+```
+
+`--platform linux/amd64`
+
+* Specifies the platform architecture (adjust if needed for your system).
+
+`-v` Mounts volumes to map your local GCP credentials and config.toml file to the container:
+
+* `$HOME/.config/gcloud/application_default_credentials.json`: Your local GCP credentials file.
+* `${PWD}/config.toml`: Your local configuration file.
+
+`-e GOOGLE_APPLICATION_CREDENTIALS=/.config/gcp/credentials.json`
+
+* Sets the environment variable for credentials within the container.
+* Please use AWS equivalent if using S3 as your cloud storage service
+
+`stellar/stellar-galexie`
+
+* The Docker image name.
+
+#### Data Integrity and Resumability:[](#data-integrity-and-resumability "Direct link to Data Integrity and Resumability:")
+
+The append command maintains strict sequential integrity within each export session. If interrupted and then restarted with the same range, it automatically resumes from where it left off before interruption, ensuring no ledgers are missed within a session.
+
+### Scan-and-fill Command[](#scan-and-fill-command "Direct link to Scan-and-fill Command")
+
+The `scan-and-fill` command is useful in cases where there are gaps in the exported ledgers in the data lake. The command works by scanning all ledgers in the specified range, identifying missing ledgers and exporting only the missing ledgers while skipping existing ledgers in the data lake.
+
+The append command ensures there are no gaps in the exported range. However, the gaps may occur in the data lake due to certain sequence of events, often due to user intervention, such as:
+
+* Manual deletion of ledgers from the data lake. For example, deleting ledgers 80-90 out of the range 1-100.
+* Running non-contiguous export ranges. For example, exporting ranges 1-50 and 60-100, leaving a gap between 50-60. In this case, running `append` command with the range 1-500 causes Galexie to resume export from from 101, without filling the gap.
+
+Syntax:
+
+```
+stellar-galexie scan-and-fill --start <start_ledger> --end <end_ledger> [--config-file <config_file>]
+```
+
+Arguments:
+
+`--start <start_ledger>` (required)
+
+* The starting ledger sequence number of the range being exported.
+
+`--end <end_ledger>` (required)
+
+* The ending ledger sequence number of the range being exported.
+
+`--config-file <config_file_path>` (optional):
+
+* The path to the configuration file. If unspecified, the exporter will look for a file named config.toml in the current directory.
+
+Example usage:
+
+```
+docker run --platform linux/amd64 -d \  
+-v "$HOME/.config/gcloud/application_default_credentials.json":/.config/gcp/credentials.json:ro \  
+-e GOOGLE_APPLICATION_CREDENTIALS=/.config/gcp/credentials.json \  
+-v ${PWD}/config.toml:/config.toml \  
+stellar/stellar-galexie \  
+scan-and-fill --start 64000 --end 68000 --config-file config.toml
+```
+
+### Replace Command[](#replace-command "Direct link to Replace Command")
+
+The `replace` command is a new addition in Galexie v24.1.0 that simplifies re-exporting ledgers that were previously processed.
+
+Unlike `append` or `scan-and-fill`, which skip existing files, `replace` will overwrite existing files within a specified range.
+
+It is primarily used when Stellar Core starts emitting new or updated metadata for previously processed ledgers (e.g., the introduction of [CAP-0067](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0067.md) Stellar Events). This allows operators to re-export affected ledgers to ensure the data lake contains the latest, most complete metadata.
+
+Syntax:
+
+```
+stellar-galexie replace --start <start_ledger> --end <end_ledger> [--config-file <config_file>]
+```
+
+Arguments:
+
+`--start <start_ledger>` (required)
+
+* The starting ledger sequence number of the range being exported.
+
+`--end <end_ledger>` (required)
+
+* The ending ledger sequence number of the range being exported.
+
+`--config-file <config_file_path>` (optional):
+
+* The path to the configuration file. If unspecified, the exporter will look for a file named config.toml in the current directory.
+
+Example usage:
+
+```
+docker run --platform linux/amd64 -d \  
+-v "$HOME/.config/gcloud/application_default_credentials.json":/.config/gcp/credentials.json:ro \  
+-e GOOGLE_APPLICATION_CREDENTIALS=/.config/gcp/credentials.json \  
+-v ${PWD}/config.toml:/config.toml \  
+stellar/stellar-galexie \  
+replace --start 64000 --end 68000 --config-file config.toml
+```
+
+### Detect-gaps Command[](#detect-gaps-command "Direct link to Detect-gaps Command")
+
+The `detect-gaps` command is a new addition in Galexie v25.0.0. It performs a read-only audit of the data lake and reports any missing ledger sequences ("gaps") within a given range.
+
+Under normal day-to-day operation, the `append` command maintains strict sequential integrity. However, operators commonly parallelize initial full-history exports by splitting the entire ledger range into multiple subranges and running many Galexie instances concurrently. Misconfigured ranges, failed jobs, or manual intervention can leave holes (missing files) in the datastore.
+
+The `detect-gaps` command is intended to verify completeness of a newly created data lake after an initial full-history or as a periodic audit. This command does not export or modify any data. It only scans the existing datastore and reports missing ranges.
+
+Syntax:
+
+```
+stellar-galexie detect-gaps --start <start_ledger> \  
+--end <end_ledger> \  
+[--config-file <config_file>] \  
+[--output-file <output_file>]
+```
+
+Arguments:
+
+`--start <start_ledger>` (required)
+
+The starting ledger sequence number of the range to be scanned for gaps.
+
+`--end <end_ledger>` (required)
+
+The ending ledger sequence number of the range to be scanned for gaps.
+
+`--config-file <config_file_path>` (optional)
+
+The path to the configuration file. If unspecified, the application looks for a file named "config.toml" in the current directory.
+
+`--output-file <output_file_path>` (optional)
+
+If provided, the gap report is written as JSON to this file. If omitted, the JSON report is written to standard output.
+
+Example usage:
+
+```
+docker run --platform linux/amd64 -d \  
+-v "$HOME/.config/gcloud/application_default_credentials.json":/.config/gcp/credentials.json:ro \  
+-e GOOGLE_APPLICATION_CREDENTIALS=/.config/gcp/credentials.json \  
+-v ${PWD}/config.toml:/config.toml \  
+-v ${PWD}:/reports \  
+stellar/stellar-galexie \  
+detect-gaps \  
+--start 2 \  
+--end 200000 \  
+--config-file config.toml \  
+--output-file gaps_report.json
+```
+
+Example Output:
+
+```
+{  
+  "scan_from": 2,  
+  "scan_to": 200000,  
+  "duration_seconds": 3.42ms,  
+  "report": {  
+    "gaps": [  
+      { "start": 144320, "end": 144383 },  
+      { "start": 180000, "end": 180063 }  
+    ],  
+    "total_ledgers_found": 199871,  
+    "total_ledgers_missing": 128,  
+    "min_sequence_found": 2,  
+    "max_sequence_found": 200000  
+  }  
+}
+```

@@ -112,3 +112,43 @@ frontend/
 │   ├── lib/          # API clients, utilities
 │   └── hooks/        # Custom React hooks
 ```
+
+---
+
+## Stellar Documentation Reference
+
+> ⚠️ **SKIP DURING CODEBASE SCANNING**: The folder `Stellar Docs (...)` is **NOT part of the codebase** - it's the complete official Stellar developer documentation for reference only. Do not index or analyze when understanding the project structure.
+
+### Contents
+
+This folder contains the **full scraped Stellar developer docs** including:
+- **Build**: Smart contracts, apps, how-to guides
+- **Learn**: Fundamentals, transactions, consensus protocol, data structures
+- **Tokens**: Asset issuance, SAC, token interface, access control
+- **Data**: Horizon API, RPC, Hubble analytics, indexers
+- **Tools**: SDKs, CLI, Stellar Lab, developer tools
+- **Networks**: Mainnet, Testnet, Futurenet config
+- **Validators**: Running and maintaining nodes
+- **Platforms**: Anchor Platform, Disbursement Platform
+
+### Key Files by Task
+
+| Task | Reference File |
+|------|---------------|
+| **Multisig Setup** | `learn/fundamentals/transactions/signatures-multisig.md` |
+| **Asset Issuance** | `tokens/how-to-issue-an-asset.md` |
+| **Asset Flags** | `tokens/control-asset-access.md` |
+| **Transactions** | `learn/fundamentals/transactions/` |
+| **Smart Contracts** | `build/smart-contracts/` |
+| **Horizon API** | `data/apis/horizon/` |
+| **JavaScript SDK** | `tools/sdks/client-sdks.md` |
+| **CLI Reference** | `tools/cli/stellar-cli.md` |
+| **Network Config** | `networks.md` |
+
+### Quick Reference
+
+- **Testnet Passphrase**: `Test SDF Network ; September 2015`
+- **Mainnet Passphrase**: `Public Global Stellar Network ; September 2015`
+- **Horizon Testnet**: `https://horizon-testnet.stellar.org`
+- **Stellar Lab**: `https://lab.stellar.org`
+

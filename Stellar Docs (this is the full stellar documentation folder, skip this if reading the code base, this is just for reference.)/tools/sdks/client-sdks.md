@@ -1,0 +1,110 @@
+# Client & XDR SDKs
+
+Client and XDR SDKs are used by applications to interact with the network.
+
+> **Note:** For SDKs for building smart contracts, see [Contract SDKs](/docs/tools/sdks/contract-sdks.md).
+
+All SDKs are open-source; file a GitHub issue or pull request in the specific SDK repository if you have questions or suggestions.
+
+Each SDK has its own source code and documentation. Learn how to use a specific SDK by referring to the documentation.
+
+## JavaScript SDK[](#javascript-sdk "Direct link to JavaScript SDK")
+
+[JavaScript SDK](https://github.com/stellar/js-stellar-sdk) | [Docs](https://stellar.github.io/js-stellar-sdk/) | [NPM](https://www.npmjs.com/package/@stellar/stellar-sdk)
+
+**The JavaScript SDK is maintained by SDF.**
+
+`stellar-sdk` is the JavaScript library for communicating with Stellar RPC and Horizon. It supports building transactions on the Stellar network. It is used for building Stellar apps either in the browser or a Node.js environment.
+
+It provides:
+
+* A networking layer API for Stellar RPC methods and the Horizon API.
+* Facilities for building and signing transactions, for communicating with an RPC instance, for communicating with a Horizon instance, and for submitting transactions or querying network state.
+
+## Python SDK[](#python-sdk "Direct link to Python SDK")
+
+[Python SDK](https://github.com/StellarCN/py-stellar-base) | [Docs](https://stellar-sdk.readthedocs.io/en/latest/) | [Examples](https://github.com/StellarCN/py-stellar-base/tree/master/examples)
+
+**The Python SDK is maintained by dedicated community developers.**
+
+`py-stellar-base` is a Python library for communicating with a Stellar Horizon server. It is used for building Stellar apps on Python. It supports Python 3.7+ as well as PyPy 3.7+.
+
+This SDK is maintained by a dedicated community developer.
+
+It provides:
+
+* A networking layer API for Horizon endpoints.
+* Facilities for building and signing transactions, for communicating with a Stellar Horizon instance, and for submitting transactions or querying network history.
+
+## Rust[](#rust "Direct link to Rust")
+
+Functionality for interacting with Stellar data can be found in the following Rust crates:
+
+* `stellar-xdr`  [Code](https://github.com/stellar/rs-stellar-xdr) | [Docs](https://docs.rs/stellar-xdr)
+
+  Provides [XDR](/docs/learn/fundamentals/data-format/xdr.md) encode/decode and the reference implementation of [XDR-JSON](/docs/learn/fundamentals/data-format/xdr-json.md). **Maintained by SDF.**
+* `stellar-strkey`  [Code](https://github.com/stellar/rs-stellar-strkey) | [Docs](https://docs.rs/stellar-strkey)
+
+  Provides Stellar Strkey (Address) [SEP-23](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0023.md) encoding/decoding. **Maintained by SDF.**
+
+* `soroban-client` - [Code](https://github.com/rahul-soshte/rs-soroban-client) | [Docs](https://docs.rs/soroban-client/latest/soroban_client/)
+
+  A Rust library for interacting with the Soroban smart contract environment. It provides APIs to build and submit transactions, communicate with Stellar RPC servers, and supports all classic Stellar operations. **Maintained by a dedicated community developer.**
+* `rs-stellar-rpc-client` - [Code](https://github.com/stellar/rs-stellar-rpc-client)
+
+  Rust Stellar RPC client. **Maintained by SDF.**
+
+## iOS SDK[](#ios-sdk "Direct link to iOS SDK")
+
+[iOS SDK](https://github.com/Soneso/stellar-ios-mac-sdk) | [Docs](https://github.com/Soneso/stellar-ios-mac-sdk/tree/master/docs) | [Smart Contract Docs](https://github.com/Soneso/stellar-ios-mac-sdk/blob/master/soroban.md)
+
+**Maintained by a dedicated community developer.**
+
+The `stellar-ios-mac-sdk` is an open source Stellar SDK for iOS & Mac. It provides APIs to build transactions and connect to Horizon. It also provides functionality to deploy and invoke Soroban smart contracts and communicates with the Stellar RPC Server.
+
+The iOS SDK is maintained by dedicated community developer, Soneso.
+
+## Flutter SDK[](#flutter-sdk "Direct link to Flutter SDK")
+
+[Flutter SDK](https://github.com/Soneso/stellar_flutter_sdk) | [Docs](https://github.com/Soneso/stellar_flutter_sdk/blob/master/soroban.md)
+
+**Maintained by a dedicated community developer.**
+
+The `stellar-flutter-sdk` is an open source Stellar SDK for Flutter developers. It provides APIs to build transactions and connect to Horizon. It also provides functionality to deploy and invoke Soroban smart contracts and communicates with the Stellar RPC Server.
+
+The Flutter Stellar SDK is maintained by dedicated community developer, Soneso.
+
+## PHP SDK[](#php-sdk "Direct link to PHP SDK")
+
+[PHP SDK](https://github.com/Soneso/stellar-php-sdk) | [Docs](https://github.com/Soneso/stellar-php-sdk/blob/main/soroban.md)
+
+**Maintained by a dedicated community developer.**
+
+The `stellar-php-sdk` is an open source Stellar SDK for PHP developers. It provides APIs to build transactions and connect to Horizon. It also provides functionality to deploy and invoke Soroban smart contracts and communicates with the Stellar RPC Server.
+
+The PHP Stellar SDK is maintained by dedicated community developer, Soneso.
+
+## Java SDK[](#java-sdk "Direct link to Java SDK")
+
+[Java SDK](https://github.com/lightsail-network/java-stellar-sdk) | [Docs](https://lightsail-network.github.io/java-stellar-sdk/)
+
+**Maintained by a dedicated community developer.**
+
+`java-stellar-sdk` provides APIs to build transactions and connect to Horizon and also provides functionality to deploy and invoke Soroban smart contracts and communicates with the Stellar RPC Server.
+
+## Go[](#go "Direct link to Go")
+
+**The Go SDK is maintained by SDF.**
+
+This SDK is split up into separate packages, all of which you can find in the [Go SDK](https://github.com/stellar/go-stellar-sdk). The key libraries are:
+
+* `txnbuild` [SDK](https://github.com/stellar/go-stellar-sdk/tree/main/txnbuild) | [Docs](https://godoc.org/github.com/stellar/go-stellar-sdk/txnbuild): enables the construction, signing, and encoding of Stellar transactions.
+* `Horizon Client` [SDK](https://github.com/stellar/go-stellar-sdk/tree/main/clients/horizonclient) | [Docs](https://godoc.org/github.com/stellar/go-stellar-sdk/clients/horizonclient): provides a web client for interfacing with Horizon server REST endpoints to retrieve ledger information and submit transactions built with `txnbuild`.
+* `RPC Client` [SDK](https://github.com/stellar/stellar-rpc/tree/main/client) | [Docs](https://pkg.go.dev/github.com/stellar/stellar-rpc/client): provide sdk wrapper to invoke RPC endpoints.
+* [Ingest SDK](/docs/data/indexers/build-your-own/ingest-sdk.md): acquire and parse data from the Stellar network.
+
+## C# .NET[](#c-net "Direct link to C# .NET")
+
+[C# .NET SDK](https://github.com/Beans-BV/dotnet-stellar-sdk) | [Docs](https://elucidsoft.github.io/dotnet-stellar-sdk/)
+
+**This SDK is maintained by dedicated community developers.**

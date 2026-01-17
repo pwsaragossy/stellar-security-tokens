@@ -1,0 +1,105 @@
+# Setup
+
+Galexie runs as a publisher and writes files to buckets and therefore needs to be provisioned with correct account permissions on the bucket to allow writes. For client applications that will be consumers of files in the bucket a smaller set of account permissions will be needed to allow read only activity.
+
+## Google Cloud Platform (GCP) for GCS[](#google-cloud-platform-gcp-for-gcs "Direct link to Google Cloud Platform (GCP) for GCS")
+
+### Google Cloud Storage (GCS) bucket[](#google-cloud-storage-gcs-bucket "Direct link to Google Cloud Storage (GCS) bucket")
+
+If you already have a GCS bucket ready for Galexie to push data, you can skip this section. If not, follow these steps:
+
+1. Visit the GCP Console's Storage section (<https://console.cloud.google.com/storage>) and create a new bucket.
+2. Choose a descriptive name for the bucket, such as `stellar-ledger-data`. Refer to [Google Cloud Storage Bucket Naming Guideline](https://cloud.google.com/storage/docs/buckets#naming) for bucket naming conventions. Note down the bucket name, you will need it later during the configuration process.
+
+### Google Cloud Platform (GCP) Authentication[](#google-cloud-platform-gcp-authentication "Direct link to Google Cloud Platform (GCP) Authentication")
+
+#### Google Kubernetes Engine Cluster[](#google-kubernetes-engine-cluster "Direct link to Google Kubernetes Engine Cluster")
+
+When running Galexie inside of a GKE cluster follow the Google cloud documentation for [workload identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) to make sure Galexie has the correct bucket access
+
+#### GCP VM[](#gcp-vm "Direct link to GCP VM")
+
+1. [Create a Service Account](https://docs.cloud.google.com/iam/docs/service-accounts-create)
+2. Use that Service Account when creating the GCP VM
+3. Make sure the Service Account has the correct bucket access
+
+#### Credentials (Not Recommended)[](#credentials-not-recommended "Direct link to Credentials (Not Recommended)")
+
+In order to use static credentials, find the authentication route that works best in the Galexie environment and follow the Google cloud documentation for [creating credentials](https://developers.google.com/workspace/guides/create-credentials) making sure the principal of the credentials has access to the correct bucket
+
+#### IAM Role Permissions[](#iam-role-permissions "Direct link to IAM Role Permissions")
+
+When using GCP IAM to authenticate Galexie to access a bucket, the following permissions are required:
+
+* storage.buckets.get
+* storage.buckets.list
+* storage.multipartUploads.abort
+* storage.multipartUploads.create
+* storage.multipartUploads.list
+* storage.multipartUploads.listParts
+* storage.objects.create
+* storage.objects.delete
+* storage.objects.get
+* storage.objects.list
+* storage.objects.restore
+* storage.objects.update
+
+## Amazon Web Services (AWS) for S3[](#amazon-web-services-aws-for-s3 "Direct link to Amazon Web Services (AWS) for S3")
+
+### Amazon Simple Storage Service (S3) bucket[](#amazon-simple-storage-service-s3-bucket "Direct link to Amazon Simple Storage Service (S3) bucket")
+
+If you already have an S3 bucket ready for Galexie to push data, you can skip this section. If not, follow these steps:
+
+1. Visit the AWS Console's Storage section (<https://console.aws.amazon.com/s3/>) and create a new bucket.
+2. Choose a descriptive name for the bucket, such as `stellar-ledger-data`. Refer to [S3 General purpose bucket naming rules](https://cloud.google.com/storage/docs/buckets#naming) for bucket naming conventions. Note down the bucket name, you will need it later during the configuration process.
+
+### Amazon Web Services (AWS) Authentication[](#amazon-web-services-aws-authentication "Direct link to Amazon Web Services (AWS) Authentication")
+
+#### EKS Cluster[](#eks-cluster "Direct link to EKS Cluster")
+
+When running Galexie inside of a EKS cluster follow either the AWS documentation for [IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) or [pod identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html)
+
+#### AWS EC2[](#aws-ec2 "Direct link to AWS EC2")
+
+1. [Creat an IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions_create-policies.html)
+2. Use that role in an [instance profile](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html)
+3. Use that instance profile in the creation of the EC2 instance
+4. Make sure the instance profile has the correct bucket access
+
+#### Credentials (Not Recommended)[](#credentials-not-recommended-1 "Direct link to Credentials (Not Recommended)")
+
+In order to use static credentials, [create an IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/getting-started-workloads.html) for Galexie making sure the principal of the credentials has access to the correct bucket and generate security credentials.
+
+#### IAM Role Permissions[](#iam-role-permissions-1 "Direct link to IAM Role Permissions")
+
+When using AWS IAM to authenticate Galexie to access a bucket, use this example policy making sure to use the correct bucket destination:
+
+```
+{  
+  "Version": "2012-10-17",  
+  "Statement": [  
+    {  
+      "Sid": "AllowS3BucketOperations",  
+      "Effect": "Allow",  
+      "Action": [  
+        "s3:ListBucket",  
+        "s3:GetBucketLocation",  
+        "s3:ListBucketMultipartUploads"  
+      ],  
+      "Resource": "arn:aws:s3:::my-galexie-bucket-example"  
+    },  
+    {  
+      "Sid": "AllowS3ObjectAccess",  
+      "Effect": "Allow",  
+      "Action": [  
+        "s3:PutObject",  
+        "s3:GetObject",  
+        "s3:DeleteObject",  
+        "s3:AbortMultipartUpload",  
+        "s3:ListMultipartUploadParts"  
+      ],  
+      "Resource": ["arn:aws:s3:::my-galexie-bucket-example/*"]  
+    }  
+  ]  
+}
+```

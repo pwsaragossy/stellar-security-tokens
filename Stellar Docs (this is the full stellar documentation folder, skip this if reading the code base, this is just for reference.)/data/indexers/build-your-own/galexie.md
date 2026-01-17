@@ -1,0 +1,34 @@
+# Galexie
+
+## What is Galexie?[](#what-is-galexie "Direct link to What is Galexie?")
+
+Galexie is a tool for extracting, processing, exporting Stellar ledger metadata to external storage, and creating a data lake of pre-processed ledger metadata. Galexie is the foundation of the Composable Data Pipeline (CDP) and serves as the first step in extracting raw Stellar ledger metadata and making it accessible. Learn more about CDPs benefits and applications in this [blog post](https://stellar.org/blog/developers/composable-data-platform).
+
+## What Are the Key Features of Galexie?[](#what-are-the-key-features-of-galexie "Direct link to What Are the Key Features of Galexie?")
+
+Galexie is designed to make streamlined and efficient export of ledger metadata via a simple user-friendly interface. Its key features include:
+
+* Exporting Stellar ledger metadata to cloud storage
+* Configurable to export a specified range of ledgers or continuously stream new ledgers as they are created on the Stellar network
+* Exporting ledger metadata in XDR which is Stellar Cores native format.
+* Compressing data before export to optimize storage efficiency in the data lake.
+
+![](/assets/images/galexie-architecture-edd2081dc32a5b5c19cf55b962fa07d7.png)
+
+## Why XDR Format?[](#why-xdr-format "Direct link to Why XDR Format?")
+
+Exporting data in XDRthe native Stellar Core formatenables Galexie to preserve full transaction metadata, ensuring data integrity while keeping storage efficient. The XDR format maintains compatibility with all Stellar components, providing a solid foundation for applications that require consistent access to historical data. Refer to the [XDR](/docs/learn/fundamentals/data-format/xdr.md) documentation for more information on this format.
+
+## Why Run Galexie?[](#why-run-galexie "Direct link to Why Run Galexie?")
+
+Galexie enables you to make a copy of Stellar ledger metadata over which you have complete control. Galexie can continuously sync your data lake with the latest ledger data freeing you up from tedious data ingestion and allowing you to focus on building customized applications that consume and analyze exported data.
+
+## What Can You Do with the Data Lake Created by Galexie?[](#what-can-you-do-with-the-data-lake-created-by-galexie "Direct link to What Can You Do with the Data Lake Created by Galexie?")
+
+Once data is stored in the cloud, it becomes easily accessible for integration with modern data processing and analytics tools, enabling various workflows and insights.
+
+The pre-processed ledger data exported by Galexie can be utilized across various applications, such as:
+
+* Analytics Tools: Analyze trends over time.
+* Audit Applications: Retrieve historical transaction data for auditing and compliance.
+* Monitoring Systems: Create tools to track network metrics.

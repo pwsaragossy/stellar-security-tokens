@@ -1,0 +1,89 @@
+# Indexers Overview
+
+## What is an indexer, and why would you need one?[](#what-is-an-indexer-and-why-would-you-need-one "Direct link to What is an indexer, and why would you need one?")
+
+When you first start building on a smart contract platform like Stellar, at first you can get everything you need from RPC calls. You write a contract, or launch a Stellar Classic Asset and [wrap it in a smart contract](/docs/tokens/stellar-asset-contract.md), and you make a bundle of RPC calls from your frontend app directly to your smart contracts.
+
+At some point, though, you are likely to run into limitations with this approach.
+
+1. You might need to make *too many* RPC calls. Imagine: your app lists 20 of a user's NFTs per page. First RPC call: get a list of NFT IDs for this user. Then: 20 simultaneous RPC calls to get data for each NFT. And possibly: for each of those, make additional HTTP requests to S3 buckets or IPFS nodes to fetch image data, etc. This can make your app slow, or even get you rate-limited by an RPC provider.
+2. You might want to show *historic* data, like every time an NFT changed ownership. This sort of data lives *in the history of the blockchain*, but is not accessible via RPC calls to the most up-to-date version of a specific contract. Those would only return the current owner.
+
+Additionally, even some information that is currently available from [Horizon](/docs/data/apis/horizon.md) will also require indexing services in the future, as Horizon will be deprecated.
+
+## What exactly is indexing?[](#what-exactly-is-indexing "Direct link to What exactly is indexing?")
+
+The word "indexing" has come to encompass a large array of use-cases. What all of them have in common is that they process and structure blockchain data. Let's think of it in the order of what you, an app-builder or small team, will need:
+
+### 1. Off-the-shelf APIs for common data[](#portfolio-apis "Direct link to 1. Off-the-shelf APIs for common data")
+
+This is the kind of stuff you might get from Horizon today, but can include more than that. For example, many indexing services in this category also provide the "every time an NFT changed ownership" kind of data mentioned above.
+
+Lots of apps need this kind of data, and it tends to have a standard shape. This makes it profitable for companies to build SaaS products, offering API access for a price (often with a free tier, appropriate for your early-stage startup or hackathon project).
+
+In the biz, these are called *Portfolio APIs.* Well-known companies offering them:
+
+* [Alchemy](https://www.alchemy.com/): most popular choice on Ethereum; now in talks to expand their service to Stellar, with a targeted launch in the first half of 2026.
+* [Allium](https://www.allium.so/): currently building Stellar support, launching Q1 2026
+* [OBSRVR](https://www.withobsrvr.com/): a home-grown Stellar-native offering, providing both RPC services and [Obsrvr Gateway](https://www.withobsrvr.com/products/gateway), promising "powerful APIs for real-time data fetching, transaction processing, and easy integration into existing systems."
+* [Horizon](/docs/data/apis/horizon.md): as mentioned above, Horizon will soon be deprecated, but for now it is the only way to get some of this data.
+
+### 2. Streaming & transforming data to a custom app database[](#custom-transformations "Direct link to 2. Streaming & transforming data to a custom app database")
+
+Not all apps have data that fits a standard shape. Most, probably, need custom data transformation.
+
+Consider again the NFT example. Wouldn't it be great to return all needed NFT data in *one* request, rather than N+1? That's what this style of indexing provides. And even better: you can (often) use these indexing solutions to aggregate data from multiple sources. If your NFT app stores additional information on IPFS, you could consolidate all of that off-chain data to your database as well. This makes your app much faster, saves you network & RPC requests, and creates new architecture possibilities.
+
+Well-known options:
+
+* [The Graph](https://thegraph.com/docs/en/about/): one of the earliest and most popular-at-the-time options on Ethereum. They now offer three main products:
+
+  1. [Subgraphs](https://thegraph.com/docs/en/subgraphs/developing/subgraphs/): their main & most famous offering, providing a [decentralized approach](https://thegraph.com/docs/en/subgraphs/developing/publishing/publishing-a-subgraph/) to custom data transformation & hosting. The Graph's use of GraphQL APIs made GraphQL a popular choice for this entire category of indexing.
+  2. **Token API**, for Indexing [Use Case #1](#portfolio-apis) described above
+  3. **Substreams**, for [Use Case #3](#analytics) described below
+
+  The Graph offers Stellar support for Substreams, with no current plans to expand Subgraph or Token API support to Stellar.
+* [Goldsky](https://goldsky.com/): one of the currently-most-loved options on Ethereum for this use-case. Goldsky provides [two main products](https://docs.goldsky.com/subgraph-vs-mirror):
+
+  1. **Subgraphs**: similar to those offered by The Graph, but data lives on Goldsky's own infrastructure rather than a decentralized network. Goldsky only offers this for EVM-based chains, with no plans to offer Subgraph support for Stellar.
+  2. **Mirror**, also called **Pipelines**: a highly efficient tool to Extract, Transform, & Load (ETL) data into your own database. Goldsky Mirrors already support Stellar; see [their documentation](https://docs.goldsky.com/chains/stellar).
+* [Mercury](https://docs.mercurydata.app/): a home-grown Stellar-native team providing streamlined Soroban (Smart Contract) support via their [Retroshades](https://docs.mercurydata.app/retroshades/introduction-to-retroshades) product. Note that this streamlined Soroban support comes at the cost of *only* supporting Soroban! Mercury also provide [Mercury "Classic"](https://docs.mercurydata.app/mercury-classic/introduction), giving access to contract events & Stellar transactions via a GraphQL interface, which might fit Indexer Use Case #1 more.
+* [SubQuery](https://subquery.network/): Decentralized Indexer SDK, Decentralized RPCs, & AI Apps. Supports 300+ chains. Like The Graph, uses a decentralized model.
+* [OnFinality](https://onfinality.io/): a big player in the Polkadot ecosystem, now expanding to other blockchains. OnFinality provides data *hosting* services for your SubQuery logic. SubQuery is the *software*, OnFinality is the *infra*, hosting 1. the pre-transformed raw Stellar data, 2. your SubGraph SDK-authored Extract, Transform, and Load (ETL) processor and 3. your final transformed data.
+* [Allium](https://www.allium.so/): in addition to their Portfolio APIs offering, Allium is also under contract with SDF to build out tools for both Indexing Use Case #2 (this one) and Indexing Use Case #3 (see below), with target launch date of Q1 2026.
+* [Space and Time](https://www.spaceandtime.io/): one challenge with most indexing approaches is the reintroduction of trusted 3rd parties into what is otherwise a verifiable, trustless software stack. Space and Time aims to fix this with "Proof of Indexing" and "Proof of SQL", using Zero-Knowledge proofs to offer tamper-proof computation for enterprises and dapps. Space and Time's Stellar support [launched](https://www.spaceandtime.io/blog/space-and-time-enables-new-sophisticated-financial-apps-for-the-stellar-ecosystem) in Q4 2025.
+* [OBSRVR Flow](https://www.withobsrvr.com/products/flow): "Structured ledger data and contract events straight to your app or warehouseno ETL needed." Currently in private beta.
+
+### 3. Blockchain-Flavored Big-Data Analytics[](#analytics "Direct link to 3. Blockchain-Flavored Big-Data Analytics")
+
+For business intelligence, compliance, tracing suspicious operations, DeFi metric tracking, transaction flow analysis, etc. When your enterprise reaches a certain scale, it's worth paying Data Engineers to set up custom ETL pipelines and manage databases/datalakes, and then paying Data Analysts to answer questions about how people are interacting with your systems.
+
+The companies building tools for Indexer Use Case #2 above (The Graph, Goldsky, Allium, etc) tend to also have tools for Use Case #3.
+
+While often referred to as *indexing*, you can also think of this category as *analytics*. See the [analytics documentation](/docs/data/analytics.md) for solutions custom-tailored to this use-case.
+
+## Build Your Own[](#build-your-own "Direct link to Build Your Own")
+
+If none of the indexing providers mentioned above currently meet your needs, you can also build your own. Start with this [tutorial on how to build your own custom network ingestion pipeline](/docs/build/apps/ingest-sdk/overview.md). Along the way, you'll use the following tools & services:
+
+### [Galexie](/docs/data/indexers/build-your-own/galexie.md)[](#galexie "Direct link to galexie")
+
+Galexie is a tool for acquiring Stellar ledger metadata from the network and exporting to external storage, a data lake. Galexie is the foundation of the Composable Data Pipeline (CDP) and serves as the first step in extracting raw Stellar ledger metadata and making it accessible. Learn more about CDPs benefits and applications in [this blog post](https://stellar.org/blog/developers/composable-data-platform).
+
+**Why Use It:**
+
+* You want to maintain a data lake of pre-computed ledger metadata for historical and currently closed network ledgers.
+
+### [Ingest SDK](/docs/data/indexers/build-your-own/ingest-sdk.md)[](#ingest-sdk "Direct link to ingest-sdk")
+
+A set of Golang packages which can be used within an application as a programmatic domain model to interact with Stellar network.
+
+**Why Use It:**
+
+* You want rapid development of applications in Golang which can acquire and parse ledger meta data and ledger entries from Stellar network.
+* You want an intuitive, compile-time, type-safe application developer experience.
+* You want to programmatically access History Archives to retrieve ledger entries.
+
+### [Processors](/docs/data/indexers/build-your-own/processors.md)[](#processors "Direct link to processors")
+
+A suite of Go packages that help you parse Stellar blockchain data.

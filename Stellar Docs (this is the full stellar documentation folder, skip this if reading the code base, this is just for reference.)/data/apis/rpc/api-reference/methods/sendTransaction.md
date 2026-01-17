@@ -1,0 +1,353 @@
+# sendTransaction
+
+Submit a real transaction to the Stellar network. This is the only way to make changes on-chain.
+
+Unlike Horizon, this does not wait for transaction completion. It simply validates and enqueues the transaction. Clients should call `getTransaction` to learn about transaction success/failure.
+
+This supports all transactions, not only smart contract-related transactions.
+
+## Params
+
+(1)
+
+Please note that parameter structure within the request must contain named parameters as a by-name object, and not as positional arguments in a by-position array
+
+### 1. transaction *(required)*
+
+The signed transaction to broadcast for inclusion in a ledger.
+
+string
+
+A Stellar [TransactionEnvelope](https://github.com/stellar/stellar-xdr/blob/v22.0/Stellar-transaction.x#L1009) (as a base64-encoded string)
+
+## Result
+
+*(sendTransactionResult)*
+
+Transaction status and network state. The result will include if the transaction was successfully enqueued, and information about the current ledger.
+
+hash
+
+string
+
+required
+
+Transaction hash (as a hex-encoded string)
+
+>= 64 characters<= 64 characters
+
+Match pattern:
+
+^[a-f\d]{64}$
+
+status
+
+string
+
+required
+
+The current status of the transaction by hash.
+
+Allowed values:
+
+PENDINGDUPLICATETRY\_AGAIN\_LATERERROR
+
+latestLedger
+
+number
+
+required
+
+The sequence number of the latest ledger known to Stellar RPC at the time it handled the request.
+
+latestLedgerCloseTime
+
+number
+
+required
+
+The unix timestamp of the close time of the latest ledger known to Stellar RPC at the time it handled the request.
+
+errorResultXdr
+
+string
+
+(optional) If the transaction status is `ERROR`, this will be a base64 encoded string of the raw TransactionResult XDR struct containing details on why stellar-core rejected the transaction.
+
+diagnosticEventsXdr
+
+array[string]
+
+(optional) If the transaction status is `ERROR`, this field may be present with an array of base64 encoded strings. Each string will decode to a raw DiagnosticEvent XDR struct containing details on why stellar-core rejected the transaction.
+
+## Examples
+
+Pending TransactionDuplicate TransactionError TransactionTry Again Later Transaction
+
+Submitting a valid transaction using the `sendTransaction` method, resulting in a `PENDING` status.
+
+### Request
+
+* cURL
+* JavaScript
+* Python
+* JSON
+
+```
+curl -X POST \  
+-H 'Content-Type: application/json' \  
+-d '{  
+  "jsonrpc": "2.0",  
+  "id": 8675309,  
+  "method": "sendTransaction",  
+  "params": {  
+    "transaction": "AAAAAgAAAAAg4dbAxsGAGICfBG3iT2cKGYQ6hK4sJWzZ6or1C5v6GAAAAGQAJsOiAAAADQAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAACgAAAAVIZWxsbwAAAAAAAAEAAAAMU29yb2JhbiBEb2NzAAAAAAAAAAELm/oYAAAAQATr6Ghp/DNO7S6JjEFwcJ9a+dvI6NJr7I/2eQttvoovjQ8te4zKKaapC3mbmx6ld6YKL5T81mxs45TjzdG5zw0="  
+  }  
+}' \  
+https://soroban-testnet.stellar.org | jq
+```
+
+```
+let requestBody = {  
+  "jsonrpc": "2.0",  
+  "id": 8675309,  
+  "method": "sendTransaction",  
+  "params": {  
+    "transaction": "AAAAAgAAAAAg4dbAxsGAGICfBG3iT2cKGYQ6hK4sJWzZ6or1C5v6GAAAAGQAJsOiAAAADQAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAACgAAAAVIZWxsbwAAAAAAAAEAAAAMU29yb2JhbiBEb2NzAAAAAAAAAAELm/oYAAAAQATr6Ghp/DNO7S6JjEFwcJ9a+dvI6NJr7I/2eQttvoovjQ8te4zKKaapC3mbmx6ld6YKL5T81mxs45TjzdG5zw0="  
+  }  
+}  
+let res = await fetch('https://soroban-testnet.stellar.org', {  
+  method: 'POST',  
+  headers: {  
+    'Content-Type': 'application/json',  
+  },  
+  body: JSON.stringify(requestBody),  
+})  
+let json = await res.json()  
+console.log(json)
+```
+
+```
+import json, requests  
+res = requests.post(https://soroban-testnet.stellar.org, json={  
+    "jsonrpc": "2.0",  
+    "id": 8675309,  
+    "method": "sendTransaction",  
+    "params": {  
+        "transaction": "AAAAAgAAAAAg4dbAxsGAGICfBG3iT2cKGYQ6hK4sJWzZ6or1C5v6GAAAAGQAJsOiAAAADQAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAACgAAAAVIZWxsbwAAAAAAAAEAAAAMU29yb2JhbiBEb2NzAAAAAAAAAAELm/oYAAAAQATr6Ghp/DNO7S6JjEFwcJ9a+dvI6NJr7I/2eQttvoovjQ8te4zKKaapC3mbmx6ld6YKL5T81mxs45TjzdG5zw0="  
+    }  
+})  
+print(json.dumps(res.json(), indent=4))
+```
+
+```
+{  
+  "jsonrpc": "2.0",  
+  "id": 8675309,  
+  "method": "sendTransaction",  
+  "params": {  
+    "transaction": "AAAAAgAAAAAg4dbAxsGAGICfBG3iT2cKGYQ6hK4sJWzZ6or1C5v6GAAAAGQAJsOiAAAADQAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAACgAAAAVIZWxsbwAAAAAAAAEAAAAMU29yb2JhbiBEb2NzAAAAAAAAAAELm/oYAAAAQATr6Ghp/DNO7S6JjEFwcJ9a+dvI6NJr7I/2eQttvoovjQ8te4zKKaapC3mbmx6ld6YKL5T81mxs45TjzdG5zw0="  
+  }  
+}
+```
+
+### Result
+
+```
+{  
+  "jsonrpc": "2.0",  
+  "id": 8675309,  
+  "result": {  
+    "status": "PENDING",  
+    "hash": "d8ec9b68780314ffdfdfc2194b1b35dd27d7303c3bceaef6447e31631a1419dc",  
+    "latestLedger": 2553978,  
+    "latestLedgerCloseTime": "1700159337"  
+  }  
+}
+```
+
+### SDK Guide[](#sdk-guide "Direct link to SDK Guide")
+
+The example above is sending a transaction using RPC methods directly. If you are using the Stellar SDK to build applications, you can use the native functions to get the same information.
+
+* Python
+* JavaScript
+* Java
+
+```
+# pip install --upgrade stellar-sdk  
+from stellar_sdk import SorobanServer, soroban_rpc, Keypair, Network, TransactionBuilder, scval  
+  
+def send_transaction() -> soroban_rpc.SendTransactionResponse:  
+    server = SorobanServer(server_url='https://soroban-testnet.stellar.org', client=None)  
+  
+    root_keypair = Keypair.from_secret(  
+        "SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"  
+    )  
+    root_account = server.load_account(root_keypair.public_key)  
+    # native token contract (XLM)  
+    contract_id = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"  
+    transaction = (  
+        TransactionBuilder(  
+            source_account=root_account,  
+            network_passphrase=Network.TESTNET_NETWORK_PASSPHRASE,  
+            base_fee=100,  
+        )  
+        # Transfer 1 native token to GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H  
+        # ../tokens/token-interface  
+        .append_invoke_contract_function_op(contract_id, "transfer", [  
+            scval.to_address(root_keypair.public_key),  # from  
+            scval.to_address("GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"),  # to  
+            scval.to_int128(1 * 10 ** 7)  # amount, 1 XLM, decimal places are 7  
+        ])  
+        .set_timeout(30)  
+        .build()  
+    )  
+  
+    transaction = server.prepare_transaction(transaction)  
+    transaction.sign(root_keypair)  
+    return server.send_transaction(transaction)  
+  
+  
+response = send_transaction()  
+  
+print("status", response.status)  
+print("hash:", response.hash)  
+print("status:", response.status)  
+print("errorResultXdr:", response.error_result_xdr)
+```
+
+```
+// yarn add @stellar/stellar-sdk  
+import * as StellarSdk from "@stellar/stellar-sdk";  
+  
+import { Server } from "@stellar/stellar-sdk/rpc";  
+const server = new Server("https://soroban-testnet.stellar.org");  
+  
+async function sendTransaction() {  
+  try {  
+    // native token contract (XLM)  
+    const contractId =  
+      "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";  
+    const sourceSecretKey =  
+      "SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";  
+    const contract = new StellarSdk.Contract(contractId);  
+    const sourceKeypair = StellarSdk.Keypair.fromSecret(sourceSecretKey);  
+    const accountId = sourceKeypair.publicKey();  
+  
+    const account = await server.getAccount(accountId);  
+    const fee = StellarSdk.BASE_FEE;  
+    // Transfer 1 native token to GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H  
+    // ../tokens/token-interface  
+    const transaction = new StellarSdk.TransactionBuilder(account, { fee })  
+      .setNetworkPassphrase(StellarSdk.Networks.TESTNET)  
+      .setTimeout(30)  
+      .addOperation(  
+        contract.call(  
+          "transfer",  
+          StellarSdk.nativeToScVal(accountId, { type: "address" }), // from  
+          StellarSdk.nativeToScVal(  
+            "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H",  
+            { type: "address" },  
+          ), // to  
+          StellarSdk.nativeToScVal("10000000", { type: "i128" }), // amount, 1 XLM, decimal places are 7  
+        ),  
+      )  
+      .build();  
+  
+    server  
+      .prepareTransaction(transaction)  
+      .then((result) => {  
+        result.sign(sourceKeypair);  
+        return server.sendTransaction(result);  
+      })  
+      .then((result) => {  
+        console.log("hash:", result.hash);  
+        console.log("status:", result.status);  
+        console.log("errorResultXdr:", result.errorResultXdr);  
+      });  
+  } catch (error) {  
+    console.error("Error fetching transaction:", error);  
+  }  
+}  
+  
+sendTransaction();
+```
+
+```
+// https://github.com/lightsail-network/java-stellar-sdk?tab=readme-ov-file#installation  
+import org.stellar.sdk.KeyPair;  
+import org.stellar.sdk.Network;  
+import org.stellar.sdk.SorobanServer;  
+import org.stellar.sdk.Transaction;  
+import org.stellar.sdk.TransactionBuilder;  
+import org.stellar.sdk.TransactionBuilderAccount;  
+import org.stellar.sdk.operations.InvokeHostFunctionOperation;  
+import org.stellar.sdk.responses.sorobanrpc.SendTransactionResponse;  
+import org.stellar.sdk.scval.Scv;  
+  
+import java.math.BigInteger;  
+import java.util.Arrays;  
+  
+public class SendTransactionExample {  
+  
+  public static void main(String[] args) {  
+    SorobanServer server = new SorobanServer("https://soroban-testnet.stellar.org");  
+    try {  
+      KeyPair sourceKeyPair =  
+          KeyPair.fromSecretSeed("SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");  
+      TransactionBuilderAccount sourceAccount = server.getAccount(sourceKeyPair.getAccountId());  
+      // native token contract (XLM)  
+      String contractId = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";  
+  
+      // Transfer 1 native token to GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H  
+      // ../tokens/token-interface  
+      org.stellar.sdk.operations.InvokeHostFunctionOperation operation =  
+          InvokeHostFunctionOperation.invokeContractFunctionOperationBuilder(  
+                  contractId,  
+                  "transfer",  
+                  Arrays.asList(  
+                      Scv.toAddress(sourceKeyPair.getAccountId()), // from  
+                      Scv.toAddress(  
+                          "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"), // to  
+                      Scv.toInt128(  
+                          BigInteger.valueOf(10000000)) // amount, 1 XLM, decimal places are 7  
+                      ))  
+              .build();  
+      Transaction transaction =  
+          new TransactionBuilder(sourceAccount, Network.TESTNET)  
+              .setBaseFee(100)  
+              .addOperation(operation)  
+              .setTimeout(30)  
+              .build();  
+  
+      transaction = server.prepareTransaction(transaction);  
+  
+      // Sign the transaction  
+      transaction.sign(sourceKeyPair);  
+  
+      // Send the transaction using the SorobanServer  
+      SendTransactionResponse response = server.sendTransaction(transaction);  
+      System.out.println(response.getStatus());  
+      System.out.println(response.getHash());  
+      System.out.println(response.getLatestLedger());  
+      System.out.println(response.getLatestLedgerCloseTime());  
+    } catch (Exception e) {  
+      System.err.println("An error has occurred:");  
+      e.printStackTrace();  
+    }  
+  }  
+}
+```
+
+### Using the Lab[](#using-the-lab "Direct link to Using the Lab")
+
+The `sendTransaction` method is used to **submit a real transaction to the Stellar network**, making it the only way to execute **on-chain changes** through RPC.
+
+Unlike Horizon, this method **does not wait for confirmation**. Instead, it **validates and enqueues** the transaction. To track its final outcome, clients should follow up with a call to [`getTransaction`](/docs/data/apis/rpc/api-reference/methods/getTransaction.md).
+
+This method supports **all Stellar transactions**, including but not limited to smart contract invocations.
+
+ð [Send (Submit) a Transaction on the Lab](https://lab.stellar.org/endpoints/rpc/send-transaction?$=network$id=testnet&label=Testnet&horizonUrl=https:////horizon-testnet.stellar.org&rpcUrl=https:////soroban-testnet.stellar.org&passphrase=Test%20SDF%20Network%20/;%20September%202015;;)
+
+![Lab: sendTransaction](/assets/images/sendtransaction-4c77281c081df4dfd293a8aa6d5cb16f.gif)

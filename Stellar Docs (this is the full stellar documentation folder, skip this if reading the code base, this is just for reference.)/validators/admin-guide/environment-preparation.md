@@ -1,0 +1,88 @@
+# Environment Preparation
+
+## Initialize the Database and Local State[](#initialize-the-database-and-local-state "Direct link to Initialize the Database and Local State")
+
+After configuring your [database](/docs/validators/admin-guide/configuring.md) and [buckets](/docs/validators/admin-guide/configuring.md) settings, before running Stellar Core for the first time, you must initialize the database:
+
+```
+stellar-core new-db
+```
+
+This command will initialize the database, as well as the bucket directory, and then exit. You can also use this command if your database gets corrupted and you want to restart it from scratch.
+
+### Automatic Maintenance[](#automatic-maintenance "Direct link to Automatic Maintenance")
+
+Some tables in stellar-core are used to publish ledger data to history archives.
+
+If not managed properly, those tables will grow without bounds. To avoid this, a built-in scheduler will delete data from old ledgers that are not used anymore by other parts of the system.
+
+By default, stellar-core will perform this automatic maintenance. The configuration fields that control the automatic maintenance behavior are:
+
+* `AUTOMATIC_MAINTENANCE_PERIOD`,
+* `AUTOMATIC_MAINTENANCE_COUNT`
+
+If you need to regenerate the metadata, the simplest way is to replay ledgers for the range you're interested in after (optionally) clearing the database with the `new-db` command [referenced earlier](#initialize-the-database-and-local-state).
+
+In some cases automatic maintenance has just too much work to do in order to get back to the nominal state. This can occur following large catchup operations such as when performing a full catchup that may create a backlog of 10s of millions of ledgers.
+
+If this happens, database performance can be restored. The node will require some downtime while you perform the following recovery commands:
+
+1. run the `maintenance` http command manually with a large number of ledgers, and
+2. perform a database maintenance operation such as `VACUUM FULL` to reclaim/rebuild the database as needed.
+
+### Metadata Snapshots and Restoration[](#metadata-snapshots-and-restoration "Direct link to Metadata Snapshots and Restoration")
+
+Some deployments of Stellar Core will want to retain metadata for the *entire history* of the network. This metadata can be quite large and computationally expensive to regenerate anew by replaying ledgers in stellar-core from an empty initial database state, as described in the previous section.
+
+This can be especially costly if it must be run more than once. For instance, when bringing a new node online. Or when needing to reingest historical data to include more meta in your stored data (as happened in [Protocol 23](https://stellar.org/blog/developers/stellar-events-retroactive-events)).
+
+> **Info:** Due to the very large size requirements, we **recommend against** retaining metadata for the whole network history unless absolutely necessary for your use-case.
+
+Some operators therefore prefer to shut down their stellar-core processes and *take filesystem-level snapshots* or *database-level dumps* of the contents of Stellar Core's database and bucket directory, after metadata generation has occurred the first time. Such snapshots can then be restored, putting stellar-core in a state containing metadata without performing full replay.
+
+Any reasonably recent state will do  if such a snapshot is a little old, stellar-core will replay ledgers from whenever the snapshot was taken to the current network state anyways  but this procedure can greatly accelerate restoring validator nodes, or cloning them to create new ones.
+
+## History Archives[](#history-archives "Direct link to History Archives")
+
+Stellar Core normally interacts with one or more history archives, which are configurable facilities where [Full Validators](/docs/validators.md) store flat files containing history checkpoints: bucket files and history logs. History archives are usually off-site commodity storage services such as Amazon S3, Google Cloud Storage, Azure Blob Storage, or custom SCP/SFTP/HTTP servers.
+
+Use command templates in the config file to give the specifics of which services you will use and how to access them. The [example config](https://github.com/stellar/stellar-core/blob/master/docs/stellar-core_example.cfg) will demonstrate how to configure a history archive through command templates.
+
+### Configuring to Get Data from an Archive[](#configuring-to-get-data-from-an-archive "Direct link to Configuring to Get Data from an Archive")
+
+No matter what kind of node you're running, you should configure it to `get` history from one or more public archives. You can configure any number of archives to download from: Stellar Core will automatically round-robin between them.
+
+When you're [choosing your quorum set](/docs/validators/admin-guide/configuring.md), you should include high-quality nodes  which, by definition, publish archives  and add the location for each node's archive in the `HISTORY` field in the [validators array](/docs/validators/admin-guide/configuring.md).
+
+> **Note:** If you notice a lot of errors related to downloading archives, you should ensure all archives in your configuration are up-to-date. You can review the [example Mainnet configuration](https://github.com/stellar/packages/blob/master/docs/examples/pubnet-validator-full/stellar-core.cfg) to see how you might use up-to-date Tier 1 validators for their history archives.
+
+### Configuring to Publish Data to an Archive[](#configuring-to-publish-data-to-an-archive "Direct link to Configuring to Publish Data to an Archive")
+
+Archive sections can also be configured with `put` and `mkdir` commands to cause the instance to publish to that archive (for nodes configured as [full validators](/docs/validators.md)).
+
+The very first time you want to use your archive, *before starting your node*, you need to initialize it with:
+
+```
+stellar-core new-hist <historyarchive>
+```
+
+> **Note:** In a secure, production, environment Stellar Core should be run as a dedicated user. Debian packages will ensure the `stellar` user exists on the system. For this reason you may need to run commands as the stellar user, for example:
+
+```
+sudo -u stellar stellar-core --conf /etc/stellar/stellar-core.cfg new-hist <historyarchive>
+```
+
+More detailed guidance and strategies for publishing history archives can be found in the [publishing history archives](/docs/validators/admin-guide/publishing-history-archives.md) page. Please check there for more information.
+
+IMPORTANT:
+
+* Make sure that you configure both `put` and `mkdir` if `put` doesn't automatically create sub-folders.
+* Writing to the same archive from different nodes is not supported and will result in undefined behavior, *potentially data loss*.
+* Do not run `new-hist` on an existing archive unless you want to erase it.
+
+## Other Preparation[](#other-preparation "Direct link to Other Preparation")
+
+In addition, you should ensure that your operating environment is also functional. This means you will have considered and prepared the following.
+
+* [Logging](/docs/validators/admin-guide/logging.md) and log rotation
+* [Monitoring](/docs/validators/admin-guide/monitoring.md) and alerting infrastructure

@@ -1,0 +1,27 @@
+# Logging
+
+Stellar Core sends logs to standard error and `stellar-core.log` by default, configurable with the `LOG_FILE_PATH` field.
+
+Log messages are classified by progressive *priority levels*: `TRACE`, `DEBUG`, `INFO`, `WARNING`, `ERROR`, and `FATAL`. The logging system only emits those messages at or above its configured logging level.
+
+Log messages at different priority levels can be color-coded on standard error by setting `LOG_COLOR=true` in the config file. By default they are not color-coded.
+
+The log level can be controlled by configuration, the `--ll` command-line flag, or adjusted dynamically by administrative (HTTP) commands. To do so, run:
+
+```
+sudo -u stellar stellar-core --conf /etc/stellar/stellar-core.cfg http-command "ll?level=debug"
+```
+
+while your node is running.
+
+Log levels can also be adjusted on a partition-by-partition basis through the administrative interface. For example the history system can be set to `DEBUG`-level logging by running:
+
+```
+sudo -u stellar stellar-core --conf /etc/stellar/stellar-core.cfg http-command "ll?level=debug&partition=history"
+```
+
+Against a running system.
+
+> **Info:** Please take a look at the [HTTP Commands reference](https://github.com/stellar/stellar-core/blob/master/docs/software/commands.md#http-commands) for more information about the partitions available for use in the `ll` command.
+
+The default log level is `INFO`, which is moderately verbose and should emit progress messages every few seconds under normal operation.

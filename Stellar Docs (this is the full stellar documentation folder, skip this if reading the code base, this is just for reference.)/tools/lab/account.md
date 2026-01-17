@@ -1,0 +1,31 @@
+# Account
+
+## [Create Account Keypair](https://lab.stellar.org/account/create)[](#create-account-keypair "Direct link to create-account-keypair")
+
+![Lab: Create Account](/assets/images/lab-account-create-f84c71de565ca961383f93d6dea434de.png)
+
+From the Labs main navigation, click on the "Account" link to expand sub-navigation. Click the "Create Account Keypair" page. Here you can generate a [keypair](/docs/learn/glossary.md) by following these steps:
+
+1. Make sure you are on the Stellar network for which you want to generate the keypair. You can see the current network in the upper right corner of the page. Click on dropdown to change the network (dont forget to provide any necessary information). We will use Testnet network for this example.
+2. Click the "Generate keypair" button to create public and secret keys for an account. Save them someplace safe, even if they are used only for testing.
+
+> **Warning:** Anyone with the accounts secret key has full access and control over the account. Keep the secret key safe.
+
+3. An account is active only once it is funded. You can use Friendbot to fund it on Testnet and Futurenet networks only. Click on the "Fund account with Friendbot" button to add 10,000 XLM to the account. When the operation completes, a message will be displayed at the bottom.
+
+> **Info:** The Friendbot can be used for new account or accounts with balance under a starting balance of 10,000 XLM. Click the "Fund account with Friendbot" button again to see what happens. Its the Lab, so feel free to experiment (as long as you are on Testnet or Futurenet network)!
+
+4. Optionally, to save the generated keypair, click the "Save Keypair" button. Enter the name in the pop-up and click the "Save" button to save the keypair in the browser's local storage. Click the "Saved" link on the main menu to expand the submenu, then click on the "[Keypairs](/docs/tools/lab/saved/keypairs.md)" link to view saved keypairs. The save feature is available only on Testnet and Futurenet networks.
+
+## [Fund Account](https://lab.stellar.org/account/fund)[](#fund-account "Direct link to fund-account")
+
+![Lab: Fund Account](/assets/images/lab-account-fund-47b50ea6a7b51cfddbe02fcdc5db049a.png)
+
+If you already have a keypair you want to fund, go to the "Fund Account" page (under the "Account" item in the main menu).
+
+1. If you have generated a keypair on the "Create Account Keypair" page, you can use its public key by clicking the "Fill in the generated key" button. The button will be disabled if there is no keypair.
+2. You can always manually input a public key.
+3. Once you enter the public key, click the "Get lumens" button to fund the account with 10,000 XLM on the Testnet or Futurenet network.
+4. You will see a response message once the operation is completed.
+
+> **Info:** You can also create an account using a Stellar SDK. Follow a guide [here](/docs/build/guides/transactions/create-account.md).

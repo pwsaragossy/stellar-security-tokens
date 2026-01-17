@@ -1,0 +1,70 @@
+# Contract SDKs
+
+Contract SDKs are used to build smart contracts that will be deployed to the Stellar network.
+
+> **Note:** For Client and XDR SDKs, visit this [page](/docs/tools/sdks/client-sdks.md).
+
+All SDKs are open-source; file a GitHub issue or pull request in the specific SDK repository if you have questions or suggestions.
+
+Each SDK has its own source code and documentation. Learn how to use a specific SDK by referring to the documentation.
+
+## Soroban Rust SDK[](#soroban-rust-sdk "Direct link to Soroban Rust SDK")
+
+[Rust SDK](https://github.com/stellar/rs-soroban-sdk) | [Docs](https://docs.rs/soroban-sdk)
+
+**The Rust SDK is maintained by SDF.**
+
+The `soroban-sdk` Rust crate contains the Soroban Rust SDK for building smart contracts for Stellar.
+
+Report issues and share feedback about the `soroban-sdk` [here](https://github.com/stellar/rs-soroban-sdk/issues/new/choose).
+
+**Add `soroban-sdk` as a dependency** by using [crates.io](https://crates.io/crates/soroban-sdk) to find the version of the most recent SDK release.
+
+Add the following sections to the `Cargo.toml` to import the `soroban-sdk` and replace `$VERSION` with the released version.
+
+```
+[dependencies]  
+soroban-sdk = $VERSION  
+  
+[dev_dependencies]  
+soroban-sdk = { version = $VERSION, features = ["testutils"] }
+```
+
+## Solidity SDK[](#solidity-sdk "Direct link to Solidity SDK")
+
+[Hyperledger Solang compiler](https://github.com/hyperledger-solang/solang) | [Docs](https://solang.readthedocs.io/en/v0.3.4/)
+
+**The Solang compiler is maintained by the Hyperledger community.**
+
+Solang is an llvm-based compiler for Solidity that can target multiple blockchains, including Stellar.
+
+The supported Solidity examples can be found within the [Solang repository](https://github.com/hyperledger-solang/solang/tree/main/examples/soroban).
+
+You can report issues and add requests for features to the Solang repository [here](https://github.com/hyperledger-solang/solang/issues/new/choose).
+
+Solang compiler also provides a Web IDE that you can use to compile, deploy and interact with Solidity contracts on Soroban. You can access the Web IDE [here](https://solang.io/).
+
+## AssemblyScript SDK[](#assemblyscript-sdk "Direct link to AssemblyScript SDK")
+
+[AssemblyScript SDK](https://github.com/Soneso/as-soroban-sdk)
+
+**The AssemblyScript SDK is maintained by dedicated community developers.**
+
+The `as-soroban-sdk` is an open source SDK that supports writing programs for the Soroban smart contract platform by using the AssemblyScript programming language.
+
+The AssemblyScript Soroban SDK is maintained by dedicated community developer, Soneso. Report issues and share feedback [here](https://github.com/Soneso/as-soroban-sdk/issues/new).
+
+## OpenZeppelin Contract and Extension Crates[](#openzeppelin-contract-and-extension-crates "Direct link to OpenZeppelin Contract and Extension Crates")
+
+OpenZeppelin Contracts are published in four crates:
+
+* Stellar Macros: <https://crates.io/crates/stellar-macros>
+* Stellar Access Control: <https://crates.io/crates/stellar-access>
+* Stellar Contract Utilities: <https://crates.io/crates/stellar-contract-utils>
+* Stellar Tokens: <https://crates.io/crates/stellar-tokens>
+
+Refer to the [OpenZeppelin for Stellar Contracts](/docs/tools/openzeppelin-contracts.md) page for additional information.
+
+## Stellar Axelar Std Derive Rust Crate[](#stellar-axelar-std-derive-rust-crate "Direct link to Stellar Axelar Std Derive Rust Crate")
+
+Axelar has created a Rust crate with useful macros for Stellar smart contract development. Please see Rust Crate [`stellar_axelar_std_derive`](https://axelarnetwork.github.io/axelar-amplifier-stellar/stellar_axelar_std_derive/index.html) for Attribute Macros and Derive Macros, and additional information.

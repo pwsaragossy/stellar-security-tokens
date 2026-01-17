@@ -1,0 +1,109 @@
+# Scaffold Stellar
+
+**Scaffold Stellar** is a developer toolkit for building decentralized applications (dApps) and smart contracts on the Stellar blockchain. It helps you go from idea to working full-stack dApp faster  by providing CLI tools, reusable contract templates, a smart contract registry, and a modern frontend.
+
+Visit the [Scaffold Stellar](https://scaffoldstellar.org) homepage for guides, docs, and more.
+
+## Prerequisites[](#prerequisites "Direct link to Prerequisites")
+
+Before you begin, make sure you have the following installed:
+
+| Tool | Description | Install Link |
+| --- | --- | --- |
+| [Rust & Cargo](https://www.rust-lang.org/tools/install) | For writing and compiling smart contracts | `curl https://sh.rustup.rs -sSf | sh` |
+| [Node.js & npm](https://nodejs.org/) | For frontend development | Download from official site |
+| [Stellar CLI](https://github.com/stellar/stellar-cli) | For building, deploying, and interacting with smart contracts | [`Link for the repo`](https://github.com/stellar/stellar-cli) |
+
+## Getting Started[](#getting-started "Direct link to Getting Started")
+
+### Installation[](#installation "Direct link to Installation")
+
+Install the required CLI tools:
+
+```
+# Install stellar-scaffold CLI  
+cargo install --locked stellar-scaffold-cli  
+  
+# Install registry CLI (to easily deploy your contract to the registry)  
+cargo install --locked stellar-registry-cli
+```
+
+For a faster install, use cargo-binstall
+
+Instead of building from source, you can speed up the installation by getting the binary directly using [cargo-binstall](https://github.com/cargo-bins/cargo-binstall). This is especially useful in CI environments.
+
+```
+# Install cargo-binstall (see other install methods in their README linked above)  
+cargo install cargo-binstall  
+  
+# Install the binaries  
+cargo binstall stellar-scaffold-cli stellar-registry-cli
+```
+
+### Creating a New Project[](#creating-a-new-project "Direct link to Creating a New Project")
+
+1. Initialize a new project:
+
+```
+stellar scaffold init my-project  
+cd my-project
+```
+
+This will create the project scaffold in the directory you specified with a few sample contracts. Or you can start from the [OpenZeppelin Wizard](/docs/tools/openzeppelin-contracts.md) to customize your contract and start a Scaffold Stellar project from there.
+
+2. Start the app:
+
+```
+npm start
+```
+
+You'll have a running dApp integrated with the starter contracts, ready to start building!
+
+Explore the `environments.toml` file to customize your development environment(s) that's set by your `.env` file.
+
+## Project Structure[](#project-structure "Direct link to Project Structure")
+
+When you run `stellar scaffold init`, it creates a full-stack project structure with example contracts and a modern frontend:
+
+```
+my-project/  
+ contracts/          # Rust smart contracts (compiled to WASM)  
+ packages/           # Auto-generated TypeScript contract clients  
+ src/                # React frontend code  
+    components/     # Reusable UI components  
+    contracts/      # Contract interaction logic  
+    App.tsx         # Main app component  
+    main.tsx        # Entry point  
+ environments.toml   # Configuration per environment (dev/test/prod)  
+ .env                # Local environment variables  
+ package.json        # Frontend packages  
+ target/             # Build outputs
+```
+
+This template provides a ready-to-use frontend application with example smart contracts and their TypeScript clients. The frontend is set up with `Vite`, `React`, and includes basic components for interacting with the contracts.
+
+## Features[](#features "Direct link to Features")
+
+* **CLI Plugins for Stellar**
+
+  + `stellar scaffold init`: Initialize new Stellar smart contract projects
+  + `stellar scaffold upgrade`: Transform existing Stellar contract workspaces into Scaffold projects
+  + `stellar scaffold build`: Build contracts and generate TypeScript clients
+  + `stellar scaffold watch`: Development mode with hot reloading
+  + `stellar registry`: Publish, deploy, and manage smart contracts
+* **Environment Management**
+
+  + Environment-specific builds (development, testing, staging, production)
+  + Seamless integration with both local and deployed contracts
+  + Network configuration via `environments.toml`
+  + Support for multiple deployment environments
+* **Smart Contract Registry**
+
+  + On-chain publishing platform for Wasm binaries
+  + Version management and contract naming
+  + Contract verification and dependency management
+  + Secure deployment workflow for testnet and mainnet
+
+### More Resources[](#more-resources "Direct link to More Resources")
+
+For more information, check out the [project on GitHub](https://github.com/theahaco/scaffold-stellar)!
