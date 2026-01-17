@@ -16,6 +16,7 @@ import offerRoutes from './routes/offerRoutes.js';
 import webauthnRoutes from './routes/webauthnRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
 import companyPaymentRoutes from './routes/companyPaymentRoutes.js';
+import adminTransactionRoutes from './routes/adminTransactionRoutes.js';
 import { swaggerUi, swaggerSpec } from './config/swagger.js';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -137,6 +138,10 @@ app.use('/api', apiLimiter, offerRoutes);
 // Notification routes
 import notificationRoutes from './routes/notificationRoutes.js';
 app.use('/api/notifications', apiLimiter, notificationRoutes);
+
+// Admin multisig transaction routes (strict limiting for security)
+app.use('/api/admin/transactions', strictLimiter, adminTransactionRoutes);
+
 
 app.use(notFoundHandler);
 app.use(errorHandler);

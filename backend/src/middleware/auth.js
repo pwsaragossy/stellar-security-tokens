@@ -141,3 +141,20 @@ export const requireCompanyUser = (req, res, next) => {
     });
   });
 };
+
+/**
+ * Middleware to require platform admin role
+ * Verifies that the authenticated user is a platform_admin
+ */
+export const authenticatePlatformAdmin = (req, res, next) => {
+  authenticateToken(req, res, () => {
+    if (req.user.role === 'platform_admin' || req.user.userType === 'platform_admin') {
+      return next();
+    }
+
+    return res.status(403).json({
+      success: false,
+      error: 'Access denied. Platform admin role required.',
+    });
+  });
+};

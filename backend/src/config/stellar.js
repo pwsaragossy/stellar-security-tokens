@@ -120,6 +120,77 @@ export const buildTransaction = async (sourceKeypair, operations, options = {}) 
 };
 
 /**
+ * Build transaction WITHOUT signing (for multisig/Ledger mode)
+ * Returns XDR string for later signing by hardware wallet
+ * @param {string} sourcePublicKey - Public key of source account
+ * @param {Operation[]} operations - Array of Stellar operations
+ * @param {Object} [options] - Additional options
+ * @param {string|Memo} [options.memo] - Memo for the transaction
+ * @param {number} [options.timeout=300] - Timeout in seconds (5 min default for multisig)
+ * @returns {Promise<string>} Unsigned transaction XDR
+ */
+export const buildUnsignedTransaction = async (sourcePublicKey, operations, options = {}) => {
+  const sourceAccount = await stellarServer.loadAccount(sourcePublicKey);
+
+  const transaction = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase: getNetworkPassphrase(),
+  });
+
+  operations.forEach(op => transaction.addOperation(op));
+
+  // Add memo if provided
+  if (options.memo) {
+    if (typeof options.memo === 'string') {
+      transaction.addMemo(Memo.text(options.memo));
+    } else if (options.memo instanceof Memo) {
+      transaction.addMemo(options.memo);
+    }
+  }
+
+  // Longer timeout for multisig (collecting signatures takes time)
+  transaction.setTimeout(options.timeout || 300);
+
+  return transaction.build().toXDR();
+};
+
+/**
+ * Submit a pre-signed transaction to the Stellar network
+ * Used for transactions signed externally (Ledger, multisig)
+ * @param {string} signedXDR - Signed transaction XDR
+ * @returns {Promise<Object>} Submission result
+ */
+export const submitSignedTransaction = async (signedXDR) => {
+  const transaction = TransactionBuilder.fromXDR(signedXDR, getNetworkPassphrase());
+
+  try {
+    const result = await stellarServer.submitTransaction(transaction);
+    return {
+      success: true,
+      hash: result.hash,
+      ledger: result.ledger,
+      result: result,
+    };
+  } catch (error) {
+    console.error('Transaction submission error:', error);
+    if (error.response && error.response.data) {
+      const errorResult = error.response.data.extras?.result_codes;
+      const errorMessage = error.response.data.detail || error.message;
+      const parsedCodes = parseStellarErrorCodes(errorResult);
+
+      return {
+        success: false,
+        error: errorMessage,
+        userFriendlyError: parsedCodes.userFriendlyMessage,
+        resultCodes: errorResult,
+      };
+    }
+    throw error;
+  }
+};
+
+
+/**
  * Parse Stellar error codes into user-friendly messages
  * @param {Object} codes - Result codes from Stellar error response
  * @returns {Object} Parsed error information
@@ -254,6 +325,8 @@ export default {
   getOperationsKeypair,
   createAsset,
   buildTransaction,
+  buildUnsignedTransaction,
+  submitSignedTransaction,
   signAndSubmitTransaction,
 };
 
