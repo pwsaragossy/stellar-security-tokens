@@ -42,14 +42,11 @@ api.interceptors.response.use(
 
       // Determine redirect path based on current location
       const path = window.location.pathname;
-      if (path.startsWith('/investor')) {
-        window.location.href = '/investor/login';
-      } else if (path.startsWith('/company')) {
-        window.location.href = '/company/login';
-      } else if (path.startsWith('/admin')) {
+      if (path.startsWith('/admin')) {
         window.location.href = '/admin/login';
       } else {
-        window.location.href = '/';
+        // Both investor and company paths redirect to main login
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);

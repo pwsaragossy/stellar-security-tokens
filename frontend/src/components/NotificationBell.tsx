@@ -25,14 +25,23 @@ export function NotificationBell() {
     const navigate = useNavigate();
 
     const fetchNotifications = async () => {
+        // Don't fetch if user is not authenticated
+        const token = localStorage.getItem('token');
+        if (!token) {
+            return;
+        }
+
         try {
-            // Assuming api.get handles auth headers automatically
             const response = await api.get('/notifications?limit=10');
             if (response.data.success) {
                 setNotifications(response.data.data.notifications);
                 setUnreadCount(response.data.data.unreadCount);
             }
         } catch (error) {
+            // Silently ignore auth errors - user may have just logged out
+            if (error instanceof Error && error.message === 'Unauthorized') {
+                return;
+            }
             console.error('Failed to fetch notifications', error);
         }
     };

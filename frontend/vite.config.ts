@@ -19,6 +19,20 @@ export default defineConfig({
       }
     }
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Split vendor libraries into separate chunks for better caching
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-charts': ['recharts'],
+          'vendor-ui': ['lucide-react', 'date-fns'],
+        },
+      },
+    },
+    // Increase chunk size warning limit to 600KB
+    chunkSizeWarningLimit: 600,
+  },
   test: {
     globals: true,
     environment: 'jsdom',

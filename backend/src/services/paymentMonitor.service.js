@@ -171,6 +171,23 @@ export class PaymentMonitor {
     // Detectar erro 429 (rate limit) do Horizon
     const isRateLimitError = this.isRateLimitError(error);
 
+    // Detectar erro 404 (account not found) - comum em testnet quando treasury não existe
+    const isAccountNotFound = this.isAccountNotFoundError(error);
+
+    if (isAccountNotFound) {
+      console.warn(`[PaymentMonitor] Treasury account not found on Stellar network (404). The account may not be funded yet.`);
+      console.warn(`[PaymentMonitor] Payment monitoring disabled until treasury account exists. Will retry in 5 minutes.`);
+      this.isRunning = false;
+      // Schedule a retry in 5 minutes to check if account was created
+      setTimeout(() => {
+        console.log('[PaymentMonitor] Retrying to start after account not found...');
+        this.isRunning = true;
+        this.reconnectAttempts = 0;
+        this.startStream();
+      }, 5 * 60 * 1000);
+      return;
+    }
+
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error(`[PaymentMonitor] Max reconnection attempts (${this.maxReconnectAttempts}) reached. Stopping.`);
       this.isRunning = false;
@@ -218,6 +235,35 @@ export class PaymentMonitor {
 
     // Check for Horizon-specific error format
     if (error.type === 'error' && error.status === 429) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if error is an account not found (404) error from Horizon
+   * This typically happens when the treasury account hasn't been funded on testnet
+   * @param {Error} error - Error object
+   * @returns {boolean} True if account not found error
+   * @private
+   */
+  isAccountNotFoundError(error) {
+    if (!error) return false;
+
+    // Check status code directly
+    if (error.status === 404 || error.response?.status === 404) {
+      return true;
+    }
+
+    // Check error message
+    const message = error.message || error.toString() || '';
+    if (message.includes('404') || message.toLowerCase().includes('not found')) {
+      return true;
+    }
+
+    // Check for Horizon-specific error format
+    if (error.type === 'error' && error.status === 404) {
       return true;
     }
 

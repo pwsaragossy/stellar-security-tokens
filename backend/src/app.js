@@ -134,8 +134,6 @@ app.use('/api/wallets', apiLimiter, walletRoutes);
 
 app.use('/api', apiLimiter, offerRoutes);
 
-app.use('/api', apiLimiter, offerRoutes);
-
 // Notification routes
 import notificationRoutes from './routes/notificationRoutes.js';
 app.use('/api/notifications', apiLimiter, notificationRoutes);
