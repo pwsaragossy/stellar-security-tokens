@@ -113,3 +113,33 @@ npm run multisig:setup    # Configure production signers
 ### Error Monitoring
 - [ ] **SENTRY_DSN** configured in backend `.env`
 - [ ] **VITE_SENTRY_DSN** configured in frontend `.env`
+
+### Stellar-Specific Security (CRITICAL)
+
+> ⚠️ **Read the full audit:** [STELLAR_SECURITY_AUDIT.md](./STELLAR_SECURITY_AUDIT.md)
+
+- [ ] **Verify issuer flags** - Run `npm run multisig:inspect` to confirm:
+  - `auth_required: true`
+  - `auth_revocable: true`
+  - `auth_clawback_enabled: true`
+  
+- [ ] **Lock issuer account AFTER initial token minting**
+  ```bash
+  # WARNING: This is IRREVERSIBLE! Only do after all tokens are minted.
+  npm run multisig:setup -- -a issuer --lock
+  ```
+  This sets `masterWeight: 0` preventing any further minting.
+
+- [ ] **Remove secret keys from production .env** when using multisig mode
+  - Only public keys needed when `KEY_MANAGEMENT_MODE=multisig`
+  - All transactions require Ledger signatures
+
+### Post-Launch Verification
+```bash
+# Verify account configuration on Stellar Explorer
+# https://stellarchain.io/accounts/GXXXX (your issuer public key)
+# Should show: 
+#   - Flags: auth_required, auth_revocable, auth_clawback_enabled
+#   - Master Weight: 0 (if locked)
+#   - Signers: Your Ledger public keys
+```
