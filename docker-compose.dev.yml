@@ -1,27 +1,34 @@
-# Docker Compose para desenvolvimento
-# Este arquivo sobrescreve configurações do docker-compose.yml para desenvolvimento
+# Docker Compose for Development
+# This file overrides settings from docker-compose.yml for local development
 #
-# Como usar:
-#   docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
-#   ou
-#   docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 #
-# Para parar:
-#   docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
+# To stop:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+#
+# Features enabled in dev mode:
+#   - NODE_ENV=development
+#   - Hot-reload via volume mounts (optional, commented out)
+#   - More verbose logging
 
 services:
   backend:
     environment:
-      # Habilitar rotas de desenvolvimento
-      ENABLE_DEV_ROUTES: 'true'
-      # Ambiente de desenvolvimento
+      # Development environment
       NODE_ENV: development
-    # Removendo volume temporariamente para evitar conflito com schema.prisma
+      # Enable more verbose logging
+      LOG_LEVEL: debug
+    # Enable hot-reload by mounting source code
+    # Uncomment these volumes for live code changes:
     # volumes:
-    #   - ./backend:/app/backend
+    #   - ./backend/src:/app/backend/src
+    #   - ./backend/prisma:/app/backend/prisma
 
   frontend:
     environment:
       NODE_ENV: development
-    # Se quiser hot-reload do frontend também, pode adicionar volumes aqui
-
+    # For frontend hot-reload, you may want to run `npm run dev` locally instead
+    # volumes:
+    #   - ./frontend/src:/app/frontend/src

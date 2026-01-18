@@ -5,16 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { passkeyClient } from '@/lib/passkey';
-import { Building2, User, Fingerprint, Terminal } from 'lucide-react';
-import { api } from '@/lib/api';
+import { Building2, User, Fingerprint } from 'lucide-react';
 import { authStorage } from '@/utils/authStorage';
 
 export function Login() {
     const [userType, setUserType] = useState<'investor' | 'company'>('investor');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    const [devEmail, setDevEmail] = useState('');
-    const [devLoading, setDevLoading] = useState(false);
     const navigate = useNavigate();
 
     const handleLogin = async () => {
@@ -48,44 +45,7 @@ export function Login() {
         }
     };
 
-    // Dev-only login bypass
-    const handleDevLogin = async () => {
-        if (!devEmail.trim()) {
-            setError('Please enter an email');
-            return;
-        }
 
-        setDevLoading(true);
-        setError('');
-
-        try {
-            const endpoint = userType === 'investor'
-                ? '/api/auth/dev-login/investor'
-                : '/api/auth/dev-login/company';
-
-            const response = await api.post(endpoint, { email: devEmail.trim() });
-
-            if (response.data.success) {
-                // Save Session with explicit user type for multi-session support
-                const actualUserType = response.data.data.userType === 'company' ? 'company' : 'investor';
-                authStorage.setToken(response.data.data.token, actualUserType);
-                authStorage.setUser(response.data.data.user, actualUserType);
-
-                console.log('[DEV] Login successful:', response.data.data.user.email);
-
-                if (response.data.data.userType === 'company') {
-                    navigate('/company/dashboard');
-                } else {
-                    navigate('/dashboard');
-                }
-            }
-        } catch (err: any) {
-            console.error('[DEV] Login error:', err);
-            setError(err.response?.data?.error || err.message || 'Login failed');
-        } finally {
-            setDevLoading(false);
-        }
-    };
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
@@ -131,31 +91,7 @@ export function Login() {
                             </p>
                         </div>
 
-                        {/* DEV MODE: Login bypass for testing */}
-                        {import.meta.env.DEV && (
-                            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-3">
-                                <div className="flex items-center gap-2 text-amber-400 text-sm font-medium">
-                                    <Terminal className="w-4 h-4" />
-                                    Dev Mode Login
-                                </div>
-                                <input
-                                    type="email"
-                                    placeholder={userType === 'investor' ? 'investor@example.com' : 'company@example.com'}
-                                    value={devEmail}
-                                    onChange={(e) => setDevEmail(e.target.value)}
-                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-                                    onKeyDown={(e) => e.key === 'Enter' && handleDevLogin()}
-                                />
-                                <Button
-                                    onClick={handleDevLogin}
-                                    variant="outline"
-                                    className="w-full border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
-                                    disabled={devLoading}
-                                >
-                                    {devLoading ? 'Logging in...' : `Dev Login as ${userType === 'investor' ? 'Investor' : 'Company'}`}
-                                </Button>
-                            </div>
-                        )}
+
                     </CardContent>
 
                     {/* Registration CTA */}
