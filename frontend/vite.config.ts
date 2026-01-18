@@ -21,31 +21,15 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      // Mark Ledger packages as external - they're optional and loaded at runtime
-      external: [
-        '@ledgerhq/hw-transport-webusb',
-        '@ledgerhq/hw-app-str',
-      ],
       output: {
-        // Handle external modules that may not be available
-        globals: {
-          '@ledgerhq/hw-transport-webusb': 'LedgerTransportWebUSB',
-          '@ledgerhq/hw-app-str': 'LedgerStellarApp',
-        },
         manualChunks: {
           // Split vendor libraries into separate chunks for better caching
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-charts': ['recharts'],
           'vendor-ui': ['lucide-react', 'date-fns'],
+          // Bundle Ledger packages together for optional loading
+          'vendor-ledger': ['@ledgerhq/hw-transport-webusb', '@ledgerhq/hw-app-str'],
         },
-      },
-      onwarn(warning, warn) {
-        // Ignore warnings about Ledger external modules
-        if (warning.code === 'UNRESOLVED_IMPORT' &&
-          (warning.exporter?.includes('@ledgerhq/'))) {
-          return;
-        }
-        warn(warning);
       },
     },
     // Increase chunk size warning limit to 600KB

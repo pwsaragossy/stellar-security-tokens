@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, User, Mail, Check, Pencil, Save, X } from 'lucide-react';
 import { api } from '@/lib/api';
+import { authStorage } from '@/utils/authStorage';
 
 export function Settings() {
     const [user, setUser] = useState<any>(null);
@@ -22,15 +23,17 @@ export function Settings() {
     useEffect(() => {
         async function fetchSettings() {
             try {
-                const userStr = localStorage.getItem('user');
-                let storedUser = JSON.parse(userStr || '{}');
+                const storedUser = authStorage.getUser<any>('investor') || {};
 
                 if (storedUser.id) {
                     try {
                         const userResponse = await api.get(`/investors/${storedUser.id}`);
                         const freshUser = userResponse.data || userResponse;
-                        storedUser = { ...storedUser, ...freshUser };
-                        localStorage.setItem('user', JSON.stringify(storedUser));
+                        const updatedUser = { ...storedUser, ...freshUser };
+                        authStorage.setUser(updatedUser, 'investor');
+                        setUser(updatedUser);
+                        setEditForm({ name: updatedUser.name || '', document: updatedUser.document || '' });
+                        return;
                     } catch (err) {
                         console.log('Could not fetch fresh user data, using cached');
                     }
@@ -79,7 +82,7 @@ export function Settings() {
             const updatedUser = response.data || response;
             const newUser = { ...user, ...updatedUser };
             setUser(newUser);
-            localStorage.setItem('user', JSON.stringify(newUser));
+            authStorage.setUser(newUser, 'investor');
 
             setSaveMessage({ type: 'success', text: 'Profile updated successfully!' });
             setIsEditing(false);

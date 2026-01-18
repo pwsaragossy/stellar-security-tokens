@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, ArrowDownLeft, ArrowUpRight, Clock, Receipt } from 'lucide-react';
 import { api } from '@/lib/api';
+import { authStorage } from '@/utils/authStorage';
 
 interface Transaction {
     id: number;
@@ -21,10 +22,8 @@ export function Transactions() {
     useEffect(() => {
         async function fetchTransactions() {
             try {
-                const userStr = localStorage.getItem('user');
-                if (!userStr) throw new Error('User not found');
-
-                const user = JSON.parse(userStr);
+                const user = authStorage.getUser<{ id: number }>('investor');
+                if (!user?.id) throw new Error('User not found');
                 const response = await api.get(`/investors/${user.id}/payments?limit=50`);
 
                 const data = response.data || response;
@@ -101,8 +100,8 @@ export function Transactions() {
                                 >
                                     <div className="flex items-center gap-4">
                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type.includes('Payment') || tx.type.includes('Interest')
-                                                ? 'bg-[hsl(160_60%_40%/0.15)]'
-                                                : 'bg-[hsl(217_91%_60%/0.15)]'
+                                            ? 'bg-[hsl(160_60%_40%/0.15)]'
+                                            : 'bg-[hsl(217_91%_60%/0.15)]'
                                             }`}>
                                             {tx.type.includes('Payment') || tx.type.includes('Interest') ? (
                                                 <ArrowDownLeft className="w-5 h-5 text-[hsl(160_60%_40%)]" />

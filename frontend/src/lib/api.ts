@@ -1,3 +1,4 @@
+import { authStorage } from '@/utils/authStorage';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -9,8 +10,20 @@ export class ApiClient {
   }
 
   private getAuthHeader(): Record<string, string> {
-    const token = localStorage.getItem('token');
+    // Use path-aware authStorage for multi-session support
+    const token = authStorage.getToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  private handleUnauthorized(): void {
+    // Clear auth for current user type only (preserve other sessions)
+    authStorage.clear();
+    const path = window.location.pathname;
+    if (path.startsWith('/admin')) {
+      window.location.href = '/admin/login';
+    } else {
+      window.location.href = '/login';
+    }
   }
 
   async get(endpoint: string) {
@@ -22,11 +35,7 @@ export class ApiClient {
     });
 
     if (response.status === 401 || response.status === 403) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('userType');
-      localStorage.removeItem('admin');
-      window.location.href = '/login';
+      this.handleUnauthorized();
       throw new Error('Unauthorized');
     }
 
@@ -54,11 +63,7 @@ export class ApiClient {
     });
 
     if (response.status === 401 || response.status === 403) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('userType');
-      localStorage.removeItem('admin');
-      window.location.href = '/login';
+      this.handleUnauthorized();
       throw new Error('Unauthorized');
     }
 
@@ -85,11 +90,7 @@ export class ApiClient {
     });
 
     if (response.status === 401 || response.status === 403) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('userType');
-      localStorage.removeItem('admin');
-      window.location.href = '/login';
+      this.handleUnauthorized();
       throw new Error('Unauthorized');
     }
 

@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+import api from './client';
 
 export interface WalletStatus {
     name: string;
@@ -31,18 +29,15 @@ export interface MultiSigTransaction {
 
 export const walletsApi = {
     getWalletStatuses: async () => {
-        const token = localStorage.getItem('token');
-        return axios.get<WalletStatus[]>(`${API_URL}/wallets`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await api.get<WalletStatus[]>('/wallets');
+        return response;
     },
 
     getTransactionProposals: async (status?: string) => {
-        const token = localStorage.getItem('token');
-        return axios.get<MultiSigTransaction[]>(`${API_URL}/wallets/transactions`, {
-            params: { status },
-            headers: { Authorization: `Bearer ${token}` }
+        const response = await api.get<MultiSigTransaction[]>('/wallets/transactions', {
+            params: { status }
         });
+        return response;
     },
 
     createTransactionProposal: async (data: {
@@ -52,16 +47,12 @@ export const walletsApi = {
         assetCode?: string;
         description: string;
     }) => {
-        const token = localStorage.getItem('token');
-        return axios.post(`${API_URL}/wallets/transactions`, data, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await api.post('/wallets/transactions', data);
+        return response;
     },
 
     submitTransaction: async (id: number, signedXDR: string) => {
-        const token = localStorage.getItem('token');
-        return axios.post(`${API_URL}/wallets/transactions/${id}/submit`, { signedXDR }, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await api.post(`/wallets/transactions/${id}/submit`, { signedXDR });
+        return response;
     }
 };

@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { authStorage } from '@/utils/authStorage';
 
 export interface PortfolioData {
     totalBalance: number;
@@ -27,10 +28,8 @@ export function usePortfolio() {
     useEffect(() => {
         async function fetchPortfolio() {
             try {
-                const userStr = localStorage.getItem('user');
-                if (!userStr) throw new Error('User not found');
-
-                const user = JSON.parse(userStr);
+                const user = authStorage.getUser<{ id: number }>('investor');
+                if (!user?.id) throw new Error('User not found');
 
                 // Fetch metrics
                 const metricsResponse = await api.get(`/investors/${user.id}/metrics`);

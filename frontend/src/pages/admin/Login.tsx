@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Shield, Loader2, Fingerprint } from 'lucide-react';
 import { platformAdminsApi } from '@/api/platformAdmins';
 import api from '@/api/client';
+import { authStorage } from '@/utils/authStorage';
 
 export function AdminLogin() {
     const navigate = useNavigate();
@@ -24,8 +25,9 @@ export function AdminLogin() {
         try {
             const response = await platformAdminsApi.login(email, password);
             if (response.success && response.data) {
-                localStorage.setItem('token', response.data.token);
-                localStorage.setItem('admin', JSON.stringify(response.data.admin));
+                // Use authStorage with explicit 'admin' type for multi-session support
+                authStorage.setToken(response.data.token, 'admin');
+                authStorage.setUser(response.data.admin, 'admin');
                 navigate('/admin/dashboard');
             } else {
                 setError('Login failed. Please check your credentials.');
@@ -66,8 +68,9 @@ export function AdminLogin() {
             });
 
             if (loginResponse.data.success && loginResponse.data.data) {
-                localStorage.setItem('token', loginResponse.data.data.token);
-                localStorage.setItem('admin', JSON.stringify(loginResponse.data.data.admin));
+                // Use authStorage with explicit 'admin' type for multi-session support
+                authStorage.setToken(loginResponse.data.data.token, 'admin');
+                authStorage.setUser(loginResponse.data.data.admin, 'admin');
                 navigate('/admin/dashboard');
             } else {
                 throw new Error(loginResponse.data.error || 'Passkey authentication failed');

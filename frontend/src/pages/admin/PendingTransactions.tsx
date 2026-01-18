@@ -9,11 +9,16 @@ import {
     FileSignature,
     Send,
     ChevronRight,
-    Usb
+    Usb,
+    Wallet
 } from 'lucide-react';
 import { LedgerConnect } from '../../components/admin/LedgerConnect';
+import { FreighterConnect } from '../../components/admin/FreighterConnect';
 import { useLedger } from '../../hooks/useLedger';
+import { useFreighter } from '../../hooks/useFreighter';
 import { api } from '../../lib/api';
+
+type SigningMethod = 'ledger' | 'freighter';
 
 interface PendingTransaction {
     id: number;
@@ -77,8 +82,14 @@ export function PendingTransactions() {
     const [error, setError] = useState<string | null>(null);
     const [selectedTx, setSelectedTx] = useState<PendingTransaction | null>(null);
     const [actionLoading, setActionLoading] = useState<number | null>(null);
+    const [signingMethod, setSigningMethod] = useState<SigningMethod>('ledger');
 
-    const { device, signTransaction, isSigning } = useLedger();
+    const { device: ledgerDevice, signTransaction: ledgerSign, isSigning: isLedgerSigning } = useLedger();
+    const { device: freighterDevice, signTransaction: freighterSign, isSigning: isFreighterSigning } = useFreighter();
+
+    // Determine active device and signing function based on selected method
+    const activeDevice = signingMethod === 'ledger' ? ledgerDevice : freighterDevice;
+    const isSigning = signingMethod === 'ledger' ? isLedgerSigning : isFreighterSigning;
 
     const fetchTransactions = useCallback(async () => {
         try {
@@ -100,8 +111,10 @@ export function PendingTransactions() {
     }, [fetchTransactions]);
 
     const handleSign = async (tx: PendingTransaction) => {
-        if (!device) {
-            setError('Please connect your Ledger device first');
+        if (!activeDevice) {
+            setError(signingMethod === 'ledger'
+                ? 'Please connect your Ledger device first'
+                : 'Please enter your secret key first');
             return;
         }
 
@@ -115,8 +128,9 @@ export function PendingTransactions() {
 
             const { xdr, networkPassphrase } = xdrResponse.data;
 
-            // Sign with Ledger
-            const signResult = await signTransaction(xdr, networkPassphrase);
+            // Sign with selected method
+            const signFn = signingMethod === 'ledger' ? ledgerSign : freighterSign;
+            const signResult = await signFn(xdr, networkPassphrase);
             if (!signResult) {
                 throw new Error('Signing was cancelled or failed');
             }
@@ -302,10 +316,38 @@ export function PendingTransactions() {
 
                 {/* Sidebar */}
                 <div className="space-y-4">
-                    {/* Ledger Connection */}
-                    <LedgerConnect
-                        onConnected={() => fetchTransactions()}
-                    />
+                    {/* Signing Method Tabs */}
+                    <div className="bg-zinc-900/50 border border-zinc-700/50 rounded-lg p-1">
+                        <div className="flex">
+                            <button
+                                onClick={() => setSigningMethod('ledger')}
+                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors ${signingMethod === 'ledger'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-zinc-400 hover:text-white'
+                                    }`}
+                            >
+                                <Usb className="w-4 h-4" />
+                                Ledger
+                            </button>
+                            <button
+                                onClick={() => setSigningMethod('freighter')}
+                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors ${signingMethod === 'freighter'
+                                    ? 'bg-purple-600 text-white'
+                                    : 'text-zinc-400 hover:text-white'
+                                    }`}
+                            >
+                                <Wallet className="w-4 h-4" />
+                                Freighter
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Connection Component (based on selected method) */}
+                    {signingMethod === 'ledger' ? (
+                        <LedgerConnect onConnected={() => fetchTransactions()} />
+                    ) : (
+                        <FreighterConnect onConnected={() => fetchTransactions()} />
+                    )}
 
                     {/* Selected Transaction Details */}
                     {selectedTx && (
@@ -368,15 +410,19 @@ export function PendingTransactions() {
                                 ) : (
                                     <button
                                         onClick={() => handleSign(selectedTx)}
-                                        disabled={!device || actionLoading === selectedTx.id || isSigning}
-                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-600 text-white rounded-lg transition-colors"
+                                        disabled={!activeDevice || actionLoading === selectedTx.id || isSigning}
+                                        className={`w-full flex items-center justify-center gap-2 px-4 py-2 ${signingMethod === 'ledger' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-purple-600 hover:bg-purple-500'} disabled:bg-zinc-600 text-white rounded-lg transition-colors`}
                                     >
                                         {actionLoading === selectedTx.id || isSigning ? (
                                             <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
+                                        ) : signingMethod === 'ledger' ? (
                                             <Usb className="w-4 h-4" />
+                                        ) : (
+                                            <Wallet className="w-4 h-4" />
                                         )}
-                                        {device ? 'Sign with Ledger' : 'Connect Ledger First'}
+                                        {activeDevice
+                                            ? (signingMethod === 'ledger' ? 'Sign with Ledger' : 'Sign with Freighter')
+                                            : (signingMethod === 'ledger' ? 'Connect Ledger First' : 'Connect Freighter First')}
                                     </button>
                                 )}
 

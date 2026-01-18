@@ -7,6 +7,7 @@ import { MobileSidebar, MenuToggleButton, useMobileSidebar } from '@/components/
 import { useEffect, useState } from 'react';
 import { companiesApi } from '@/api/companies';
 import type { Company } from '@/types';
+import { authStorage } from '@/utils/authStorage';
 
 export function CompanyLayout() {
     const navigate = useNavigate();
@@ -16,8 +17,7 @@ export function CompanyLayout() {
 
     // Auth guard - redirect to login if no token
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) {
+        if (!authStorage.isAuthenticated('company')) {
             navigate('/login', { replace: true });
         }
     }, [navigate]);
@@ -53,9 +53,8 @@ export function CompanyLayout() {
     }, []);
 
     const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('userType');
+        // Only clear company session, preserve other user sessions
+        authStorage.clear('company');
         navigate('/login');
     };
 

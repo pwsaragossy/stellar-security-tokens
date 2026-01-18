@@ -129,11 +129,17 @@ export class PasskeyWalletService {
 
       tx.sign(issuerKeypair);
 
-      // 3. Send via Launchtube (Sponsoring)
-      const result = await server.send(tx);
-
-      if (!result || !result.hash) {
-        throw new Error('Failed to submit transaction via PasskeyServer');
+      // 3. Send via Launchtube (Sponsoring) with fallback
+      let result;
+      try {
+        result = await server.send(tx);
+        if (!result || !result.hash) {
+          throw new Error('No hash returned from Launchtube');
+        }
+      } catch (launchtubeError) {
+        console.log('[PasskeyWalletService] Launchtube failed during deploySmartWallet:', launchtubeError.message);
+        console.log('[PasskeyWalletService] Attempting self-sponsorship fallback for deployment...');
+        result = await this.submitWithSponsorship(tx.toXDR());
       }
 
       // 4. Calculate Contract ID
@@ -236,11 +242,17 @@ export class PasskeyWalletService {
 
       tx.sign(issuerKeypair);
 
-      // 3. Send via Launchtube (Sponsoring)
-      const result = await server.send(tx);
-
-      if (!result || !result.hash) {
-        throw new Error('Failed to submit transaction via PasskeyServer');
+      // 3. Send via Launchtube (Sponsoring) with fallback
+      let result;
+      try {
+        result = await server.send(tx);
+        if (!result || !result.hash) {
+          throw new Error('No hash returned from Launchtube');
+        }
+      } catch (launchtubeError) {
+        console.log('[PasskeyWalletService] Launchtube failed during createSmartWallet:', launchtubeError.message);
+        console.log('[PasskeyWalletService] Attempting self-sponsorship fallback for creation...');
+        result = await this.submitWithSponsorship(tx.toXDR());
       }
 
       // 4. Calculate Contract ID
@@ -425,20 +437,32 @@ export class PasskeyWalletService {
    * Submit a transaction with backend sponsorship (Fee Bump)
    * This is used as a fallback for Launchtube
    * 
-   * @param {string} xdr - The signed transaction XDR
+   * @param {string|Transaction} txOrXdr - The signed transaction (XDR string or Transaction object)
    * @returns {Promise<Object>} Transaction result
    */
-  static async submitWithSponsorship(xdrString) {
+  static async submitWithSponsorship(txOrXdr) {
     try {
       const { stellarServer, getNetworkPassphrase, getOperationsKeypair } = await import('../config/stellar.js');
       const networkPassphrase = getNetworkPassphrase();
       const operationsKeypair = getOperationsKeypair();
 
-      // 1. Parse the inner transaction
-      const innerTx = TransactionBuilder.fromXDR(xdrString, networkPassphrase);
+      // 1. Parse the inner transaction (handle both XDR string and Transaction object)
+      let innerTx;
+      if (typeof txOrXdr === 'string') {
+        innerTx = TransactionBuilder.fromXDR(txOrXdr, networkPassphrase);
+      } else if (txOrXdr && typeof txOrXdr.toXDR === 'function') {
+        // It's already a Transaction object
+        innerTx = txOrXdr;
+      } else {
+        throw new Error('Invalid transaction format: expected XDR string or Transaction object');
+      }
 
       // 2. Wrap in Fee Bump Transaction
       // Note: We use a slightly higher fee or double the base fee to ensure priority
+      console.log('[PasskeyWalletService] Inner TX source:', innerTx.source);
+      console.log('[PasskeyWalletService] Inner TX operations count:', innerTx.operations?.length);
+      console.log('[PasskeyWalletService] Operations keypair:', operationsKeypair.publicKey());
+
       const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
         operationsKeypair.publicKey(),
         (parseInt(BASE_FEE) * 2).toString(),
@@ -451,6 +475,7 @@ export class PasskeyWalletService {
 
       // 4. Submit directly to Horizon
       console.log('[PasskeyWalletService] Submitting self-sponsored fee bump to Horizon...');
+      console.log('[PasskeyWalletService] Fee bump source:', feeBumpTx.feeSource);
       const result = await stellarServer.submitTransaction(feeBumpTx);
 
       return {
@@ -467,6 +492,7 @@ export class PasskeyWalletService {
         throw new Error(`Sponsorship failed: ${detail} Codes: ${JSON.stringify(resultCodes)}`);
       }
       throw new Error(`Sponsorship failed: ${error.message}`);
+
     }
   }
 

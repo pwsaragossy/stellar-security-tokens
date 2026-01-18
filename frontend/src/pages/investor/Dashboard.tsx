@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, DollarSign, Activity, Loader2, Clock, Briefcase } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { authStorage } from "@/utils/authStorage";
 
 export function InvestorDashboard() {
     const { data, activity, loading, error } = usePortfolio();
@@ -24,7 +25,7 @@ export function InvestorDashboard() {
         );
     }
 
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const user = authStorage.getUser<{ kycStatus?: string }>('investor') || {};
 
     return (
         <div className="space-y-8">

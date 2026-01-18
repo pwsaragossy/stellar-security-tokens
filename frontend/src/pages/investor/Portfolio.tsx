@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, Wallet, TrendingUp, PieChart, Briefcase } from 'lucide-react';
 import { api } from '@/lib/api';
+import { authStorage } from '@/utils/authStorage';
 
 interface Investment {
     assetCode: string;
@@ -21,10 +22,8 @@ export function Portfolio() {
     useEffect(() => {
         async function fetchPortfolio() {
             try {
-                const userStr = localStorage.getItem('user');
-                if (!userStr) throw new Error('User not found');
-
-                const user = JSON.parse(userStr);
+                const user = authStorage.getUser<{ id: number }>('investor');
+                if (!user?.id) throw new Error('User not found');
                 const response = await api.get(`/investors/${user.id}/portfolio`);
 
                 const data = response.data || response;

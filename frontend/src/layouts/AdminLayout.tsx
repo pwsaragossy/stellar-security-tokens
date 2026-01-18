@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/NotificationBell';
 import { MobileSidebar, MenuToggleButton, useMobileSidebar } from '@/components/MobileSidebar';
 import { useEffect } from 'react';
+import { authStorage } from '@/utils/authStorage';
 
 export function AdminLayout() {
     const navigate = useNavigate();
@@ -13,8 +14,7 @@ export function AdminLayout() {
 
     // Auth guard - redirect to admin login if no token
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) {
+        if (!authStorage.isAuthenticated('admin')) {
             navigate('/admin/login', { replace: true });
         }
     }, [navigate]);
@@ -41,10 +41,8 @@ export function AdminLayout() {
     const isActive = (path: string) => location.pathname === path;
 
     const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('admin');
-        localStorage.removeItem('user');
-        localStorage.removeItem('userType');
+        // Only clear admin session, preserve other user sessions
+        authStorage.clear('admin');
         navigate('/admin/login');
     };
 

@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
 import { NotificationBell } from '@/components/NotificationBell';
 import { MobileSidebar, MenuToggleButton, useMobileSidebar } from '@/components/MobileSidebar';
+import { authStorage } from '@/utils/authStorage';
 
 export function DashboardLayout() {
     const navigate = useNavigate();
@@ -13,8 +14,7 @@ export function DashboardLayout() {
 
     // Auth guard - redirect to login if no token
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) {
+        if (!authStorage.isAuthenticated('investor')) {
             navigate('/login', { replace: true });
         }
     }, [navigate]);
@@ -36,10 +36,8 @@ export function DashboardLayout() {
     const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
     const handleLogout = () => {
-        // Clear all session data
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('userType');
+        // Only clear investor session, preserve other user sessions
+        authStorage.clear('investor');
         navigate('/login');
     };
 

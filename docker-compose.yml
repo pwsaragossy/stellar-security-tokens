@@ -95,8 +95,8 @@ services:
       XLM_SAC_CONTRACT_ID: ${XLM_SAC_CONTRACT_ID:-CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC}
       USDC_SAC_CONTRACT_ID: ${USDC_SAC_CONTRACT_ID:-CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA}
 
-      # Dev Routes (habilitar rotas de desenvolvimento)
-      ENABLE_DEV_ROUTES: ${ENABLE_DEV_ROUTES:-false}
+      # Dev Routes (enable development login bypass)
+      ENABLE_DEV_ROUTES: ${ENABLE_DEV_ROUTES:-true}
     ports:
       - "3000:3000"
     depends_on:

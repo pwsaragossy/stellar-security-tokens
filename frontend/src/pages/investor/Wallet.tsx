@@ -17,6 +17,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import { DepositDialog } from '@/components/wallet/DepositDialog';
+import { authStorage } from '@/utils/authStorage';
 
 interface WalletStatus {
     hasWallet: boolean;
@@ -57,7 +58,7 @@ export function Wallet() {
     const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
     // Cache key for localStorage
-    const getCacheKey = (userId: number | string) => `wallet_balance_cache_${userId}`;
+    const getCacheKey = (userId: number | string) => `investor_wallet_cache_${userId}`;
 
     // Get cached balance from localStorage
     const getCachedBalance = (userId: number | string) => {
@@ -87,8 +88,7 @@ export function Wallet() {
     useEffect(() => {
         async function fetchWalletStatus() {
             try {
-                const userStr = localStorage.getItem('user');
-                const storedUser = JSON.parse(userStr || '{}');
+                const storedUser = authStorage.getUser<any>('investor') || {};
                 setUser(storedUser);
 
                 if (storedUser.id) {

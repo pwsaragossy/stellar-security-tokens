@@ -20,6 +20,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import { DepositDialog } from '@/components/wallet/DepositDialog';
+import { authStorage } from '@/utils/authStorage';
 
 interface WalletStatus {
     hasWallet: boolean;
@@ -67,8 +68,7 @@ export function Wallet() {
     useEffect(() => {
         async function fetchWalletStatus() {
             try {
-                const userStr = localStorage.getItem('user');
-                const storedUser = JSON.parse(userStr || '{}');
+                const storedUser = authStorage.getUser<any>('company') || {};
                 setUser(storedUser);
 
                 const userId = storedUser.companyId || storedUser.id;

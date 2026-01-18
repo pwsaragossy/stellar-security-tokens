@@ -31,6 +31,7 @@ export const WalletController = {
                         exists: true,
                     };
                 } catch (error) {
+                    console.error(`[WalletController] Error loading ${w.name} account:`, error.message);
                     if (error.response && error.response.status === 404) {
                         return {
                             name: w.name,
@@ -39,11 +40,13 @@ export const WalletController = {
                             balances: [],
                         };
                     }
+                    // Log the full error for non-404 errors
+                    console.error(`[WalletController] ${w.name} full error:`, error);
                     return {
                         name: w.name,
                         publicKey: w.keypair.publicKey(),
                         exists: false,
-                        error: 'Error loading account',
+                        error: `Error loading account: ${error.message}`,
                     };
                 }
             }));
@@ -184,7 +187,8 @@ export const WalletController = {
                     description,
                     initiatorId: adminId,
                     status: 'pending',
-                    network: process.env.STELLAR_NETWORK || 'testnet',
+                    networkPassphrase: process.env.STELLAR_NETWORK === 'public' ? 'Public Global Stellar Network ; September 2015' : 'Test SDF Network ; September 2015',
+                    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
                 }
             });
 
@@ -209,7 +213,7 @@ export const WalletController = {
                 where,
                 take: parseInt(limit),
                 skip: parseInt(offset),
-                include: { initiator: { select: { name: true, email: true } } },
+                include: { initiator: true },
                 orderBy: { createdAt: 'desc' },
             });
 
@@ -255,9 +259,10 @@ export const WalletController = {
                     where: { id: parseInt(id) },
                     data: {
                         status: 'executed',
-                        hash: result.hash,
-                        xdr: signedXDR, // Updated with signatures
-                        thresholdMet: true
+                        txHash: result.hash,
+                        ledger: result.ledger,
+                        xdr: signedXDR,
+                        submittedAt: new Date()
                     }
                 });
 

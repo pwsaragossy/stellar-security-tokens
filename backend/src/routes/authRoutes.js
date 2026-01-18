@@ -232,4 +232,182 @@ router.post('/passkey-login/discover', [
   }
 });
 
+// ============================================================================
+// DEV ONLY: Login bypass for testing (no passkey required)
+// Enabled when: NODE_ENV !== 'production' OR ENABLE_DEV_ROUTES === 'true'
+// ============================================================================
+const enableDevRoutes = process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEV_ROUTES === 'true';
+if (enableDevRoutes) {
+  /**
+   * @swagger
+   * /api/auth/dev-login/investor:
+   *   post:
+   *     summary: "[DEV ONLY] Login as investor without passkey"
+   *     tags: [Auth]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - email
+   *             properties:
+   *               email:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Login successful
+   *       404:
+   *         description: Investor not found
+   */
+  router.post('/dev-login/investor', async (req, res) => {
+    try {
+      const { email } = req.body;
+      console.log('[DEV AUTH] Investor login attempt for:', email);
+
+      const investor = await prisma.investor.findUnique({
+        where: { email },
+        select: { id: true, name: true, email: true, kycStatus: true, stellarContractId: true }
+      });
+
+      if (!investor) {
+        return res.status(404).json({ success: false, error: 'Investor not found' });
+      }
+
+      const token = generateToken({
+        userId: investor.id,
+        email: investor.email,
+        userType: 'investor',
+        role: 'investor',
+      });
+
+      console.log('[DEV AUTH] Investor login successful for:', email);
+
+      res.json({
+        success: true,
+        data: {
+          token,
+          user: {
+            id: investor.id,
+            name: investor.name,
+            email: investor.email,
+            kycStatus: investor.kycStatus,
+            stellarContractId: investor.stellarContractId,
+          },
+          userType: 'investor',
+        },
+      });
+    } catch (error) {
+      console.error('[DEV AUTH] Investor login error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/auth/dev-login/company:
+   *   post:
+   *     summary: "[DEV ONLY] Login as company user without passkey"
+   *     tags: [Auth]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - email
+   *             properties:
+   *               email:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Login successful
+   *       404:
+   *         description: Company/User not found
+   */
+  router.post('/dev-login/company', async (req, res) => {
+    try {
+      const { email } = req.body;
+      console.log('[DEV AUTH] Company login attempt for:', email);
+
+      // Try CompanyUser first
+      let user = await prisma.companyUser.findFirst({
+        where: { email },
+        select: { id: true, name: true, email: true, role: true, companyId: true, stellarContractId: true }
+      });
+
+      if (user) {
+        const token = generateToken({
+          userId: user.id,
+          email: user.email,
+          userType: 'company',
+          role: user.role,
+          companyId: user.companyId,
+        });
+
+        console.log('[DEV AUTH] CompanyUser login successful for:', email);
+
+        return res.json({
+          success: true,
+          data: {
+            token,
+            user: {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              companyId: user.companyId,
+              stellarContractId: user.stellarContractId,
+            },
+            userType: 'company',
+          },
+        });
+      }
+
+      // Try Company directly (owner login)
+      const company = await prisma.company.findUnique({
+        where: { email },
+        select: { id: true, name: true, email: true, status: true, stellarContractId: true }
+      });
+
+      if (company) {
+        const token = generateToken({
+          userId: company.id,
+          email: company.email,
+          userType: 'company',
+          role: 'admin',
+          companyId: company.id,
+        });
+
+        console.log('[DEV AUTH] Company (owner) login successful for:', email);
+
+        return res.json({
+          success: true,
+          data: {
+            token,
+            user: {
+              id: company.id,
+              name: company.name,
+              email: company.email,
+              role: 'admin',
+              companyId: company.id,
+              stellarContractId: company.stellarContractId,
+            },
+            userType: 'company',
+          },
+        });
+      }
+
+      return res.status(404).json({ success: false, error: 'Company or user not found' });
+    } catch (error) {
+      console.error('[DEV AUTH] Company login error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  console.log('[Auth] DEV MODE: /api/auth/dev-login/* routes enabled');
+}
+
 export default router;

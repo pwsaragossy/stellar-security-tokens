@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api';
+import { authStorage } from '@/utils/authStorage';
 
 export function useInvestment() {
     const [loading, setLoading] = useState(false);
@@ -10,9 +11,8 @@ export function useInvestment() {
         setLoading(true);
         setError(null);
         try {
-            const userStr = localStorage.getItem('user');
-            if (!userStr) throw new Error("User not found");
-            const user = JSON.parse(userStr);
+            const user = authStorage.getUser<{ id: number }>('investor');
+            if (!user?.id) throw new Error('User not found');
 
             const response = await api.post('/investments/purchase', {
                 investorId: user.id,

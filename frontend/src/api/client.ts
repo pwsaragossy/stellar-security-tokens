@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios';
 import type { ApiResponse } from '@/types';
+import { authStorage } from '@/utils/authStorage';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -13,7 +14,8 @@ export const api: AxiosInstance = axios.create({
 // Request interceptor - Add token to requests and handle FormData
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    // Use path-aware authStorage for multi-session support
+    const token = authStorage.getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -35,17 +37,16 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiResponse>) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('userType');
-      localStorage.removeItem('admin');
+      // Clear auth for current user type only (preserve other sessions)
+      authStorage.clear();
 
       // Determine redirect path based on current location
       const path = window.location.pathname;
       if (path.startsWith('/admin')) {
         window.location.href = '/admin/login';
+      } else if (path.startsWith('/company')) {
+        window.location.href = '/login';
       } else {
-        // Both investor and company paths redirect to main login
         window.location.href = '/login';
       }
     }

@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { passkeyClient } from '@/lib/passkey';
 import { api } from '@/lib/api';
 import { ShieldAlert, Cloud, Smartphone, Key, Mail, ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
+import { authStorage } from '@/utils/authStorage';
 
 type Ecosystem = 'icloud' | 'google' | 'other';
 type Step = 'email' | 'code' | 'details';
@@ -201,9 +202,8 @@ export function Register() {
 
             // 3. Store token and redirect to success page
             if (response.data?.token) {
-                localStorage.setItem('token', response.data.token);
-                localStorage.setItem('user', JSON.stringify(response.data.investor));
-                localStorage.setItem('userType', 'investor');
+                authStorage.setToken(response.data.token, 'investor');
+                authStorage.setUser(response.data.investor, 'investor');
             }
 
             navigate('/registration-success');
