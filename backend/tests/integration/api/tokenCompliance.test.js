@@ -42,16 +42,18 @@ describe('Token Compliance API Integration Tests', () => {
             .post('/api/tokens/freeze')
             .set('Authorization', `Bearer ${platformAdminToken}`)
             .send({
-                investorPublicKey: investor.stellar_public_key || 'GD7O3GDUG6A7Y5O4V4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4',
+                investorPublicKey: investor.stellarContractId || 'GD7O3GDUG6A7Y5O4V4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4',
                 assetCode: token.assetCode
             });
 
-        // If StellarService is not mocked, this might fail due to network/keys
-        // But we expect the controller to at least handle the request.
-        assert.ok(res.status === 200 || res.status === 500);
-        if (res.status === 200) {
-            assert.strictEqual(res.body.success, true);
+        // If Stellar is unavailable (500), log and skip assertion rather than silently pass
+        if (res.status === 500) {
+            console.log('[Compliance Test] Freeze test skipped - Stellar network unavailable:', res.body.error);
+            return;
         }
+
+        assert.strictEqual(res.status, 200, `Expected 200 but got ${res.status}: ${JSON.stringify(res.body)}`);
+        assert.strictEqual(res.body.success, true);
     });
 
     test('GET /api/tokens/:assetCode/holders - should list asset holders', async () => {

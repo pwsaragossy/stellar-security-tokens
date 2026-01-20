@@ -53,6 +53,11 @@ const TEST_ACCOUNTS = {
         envSecretKey: 'TEST_COMPANY_SECRET_KEY',
         envPublicKey: 'TEST_COMPANY_PUBLIC_KEY',
     },
+    admin: {
+        name: 'Test Admin',
+        email: 'admin@stellar-tokens.local',
+        role: 'super_admin',
+    },
 };
 
 async function fundWithFriendbot(publicKey) {
@@ -225,6 +230,37 @@ async function setupTestCompany(secretKey, publicKey) {
     return { company, companyUser, token, keypair };
 }
 
+async function setupTestAdmin() {
+    console.log('\n🛡️  Setting up Test Admin...');
+
+    // Admin doesn't need Stellar account - just database entry
+    const admin = await prisma.platformAdmin.upsert({
+        where: { email: TEST_ACCOUNTS.admin.email },
+        update: {
+            isActive: true,
+        },
+        create: {
+            name: TEST_ACCOUNTS.admin.name,
+            email: TEST_ACCOUNTS.admin.email,
+            passwordHash: 'not-used-for-test-login',
+            role: TEST_ACCOUNTS.admin.role,
+            isActive: true,
+        },
+    });
+
+    console.log(`  ✓ Admin created/updated: ID ${admin.id}`);
+
+    // Generate JWT
+    const token = generateToken({
+        userId: admin.id,
+        email: admin.email,
+        userType: 'platform_admin',
+        role: 'platform_admin',
+    });
+
+    return { admin, token };
+}
+
 function appendToEnvFile(key, value) {
     const envPath = path.join(__dirname, '..', '..', '.env');
     const line = `${key}=${value}\n`;
@@ -278,6 +314,7 @@ async function main() {
     // Setup accounts
     const investorResult = await setupTestInvestor(investorSecret, investorPublic);
     const companyResult = await setupTestCompany(companySecret, companyPublic);
+    const adminResult = await setupTestAdmin();
 
     console.log('\n═══════════════════════════════════════════════════════════');
     console.log('                    SETUP COMPLETE');
@@ -293,6 +330,11 @@ async function main() {
     console.log(`  ID: ${companyResult.company.id}`);
     console.log(`  User ID: ${companyResult.companyUser.id}`);
     console.log(`  Stellar: ${companyPublic}`);
+    console.log('');
+    console.log(`Admin: ${adminResult.admin.email}`);
+    console.log(`  ID: ${adminResult.admin.id}`);
+    console.log(`  Role: ${adminResult.admin.role}`);
+    console.log(`  Stellar: ${companyPublic}`);
 
     if (generateTokens) {
         console.log('\n🎫 JWT Tokens (valid for 30 days):');
@@ -301,6 +343,8 @@ async function main() {
         console.log(investorResult.token);
         console.log('\nCompany Token:');
         console.log(companyResult.token);
+        console.log('\nAdmin Token:');
+        console.log(adminResult.token);
 
         // Save tokens to a file for easy access
         const tokensPath = path.join(__dirname, 'test-tokens.json');
@@ -319,6 +363,12 @@ async function main() {
                 email: companyResult.companyUser.email,
                 stellarPublicKey: companyPublic,
                 token: companyResult.token,
+            },
+            admin: {
+                id: adminResult.admin.id,
+                email: adminResult.admin.email,
+                role: adminResult.admin.role,
+                token: adminResult.token,
             },
         }, null, 2));
         console.log(`\n✓ Tokens saved to: ${tokensPath}`);
