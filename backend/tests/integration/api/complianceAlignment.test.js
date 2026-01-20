@@ -2,6 +2,7 @@ import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import request from 'supertest';
 import app from '../../../src/app.js';
+import prisma from '../../../src/config/prisma.js';
 import { setupTestDatabase, seedTestData, cleanDatabase } from '../../helpers/testDatabase.js';
 import { getAdminToken } from '../../helpers/authHelper.js';
 import { StellarService } from '../../../src/services/stellar.service.js';

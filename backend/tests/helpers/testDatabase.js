@@ -163,10 +163,34 @@ export const seedTestData = async () => {
       },
     });
 
+    // Create test company
+    const company = await prisma.company.create({
+      data: {
+        name: `Test Company ${timestamp}`,
+        email: `company-${timestamp}@example.com`,
+        cnpj: `${timestamp}`.slice(-14).padStart(14, '0'),
+        legalRepresentative: 'Test Representative',
+        status: 'approved',
+      },
+    });
+
+    // Create test company user
+    const companyUser = await prisma.companyUser.create({
+      data: {
+        companyId: company.id,
+        name: 'Test Company Admin',
+        email: `cu-${timestamp}@example.com`,
+        role: 'admin',
+        passkeyCredentialId: `test-cu-${timestamp}`,
+      },
+    });
+
     return {
       investor,
       token,
       admin,
+      company,
+      companyUser,
     };
   } catch (error) {
     console.error('Error seeding test data:', error);
