@@ -4,10 +4,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Wallet, ArrowRightLeft, PenTool, CheckCircle, Loader2, Copy, Clock, AlertCircle, ExternalLink, X, Info, Settings } from 'lucide-react';
+import { Wallet, ArrowRightLeft, PenTool, CheckCircle, Loader2, Copy, Clock, AlertCircle, ExternalLink, Info, Settings } from 'lucide-react';
 import { walletsApi } from '@/api/wallets';
 import type { WalletStatus, MultiSigTransaction } from '@/api/wallets';
 import { TokenManagementModal } from '@/components/admin/TokenManagementModal';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from "@/components/ui/dialog";
 
 interface TokenBalance {
     asset_type: string;
@@ -22,117 +29,117 @@ function WalletDetailModal({ wallet, onClose }: { wallet: WalletStatus; onClose:
     const explorerUrl = `https://stellar.expert/explorer/testnet/account/${wallet.publicKey}`;
 
     return (
-        <>
-            <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
-                <div className="bg-slate-900 border border-white/10 rounded-xl max-w-2xl w-full max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-between p-4 border-b border-white/10">
-                        <div className="flex items-center gap-3">
-                            <Wallet className="w-6 h-6 text-emerald-400" />
-                            <h3 className="text-xl font-bold text-white">{wallet.name} Wallet</h3>
-                        </div>
-                        <Button variant="ghost" size="icon" onClick={onClose}>
-                            <X className="w-5 h-5" />
-                        </Button>
+        <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-2xl bg-slate-900 border-white/10 text-white p-0 overflow-hidden flex flex-col max-h-[85vh]">
+                <DialogHeader className="p-4 border-b border-white/10 bg-slate-900 flex flex-row items-center gap-3 space-y-0">
+                    <div className="p-2 bg-emerald-500/10 rounded-lg">
+                        <Wallet className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div>
+                        <DialogTitle className="text-xl font-bold text-white">{wallet.name} Wallet Detail</DialogTitle>
+                        <DialogDescription className="text-slate-400">System account identifier and balances</DialogDescription>
+                    </div>
+                </DialogHeader>
+
+                <div className="flex-1 overflow-auto p-6 space-y-6">
+                    {/* Status */}
+                    <div className="flex items-center gap-2">
+                        <Badge variant={wallet.exists ? 'default' : 'destructive'} className={wallet.exists ? 'bg-emerald-600' : ''}>
+                            {wallet.exists ? 'Active on Network' : 'Not Created'}
+                        </Badge>
                     </div>
 
-                    <div className="p-6 space-y-6">
-                        {/* Status */}
-                        <div className="flex items-center gap-2">
-                            <Badge variant={wallet.exists ? 'default' : 'destructive'} className={wallet.exists ? 'bg-emerald-600' : ''}>
-                                {wallet.exists ? 'Active on Network' : 'Not Created'}
-                            </Badge>
+                    {/* Full Address */}
+                    <div className="space-y-2">
+                        <Label className="text-slate-400 text-xs font-bold uppercase tracking-wider">Wallet Address</Label>
+                        <div className="flex items-center gap-2 bg-black/40 p-3 rounded-lg border border-white/5">
+                            <code className="text-sm text-emerald-400/80 break-all flex-1 font-mono">{wallet.publicKey}</code>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigator.clipboard.writeText(wallet.publicKey)}>
+                                <Copy className="w-4 h-4" />
+                            </Button>
                         </div>
+                    </div>
 
-                        {/* Full Address */}
-                        <div className="space-y-2">
-                            <Label className="text-muted-foreground">Wallet Address</Label>
-                            <div className="flex items-center gap-2 bg-black/40 p-3 rounded-lg">
-                                <code className="text-sm text-white break-all flex-1">{wallet.publicKey}</code>
-                                <Button variant="ghost" size="icon" onClick={() => navigator.clipboard.writeText(wallet.publicKey)}>
-                                    <Copy className="w-4 h-4" />
-                                </Button>
-                            </div>
-                        </div>
+                    {/* Explorer Link */}
+                    <Button variant="outline" className="w-full border-white/10 hover:bg-white/5 text-white" onClick={() => window.open(explorerUrl, '_blank')}>
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        View on Stellar Expert
+                    </Button>
 
-                        {/* Explorer Link */}
-                        <Button variant="outline" className="w-full" onClick={() => window.open(explorerUrl, '_blank')}>
-                            <ExternalLink className="w-4 h-4 mr-2" />
-                            View on Stellar Expert
-                        </Button>
-
-                        {/* Balances Table - Clickable rows */}
-                        <div className="space-y-2">
-                            <Label className="text-muted-foreground">Assets (click to manage)</Label>
-                            {wallet.exists && wallet.balances.length > 0 ? (
-                                <div className="bg-black/40 rounded-lg overflow-hidden">
-                                    <table className="w-full">
-                                        <thead className="border-b border-white/10">
-                                            <tr>
-                                                <th className="text-left p-3 text-sm text-muted-foreground">Asset</th>
-                                                <th className="text-right p-3 text-sm text-muted-foreground">Balance</th>
-                                                <th className="text-right p-3 text-sm text-muted-foreground">Action</th>
+                    {/* Balances Table - Clickable rows */}
+                    <div className="space-y-3">
+                        <Label className="text-slate-400 text-xs font-bold uppercase tracking-wider">Asset Distribution</Label>
+                        {wallet.exists && wallet.balances.length > 0 ? (
+                            <div className="border border-white/10 rounded-xl overflow-hidden bg-black/20">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-white/5">
+                                        <tr>
+                                            <th className="text-left p-3 text-slate-500 font-medium tracking-tight">Asset</th>
+                                            <th className="text-right p-3 text-slate-500 font-medium tracking-tight">Balance</th>
+                                            <th className="text-right p-3 text-slate-500 font-medium tracking-tight">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {wallet.balances.map((b, i) => (
+                                            <tr
+                                                key={i}
+                                                className="cursor-pointer hover:bg-white/5 transition-colors group"
+                                                onClick={() => setSelectedToken(b)}
+                                            >
+                                                <td className="p-3">
+                                                    <span className="text-emerald-400 font-bold tracking-tight">{b.asset_code || 'XLM'}</span>
+                                                    {b.asset_issuer && (
+                                                        <span className="text-[10px] text-slate-500 ml-2 font-mono">
+                                                            {b.asset_issuer.substring(0, 8)}...
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="p-3 text-right text-white font-mono">
+                                                    {parseFloat(b.balance).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                                                </td>
+                                                <td className="p-3 text-right">
+                                                    <Button variant="ghost" size="sm" className="h-7 text-slate-500 group-hover:text-emerald-400 group-hover:bg-emerald-400/10">
+                                                        <Settings className="w-3.5 h-3.5 mr-1.5" />
+                                                        Manage
+                                                    </Button>
+                                                </td>
                                             </tr>
-                                        </thead>
-                                        <tbody>
-                                            {wallet.balances.map((b, i) => (
-                                                <tr
-                                                    key={i}
-                                                    className="border-b border-white/5 last:border-0 cursor-pointer hover:bg-white/5 transition-colors"
-                                                    onClick={() => setSelectedToken(b)}
-                                                >
-                                                    <td className="p-3">
-                                                        <span className="text-emerald-400 font-medium">{b.asset_code || 'XLM'}</span>
-                                                        {b.asset_issuer && (
-                                                            <span className="text-xs text-muted-foreground ml-2">
-                                                                {b.asset_issuer.substring(0, 8)}...
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-3 text-right text-white font-mono">
-                                                        {parseFloat(b.balance).toLocaleString(undefined, { maximumFractionDigits: 7 })}
-                                                    </td>
-                                                    <td className="p-3 text-right">
-                                                        <Button variant="ghost" size="sm">
-                                                            <Settings className="w-4 h-4 mr-1" />
-                                                            Manage
-                                                        </Button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : (
-                                <div className="bg-black/40 p-4 rounded-lg text-center text-muted-foreground">
-                                    {wallet.exists ? 'No tokens found' : 'Wallet not created on network'}
-                                </div>
-                            )}
-                        </div>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="bg-black/40 p-10 rounded-xl text-center border border-dashed border-white/10">
+                                <p className="text-sm text-slate-500 italic">
+                                    {wallet.exists ? 'No tokens found in this vault' : 'Wallet not yet registered on the Stellar ledger'}
+                                </p>
+                            </div>
+                        )}
+                    </div>
 
-                        {/* Wallet Role Description */}
-                        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                            <div className="flex gap-3">
-                                <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-                                <div className="text-sm text-blue-300">
-                                    {wallet.name === 'Treasury' && 'Holds platform revenue and operational funds. Used for interest payments to investors.'}
-                                    {wallet.name === 'Issuer' && 'The asset issuing account. Creates and manages all security tokens. Should be locked with multisig in production.'}
-                                    {wallet.name === 'Distributor' && 'Distributes tokens to investors after purchase. Holds tokens before distribution.'}
-                                </div>
+                    {/* Wallet Role Description */}
+                    <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-4">
+                        <div className="flex gap-3">
+                            <Info className="w-5 h-5 text-blue-400/60 shrink-0 mt-0.5" />
+                            <div className="text-xs text-blue-300/80 leading-relaxed italic">
+                                {wallet.name === 'Treasury' && 'Strategic vault for platform revenue and interest reserves. Primary source for automated distribution events.'}
+                                {wallet.name === 'Issuer' && 'Master account for security token minting. Operates as the legal root of trust for all smart assets. Restricted bypass recommended.'}
+                                {wallet.name === 'Distributor' && 'Intermediate staging vault for secondary market liquidity and investor onboarding batches.'}
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Token Management Modal */}
-            {selectedToken && (
-                <TokenManagementModal
-                    token={selectedToken}
-                    walletName={wallet.name}
-                    onClose={() => setSelectedToken(null)}
-                />
-            )}
-        </>
+                {/* Sub-modal: Token Management */}
+                {selectedToken && (
+                    <TokenManagementModal
+                        token={selectedToken}
+                        walletName={wallet.name}
+                        onClose={() => setSelectedToken(null)}
+                    />
+                )}
+            </DialogContent>
+        </Dialog>
     );
 }
 

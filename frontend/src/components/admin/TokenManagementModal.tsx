@@ -1,8 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from "@/components/ui/dialog";
 import {
     X,
     Search,
@@ -15,7 +21,8 @@ import {
     Copy,
     Users,
     Coins,
-    Shield
+    Shield,
+    CheckCircle2
 } from 'lucide-react';
 import api from '@/api/client';
 
@@ -41,12 +48,14 @@ interface TokenManagementModalProps {
 export function TokenManagementModal({ token, walletName, onClose }: TokenManagementModalProps) {
     const [holders, setHolders] = useState<TokenHolder[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [clawbackAmount, setClawbackAmount] = useState('');
     const [selectedHolder, setSelectedHolder] = useState<string | null>(null);
+    const [pendingAction, setPendingAction] = useState<string | null>(null); // format: "type:address"
 
     const assetCode = token.asset_code || 'XLM';
     const isNative = token.asset_type === 'native';
@@ -55,16 +64,10 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
         ? 'https://stellar.expert/explorer/testnet/asset/native'
         : `https://stellar.expert/explorer/testnet/asset/${assetCode}-${token.asset_issuer}`;
 
-    useEffect(() => {
-        if (!isNative) {
-            loadHolders();
-        } else {
-            setLoading(false);
-        }
-    }, [assetCode]);
+    const loadHolders = useCallback(async (isInitial = false) => {
+        if (isInitial) setLoading(true);
+        else setRefreshing(true);
 
-    const loadHolders = async () => {
-        setLoading(true);
         setError('');
         try {
             const response = await api.get(`/tokens/${assetCode}/holders`);
@@ -76,12 +79,19 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
             setError(err.response?.data?.error || 'Failed to load token holders');
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
-    };
+    }, [assetCode]);
+
+    useEffect(() => {
+        if (!isNative) {
+            loadHolders(true);
+        } else {
+            setLoading(false);
+        }
+    }, [isNative, loadHolders]);
 
     const handleFreeze = async (holderAddress: string) => {
-        if (!confirm(`Freeze account ${holderAddress.substring(0, 8)}... for ${assetCode}? They won't be able to transfer this token.`)) return;
-
         setActionLoading(holderAddress);
         setError('');
         setSuccess('');
@@ -91,6 +101,7 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
                 assetCode: assetCode
             });
             setSuccess(`Account frozen successfully`);
+            setPendingAction(null);
             loadHolders();
         } catch (err: any) {
             setError(err.response?.data?.error || 'Failed to freeze account');
@@ -100,8 +111,6 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
     };
 
     const handleUnfreeze = async (holderAddress: string) => {
-        if (!confirm(`Unfreeze account ${holderAddress.substring(0, 8)}... ? They will be able to transfer ${assetCode} again.`)) return;
-
         setActionLoading(holderAddress);
         setError('');
         setSuccess('');
@@ -111,6 +120,7 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
                 assetCode: assetCode
             });
             setSuccess(`Account unfrozen successfully`);
+            setPendingAction(null);
             loadHolders();
         } catch (err: any) {
             setError(err.response?.data?.error || 'Failed to unfreeze account');
@@ -125,9 +135,6 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
             return;
         }
 
-        const confirmMsg = `CLAWBACK ${amount} ${assetCode} from ${holderAddress.substring(0, 8)}...?\n\nThis will BURN the tokens permanently. This action is required for regulatory compliance and cannot be easily undone.`;
-        if (!confirm(confirmMsg)) return;
-
         setActionLoading(holderAddress);
         setError('');
         setSuccess('');
@@ -140,6 +147,7 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
             setSuccess(`Clawback of ${amount} ${assetCode} successful`);
             setClawbackAmount('');
             setSelectedHolder(null);
+            setPendingAction(null);
             loadHolders();
         } catch (err: any) {
             setError(err.response?.data?.error || 'Failed to clawback tokens');
@@ -154,245 +162,280 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
 
     const totalCirculating = holders.reduce((sum, h) => sum + parseFloat(h.balance), 0);
 
+    const getPendingType = (address: string) => {
+        if (!pendingAction || !pendingAction.includes(':')) return null;
+        const [type, addr] = pendingAction.split(':');
+        return addr === address ? type : null;
+    };
     return (
-        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4" onClick={onClose}>
-            <div
-                className="bg-slate-900 border border-white/10 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-auto"
-                onClick={(e) => e.stopPropagation()}
-            >
-                {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-white/10 sticky top-0 bg-slate-900 z-10">
+        <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-4xl bg-slate-900 border-white/10 text-white p-0 overflow-hidden flex flex-col max-h-[90vh]">
+                <DialogHeader className="p-4 border-b border-white/10 bg-slate-900 sticky top-0 z-10">
                     <div className="flex items-center gap-3">
-                        <Coins className="w-6 h-6 text-emerald-400" />
+                        <div className="p-2 bg-emerald-500/10 rounded-lg">
+                            <Coins className="w-5 h-5 text-emerald-400" />
+                        </div>
                         <div>
-                            <h3 className="text-xl font-bold text-white">{assetCode} Token Management</h3>
-                            <p className="text-sm text-muted-foreground">From {walletName} wallet</p>
+                            <DialogTitle className="text-xl font-bold text-white">
+                                {assetCode} Management
+                            </DialogTitle>
+                            <DialogDescription className="text-slate-400">
+                                Controlling assets from {walletName} wallet
+                            </DialogDescription>
                         </div>
                     </div>
-                    <Button variant="ghost" size="icon" onClick={onClose}>
-                        <X className="w-5 h-5" />
-                    </Button>
-                </div>
+                </DialogHeader>
 
-                <div className="p-6 space-y-6">
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-white/10">
                     {/* Alerts */}
                     {error && (
-                        <div className="p-3 bg-red-500/10 text-red-400 rounded-lg border border-red-500/20 text-sm flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4" />
-                            {error}
+                        <div className="p-3 bg-red-500/10 text-red-400 rounded-lg border border-red-500/20 text-sm flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            <span className="flex-1">{error}</span>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setError('')}>
+                                <X className="w-3 h-3" />
+                            </Button>
                         </div>
                     )}
                     {success && (
-                        <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 text-sm flex items-center gap-2">
-                            <Shield className="w-4 h-4" />
-                            {success}
+                        <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 text-sm flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                            <CheckCircle2 className="w-4 h-4 shrink-0" />
+                            <span className="flex-1">{success}</span>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSuccess('')}>
+                                <X className="w-3 h-3" />
+                            </Button>
                         </div>
                     )}
 
-                    {/* Token Info */}
+                    {/* Token Info Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-black/40 p-4 rounded-lg">
-                            <div className="text-sm text-muted-foreground">Asset Code</div>
-                            <div className="text-lg font-bold text-emerald-400">{assetCode}</div>
-                        </div>
-                        <div className="bg-black/40 p-4 rounded-lg">
-                            <div className="text-sm text-muted-foreground">This Wallet</div>
-                            <div className="text-lg font-bold text-white">
-                                {parseFloat(token.balance).toLocaleString(undefined, { maximumFractionDigits: 7 })}
+                        {[
+                            { label: 'Asset Code', value: assetCode, color: 'text-emerald-400' },
+                            { label: 'In Wallet', value: parseFloat(token.balance).toLocaleString(undefined, { maximumFractionDigits: 4 }) },
+                            { label: 'Holders', value: isNative ? 'N/A' : (refreshing ? '...' : holders.length), icon: <Users className="w-3 h-3" /> },
+                            { label: 'Circulating', value: isNative ? 'N/A' : (refreshing ? '...' : totalCirculating.toLocaleString(undefined, { maximumFractionDigits: 0 })) },
+                        ].map((item, i) => (
+                            <div key={i} className="bg-white/5 border border-white/10 p-4 rounded-xl">
+                                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">{item.label}</div>
+                                <div className={`text-lg font-bold flex items-center gap-1.5 ${item.color || 'text-white'}`}>
+                                    {item.icon}
+                                    {item.value}
+                                </div>
                             </div>
-                        </div>
-                        <div className="bg-black/40 p-4 rounded-lg">
-                            <div className="text-sm text-muted-foreground">Total Holders</div>
-                            <div className="text-lg font-bold text-white flex items-center gap-2">
-                                <Users className="w-4 h-4" />
-                                {isNative ? 'N/A' : holders.length}
-                            </div>
-                        </div>
-                        <div className="bg-black/40 p-4 rounded-lg">
-                            <div className="text-sm text-muted-foreground">Circulating</div>
-                            <div className="text-lg font-bold text-white">
-                                {isNative ? 'N/A' : totalCirculating.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                            </div>
-                        </div>
+                        ))}
                     </div>
 
-                    {/* Issuer Info */}
-                    {!isNative && token.asset_issuer && (
-                        <div className="bg-black/40 p-4 rounded-lg space-y-2">
-                            <Label className="text-muted-foreground">Issuer Address</Label>
-                            <div className="flex items-center gap-2">
-                                <code className="text-sm text-white break-all flex-1">{token.asset_issuer}</code>
-                                <Button variant="ghost" size="icon" onClick={() => navigator.clipboard.writeText(token.asset_issuer!)}>
-                                    <Copy className="w-4 h-4" />
+                    {/* Action Bar */}
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        {!isNative && token.asset_issuer && (
+                            <div className="flex-1 bg-white/5 border border-white/10 p-3 rounded-lg flex items-center justify-between">
+                                <div className="min-w-0">
+                                    <div className="text-[10px] uppercase text-slate-500 font-bold mb-0.5">Issuer</div>
+                                    <div className="text-xs text-white truncate font-mono">{token.asset_issuer}</div>
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => navigator.clipboard.writeText(token.asset_issuer!)}>
+                                    <Copy className="w-3.5 h-3.5" />
                                 </Button>
                             </div>
-                        </div>
-                    )}
+                        )}
+                        <Button variant="secondary" className="bg-white/5 border-white/10 hover:bg-white/10 text-white" onClick={() => window.open(explorerUrl, '_blank')}>
+                            <ExternalLink className="w-4 h-4 mr-2" />
+                            Stellar Expert
+                        </Button>
+                    </div>
 
-                    {/* Explorer Link */}
-                    <Button variant="outline" className="w-full" onClick={() => window.open(explorerUrl, '_blank')}>
-                        <ExternalLink className="w-4 h-4 mr-2" />
-                        View on Stellar Expert
-                    </Button>
-
-                    {/* Holders Section - Only for non-native assets */}
+                    {/* Holders Section */}
                     {!isNative && (
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h4 className="text-lg font-semibold text-white flex items-center gap-2">
-                                    <Users className="w-5 h-5" />
-                                    Token Holders
+                            <div className="flex items-center justify-between gap-4">
+                                <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2 shrink-0">
+                                    <Users className="w-4 h-4" />
+                                    Holders Directory
+                                    {refreshing && <Loader2 className="w-3 h-3 animate-spin" />}
                                 </h4>
-                                <div className="relative">
-                                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                <div className="relative flex-1 max-w-sm">
+                                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                                     <Input
-                                        placeholder="Search by address..."
+                                        placeholder="Filter by address..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="pl-9 w-64"
+                                        className="pl-9 bg-white/5 border-white/10 h-9"
                                     />
                                 </div>
                             </div>
 
-                            {loading ? (
-                                <div className="flex items-center justify-center py-12">
-                                    <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
-                                </div>
-                            ) : filteredHolders.length > 0 ? (
-                                <div className="bg-black/40 rounded-lg overflow-hidden">
-                                    <table className="w-full">
-                                        <thead className="border-b border-white/10">
-                                            <tr>
-                                                <th className="text-left p-3 text-sm text-muted-foreground">Account</th>
-                                                <th className="text-right p-3 text-sm text-muted-foreground">Balance</th>
-                                                <th className="text-center p-3 text-sm text-muted-foreground">Status</th>
-                                                <th className="text-right p-3 text-sm text-muted-foreground">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {filteredHolders.map((holder, i) => (
-                                                <tr key={i} className="border-b border-white/5 last:border-0">
-                                                    <td className="p-3">
-                                                        <code className="text-sm text-white">
-                                                            {holder.publicKey.substring(0, 8)}...{holder.publicKey.substring(48)}
-                                                        </code>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-6 w-6 ml-1"
-                                                            onClick={() => navigator.clipboard.writeText(holder.publicKey)}
-                                                        >
-                                                            <Copy className="w-3 h-3" />
-                                                        </Button>
-                                                    </td>
-                                                    <td className="p-3 text-right text-white font-mono">
-                                                        {parseFloat(holder.balance).toLocaleString(undefined, { maximumFractionDigits: 7 })}
-                                                    </td>
-                                                    <td className="p-3 text-center">
-                                                        {holder.authorized ? (
-                                                            <Badge className="bg-emerald-600">Authorized</Badge>
-                                                        ) : (
-                                                            <Badge variant="destructive">Frozen</Badge>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-3 text-right">
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            {holder.authorized ? (
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => handleFreeze(holder.publicKey)}
-                                                                    disabled={actionLoading === holder.publicKey}
-                                                                >
-                                                                    {actionLoading === holder.publicKey ? (
-                                                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                                                    ) : (
-                                                                        <Snowflake className="w-3 h-3 mr-1" />
-                                                                    )}
-                                                                    Freeze
-                                                                </Button>
-                                                            ) : (
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => handleUnfreeze(holder.publicKey)}
-                                                                    disabled={actionLoading === holder.publicKey}
-                                                                >
-                                                                    {actionLoading === holder.publicKey ? (
-                                                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                                                    ) : (
-                                                                        <Sun className="w-3 h-3 mr-1" />
-                                                                    )}
-                                                                    Unfreeze
-                                                                </Button>
-                                                            )}
+                            <div className="relative border border-white/10 rounded-xl overflow-hidden bg-white/5">
+                                {loading ? (
+                                    <div className="flex flex-col items-center justify-center py-20 gap-3">
+                                        <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+                                        <p className="text-sm text-slate-500">Scanning ledger...</p>
+                                    </div>
+                                ) : filteredHolders.length > 0 ? (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="border-b border-white/10 bg-white/5">
+                                                    <th className="text-left p-4 text-slate-400 font-medium">Account</th>
+                                                    <th className="text-right p-4 text-slate-400 font-medium">Balance</th>
+                                                    <th className="text-center p-4 text-slate-400 font-medium">Status</th>
+                                                    <th className="text-right p-4 text-slate-400 font-medium">Control Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/5">
+                                                {filteredHolders.map((holder, i) => {
+                                                    const pendingType = getPendingType(holder.publicKey);
 
-                                                            {selectedHolder === holder.publicKey ? (
-                                                                <div className="flex items-center gap-1">
-                                                                    <Input
-                                                                        type="number"
-                                                                        placeholder="Amount"
-                                                                        value={clawbackAmount}
-                                                                        onChange={(e) => setClawbackAmount(e.target.value)}
-                                                                        className="w-24 h-8"
-                                                                    />
-                                                                    <Button
-                                                                        variant="destructive"
-                                                                        size="sm"
-                                                                        onClick={() => handleClawback(holder.publicKey, clawbackAmount)}
-                                                                        disabled={actionLoading === holder.publicKey}
-                                                                    >
-                                                                        {actionLoading === holder.publicKey ? (
-                                                                            <Loader2 className="w-3 h-3 animate-spin" />
-                                                                        ) : (
-                                                                            <Flame className="w-3 h-3" />
-                                                                        )}
-                                                                    </Button>
+                                                    return (
+                                                        <tr key={i} className="hover:bg-white/[0.02] transition-colors group">
+                                                            <td className="p-4">
+                                                                <div className="flex items-center gap-2">
+                                                                    <code className="text-emerald-400/80 font-mono">
+                                                                        {holder.publicKey.substring(0, 8)}...{holder.publicKey.substring(48)}
+                                                                    </code>
                                                                     <Button
                                                                         variant="ghost"
-                                                                        size="sm"
-                                                                        onClick={() => {
-                                                                            setSelectedHolder(null);
-                                                                            setClawbackAmount('');
-                                                                        }}
+                                                                        size="icon"
+                                                                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        onClick={() => navigator.clipboard.writeText(holder.publicKey)}
                                                                     >
-                                                                        <X className="w-3 h-3" />
+                                                                        <Copy className="w-3 h-3 text-slate-500" />
                                                                     </Button>
                                                                 </div>
-                                                            ) : (
-                                                                <Button
-                                                                    variant="destructive"
-                                                                    size="sm"
-                                                                    onClick={() => setSelectedHolder(holder.publicKey)}
-                                                                >
-                                                                    <Flame className="w-3 h-3 mr-1" />
-                                                                    Clawback
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : (
-                                <div className="text-center py-12 text-muted-foreground">
-                                    {searchQuery ? 'No holders match your search' : 'No holders found for this token'}
-                                </div>
-                            )}
+                                                            </td>
+                                                            <td className="p-4 text-right font-mono text-white">
+                                                                {parseFloat(holder.balance).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                                                            </td>
+                                                            <td className="p-4 text-center">
+                                                                {holder.authorized ? (
+                                                                    <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10">Active</Badge>
+                                                                ) : (
+                                                                    <Badge variant="destructive" className="bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/10">Frozen</Badge>
+                                                                )}
+                                                            </td>
+                                                            <td className="p-4 text-right">
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    {/* Inline Confirm UI */}
+                                                                    {pendingType ? (
+                                                                        <div className="flex items-center gap-2 bg-red-500/10 p-1 rounded-md border border-red-500/20 animate-in zoom-in-95 duration-200">
+                                                                            <span className="text-[10px] font-bold text-red-500 px-2 uppercase">Confirm {pendingType}?</span>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                className="h-7 text-xs text-white hover:bg-white/10"
+                                                                                onClick={(e) => { e.stopPropagation(); setPendingAction(null); }}
+                                                                            >Cancel</Button>
+                                                                            <Button
+                                                                                variant="destructive"
+                                                                                size="sm"
+                                                                                className="h-7 px-3 text-xs"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    if (pendingType === 'freeze') handleFreeze(holder.publicKey);
+                                                                                    else if (pendingType === 'unfreeze') handleUnfreeze(holder.publicKey);
+                                                                                    else handleClawback(holder.publicKey, clawbackAmount);
+                                                                                }}
+                                                                                disabled={actionLoading === holder.publicKey}
+                                                                            >
+                                                                                {actionLoading === holder.publicKey ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Yes'}
+                                                                            </Button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <>
+                                                                            {holder.authorized ? (
+                                                                                <Button
+                                                                                    variant="outline"
+                                                                                    size="sm"
+                                                                                    className="h-8 border-white/10 text-slate-300 hover:bg-blue-500/10 hover:text-blue-400"
+                                                                                    onClick={(e) => { e.stopPropagation(); setPendingAction(`freeze:${holder.publicKey}`); }}
+                                                                                >
+                                                                                    <Snowflake className="w-3.5 h-3.5 mr-1.5" />
+                                                                                    Freeze
+                                                                                </Button>
+                                                                            ) : (
+                                                                                <Button
+                                                                                    variant="outline"
+                                                                                    size="sm"
+                                                                                    className="h-8 border-white/10 text-slate-300 hover:bg-emerald-500/10 hover:text-emerald-400"
+                                                                                    onClick={(e) => { e.stopPropagation(); setPendingAction(`unfreeze:${holder.publicKey}`); }}
+                                                                                >
+                                                                                    <Sun className="w-3.5 h-3.5 mr-1.5" />
+                                                                                    Unfreeze
+                                                                                </Button>
+                                                                            )}
+
+                                                                            {selectedHolder === holder.publicKey ? (
+                                                                                <div className="flex items-center gap-1.5 animate-in slide-in-from-right-2">
+                                                                                    <Input
+                                                                                        type="number"
+                                                                                        placeholder="Amount"
+                                                                                        value={clawbackAmount}
+                                                                                        onChange={(e) => setClawbackAmount(e.target.value)}
+                                                                                        className="w-24 h-8 bg-black/40 border-red-500/30 text-xs"
+                                                                                    />
+                                                                                    <Button
+                                                                                        variant="destructive"
+                                                                                        size="sm"
+                                                                                        className="h-8 bg-red-600 hover:bg-red-500"
+                                                                                        onClick={(e) => { e.stopPropagation(); setPendingAction(`clawback:${holder.publicKey}`); }}
+                                                                                    >
+                                                                                        <Flame className="w-3.5 h-3.5" />
+                                                                                    </Button>
+                                                                                    <Button
+                                                                                        variant="ghost"
+                                                                                        size="icon"
+                                                                                        className="h-8 w-8"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setSelectedHolder(null);
+                                                                                            setClawbackAmount('');
+                                                                                        }}
+                                                                                    >
+                                                                                        <X className="w-4 h-4" />
+                                                                                    </Button>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="sm"
+                                                                                    className="h-8 text-slate-500 hover:text-red-400 hover:bg-red-500/10"
+                                                                                    onClick={(e) => { e.stopPropagation(); setSelectedHolder(holder.publicKey); }}
+                                                                                >
+                                                                                    <Flame className="w-3.5 h-3.5" />
+                                                                                </Button>
+                                                                            )}
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-20 text-slate-500 italic">
+                                        {searchQuery ? 'Zero results matched' : 'No history for this asset.'}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 
-                    {/* Native XLM message */}
                     {isNative && (
-                        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 text-center text-blue-300">
-                            XLM is the native Stellar asset. Token management actions (freeze, clawback) are only available for issued assets.
+                        <div className="py-12 flex flex-col items-center text-center">
+                            <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mb-4">
+                                <Shield className="w-8 h-8 text-blue-400" />
+                            </div>
+                            <h5 className="text-lg font-bold mb-2">Native Asset Protocol</h5>
+                            <p className="max-w-md text-sm text-slate-400 leading-relaxed">
+                                XLM is the decentralized backbone of Stellar. Immutable protocols prevent freezing or clawbacks on the native currency.
+                            </p>
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }
 
