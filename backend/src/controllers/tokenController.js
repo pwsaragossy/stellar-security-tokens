@@ -105,10 +105,10 @@ export const distributeTokens = async (req, res, next) => {
       });
     }
 
-    if (!investor.stellarPublicKey) {
+    if (!investor.stellarPublicKey && !investor.stellarContractId) {
       return res.status(400).json({
         success: false,
-        error: 'Investor does not have a Stellar public key configured',
+        error: 'Investor does not have a Stellar public key or wallet configured',
       });
     }
 
@@ -127,8 +127,24 @@ export const distributeTokens = async (req, res, next) => {
       });
     }
 
+    // JIT AUTHORIZATION
+    // Ensure investor is authorized before distribution
+    let targetWallet = investor.stellarPublicKey;
+    if (!targetWallet && investor.stellarContractId) {
+      targetWallet = investor.stellarContractId;
+    }
+
+    if (targetWallet) {
+      console.log(`[TokenController] JIT Authorizing ${targetWallet} for ${assetCode}...`);
+      try {
+        await StellarService.authorizeInvestor(targetWallet, assetCode);
+      } catch (authErr) {
+        console.error(`[TokenController] JIT Auth Error:`, authErr);
+      }
+    }
+
     const stellarResult = await StellarService.distributeTokens(
-      investor.stellarPublicKey,
+      targetWallet,
       amount,
       assetCode
     );

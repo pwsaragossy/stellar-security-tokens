@@ -28,6 +28,9 @@ function WalletDetailModal({ wallet, onClose }: { wallet: WalletStatus; onClose:
     const [selectedToken, setSelectedToken] = useState<TokenBalance | null>(null);
     const explorerUrl = `https://stellar.expert/explorer/testnet/account/${wallet.publicKey}`;
 
+    // Filter out zero balance tokens to hide test artifacts
+    const activeBalances = wallet.balances.filter(b => parseFloat(b.balance) > 0);
+
     return (
         <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="max-w-2xl bg-slate-900 border-white/10 text-white p-0 overflow-hidden flex flex-col max-h-[85vh]">
@@ -69,7 +72,7 @@ function WalletDetailModal({ wallet, onClose }: { wallet: WalletStatus; onClose:
                     {/* Balances Table - Clickable rows */}
                     <div className="space-y-3">
                         <Label className="text-slate-400 text-xs font-bold uppercase tracking-wider">Asset Distribution</Label>
-                        {wallet.exists && wallet.balances.length > 0 ? (
+                        {wallet.exists && activeBalances.length > 0 ? (
                             <div className="border border-white/10 rounded-xl overflow-hidden bg-black/20">
                                 <table className="w-full text-sm">
                                     <thead className="bg-white/5">
@@ -80,7 +83,7 @@ function WalletDetailModal({ wallet, onClose }: { wallet: WalletStatus; onClose:
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
-                                        {wallet.balances.map((b, i) => (
+                                        {activeBalances.map((b, i) => (
                                             <tr
                                                 key={i}
                                                 className="cursor-pointer hover:bg-white/5 transition-colors group"
@@ -269,49 +272,52 @@ export function Wallets() {
 
             {/* Wallet Overview */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {wallets.map((wallet) => (
-                    <Card
-                        key={wallet.name}
-                        className="glass-panel border-white/5 bg-white/5 cursor-pointer hover:border-emerald-500/30 transition-colors"
-                        onClick={() => setSelectedWallet(wallet)}
-                    >
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-white">{wallet.name}</CardTitle>
-                            <Wallet className="h-4 w-4 text-emerald-400" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-white mb-2">
-                                {wallet.exists ? (
-                                    wallet.balances.length > 0 ? (
-                                        <div className="space-y-1">
-                                            {wallet.balances.slice(0, 2).map((b, i) => (
-                                                <div key={i} className="text-sm">
-                                                    {parseFloat(b.balance).toLocaleString()} <span className="text-emerald-400">{b.asset_code || 'XLM'}</span>
-                                                </div>
-                                            ))}
-                                            {wallet.balances.length > 2 && (
-                                                <div className="text-xs text-muted-foreground">+{wallet.balances.length - 2} more...</div>
-                                            )}
-                                        </div>
-                                    ) : '0.00 XLM'
-                                ) : (
-                                    <span className="text-red-400 text-sm">Not Created</span>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground break-all">
-                                <span className="font-mono">{wallet.publicKey?.substring(0, 8)}...{wallet.publicKey?.substring(48)}</span>
-                                <Button variant="ghost" size="icon" className="h-4 w-4" onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigator.clipboard.writeText(wallet.publicKey);
-                                    setSuccess('Copied to clipboard');
-                                }}>
-                                    <Copy className="h-3 w-3" />
-                                </Button>
-                            </div>
-                            <div className="text-xs text-emerald-400 mt-2">Click for details →</div>
-                        </CardContent>
-                    </Card>
-                ))}
+                {wallets.map((wallet) => {
+                    const activeBalances = wallet.balances.filter(b => parseFloat(b.balance) > 0);
+                    return (
+                        <Card
+                            key={wallet.name}
+                            className="glass-panel border-white/5 bg-white/5 cursor-pointer hover:border-emerald-500/30 transition-colors"
+                            onClick={() => setSelectedWallet(wallet)}
+                        >
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium text-white">{wallet.name}</CardTitle>
+                                <Wallet className="h-4 w-4 text-emerald-400" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-white mb-2">
+                                    {wallet.exists ? (
+                                        activeBalances.length > 0 ? (
+                                            <div className="space-y-1">
+                                                {activeBalances.slice(0, 2).map((b, i) => (
+                                                    <div key={i} className="text-sm">
+                                                        {parseFloat(b.balance).toLocaleString()} <span className="text-emerald-400">{b.asset_code || 'XLM'}</span>
+                                                    </div>
+                                                ))}
+                                                {activeBalances.length > 2 && (
+                                                    <div className="text-xs text-muted-foreground">+{activeBalances.length - 2} more...</div>
+                                                )}
+                                            </div>
+                                        ) : '0.00 XLM'
+                                    ) : (
+                                        <span className="text-red-400 text-sm">Not Created</span>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground break-all">
+                                    <span className="font-mono">{wallet.publicKey?.substring(0, 8)}...{wallet.publicKey?.substring(48)}</span>
+                                    <Button variant="ghost" size="icon" className="h-4 w-4" onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigator.clipboard.writeText(wallet.publicKey);
+                                        setSuccess('Copied to clipboard');
+                                    }}>
+                                        <Copy className="h-3 w-3" />
+                                    </Button>
+                                </div>
+                                <div className="text-xs text-emerald-400 mt-2">Click for details →</div>
+                            </CardContent>
+                        </Card>
+                    )
+                })}
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">

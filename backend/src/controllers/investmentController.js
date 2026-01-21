@@ -355,8 +355,18 @@ async function processInvestmentPayment(investment, usdcPayment, req, res, next)
 
     // Distribuir tokens com memo
     const investor = await Investor.findById(investment.investorId);
+
+    // JIT AUTHORIZATION
+    let targetWallet = investor.stellarPublicKey;
+    if (!targetWallet && investor.stellarContractId) targetWallet = investor.stellarContractId;
+
+    if (targetWallet) {
+      console.log(`[InvestmentController] JIT Authorizing ${targetWallet} for ${investment.assetCode}...`);
+      await StellarService.authorizeInvestor(targetWallet, investment.assetCode);
+    }
+
     const stellarResult = await StellarService.distributeTokens(
-      investor.stellarPublicKey,
+      targetWallet,
       investment.tokenAmount.toString(),
       investment.assetCode,
       { memo }

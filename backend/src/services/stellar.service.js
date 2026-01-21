@@ -599,6 +599,67 @@ export class StellarService {
   }
 
   /**
+   * Authorize an investor to hold a specific asset (White-listing)
+   * This sets the Authorized flag on the trustline
+   * 
+   * @param {string} investorPublicKey - Investor's wallet address
+   * @param {string} assetCode - The asset code
+   * @returns {Promise<Object>} Transaction result
+   */
+  static async authorizeInvestor(investorPublicKey, assetCode) {
+    if (!assetCode) {
+      throw new Error('assetCode is required');
+    }
+    console.log(`[StellarService] Authorizing investor ${investorPublicKey} for asset ${assetCode}`);
+
+    try {
+      const issuerKeypair = getIssuerKeypair();
+      const server = stellarServer;
+      const asset = createAsset(assetCode, issuerKeypair.publicKey());
+
+      // Check if trustline exists first
+      try {
+        const account = await server.loadAccount(investorPublicKey);
+        // Check for trustline (classic or contract wallet)
+        const hasTrustline = account.balances.some(b =>
+          (b.asset_code === assetCode && b.asset_issuer === issuerKeypair.publicKey()) ||
+          (b.asset_type === 'native' && assetCode === 'XLM') // Should not happen for security tokens but good safety
+        );
+
+        if (!hasTrustline) {
+          console.log(`[StellarService] Investor ${investorPublicKey} does not have a trustline for ${assetCode} yet. Skip auth.`);
+          return { success: false, reason: 'No trustline' };
+        }
+      } catch (err) {
+        console.log(`[StellarService] Investor account ${investorPublicKey} not found on ledger (might be un-funded). Skip auth.`);
+        return { success: false, reason: 'Account not found' };
+      }
+
+      // Set Authorized Flag (1)
+      const op = Operation.setTrustLineFlags({
+        trustor: investorPublicKey,
+        asset: asset,
+        flags: {
+          authorized: true,
+          authorizedToMaintainLiabilities: false
+        },
+        source: issuerKeypair.publicKey()
+      });
+
+      // Use custom build/submit to reuse loaded issuer account if possible, or force load new
+      // For simplicity reusing standard internal flow
+      const issuerAccount = await server.loadAccount(issuerKeypair.publicKey());
+      const tx = buildTransactionWithAccount(issuerAccount, [op]);
+      return await signAndSubmitTransaction(tx, issuerKeypair);
+
+    } catch (error) {
+      console.error(`[StellarService] Failed to authorize investor:`, error);
+      // Don't throw logic error, just return failure so bulk auth can continue
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Descongela conta do investidor restaurando a autorização da trustline
    * Ativa a flag AUTHORIZED_FLAG
    * @param {string} investorPublicKey - Chave pública do investidor (56 caracteres)

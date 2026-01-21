@@ -125,7 +125,7 @@ export function initDistributionQueue() {
       try {
         // Extrair mensagem de erro útil
         let errorMessage = 'Unknown error';
-        
+
         // Handle specific ioredis offline queue errors
         if (error?.message?.includes('enableOfflineQueue') || error?.message?.includes('Stream isn\'t writeable')) {
           // This error occurs when commands are sent before connection is ready
@@ -134,7 +134,7 @@ export function initDistributionQueue() {
           // Don't log this as an error since it's expected during initialization
           return;
         }
-        
+
         if (error?.message && error.message !== 'AggregateError') {
           errorMessage = error.message;
         } else if (error?.code) {
@@ -148,10 +148,10 @@ export function initDistributionQueue() {
           // AggregateError - pegar primeiro erro útil
           const firstError = error.errors[0];
           // Priorizar mensagem do primeiro erro se for útil
-          if (firstError?.message && 
-              firstError.message !== 'AggregateError' && 
-              firstError.message.length > 0 &&
-              !firstError.message.match(/^Error:\s*$/)) {
+          if (firstError?.message &&
+            firstError.message !== 'AggregateError' &&
+            firstError.message.length > 0 &&
+            !firstError.message.match(/^Error:\s*$/)) {
             errorMessage = firstError.message;
           } else if (firstError?.code) {
             // Construir mensagem a partir do código e detalhes do primeiro erro
@@ -169,7 +169,7 @@ export function initDistributionQueue() {
         } else {
           errorMessage = error?.toString() || 'Unknown error';
         }
-        
+
         // Limpar mensagem vazia ou apenas espaços e garantir que não está vazia
         errorMessage = (errorMessage.trim() || 'Unknown error').replace(/\s+/g, ' ');
 
@@ -261,9 +261,18 @@ export function initDistributionQueue() {
         investment.assetCode
       );
 
+      // JIT AUTHORIZATION
+      let targetWallet = investor.stellarPublicKey;
+      if (!targetWallet && investor.stellarContractId) targetWallet = investor.stellarContractId;
+
+      if (targetWallet) {
+        console.log(`[DistributionQueue] JIT Authorizing ${targetWallet} for ${assetCode}...`);
+        await StellarService.authorizeInvestor(targetWallet, assetCode);
+      }
+
       // Distribuir tokens
       const stellarResult = await StellarService.distributeTokens(
-        investor.stellarPublicKey,
+        targetWallet,
         amount,
         assetCode,
         { memo: distributionMemo }
@@ -383,7 +392,7 @@ export async function closeDistributionQueue() {
   if (distributionQueue) {
     const queue = distributionQueue;
     distributionQueue = null; // Resetar imediatamente para evitar novas operações
-    
+
     try {
       // Remover todos os listeners para evitar atividade assíncrona
       queue.removeAllListeners('completed');
@@ -391,7 +400,7 @@ export async function closeDistributionQueue() {
       queue.removeAllListeners('stalled');
       queue.removeAllListeners('error');
       queue.removeAllListeners();
-      
+
       // Fechar conexões Redis de forma mais robusta
       if (queue.client) {
         try {
@@ -402,7 +411,7 @@ export async function closeDistributionQueue() {
           // Ignorar erros ao fechar cliente
         }
       }
-      
+
       // Fechar subscribers também se existirem
       if (queue.clients && Array.isArray(queue.clients)) {
         for (const client of queue.clients) {
@@ -418,13 +427,13 @@ export async function closeDistributionQueue() {
           }
         }
       }
-      
+
       // Fechar a fila com timeout
       await Promise.race([
         queue.close(),
         new Promise((resolve) => setTimeout(resolve, 1000)) // Timeout de 1s
       ]);
-      
+
       // Aguardar um pouco para garantir que todas as operações assíncronas sejam concluídas
       await new Promise(resolve => setTimeout(resolve, 300));
     } catch (error) {
