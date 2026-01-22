@@ -23,6 +23,7 @@ export const issueToken = async (req, res, next) => {
       description,
       offerId: offerId || null,
       issuedBy: req.user?.userId || null,
+      sacContractId: stellarResult.sacContractId,
     });
 
     res.status(201).json({
@@ -262,6 +263,29 @@ export const clawbackTokens = async (req, res, next) => {
     next(error);
   }
 };
+
+export const disableClawback = async (req, res, next) => {
+  try {
+    const { investorPublicKey, assetCode } = req.body;
+
+    if (!investorPublicKey || !assetCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'investorPublicKey and assetCode are required',
+      });
+    }
+
+    const result = await StellarService.disableClawbackForTrustline(investorPublicKey, assetCode);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const listAssetHolders = async (req, res, next) => {
   try {
     const { assetCode } = req.params;

@@ -297,10 +297,15 @@ export const signAndSubmitTransaction = async (transaction, keypair, server = nu
   // The 'Operations' wallet pays the fee, preventing the business wallets (Distributor/Issuer) from needing XLM.
   const operationsKeypair = getOperationsKeypair();
 
+  // For Soroban, the inner transaction fee might be higher than BASE_FEE.
+  // The fee-bump fee must be at least (inner_fee + BASE_FEE).
+  const innerFee = parseInt(transaction.fee);
+  const feeBumpFee = Math.max(parseInt(BASE_FEE), innerFee + parseInt(BASE_FEE));
+
   // Create Fee Bump Transaction
   const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
-    getOperationsKeypair(),
-    BASE_FEE,
+    operationsKeypair.publicKey(),
+    feeBumpFee.toString(),
     transaction,
     getNetworkPassphrase()
   );

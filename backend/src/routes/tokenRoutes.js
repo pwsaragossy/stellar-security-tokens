@@ -11,6 +11,7 @@ import {
   freezeAccount,
   unfreezeAccount,
   clawbackTokens,
+  disableClawback,
   listAssetHolders,
 } from '../controllers/tokenController.js';
 
@@ -217,16 +218,18 @@ router.post('/freeze', requirePlatformAdmin, freezeAccount);
  */
 router.post('/unfreeze', requirePlatformAdmin, unfreezeAccount);
 
+router.post('/clawback', requirePlatformAdmin, clawbackTokens);
+
 /**
  * @swagger
- * /api/tokens/clawback:
+ * /api/tokens/disable-clawback:
  *   post:
- *     summary: Recuperar tokens (Clawback)
+ *     summary: Desabilitar Clawback para uma trustline (Finalidade de Compliance)
  *     tags: [Tokens]
  *     security:
  *       - bearerAuth: []
  */
-router.post('/clawback', requirePlatformAdmin, clawbackTokens);
+router.post('/disable-clawback', requirePlatformAdmin, disableClawback);
 
 /**
  * @swagger

@@ -867,3 +867,56 @@ export const submitWithdrawal = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Inicia a configuração de uma trustline patrocinada para um investidor.
+ * Se for custodial (temos a secret), a transação é submetida automaticamente.
+ * Se for non-custodial (Freighter/Smart Wallet), retorna o XDR para assinatura.
+ */
+export const initSponsoredTrustline = async (req, res, next) => {
+  try {
+    const { investorId } = req.params;
+    const { assetCode } = req.body;
+
+    if (!assetCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'assetCode is required',
+      });
+    }
+
+    const investor = await Investor.findById(parseInt(investorId, 10));
+    if (!investor) {
+      return res.status(404).json({
+        success: false,
+        error: 'Investor not found',
+      });
+    }
+
+    const targetWallet = investor.stellarPublicKey || investor.stellarContractId;
+    if (!targetWallet) {
+      return res.status(400).json({
+        success: false,
+        error: 'Investor does not have a Stellar address configured',
+      });
+    }
+
+    // Nota: Por enquanto, o backend não armazena secrets no DB (KMS/Security).
+    // Para simplificar o teste de Phase 2, vamos assumir que se não tivermos
+    // a secret, retornamos o XDR.
+    const result = await StellarService.setupSponsoredTrustline(
+      targetWallet,
+      assetCode,
+      investor.stellarSecretKey || null // Use secret if available
+    );
+
+    res.json({
+      success: true,
+      message: result.requiresSignature ? 'Signature required' : 'Trustline setup successful',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

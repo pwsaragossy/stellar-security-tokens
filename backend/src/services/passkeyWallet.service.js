@@ -14,6 +14,7 @@ import {
   Transaction,
   FeeBumpTransaction
 } from '@stellar/stellar-sdk';
+import { StellarService } from './stellar.service.js';
 
 /**
  * Supported user types for passkey wallet
@@ -119,13 +120,17 @@ export class PasskeyWalletService {
         xdr.ScVal.scvBytes(publicKeyBuffer)
       );
 
-      const tx = new TransactionBuilder(
+      let tx = new TransactionBuilder(
         await server.rpc.getAccount(issuerKeypair.publicKey()),
         { fee: BASE_FEE, networkPassphrase }
       )
         .addOperation(deployOp)
         .setTimeout(30)
         .build();
+
+      // Soroban Simulation & Preparation
+      console.log('[PasskeyWalletService] Simulating Smart Wallet deployment...');
+      tx = await StellarService.prepareSorobanTransaction(tx);
 
       tx.sign(issuerKeypair);
 
@@ -501,9 +506,14 @@ export class PasskeyWalletService {
       console.log('[PasskeyWalletService] Inner TX operations count:', innerTx.operations?.length);
       console.log('[PasskeyWalletService] Operations keypair:', operationsKeypair.publicKey());
 
+      // Calculate dynamic fee for Fee Bump
+      // For Soroban, the inner transaction fee is significantly higher.
+      const innerFee = parseInt(innerTx.fee);
+      const feeBumpFee = Math.max(parseInt(BASE_FEE) * 2, innerFee + parseInt(BASE_FEE));
+
       const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
         operationsKeypair.publicKey(),
-        (parseInt(BASE_FEE) * 2).toString(),
+        feeBumpFee.toString(),
         innerTx,
         networkPassphrase
       );
@@ -828,13 +838,17 @@ export class PasskeyWalletService {
       xdr.ScVal.scvI128(xdr.Int128Parts.fromBigInt(amountBigInt))
     );
 
-    const tx = new TransactionBuilder(
+    let tx = new TransactionBuilder(
       await server.rpc.getAccount(issuerKeypair.publicKey()),
       { fee: BASE_FEE, networkPassphrase }
     )
       .addOperation(transferOp)
       .setTimeout(180)
       .build();
+
+    // Soroban Simulation & Preparation
+    console.log('[PasskeyWalletService] Simulating withdrawal transaction...');
+    tx = await StellarService.prepareSorobanTransaction(tx);
 
     // Sign with issuer (sponsor)
     tx.sign(issuerKeypair);

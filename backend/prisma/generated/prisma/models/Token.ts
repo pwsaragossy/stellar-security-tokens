@@ -53,6 +53,7 @@ export type TokenMinAggregateOutputType = {
   issuedBy: number | null
   createdAt: Date | null
   updatedAt: Date | null
+  sacContractId: string | null
 }
 
 export type TokenMaxAggregateOutputType = {
@@ -66,6 +67,7 @@ export type TokenMaxAggregateOutputType = {
   issuedBy: number | null
   createdAt: Date | null
   updatedAt: Date | null
+  sacContractId: string | null
 }
 
 export type TokenCountAggregateOutputType = {
@@ -79,6 +81,7 @@ export type TokenCountAggregateOutputType = {
   issuedBy: number
   createdAt: number
   updatedAt: number
+  sacContractId: number
   _all: number
 }
 
@@ -110,6 +113,7 @@ export type TokenMinAggregateInputType = {
   issuedBy?: true
   createdAt?: true
   updatedAt?: true
+  sacContractId?: true
 }
 
 export type TokenMaxAggregateInputType = {
@@ -123,6 +127,7 @@ export type TokenMaxAggregateInputType = {
   issuedBy?: true
   createdAt?: true
   updatedAt?: true
+  sacContractId?: true
 }
 
 export type TokenCountAggregateInputType = {
@@ -136,6 +141,7 @@ export type TokenCountAggregateInputType = {
   issuedBy?: true
   createdAt?: true
   updatedAt?: true
+  sacContractId?: true
   _all?: true
 }
 
@@ -236,6 +242,7 @@ export type TokenGroupByOutputType = {
   issuedBy: number | null
   createdAt: Date
   updatedAt: Date
+  sacContractId: string | null
   _count: TokenCountAggregateOutputType | null
   _avg: TokenAvgAggregateOutputType | null
   _sum: TokenSumAggregateOutputType | null
@@ -272,6 +279,7 @@ export type TokenWhereInput = {
   issuedBy?: Prisma.IntNullableFilter<"Token"> | number | null
   createdAt?: Prisma.DateTimeFilter<"Token"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Token"> | Date | string
+  sacContractId?: Prisma.StringNullableFilter<"Token"> | string | null
   offer?: Prisma.XOR<Prisma.OfferNullableScalarRelationFilter, Prisma.OfferWhereInput> | null
   issuer?: Prisma.XOR<Prisma.PlatformAdminNullableScalarRelationFilter, Prisma.PlatformAdminWhereInput> | null
   distributions?: Prisma.TokenDistributionListRelationFilter
@@ -290,6 +298,7 @@ export type TokenOrderByWithRelationInput = {
   issuedBy?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  sacContractId?: Prisma.SortOrderInput | Prisma.SortOrder
   offer?: Prisma.OfferOrderByWithRelationInput
   issuer?: Prisma.PlatformAdminOrderByWithRelationInput
   distributions?: Prisma.TokenDistributionOrderByRelationAggregateInput
@@ -311,6 +320,7 @@ export type TokenWhereUniqueInput = Prisma.AtLeast<{
   issuedBy?: Prisma.IntNullableFilter<"Token"> | number | null
   createdAt?: Prisma.DateTimeFilter<"Token"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Token"> | Date | string
+  sacContractId?: Prisma.StringNullableFilter<"Token"> | string | null
   offer?: Prisma.XOR<Prisma.OfferNullableScalarRelationFilter, Prisma.OfferWhereInput> | null
   issuer?: Prisma.XOR<Prisma.PlatformAdminNullableScalarRelationFilter, Prisma.PlatformAdminWhereInput> | null
   distributions?: Prisma.TokenDistributionListRelationFilter
@@ -329,6 +339,7 @@ export type TokenOrderByWithAggregationInput = {
   issuedBy?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  sacContractId?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.TokenCountOrderByAggregateInput
   _avg?: Prisma.TokenAvgOrderByAggregateInput
   _max?: Prisma.TokenMaxOrderByAggregateInput
@@ -350,6 +361,7 @@ export type TokenScalarWhereWithAggregatesInput = {
   issuedBy?: Prisma.IntNullableWithAggregatesFilter<"Token"> | number | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Token"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Token"> | Date | string
+  sacContractId?: Prisma.StringNullableWithAggregatesFilter<"Token"> | string | null
 }
 
 export type TokenCreateInput = {
@@ -360,6 +372,7 @@ export type TokenCreateInput = {
   annualInterestRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
   offer?: Prisma.OfferCreateNestedOneWithoutTokensInput
   issuer?: Prisma.PlatformAdminCreateNestedOneWithoutIssuedTokensInput
   distributions?: Prisma.TokenDistributionCreateNestedManyWithoutTokenInput
@@ -378,6 +391,7 @@ export type TokenUncheckedCreateInput = {
   issuedBy?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
   distributions?: Prisma.TokenDistributionUncheckedCreateNestedManyWithoutTokenInput
   interestPayments?: Prisma.InterestPaymentUncheckedCreateNestedManyWithoutTokenInput
   investments?: Prisma.InvestmentUncheckedCreateNestedManyWithoutTokenInput
@@ -391,6 +405,7 @@ export type TokenUpdateInput = {
   annualInterestRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   offer?: Prisma.OfferUpdateOneWithoutTokensNestedInput
   issuer?: Prisma.PlatformAdminUpdateOneWithoutIssuedTokensNestedInput
   distributions?: Prisma.TokenDistributionUpdateManyWithoutTokenNestedInput
@@ -409,6 +424,7 @@ export type TokenUncheckedUpdateInput = {
   issuedBy?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   distributions?: Prisma.TokenDistributionUncheckedUpdateManyWithoutTokenNestedInput
   interestPayments?: Prisma.InterestPaymentUncheckedUpdateManyWithoutTokenNestedInput
   investments?: Prisma.InvestmentUncheckedUpdateManyWithoutTokenNestedInput
@@ -425,6 +441,7 @@ export type TokenCreateManyInput = {
   issuedBy?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
 }
 
 export type TokenUpdateManyMutationInput = {
@@ -435,6 +452,7 @@ export type TokenUpdateManyMutationInput = {
   annualInterestRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type TokenUncheckedUpdateManyInput = {
@@ -448,6 +466,7 @@ export type TokenUncheckedUpdateManyInput = {
   issuedBy?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type TokenCountOrderByAggregateInput = {
@@ -461,6 +480,7 @@ export type TokenCountOrderByAggregateInput = {
   issuedBy?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  sacContractId?: Prisma.SortOrder
 }
 
 export type TokenAvgOrderByAggregateInput = {
@@ -482,6 +502,7 @@ export type TokenMaxOrderByAggregateInput = {
   issuedBy?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  sacContractId?: Prisma.SortOrder
 }
 
 export type TokenMinOrderByAggregateInput = {
@@ -495,6 +516,7 @@ export type TokenMinOrderByAggregateInput = {
   issuedBy?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  sacContractId?: Prisma.SortOrder
 }
 
 export type TokenSumOrderByAggregateInput = {
@@ -678,6 +700,7 @@ export type TokenCreateWithoutDistributionsInput = {
   annualInterestRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
   offer?: Prisma.OfferCreateNestedOneWithoutTokensInput
   issuer?: Prisma.PlatformAdminCreateNestedOneWithoutIssuedTokensInput
   interestPayments?: Prisma.InterestPaymentCreateNestedManyWithoutTokenInput
@@ -695,6 +718,7 @@ export type TokenUncheckedCreateWithoutDistributionsInput = {
   issuedBy?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
   interestPayments?: Prisma.InterestPaymentUncheckedCreateNestedManyWithoutTokenInput
   investments?: Prisma.InvestmentUncheckedCreateNestedManyWithoutTokenInput
 }
@@ -723,6 +747,7 @@ export type TokenUpdateWithoutDistributionsInput = {
   annualInterestRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   offer?: Prisma.OfferUpdateOneWithoutTokensNestedInput
   issuer?: Prisma.PlatformAdminUpdateOneWithoutIssuedTokensNestedInput
   interestPayments?: Prisma.InterestPaymentUpdateManyWithoutTokenNestedInput
@@ -740,6 +765,7 @@ export type TokenUncheckedUpdateWithoutDistributionsInput = {
   issuedBy?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   interestPayments?: Prisma.InterestPaymentUncheckedUpdateManyWithoutTokenNestedInput
   investments?: Prisma.InvestmentUncheckedUpdateManyWithoutTokenNestedInput
 }
@@ -752,6 +778,7 @@ export type TokenCreateWithoutInterestPaymentsInput = {
   annualInterestRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
   offer?: Prisma.OfferCreateNestedOneWithoutTokensInput
   issuer?: Prisma.PlatformAdminCreateNestedOneWithoutIssuedTokensInput
   distributions?: Prisma.TokenDistributionCreateNestedManyWithoutTokenInput
@@ -769,6 +796,7 @@ export type TokenUncheckedCreateWithoutInterestPaymentsInput = {
   issuedBy?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
   distributions?: Prisma.TokenDistributionUncheckedCreateNestedManyWithoutTokenInput
   investments?: Prisma.InvestmentUncheckedCreateNestedManyWithoutTokenInput
 }
@@ -797,6 +825,7 @@ export type TokenUpdateWithoutInterestPaymentsInput = {
   annualInterestRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   offer?: Prisma.OfferUpdateOneWithoutTokensNestedInput
   issuer?: Prisma.PlatformAdminUpdateOneWithoutIssuedTokensNestedInput
   distributions?: Prisma.TokenDistributionUpdateManyWithoutTokenNestedInput
@@ -814,6 +843,7 @@ export type TokenUncheckedUpdateWithoutInterestPaymentsInput = {
   issuedBy?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   distributions?: Prisma.TokenDistributionUncheckedUpdateManyWithoutTokenNestedInput
   investments?: Prisma.InvestmentUncheckedUpdateManyWithoutTokenNestedInput
 }
@@ -826,6 +856,7 @@ export type TokenCreateWithoutIssuerInput = {
   annualInterestRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
   offer?: Prisma.OfferCreateNestedOneWithoutTokensInput
   distributions?: Prisma.TokenDistributionCreateNestedManyWithoutTokenInput
   interestPayments?: Prisma.InterestPaymentCreateNestedManyWithoutTokenInput
@@ -842,6 +873,7 @@ export type TokenUncheckedCreateWithoutIssuerInput = {
   offerId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
   distributions?: Prisma.TokenDistributionUncheckedCreateNestedManyWithoutTokenInput
   interestPayments?: Prisma.InterestPaymentUncheckedCreateNestedManyWithoutTokenInput
   investments?: Prisma.InvestmentUncheckedCreateNestedManyWithoutTokenInput
@@ -887,6 +919,7 @@ export type TokenScalarWhereInput = {
   issuedBy?: Prisma.IntNullableFilter<"Token"> | number | null
   createdAt?: Prisma.DateTimeFilter<"Token"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Token"> | Date | string
+  sacContractId?: Prisma.StringNullableFilter<"Token"> | string | null
 }
 
 export type TokenCreateWithoutOfferInput = {
@@ -897,6 +930,7 @@ export type TokenCreateWithoutOfferInput = {
   annualInterestRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
   issuer?: Prisma.PlatformAdminCreateNestedOneWithoutIssuedTokensInput
   distributions?: Prisma.TokenDistributionCreateNestedManyWithoutTokenInput
   interestPayments?: Prisma.InterestPaymentCreateNestedManyWithoutTokenInput
@@ -913,6 +947,7 @@ export type TokenUncheckedCreateWithoutOfferInput = {
   issuedBy?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
   distributions?: Prisma.TokenDistributionUncheckedCreateNestedManyWithoutTokenInput
   interestPayments?: Prisma.InterestPaymentUncheckedCreateNestedManyWithoutTokenInput
   investments?: Prisma.InvestmentUncheckedCreateNestedManyWithoutTokenInput
@@ -952,6 +987,7 @@ export type TokenCreateWithoutInvestmentsInput = {
   annualInterestRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
   offer?: Prisma.OfferCreateNestedOneWithoutTokensInput
   issuer?: Prisma.PlatformAdminCreateNestedOneWithoutIssuedTokensInput
   distributions?: Prisma.TokenDistributionCreateNestedManyWithoutTokenInput
@@ -969,6 +1005,7 @@ export type TokenUncheckedCreateWithoutInvestmentsInput = {
   issuedBy?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
   distributions?: Prisma.TokenDistributionUncheckedCreateNestedManyWithoutTokenInput
   interestPayments?: Prisma.InterestPaymentUncheckedCreateNestedManyWithoutTokenInput
 }
@@ -997,6 +1034,7 @@ export type TokenUpdateWithoutInvestmentsInput = {
   annualInterestRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   offer?: Prisma.OfferUpdateOneWithoutTokensNestedInput
   issuer?: Prisma.PlatformAdminUpdateOneWithoutIssuedTokensNestedInput
   distributions?: Prisma.TokenDistributionUpdateManyWithoutTokenNestedInput
@@ -1014,6 +1052,7 @@ export type TokenUncheckedUpdateWithoutInvestmentsInput = {
   issuedBy?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   distributions?: Prisma.TokenDistributionUncheckedUpdateManyWithoutTokenNestedInput
   interestPayments?: Prisma.InterestPaymentUncheckedUpdateManyWithoutTokenNestedInput
 }
@@ -1028,6 +1067,7 @@ export type TokenCreateManyIssuerInput = {
   offerId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
 }
 
 export type TokenUpdateWithoutIssuerInput = {
@@ -1038,6 +1078,7 @@ export type TokenUpdateWithoutIssuerInput = {
   annualInterestRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   offer?: Prisma.OfferUpdateOneWithoutTokensNestedInput
   distributions?: Prisma.TokenDistributionUpdateManyWithoutTokenNestedInput
   interestPayments?: Prisma.InterestPaymentUpdateManyWithoutTokenNestedInput
@@ -1054,6 +1095,7 @@ export type TokenUncheckedUpdateWithoutIssuerInput = {
   offerId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   distributions?: Prisma.TokenDistributionUncheckedUpdateManyWithoutTokenNestedInput
   interestPayments?: Prisma.InterestPaymentUncheckedUpdateManyWithoutTokenNestedInput
   investments?: Prisma.InvestmentUncheckedUpdateManyWithoutTokenNestedInput
@@ -1069,6 +1111,7 @@ export type TokenUncheckedUpdateManyWithoutIssuerInput = {
   offerId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type TokenCreateManyOfferInput = {
@@ -1081,6 +1124,7 @@ export type TokenCreateManyOfferInput = {
   issuedBy?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  sacContractId?: string | null
 }
 
 export type TokenUpdateWithoutOfferInput = {
@@ -1091,6 +1135,7 @@ export type TokenUpdateWithoutOfferInput = {
   annualInterestRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   issuer?: Prisma.PlatformAdminUpdateOneWithoutIssuedTokensNestedInput
   distributions?: Prisma.TokenDistributionUpdateManyWithoutTokenNestedInput
   interestPayments?: Prisma.InterestPaymentUpdateManyWithoutTokenNestedInput
@@ -1107,6 +1152,7 @@ export type TokenUncheckedUpdateWithoutOfferInput = {
   issuedBy?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   distributions?: Prisma.TokenDistributionUncheckedUpdateManyWithoutTokenNestedInput
   interestPayments?: Prisma.InterestPaymentUncheckedUpdateManyWithoutTokenNestedInput
   investments?: Prisma.InvestmentUncheckedUpdateManyWithoutTokenNestedInput
@@ -1122,6 +1168,7 @@ export type TokenUncheckedUpdateManyWithoutOfferInput = {
   issuedBy?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  sacContractId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 
@@ -1184,6 +1231,7 @@ export type TokenSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   issuedBy?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  sacContractId?: boolean
   offer?: boolean | Prisma.Token$offerArgs<ExtArgs>
   issuer?: boolean | Prisma.Token$issuerArgs<ExtArgs>
   distributions?: boolean | Prisma.Token$distributionsArgs<ExtArgs>
@@ -1203,6 +1251,7 @@ export type TokenSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   issuedBy?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  sacContractId?: boolean
   offer?: boolean | Prisma.Token$offerArgs<ExtArgs>
   issuer?: boolean | Prisma.Token$issuerArgs<ExtArgs>
 }, ExtArgs["result"]["token"]>
@@ -1218,6 +1267,7 @@ export type TokenSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   issuedBy?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  sacContractId?: boolean
   offer?: boolean | Prisma.Token$offerArgs<ExtArgs>
   issuer?: boolean | Prisma.Token$issuerArgs<ExtArgs>
 }, ExtArgs["result"]["token"]>
@@ -1233,9 +1283,10 @@ export type TokenSelectScalar = {
   issuedBy?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  sacContractId?: boolean
 }
 
-export type TokenOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "assetCode" | "issuerPublicKey" | "totalSupply" | "description" | "annualInterestRate" | "offerId" | "issuedBy" | "createdAt" | "updatedAt", ExtArgs["result"]["token"]>
+export type TokenOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "assetCode" | "issuerPublicKey" | "totalSupply" | "description" | "annualInterestRate" | "offerId" | "issuedBy" | "createdAt" | "updatedAt" | "sacContractId", ExtArgs["result"]["token"]>
 export type TokenInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   offer?: boolean | Prisma.Token$offerArgs<ExtArgs>
   issuer?: boolean | Prisma.Token$issuerArgs<ExtArgs>
@@ -1273,6 +1324,7 @@ export type $TokenPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs 
     issuedBy: number | null
     createdAt: Date
     updatedAt: Date
+    sacContractId: string | null
   }, ExtArgs["result"]["token"]>
   composites: {}
 }
@@ -1711,6 +1763,7 @@ export interface TokenFieldRefs {
   readonly issuedBy: Prisma.FieldRef<"Token", 'Int'>
   readonly createdAt: Prisma.FieldRef<"Token", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Token", 'DateTime'>
+  readonly sacContractId: Prisma.FieldRef<"Token", 'String'>
 }
     
 

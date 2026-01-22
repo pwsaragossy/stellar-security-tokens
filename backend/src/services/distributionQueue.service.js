@@ -262,12 +262,21 @@ export function initDistributionQueue() {
       );
 
       // JIT AUTHORIZATION
-      let targetWallet = investor.stellarPublicKey;
-      if (!targetWallet && investor.stellarContractId) targetWallet = investor.stellarContractId;
+      // Prioritize Smart Wallet (contractId) as it's the preferred method
+      let targetWallet = investor.stellarContractId || investor.stellarPublicKey;
 
       if (targetWallet) {
-        console.log(`[DistributionQueue] JIT Authorizing ${targetWallet} for ${assetCode}...`);
-        await StellarService.authorizeInvestor(targetWallet, assetCode);
+        console.log(`[DistributionQueue] Checking JIT Authorization for ${targetWallet} (${assetCode})...`);
+
+        // For classic accounts, this will set the flag if trustline exists.
+        // For smart wallets, we ensure they are whitelisted in the asset instance.
+        const authResult = await StellarService.authorizeInvestor(targetWallet, assetCode);
+
+        if (authResult.success) {
+          console.log(`[DistributionQueue] JIT Authorization successful for ${targetWallet}`);
+        } else if (authResult.reason === 'No trustline') {
+          console.warn(`[DistributionQueue] Trustline missing for ${targetWallet}. Distribution may fail if not a Smart Wallet.`);
+        }
       }
 
       // Distribuir tokens

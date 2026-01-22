@@ -17,7 +17,7 @@ export class Token {
    * @throws {Error} Se assetCode já existir (violação de constraint único)
    */
   static async create(tokenData) {
-    const { assetCode, issuerPublicKey, totalSupply, description, offerId, issuedBy } = tokenData;
+    const { assetCode, issuerPublicKey, totalSupply, description, offerId, issuedBy, sacContractId } = tokenData;
 
     return await prisma.token.create({
       data: {
@@ -27,6 +27,7 @@ export class Token {
         description,
         offerId: offerId || null,
         issuedBy: issuedBy || null,
+        sacContractId: sacContractId || null,
       },
     });
   }

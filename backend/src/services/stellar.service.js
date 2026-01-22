@@ -9,6 +9,8 @@ import {
   signAndSubmitTransaction,
   getNetworkPassphrase,
   getTreasuryKeypair,
+  getOperationsKeypair,
+  getSorobanRpcUrl,
 } from '../config/stellar.js';
 import {
   Operation,
@@ -19,6 +21,14 @@ import {
   AuthClawbackEnabledFlag,
   TransactionBuilder,
   BASE_FEE,
+  xdr,
+  StrKey,
+  hash,
+  Address,
+  Contract,
+  rpc,
+  scValToNative,
+  nativeToScVal,
 } from '@stellar/stellar-sdk';
 
 export class StellarService {
@@ -384,6 +394,16 @@ export class StellarService {
         })
       );
 
+      // 5. Deploy SAC (Stellar Asset Contract)
+      const sacContractId = this.getSACContractId(asset);
+      console.log(`[StellarService] Adding SAC deployment for asset ${code} (${sacContractId})`);
+      operations.push(
+        Operation.createAssetContract({
+          asset: asset,
+          source: issuerKeypair.publicKey(),
+        })
+      );
+
       // Configurar home domain se fornecido
       if (options.homeDomain) {
         operations.unshift(
@@ -395,14 +415,14 @@ export class StellarService {
       }
 
       // Reload issuer account to get fresh sequence number (using fresh server)
-      console.log(`[StellarService] Building issuance transaction for asset ${code}`);
+      console.log(`[StellarService] Building issuance and SAC deployment transaction for asset ${code}`);
       const freshIssuerAccount = await freshServer.loadAccount(issuerKeypair.publicKey());
 
       const transaction = buildTransactionWithAccount(freshIssuerAccount, operations);
       const result = await signAndSubmitTransaction(transaction, issuerKeypair, freshServer);
 
       if (!result.success) {
-        throw new Error(`Failed to issue token: ${result.userFriendlyError || result.error}`);
+        throw new Error(`Failed to issue token and deploy SAC: ${result.userFriendlyError || result.error}`);
       }
 
       const returnData = {
@@ -413,6 +433,7 @@ export class StellarService {
         amount: amount.toString(),
         transactionHash: result.hash,
         ledger: result.ledger,
+        sacContractId,
       };
 
       if (options.homeDomain) {
@@ -427,19 +448,49 @@ export class StellarService {
   }
 
   /**
+   * Deploys the Stellar Asset Contract (SAC) for an existing asset.
+   * @param {string} code - Asset code
+   * @returns {Promise<Object>} Deployment result
+   */
+  static async deploySACForAsset(code) {
+    try {
+      const issuerKeypair = getIssuerKeypair();
+      const asset = createAsset(code, issuerKeypair.publicKey());
+      const sacContractId = this.getSACContractId(asset);
+
+      console.log(`[StellarService] Deploying SAC for existing asset ${code} (${sacContractId})`);
+
+      const op = Operation.createAssetContract({
+        asset: asset,
+        source: issuerKeypair.publicKey(),
+      });
+
+      const issuerAccount = await stellarServer.loadAccount(issuerKeypair.publicKey());
+      const transaction = buildTransactionWithAccount(issuerAccount, [op]);
+      const result = await signAndSubmitTransaction(transaction, issuerKeypair);
+
+      return {
+        success: result.success,
+        sacContractId,
+        transactionHash: result.hash,
+        error: result.error,
+        userFriendlyError: result.userFriendlyError
+      };
+    } catch (error) {
+      console.error(`[StellarService] SAC deployment failed for ${code}:`, error);
+      throw error;
+    }
+  }
+
+
+  /**
    * Distribui tokens para investidor
-   * Envia tokens da conta distribuidora para o investidor
-   * @param {string} investorPublicKey - Chave pública do investidor (56 caracteres)
+   * Detecta automaticamente se o destino é uma conta clássica ou Smart Wallet (Soroban)
+   * 
+   * @param {string} investorPublicKey - Chave pública do investidor (G... ou C...)
    * @param {number|string} amount - Quantidade de tokens a distribuir
    * @param {string} assetCode - Código do asset (REQUIRED)
    * @returns {Promise<Object>} Resultado da distribuição
-   * @returns {boolean} returns.success - Indica sucesso
-   * @returns {string} returns.assetCode - Código do asset
-   * @returns {string} returns.investorPublicKey - Chave pública do investidor
-   * @returns {string} returns.amount - Quantidade distribuída
-   * @returns {string} returns.transactionHash - Hash da transação
-   * @returns {number} returns.ledger - Número do ledger
-   * @throws {Error} Se assetCode não for fornecido, chave inválida, conta não existir, trustline não autorizada ou amount inválido
    */
   static async distributeTokens(investorPublicKey, amount, assetCode, options = {}) {
     if (!assetCode) {
@@ -453,49 +504,70 @@ export class StellarService {
         throw new Error('Invalid investor public key');
       }
 
-      if (!amount || parseFloat(amount) <= 0) {
-        throw new Error('Amount must be a positive number');
-      }
-
-      try {
-        await stellarServer.loadAccount(investorPublicKey);
-      } catch (error) {
-        if (error.status === 404) {
-          throw new Error('Investor account does not exist');
-        }
-        throw error;
-      }
-
+      const isContract = investorPublicKey.startsWith('C');
       const asset = createAsset(assetCode, issuerKeypair.publicKey());
+      const amountStr = amount.toString();
 
-      const operations = [
-        Operation.payment({
-          destination: investorPublicKey,
-          asset: asset,
-          amount: amount.toString(),
-          source: distributorKeypair.publicKey(),
-        }),
-      ];
+      let result;
 
-      const transaction = await buildTransaction(distributorKeypair, operations, {
-        memo: options.memo || null,
-      });
-      const result = await signAndSubmitTransaction(transaction, distributorKeypair);
+      if (isContract) {
+        // --- SOROBAN SAC DISTRIBUTION ---
+        console.log(`[StellarService] Distributing via SAC to contract ${investorPublicKey}`);
+        const sacContractId = this.getSACContractId(asset);
+        const contract = new Contract(sacContractId);
+
+        // Build 'transfer' call: transfer(from, to, amount)
+        const transferOp = contract.call(
+          'transfer',
+          new Address(distributorKeypair.publicKey()).toScVal(),
+          new Address(investorPublicKey).toScVal(),
+          nativeToScVal(BigInt(Math.floor(parseFloat(amountStr) * 10000000)), { type: 'i128' })
+        );
+
+        const distributorAccount = await stellarServer.loadAccount(distributorKeypair.publicKey());
+        let transaction = buildTransactionWithAccount(distributorAccount, [transferOp]);
+
+        // Soroban Simulation & Preparation
+        // This estimates footprint, resource limits and sets proper fees
+        console.log(`[StellarService] Simulating Soroban SAC transfer...`);
+        transaction = await this.prepareSorobanTransaction(transaction);
+
+        result = await signAndSubmitTransaction(transaction, distributorKeypair);
+      } else {
+        // --- CLASSIC STELLAR DISTRIBUTION ---
+        try {
+          await stellarServer.loadAccount(investorPublicKey);
+        } catch (error) {
+          if (error.status === 404) {
+            console.log(`[StellarService] Investor account ${investorPublicKey} not found. Attempting sponsored trustline...`);
+            // Se não existir, podemos tentar criar a conta e trustline se for custodial
+            // Mas JIT deve ser cauteloso. Por enquanto, falhar amigavelmente.
+            throw new Error('Investor account does not exist. Please initialize wallet first.');
+          }
+          throw error;
+        }
+
+        const operations = [
+          Operation.payment({
+            destination: investorPublicKey,
+            asset: asset,
+            amount: amountStr,
+            source: distributorKeypair.publicKey(),
+          }),
+        ];
+
+        const transaction = await buildTransaction(distributorKeypair, operations, {
+          memo: options.memo || null,
+        });
+        result = await signAndSubmitTransaction(transaction, distributorKeypair);
+      }
 
       if (!result.success) {
-        // Usar mensagem amigável se disponível
         if (result.userFriendlyError) {
           throw new Error(result.userFriendlyError);
         }
-        // Fallback para casos específicos conhecidos
         if (result.resultCodes && result.resultCodes.operation === 'op_no_trust') {
           throw new Error('Investor must establish and be whitelisted for this asset trustline first');
-        }
-        if (result.resultCodes && result.resultCodes.operation === 'op_not_authorized') {
-          throw new Error('Investor trustline is not authorized (not whitelisted)');
-        }
-        if (result.resultCodes && result.resultCodes.operation === 'op_underfunded') {
-          throw new Error('Insufficient balance in distribution account');
         }
         throw new Error(`Failed to distribute tokens: ${result.error}`);
       }
@@ -504,29 +576,39 @@ export class StellarService {
         success: true,
         assetCode,
         investorPublicKey,
-        amount: amount.toString(),
+        amount: amountStr,
         transactionHash: result.hash,
         ledger: result.ledger,
       };
     } catch (error) {
       console.error('Error distributing tokens:', error);
-
-      if (error.response) {
-        const errorResult = error.response.data?.extras?.result_codes;
-        if (errorResult) {
-          if (errorResult.operation === 'op_no_trust') {
-            throw new Error('Investor must establish trustline first');
-          }
-          if (errorResult.operation === 'op_not_authorized') {
-            throw new Error('Investor trustline is not authorized (not whitelisted)');
-          }
-          throw new Error(`Token distribution failed: ${JSON.stringify(errorResult)}`);
-        }
-      }
-
       throw error;
     }
   }
+
+  /**
+   * Obtém o Contract ID do Stellar Asset Contract (SAC) para um asset
+   * @param {Asset} asset - Objeto Asset
+   * @returns {string} Contract ID (C...)
+   */
+  static getSACContractId(asset) {
+    const networkPassphrase = getNetworkPassphrase();
+    const networkId = hash(Buffer.from(networkPassphrase));
+
+    // Preimage from Asset
+    const xdrAsset = asset.toXDR();
+    const preimage = xdr.ContractIdPreimage.contractIdPreimageFromAsset(xdrAsset);
+
+    const contractIdHash = hash(
+      xdr.HashIdPreimage.envelopeTypeContractId(new xdr.HashIdPreimageContractId({
+        networkId,
+        contractIdPreimage,
+      })).toXDR()
+    );
+
+    return StrKey.encodeContract(contractIdHash);
+  }
+
 
   /**
    * Congela conta do investidor revogando a autorização da trustline
@@ -660,6 +742,112 @@ export class StellarService {
   }
 
   /**
+   * Configura uma trustline patrocinada para um investidor.
+   * Utiliza CAP-33 (Sponsorship) para cobrir o reserve de 0.5 XLM.
+   * 
+   * @param {string} investorPublicKey - Chave pública do investidor
+   * @param {string} assetCode - Código do asset
+   * @param {string} [investorSecret] - Chave secreta (apenas para modo custodial)
+   * @returns {Promise<Object>} Resultado da transação ou XDR para assinatura
+   */
+  static async setupSponsoredTrustline(investorPublicKey, assetCode, investorSecret = null) {
+    try {
+      const issuerKeypair = getIssuerKeypair();
+      const operationsKeypair = getOperationsKeypair();
+      const asset = createAsset(assetCode, issuerKeypair.publicKey());
+
+      console.log(`[StellarService] Setting up sponsored trustline for ${investorPublicKey} (${assetCode})`);
+
+      // 1. Verificar se a conta do investidor existe
+      let investorExists = true;
+      try {
+        await stellarServer.loadAccount(investorPublicKey);
+      } catch (error) {
+        if (error.status === 404) {
+          investorExists = false;
+        } else {
+          throw error;
+        }
+      }
+
+      // 2. Carregar conta de operações (Sponsor)
+      const sponsorAccount = await stellarServer.loadAccount(operationsKeypair.publicKey());
+
+      // 3. Iniciar construção da transação
+      const transactionBuilder = new TransactionBuilder(sponsorAccount, {
+        fee: BASE_FEE,
+        networkPassphrase: getNetworkPassphrase(),
+      });
+
+      // Operação 1: Criar conta se não existir (Patrocinado)
+      if (!investorExists) {
+        transactionBuilder.addOperation(Operation.beginSponsoringFutureReserves({
+          sponsoredID: investorPublicKey,
+          source: operationsKeypair.publicKey()
+        }));
+
+        transactionBuilder.addOperation(Operation.createAccount({
+          destination: investorPublicKey,
+          startingBalance: '0', // No balance needed if sponsored
+          source: operationsKeypair.publicKey()
+        }));
+
+        transactionBuilder.addOperation(Operation.endSponsoringFutureReserves({
+          source: investorPublicKey
+        }));
+      }
+
+      // Operação 2: Adicionar Trustline (Patrocinada)
+      transactionBuilder.addOperation(Operation.beginSponsoringFutureReserves({
+        sponsoredID: investorPublicKey,
+        source: operationsKeypair.publicKey()
+      }));
+
+      transactionBuilder.addOperation(Operation.changeTrust({
+        asset: asset,
+        source: investorPublicKey
+      }));
+
+      transactionBuilder.addOperation(Operation.endSponsoringFutureReserves({
+        source: investorPublicKey
+      }));
+
+      transactionBuilder.setTimeout(TransactionBuilder.TIMEOUT_INFINITE);
+      const transaction = transactionBuilder.build();
+
+      // Sign with Sponsor (Operations)
+      transaction.sign(operationsKeypair);
+
+      // 4. Se tiver a secret (Custodial), assinar e submeter
+      if (investorSecret) {
+        const investorKeypair = Keypair.fromSecret(investorSecret);
+        transaction.sign(investorKeypair);
+
+        const result = await stellarServer.submitTransaction(transaction);
+        return {
+          success: true,
+          hash: result.hash,
+          ledger: result.ledger,
+          sponsored: true
+        };
+      }
+
+      // 5. Se não tiver secret (Non-custodial), retornar XDR para o frontend assinar
+      return {
+        success: true,
+        requiresSignature: true,
+        xdr: transaction.toXDR(),
+        sponsored: true
+      };
+
+    } catch (error) {
+      console.error('[StellarService] Error in setupSponsoredTrustline:', error);
+      throw new Error(`Failed to setup sponsored trustline: ${error.message}`);
+    }
+  }
+
+
+  /**
    * Descongela conta do investidor restaurando a autorização da trustline
    * Ativa a flag AUTHORIZED_FLAG
    * @param {string} investorPublicKey - Chave pública do investidor (56 caracteres)
@@ -705,6 +893,57 @@ export class StellarService {
     } catch (error) {
       console.error('Error unfreezing account:', error);
       throw new Error(`Account unfreeze failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Desabilita permanentemente a capacidade de clawback para uma trustline específica.
+   * Usado para garantir finalidade de posse para investidores verificados.
+   * 
+   * @param {string} investorPublicKey - Chave pública do investidor
+   * @param {string} assetCode - Código do asset
+   * @returns {Promise<Object>} Resultado da transação
+   */
+  static async disableClawbackForTrustline(investorPublicKey, assetCode) {
+    if (!assetCode) {
+      throw new Error('assetCode is required');
+    }
+    try {
+      const issuerKeypair = getIssuerKeypair();
+
+      if (!investorPublicKey || investorPublicKey.length !== 56) {
+        throw new Error('Invalid investor public key');
+      }
+
+      const asset = createAsset(assetCode, issuerKeypair.publicKey());
+
+      const operations = [
+        Operation.setTrustLineFlags({
+          trustor: investorPublicKey,
+          asset: asset,
+          // CLAWBACK_ENABLED_FLAG = 4
+          clearFlags: 4,
+        }),
+      ];
+
+      const transaction = await buildTransaction(issuerKeypair, operations);
+      const result = await signAndSubmitTransaction(transaction, issuerKeypair);
+
+      if (!result.success) {
+        throw new Error(`Failed to disable clawback: ${result.error}`);
+      }
+
+      return {
+        success: true,
+        investorPublicKey,
+        assetCode,
+        transactionHash: result.hash,
+        ledger: result.ledger,
+        message: 'Clawback capability disabled for this trustline successfully',
+      };
+    } catch (error) {
+      console.error('Error disabling clawback for trustline:', error);
+      throw new Error(`Disable clawback failed: ${error.message}`);
     }
   }
 
@@ -1081,6 +1320,62 @@ export class StellarService {
       };
     } catch (error) {
       console.error('Error in authorizeAllUserTrustlines:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Simulates a Soroban transaction to estimate resources and fees.
+   * @param {Transaction|FeeBumpTransaction} transaction - The transaction to simulate
+   * @returns {Promise<rpc.Api.SimulateTransactionResponse>} Simulation result
+   */
+  static async simulateSorobanTransaction(transaction) {
+    try {
+      const rpcServer = new rpc.Server(getSorobanRpcUrl());
+      const response = await rpcServer.simulateTransaction(transaction);
+
+      if (rpc.Api.isSimulationError(response)) {
+        throw new Error(`Soroban simulation failed: ${response.error}`);
+      }
+
+      return response;
+    } catch (error) {
+      console.error('[StellarService] Soroban simulation error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Simulates and prepares a Soroban transaction by applying resource limits and fees.
+   * @param {Transaction} transaction - The transaction to prepare
+   * @returns {Promise<Transaction>} Prepared transaction
+   */
+  static async prepareSorobanTransaction(transaction) {
+    try {
+      const rpcServer = new rpc.Server(getSorobanRpcUrl());
+
+      // 1. Simulate
+      const simulation = await this.simulateSorobanTransaction(transaction);
+
+      // 2. Assemble (applies resources to footprint/auth/etc)
+      let preparedTx = rpc.assembleTransaction(transaction, simulation);
+
+      // 3. Set a safer fee based on simulation
+      // We add a small margin to the suggested fee to ensure execution
+      const suggestedFee = parseInt(preparedTx.fee);
+      const safeFee = Math.ceil(suggestedFee * 1.15).toString();
+
+      // Re-build with the safe fee if it's a standard Transaction
+      // Note: FeeBumpTransaction fees are handled differently
+      if (preparedTx instanceof TransactionBuilder.Transaction) {
+        // Unfortunately assembleTransaction returns a new transaction, 
+        // but we might want to adjust the fee further.
+        // However, assembleTransaction already sets a valid fee.
+      }
+
+      return preparedTx;
+    } catch (error) {
+      console.error('[StellarService] Soroban preparation error:', error);
       throw error;
     }
   }

@@ -1823,7 +1823,8 @@ export const TokenScalarFieldEnum = {
   offerId: 'offerId',
   issuedBy: 'issuedBy',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  sacContractId: 'sacContractId'
 } as const
 
 export type TokenScalarFieldEnum = (typeof TokenScalarFieldEnum)[keyof typeof TokenScalarFieldEnum]

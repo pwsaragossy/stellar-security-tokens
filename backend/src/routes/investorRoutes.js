@@ -22,6 +22,7 @@ import {
   getWalletStatus,
   proposeWithdrawal,
   submitWithdrawal,
+  initSponsoredTrustline,
 } from '../controllers/investorController.js';
 import { requireInvestor, requireOwnData } from '../middleware/authorize.js';
 
@@ -428,6 +429,7 @@ router.get('/:investorId/payments', authenticateToken, getInvestorPayments);
  *         description: Status da wallet
  */
 router.get('/:investorId/wallet-status', getWalletStatus);
+router.post('/:investorId/init-sponsored-trustline', authenticateToken, initSponsoredTrustline);
 router.put('/:id', requireInvestor, requireOwnData, updateInvestor);
 
 /**

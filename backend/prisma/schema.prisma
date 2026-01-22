@@ -138,6 +138,7 @@ model Token {
   issuedBy           Int?     @map("issued_by")
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamp
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+  sacContractId      String?  @map("sac_contract_id") @db.VarChar(56)
 
   // Relations
   offer            Offer?              @relation(fields: [offerId], references: [id], onDelete: SetNull)
