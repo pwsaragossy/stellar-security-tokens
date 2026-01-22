@@ -115,7 +115,7 @@ export const WalletController = {
                     networkPassphrase: process.env.STELLAR_NETWORK === 'public' ? StellarNetworks.PUBLIC : StellarNetworks.TESTNET,
                 })
                     .addOperation(transferOp)
-                    .setTimeout(180)
+                    .setTimeout(24 * 60 * 60) // 24 hours for multisig
                     .build();
 
                 // Simulate to get footprint
@@ -175,7 +175,7 @@ export const WalletController = {
                     networkPassphrase: process.env.STELLAR_NETWORK === 'public' ? StellarNetworks.PUBLIC : StellarNetworks.TESTNET,
                 })
                     .addOperation(operation)
-                    .setTimeout(180)
+                    .setTimeout(24 * 60 * 60) // 24 hours for multisig
                     .build();
             }
 
@@ -242,15 +242,17 @@ export const WalletController = {
                 return res.status(404).json({ error: 'Proposal not found' });
             }
 
-            if (proposal.status !== 'pending') {
-                return res.status(400).json({ error: 'Transaction already executed or rejected' });
-            }
-
-            // TODO: Verify signatures meet threshold
-            // For now, we assume if an admin sends "signedXDR", they have signed it.
-            // Since we are simulating, we just try to submit.
-
             const transaction = new Transaction(signedXDR, process.env.STELLAR_NETWORK === 'public' ? StellarNetworks.PUBLIC : StellarNetworks.TESTNET);
+
+            // Verify thresholds if it's a known multisig transaction
+            if (proposal.requiredSigners && proposal.requiredSigners.length > 0) {
+                const signatureCount = transaction.signatures.length;
+                if (signatureCount < proposal.thresholdRequired) {
+                    return res.status(400).json({
+                        error: `Insufficient signatures. Collected: ${signatureCount}, Required: ${proposal.thresholdRequired}`
+                    });
+                }
+            }
 
             try {
                 const result = await stellarServer.submitTransaction(transaction);

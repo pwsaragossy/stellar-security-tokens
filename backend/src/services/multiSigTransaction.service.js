@@ -1,5 +1,5 @@
 import prisma from '../config/prisma.js';
-import { TransactionBuilder } from '@stellar/stellar-sdk';
+import { TransactionBuilder, Keypair } from '@stellar/stellar-sdk';
 import { getNetworkPassphrase, stellarServer } from '../config/stellar.js';
 
 /**
@@ -17,10 +17,10 @@ import { getNetworkPassphrase, stellarServer } from '../config/stellar.js';
  */
 export class MultiSigTransactionService {
     /**
-     * Default transaction expiration time (5 minutes)
-     * Stellar transactions have a max timeout of 5 minutes
+     * Default transaction expiration time (24 hours)
+     * To accommodate human signature collection and Ledger connection.
      */
-    static DEFAULT_EXPIRATION_MINUTES = 5;
+    static DEFAULT_EXPIRATION_MINUTES = 24 * 60;
 
     /**
      * Create a new pending transaction awaiting signatures
@@ -136,6 +136,21 @@ export class MultiSigTransactionService {
         // Verify signer is in required list
         if (!tx.requiredSigners.includes(publicKey)) {
             throw new Error(`Public key ${publicKey.slice(0, 8)}... is not a required signer`);
+        }
+
+        // Cryptographically verify signature
+        try {
+            const transaction = TransactionBuilder.fromXDR(tx.xdr, tx.networkPassphrase);
+            const txHash = transaction.hash();
+            const keypair = Keypair.fromPublicKey(publicKey);
+
+            // Signature is expected to be base64 from the frontend (as returned by Freighter/Ledger)
+            if (!keypair.verify(txHash, Buffer.from(signature, 'base64'))) {
+                throw new Error('Invalid signature: verification failed');
+            }
+        } catch (verificationError) {
+            console.error(`[MultiSig] Cryptographic verification failed for TX #${txId}:`, verificationError.message);
+            throw new Error(`Signature verification failed: ${verificationError.message}`);
         }
 
         // Check if already signed by this key
