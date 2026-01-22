@@ -78,6 +78,7 @@ export interface Offer {
     other?: LegalDocument;
   };
   due_diligence_notes?: string;
+  token?: Token;
   created_at: string;
   updated_at: string;
 }
@@ -92,6 +93,7 @@ export interface Token {
   annual_interest_rate?: number;
   offer_id?: number;
   issued_by?: number;
+  sacContractId?: string;
   created_at: string;
   updated_at: string;
 }

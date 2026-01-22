@@ -23,7 +23,8 @@ import {
     Lock,
     Unlock,
     ExternalLink,
-    Users
+    Users,
+    Copy
 } from 'lucide-react';
 import { tokensApi } from '@/api/tokens';
 import api from '@/api/client';
@@ -141,6 +142,25 @@ export function AssetCompliance() {
         }
     };
 
+    const handleDisableClawback = async (holder: Holder) => {
+        if (!window.confirm(`Are you sure you want to PERMANENTLY disable clawback for this trustline? This action provides finality of ownership and cannot be undone.`)) {
+            return;
+        }
+
+        setActionLoading(holder.publicKey);
+        try {
+            await tokensApi.disableClawback({
+                investorPublicKey: holder.publicKey,
+                assetCode: selectedAsset
+            });
+            await loadHolders();
+        } catch (err: any) {
+            setError(err.response?.data?.error || 'Failed to disable clawback');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
     const filteredHolders = holders.filter(h =>
         h.publicKey.toLowerCase().includes(search.toLowerCase())
     );
@@ -196,7 +216,23 @@ export function AssetCompliance() {
                     <CardContent className="space-y-4">
                         <div>
                             <p className="text-2xl font-bold text-white">{selectedAsset || '---'}</p>
-                            <p className="text-xs text-muted-foreground">Active Security Token</p>
+                            <p className="text-xs text-muted-foreground mb-2">Active Security Token</p>
+                            {tokens.find(t => t.asset_code === selectedAsset)?.sacContractId && (
+                                <div className="p-2 bg-white/5 rounded-lg border border-white/10 mt-2">
+                                    <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Soroban SAC ID</p>
+                                    <div className="flex items-center justify-between gap-1">
+                                        <code className="text-[10px] text-emerald-400 truncate flex-1">
+                                            {tokens.find(t => t.asset_code === selectedAsset)?.sacContractId}
+                                        </code>
+                                        <button
+                                            onClick={() => navigator.clipboard.writeText(tokens.find(t => t.asset_code === selectedAsset)?.sacContractId || '')}
+                                            className="text-muted-foreground hover:text-white"
+                                        >
+                                            <Copy className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div className="pt-4 border-t border-white/5">
                             <div className="flex items-center justify-between mb-2">
@@ -329,6 +365,20 @@ export function AssetCompliance() {
                                                         <ArrowDownToLine className="w-3 h-3 mr-1" />
                                                         Clawback
                                                     </Button>
+
+                                                    {holder.clawbackEnabled && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-8 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10"
+                                                            onClick={() => handleDisableClawback(holder)}
+                                                            disabled={!!actionLoading}
+                                                            title="Disable Clawback (Compliance Finality)"
+                                                        >
+                                                            <ShieldCheck className="w-3 h-3 mr-1" />
+                                                            Finality
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -410,7 +460,7 @@ export function AssetCompliance() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     );
 }
 

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
     FileText, Search, Filter, Loader2, Check, X, Eye,
-    Building2, DollarSign, AlertTriangle, Rocket
+    Building2, DollarSign, AlertTriangle, Rocket, Copy
 } from "lucide-react";
 import { offersApi } from "@/api/offers";
 import type { Offer } from "@/types";
@@ -397,6 +397,24 @@ export function AdminOffers() {
                                     <p className="text-xs text-muted-foreground">Status</p>
                                     {getStatusBadge(selectedOffer.status)}
                                 </div>
+                                {selectedOffer.token?.sacContractId && (
+                                    <div className="col-span-2 p-2 bg-emerald-500/5 rounded-lg border border-emerald-500/10">
+                                        <p className="text-[10px] text-emerald-400 uppercase font-bold mb-1">Soroban SAC ID</p>
+                                        <div className="flex items-center justify-between gap-2">
+                                            <code className="text-xs text-emerald-300 font-mono break-all flex-1">
+                                                {selectedOffer.token.sacContractId}
+                                            </code>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 w-8 p-0 hover:bg-emerald-500/10 text-emerald-400"
+                                                onClick={() => navigator.clipboard.writeText(selectedOffer.token?.sacContractId || '')}
+                                            >
+                                                <Copy className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <p className="text-xs text-muted-foreground mb-1">Description</p>

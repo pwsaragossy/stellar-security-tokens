@@ -65,5 +65,10 @@ export const investorsApi = {
     const response = await api.put(`/investors/${investorId}/kyc-status`, { status, reason });
     return response.data;
   },
+
+  initSponsoredTrustline: async (investorId: number, assetCode: string): Promise<ApiResponse> => {
+    const response = await api.post(`/investors/${investorId}/init-sponsored-trustline`, { assetCode });
+    return response.data;
+  },
 };
 
