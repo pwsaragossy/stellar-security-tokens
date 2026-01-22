@@ -14,10 +14,18 @@ import {
 import { Operation, Asset } from '@stellar/stellar-sdk';
 import cron from 'node-cron';
 
-const USDC_ISSUER = process.env.USDC_ISSUER || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
-const USDC_ASSET_CODE = 'USDC';
 const DEFAULT_ANNUAL_INTEREST_RATE = 10.0; // Fallback se não encontrar no banco
 const MAX_OPERATIONS_PER_TX = 95; // Buffer de segurança (Stellar limit is 100)
+
+/**
+ * Gets the USDC configuration from ConfigService
+ * @returns {Promise<{issuer: string, code: string}>}
+ */
+const getUSDCConfig = async () => {
+  const issuer = await ConfigService.get('USDC_ISSUER', process.env.USDC_ISSUER || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN');
+  const code = await ConfigService.get('USDC_ASSET_CODE', 'USDC');
+  return { issuer, code };
+};
 
 const logger = {
   info: (message, data = {}) => {
@@ -203,9 +211,11 @@ export class PaymentService {
       const distributorKeypair = getDistributorKeypair();
       const distributorAccount = await stellarServer.loadAccount(distributorKeypair.publicKey());
 
+      const { issuer: usdcIssuer, code: usdcAssetCode } = await getUSDCConfig();
+
       // Verificar liquidez USDC antes de criar operações
       const usdcBalance = distributorAccount.balances.find(
-        b => b.asset_code === USDC_ASSET_CODE && b.asset_issuer === USDC_ISSUER
+        b => b.asset_code === usdcAssetCode && b.asset_issuer === usdcIssuer
       );
 
       const totalNeeded = payments.reduce((sum, p) => sum + parseFloat(p.usdcAmount), 0);
@@ -228,7 +238,7 @@ export class PaymentService {
         remaining: parseFloat(usdcBalance.balance) - totalNeeded
       });
 
-      const usdcAsset = new Asset(USDC_ASSET_CODE, USDC_ISSUER);
+      const usdcAsset = new Asset(usdcAssetCode, usdcIssuer);
 
       // Preparar operações válidas
       const validPayments = [];
@@ -510,10 +520,12 @@ export class PaymentService {
           feeAmount = grossInterest * (feePercent / 100);
           netInterest = grossInterest - feeAmount;
 
+          const { code: usdcAssetCode } = await getUSDCConfig();
+
           // Log Fee (Fire and forget, or await?) Await to ensure log.
           await ConfigService.logFee({
             amount: feeAmount,
-            assetCode: USDC_ASSET_CODE,
+            assetCode: usdcAssetCode,
             category: 'DIVIDEND_FEE',
             sourceId: investor.id,
             description: `Dividend Fee ${feePercent}% on ${grossInterest} USDC`,
@@ -606,7 +618,8 @@ export class PaymentService {
     } catch (error) {
       logger.error('Monthly interest payment process failed', error);
 
-      // Log error payment record (investor_id can be null for system errors)
+      const { code: usdcAssetCode } = await getUSDCConfig();
+
       await prisma.interestPayment.create({
         data: {
           investorId: 0, // Placeholder for system errors
