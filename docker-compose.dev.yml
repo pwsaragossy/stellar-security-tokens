@@ -20,6 +20,8 @@ services:
       NODE_ENV: development
       # Enable more verbose logging
       LOG_LEVEL: debug
+      # Keep IPFS mocked in dev (empty = mock mode, real JWT in production only)
+      PINATA_JWT: ""
     # Enable hot-reload by mounting source code
     # Uncomment these volumes for live code changes:
     # volumes:
