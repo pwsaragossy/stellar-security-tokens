@@ -243,43 +243,13 @@ export class StellarService {
           }
           await response.json();
         } catch (error) {
-          throw new Error(`Failed to fund investor account via Friendbot: ${error.message}`);
+          console.warn(`[StellarService] Friendbot failed, falling back to sponsorship: ${error.message}`);
+          // Fallback to sponsorship even on testnet if friendbot fails
+          await this.setupSponsoredAccount(keypair.publicKey());
         }
       } else {
-        // Mainnet: Sponsored Activation via Treasury
-        const treasuryKeypair = getTreasuryKeypair();
-        if (!treasuryKeypair) {
-          throw new Error('Treasury Keypair not configured. Cannot sponsor account activation on Mainnet.');
-        }
-
-        try {
-          const treasuryAccount = await stellarServer.loadAccount(treasuryKeypair.publicKey());
-
-          const transaction = new TransactionBuilder(treasuryAccount, {
-            fee: BASE_FEE,
-            networkPassphrase: getNetworkPassphrase(),
-          })
-            .addOperation(Operation.createAccount({
-              destination: keypair.publicKey(),
-              startingBalance: '3.0', // 1 (Base) + 0.5 (Trustline) + 1.5 (Gas/Buffer)
-            }))
-            .setTimeout(30)
-            .build();
-
-          transaction.sign(treasuryKeypair);
-
-          await stellarServer.submitTransaction(transaction);
-
-        } catch (error) {
-          throw new Error(`Failed to sponsor Mainnet account activation: ${error.message}`);
-        }
-
-        return {
-          success: true,
-          publicKey: keypair.publicKey(),
-          secretKey: keypair.secret(),
-          note: 'Account activated via Treasury sponsorship.',
-        };
+        // Mainnet: Sponsored Activation via Operations
+        await this.setupSponsoredAccount(keypair.publicKey());
       }
 
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -539,12 +509,16 @@ export class StellarService {
           await stellarServer.loadAccount(investorPublicKey);
         } catch (error) {
           if (error.status === 404) {
-            console.log(`[StellarService] Investor account ${investorPublicKey} not found. Attempting sponsored trustline...`);
-            // Se não existir, podemos tentar criar a conta e trustline se for custodial
-            // Mas JIT deve ser cauteloso. Por enquanto, falhar amigavelmente.
-            throw new Error('Investor account does not exist. Please initialize wallet first.');
+            console.log(`[StellarService] Investor account ${investorPublicKey} not found. Attempting JIT sponsored trustline...`);
+            // Attempt to setup sponsored trustline automatically (JIT)
+            const jitResult = await this.setupSponsoredTrustline(investorPublicKey, assetCode);
+            if (!jitResult.success) {
+              throw new Error(`JIT Sponsorship failed: ${jitResult.error || 'Unknown error'}`);
+            }
+            console.log(`[StellarService] JIT Sponsored trustline setup successful for ${investorPublicKey}`);
+          } else {
+            throw error;
           }
-          throw error;
         }
 
         const operations = [
@@ -843,6 +817,41 @@ export class StellarService {
     } catch (error) {
       console.error('[StellarService] Error in setupSponsoredTrustline:', error);
       throw new Error(`Failed to setup sponsored trustline: ${error.message}`);
+    }
+  }
+
+  /**
+   * Ativa uma conta Stellar via patrocínio (Sponsorship).
+   * @param {string} destination - Chave pública da conta a ser criada
+   * @returns {Promise<Object>} Resultado da transação
+   */
+  static async setupSponsoredAccount(destination) {
+    try {
+      const operationsKeypair = getOperationsKeypair();
+      const operationsAccount = await stellarServer.loadAccount(operationsKeypair.publicKey());
+
+      const transaction = new TransactionBuilder(operationsAccount, {
+        fee: BASE_FEE,
+        networkPassphrase: getNetworkPassphrase(),
+      })
+        .addOperation(Operation.beginSponsoringFutureReserves({
+          sponsoredID: destination,
+        }))
+        .addOperation(Operation.createAccount({
+          destination,
+          startingBalance: '0',
+        }))
+        .addOperation(Operation.endSponsoringFutureReserves({
+          source: destination,
+        }))
+        .setTimeout(30)
+        .build();
+
+      transaction.sign(operationsKeypair);
+      return await stellarServer.submitTransaction(transaction);
+    } catch (error) {
+      console.error(`[StellarService] Sponsored account activation failed for ${destination}:`, error);
+      throw error;
     }
   }
 

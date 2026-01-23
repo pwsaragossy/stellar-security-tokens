@@ -278,7 +278,14 @@ export function AdminOffers() {
                                             <td className="py-3 px-2">
                                                 <div>
                                                     <p className="text-white font-medium">{offer.offer_name}</p>
-                                                    <p className="text-xs text-muted-foreground font-mono">{offer.asset_code}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-xs text-muted-foreground font-mono">{offer.asset_code}</p>
+                                                        {offer.token?.sacContractId && (
+                                                            <Badge variant="outline" className="text-[10px] h-4 px-1 border-emerald-500/30 text-emerald-400 bg-emerald-500/5">
+                                                                SAC
+                                                            </Badge>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td className="py-3 px-2">
