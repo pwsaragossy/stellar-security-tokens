@@ -1,6 +1,10 @@
 import { Token } from '../models/Token.js';
 import { Investor } from '../models/Investor.js';
 import { StellarService } from '../services/stellar.service.js';
+import { keyManager } from '../services/KeyManager.js';
+import { MultiSigTransactionService } from '../services/multiSigTransaction.service.js';
+import { buildUnsignedTransaction } from '../config/stellar.js';
+import { Operation } from '@stellar/stellar-sdk';
 
 export const issueToken = async (req, res, next) => {
   try {
@@ -272,6 +276,36 @@ export const disableClawback = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: 'investorPublicKey and assetCode are required',
+      });
+    }
+
+    // PHASE 2.1: Multi-Admin Consensus for Compliance Finality
+    if (keyManager.requiresMultisigApproval('disable_clawback')) {
+      console.log(`[TokenController] Multi-Admin mode: Creating proposal for disable_clawback...`);
+
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
+      const xdr = await buildUnsignedTransaction(
+        issuerPublicKey,
+        [StellarService.buildDisableClawbackOp(investorPublicKey, assetCode)]
+      );
+
+      const proposal = await MultiSigTransactionService.create({
+        operationType: 'disable_clawback',
+        xdr,
+        requiredSigners: keyManager.getRequiredSigners('disable_clawback'),
+        thresholdRequired: keyManager.getSignatureThreshold('disable_clawback'),
+        description: `Permanently disable clawback for holder ${investorPublicKey.slice(0, 12)}... on asset ${assetCode}`,
+        metadata: { investorPublicKey, assetCode },
+        initiatorId: req.user?.userId || null,
+      });
+
+      return res.status(202).json({
+        success: true,
+        message: 'Multisig proposal created for compliance finality',
+        data: {
+          proposalId: proposal.id,
+          status: 'pending_signatures',
+        },
       });
     }
 

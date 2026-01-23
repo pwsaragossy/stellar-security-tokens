@@ -957,6 +957,19 @@ export class StellarService {
   }
 
   /**
+   * Builds the operation to disable clawback for a trustline (Internal helper)
+   */
+  static buildDisableClawbackOp(investorPublicKey, assetCode) {
+    const issuerKeypair = getIssuerKeypair();
+    const asset = createAsset(assetCode, issuerKeypair.publicKey());
+    return Operation.setTrustLineFlags({
+      trustor: investorPublicKey,
+      asset: asset,
+      clearFlags: 4, // AuthClawbackEnabledFlag = 4
+    });
+  }
+
+  /**
    * Recupera tokens (clawback) do investidor
    * Retira tokens da conta do investidor e retorna para o emissor
    * Requer que o asset tenha AuthClawbackEnabledFlag habilitada
