@@ -10,7 +10,8 @@ coverage/
 .env.bak
 .env.local
 .env*
-/generated/prisma
+**/generated/prisma/
+
 .obsidian/app.json
 .obsidian/appearance.json
 .obsidian/core-plugins.json
