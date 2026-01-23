@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -68,6 +68,8 @@ export function AssetCompliance() {
         }
     }, [selectedAsset]);
 
+    const [pendingActions, setPendingActions] = useState<Array<{ type: string; key: string }>>([]);
+
     const loadTokens = async () => {
         try {
             setLoadingTokens(true);
@@ -87,10 +89,25 @@ export function AssetCompliance() {
     const loadHolders = async () => {
         try {
             setLoadingHolders(true);
-            const response = await api.get(`/tokens/${selectedAsset}/holders`);
-            setHolders(response.data.data || []);
+            const [holdersResponse, pendingResponse] = await Promise.all([
+                api.get(`/tokens/${selectedAsset}/holders`),
+                api.get('/admin/transactions/pending')
+            ]);
+
+            setHolders(holdersResponse.data.data || []);
+
+            if (pendingResponse.data.success) {
+                const pending = pendingResponse.data.data.transactions
+                    .filter((tx: any) => tx.metadata?.assetCode === selectedAsset)
+                    .map((tx: any) => ({
+                        type: tx.operationType,
+                        key: tx.metadata?.investorPublicKey || tx.metadata?.holderAddress
+                    }))
+                    .filter((a: any) => a.key);
+                setPendingActions(pending);
+            }
         } catch (err: any) {
-            setError('Failed to load holders');
+            setError('Failed to refresh data');
         } finally {
             setLoadingHolders(false);
         }
@@ -106,7 +123,7 @@ export function AssetCompliance() {
                 assetCode: selectedAsset
             });
 
-            if (response.data.status === 'pending_multisig') {
+            if (response.data.status === 'pending_multisig' || (response as any).status === 'pending_multisig') {
                 setSuccess(
                     <div className="flex flex-col gap-1">
                         <span>Freeze request queued for MultiSig approval</span>
@@ -115,6 +132,7 @@ export function AssetCompliance() {
                         </Link>
                     </div>
                 );
+                setPendingActions(prev => [...prev, { type: 'freeze_account', key: holder.publicKey }]);
             } else {
                 setSuccess('Account frozen successfully');
             }
@@ -136,7 +154,7 @@ export function AssetCompliance() {
                 assetCode: selectedAsset
             });
 
-            if (response.data.status === 'pending_multisig') {
+            if (response.data.status === 'pending_multisig' || (response as any).status === 'pending_multisig') {
                 setSuccess(
                     <div className="flex flex-col gap-1">
                         <span>Unfreeze request queued for MultiSig approval</span>
@@ -145,6 +163,7 @@ export function AssetCompliance() {
                         </Link>
                     </div>
                 );
+                setPendingActions(prev => [...prev, { type: 'unfreeze_account', key: holder.publicKey }]);
             } else {
                 setSuccess('Account unfrozen successfully');
             }
@@ -158,17 +177,18 @@ export function AssetCompliance() {
 
     const handleClawback = async () => {
         if (!clawbackModal.holder || !clawbackAmount) return;
+        const holderKey = clawbackModal.holder.publicKey;
         setActionLoading('clawback');
         setError(null);
         setSuccess(null);
         try {
             const response = await tokensApi.clawback({
-                investorPublicKey: clawbackModal.holder.publicKey,
+                investorPublicKey: holderKey,
                 assetCode: selectedAsset,
                 amount: clawbackAmount
             });
 
-            if (response.data.status === 'pending_multisig') {
+            if (response.data.status === 'pending_multisig' || (response as any).status === 'pending_multisig') {
                 setSuccess(
                     <div className="flex flex-col gap-1">
                         <span>Clawback request queued for MultiSig approval</span>
@@ -177,6 +197,7 @@ export function AssetCompliance() {
                         </Link>
                     </div>
                 );
+                setPendingActions(prev => [...prev, { type: 'clawback', key: holderKey }]);
             } else {
                 setSuccess('Clawback successful');
             }
@@ -204,7 +225,7 @@ export function AssetCompliance() {
                 assetCode: selectedAsset
             });
 
-            if (response.data.status === 'pending_multisig') {
+            if (response.data.status === 'pending_multisig' || (response as any).status === 'pending_multisig') {
                 setSuccess(
                     <div className="flex flex-col gap-1">
                         <span>Finality request queued for MultiSig approval</span>
@@ -213,6 +234,7 @@ export function AssetCompliance() {
                         </Link>
                     </div>
                 );
+                setPendingActions(prev => [...prev, { type: 'disable_clawback', key: holder.publicKey }]);
             } else {
                 setSuccess('Finality applied successfully');
             }
@@ -399,14 +421,14 @@ export function AssetCompliance() {
                                                             variant="outline"
                                                             className="h-8 border-red-500/30 text-red-500 hover:bg-red-500/10"
                                                             onClick={() => handleFreeze(holder)}
-                                                            disabled={!!actionLoading}
+                                                            disabled={!!actionLoading || pendingActions.some(a => a.key === holder.publicKey && a.type === 'freeze_account')}
                                                         >
                                                             {actionLoading === holder.publicKey ? (
                                                                 <Loader2 className="w-3 h-3 animate-spin mr-1" />
                                                             ) : (
                                                                 <Lock className="w-3 h-3 mr-1" />
                                                             )}
-                                                            Freeze
+                                                            {pendingActions.some(a => a.key === holder.publicKey && a.type === 'freeze_account') ? 'Pending' : 'Freeze'}
                                                         </Button>
                                                     ) : (
                                                         <Button
@@ -414,14 +436,14 @@ export function AssetCompliance() {
                                                             variant="outline"
                                                             className="h-8 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10"
                                                             onClick={() => handleUnfreeze(holder)}
-                                                            disabled={!!actionLoading}
+                                                            disabled={!!actionLoading || pendingActions.some(a => a.key === holder.publicKey && a.type === 'unfreeze_account')}
                                                         >
                                                             {actionLoading === holder.publicKey ? (
                                                                 <Loader2 className="w-3 h-3 animate-spin mr-1" />
                                                             ) : (
                                                                 <Unlock className="w-3 h-3 mr-1" />
                                                             )}
-                                                            Unfreeze
+                                                            {pendingActions.some(a => a.key === holder.publicKey && a.type === 'unfreeze_account') ? 'Pending' : 'Unfreeze'}
                                                         </Button>
                                                     )}
 
@@ -430,23 +452,23 @@ export function AssetCompliance() {
                                                         variant="outline"
                                                         className="h-8 border-orange-500/30 text-orange-500 hover:bg-orange-500/10"
                                                         onClick={() => setClawbackModal({ open: true, holder })}
-                                                        disabled={!!actionLoading}
+                                                        disabled={!!actionLoading || pendingActions.some(a => a.key === holder.publicKey && a.type === 'clawback')}
                                                     >
                                                         <ArrowDownToLine className="w-3 h-3 mr-1" />
-                                                        Clawback
+                                                        {pendingActions.some(a => a.key === holder.publicKey && a.type === 'clawback') ? 'Pending' : 'Clawback'}
                                                     </Button>
 
                                                     {holder.clawbackEnabled && (
                                                         <Button
                                                             size="sm"
                                                             variant="outline"
-                                                            className="h-8 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10"
+                                                            className="h-8 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
                                                             onClick={() => handleDisableClawback(holder)}
-                                                            disabled={!!actionLoading}
+                                                            disabled={!!actionLoading || pendingActions.some(a => a.key === holder.publicKey && a.type === 'disable_clawback')}
                                                             title="Disable Clawback (Compliance Finality)"
                                                         >
                                                             <ShieldCheck className="w-3 h-3 mr-1" />
-                                                            Finality
+                                                            {pendingActions.some(a => a.key === holder.publicKey && a.type === 'disable_clawback') ? 'Pending' : 'Finality'}
                                                         </Button>
                                                     )}
                                                 </div>

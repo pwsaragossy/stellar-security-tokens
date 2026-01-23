@@ -9,8 +9,8 @@ import {
   stellarServer,
   getDistributorKeypair,
   buildTransaction,
-  signAndSubmitTransaction,
 } from '../config/stellar.js';
+import { TransactionManager } from './transactionManager.service.js';
 import { Operation, Asset } from '@stellar/stellar-sdk';
 import cron from 'node-cron';
 
@@ -285,7 +285,32 @@ export class PaymentService {
         );
 
         const transaction = await buildTransaction(distributorKeypair, operations);
-        const result = await signAndSubmitTransaction(transaction, distributorKeypair);
+
+        const result = await TransactionManager.submit({
+          transaction,
+          signingKeypair: distributorKeypair,
+          operationType: 'dividend_distribution',
+          description: `Interest Distribution: ${operations.length} payments`,
+          metadata: {
+            payments: batch.map(b => ({
+              ...b.payment,
+              investorId: b.investor.id,
+              assetCode: usdcAssetCode
+            })),
+            paymentDate: new Date().toISOString(),
+            operationCount: operations.length
+          }
+        });
+
+        if (result.status === 'pending_multisig') {
+          results.push({
+            batchIndex: index,
+            status: 'pending_multisig',
+            multiSigTransactionId: result.multiSigTransactionId,
+            operationsCount: operations.length
+          });
+          continue;
+        }
 
         if (!result.success) {
           throw new Error(`Batch ${index + 1} payment failed: ${result.error}`);
@@ -311,10 +336,13 @@ export class PaymentService {
         }
       }
 
+      const hasPendingMultisig = results.some(r => r.status === 'pending_multisig');
+
       return {
         success: true,
-        transactionHash: results[0].transactionHash, // Primeira transação para compatibilidade
-        ledger: results[0].ledger,
+        status: hasPendingMultisig ? 'pending_multisig' : 'executed',
+        transactionHash: results[0].transactionHash || null,
+        ledger: results[0].ledger || null,
         operationCount: validPayments.length,
         batches: results,
       };
@@ -560,6 +588,18 @@ export class PaymentService {
         3,
         2000
       );
+
+      // If pending multisig, skip local recording and emails (handled by hook later)
+      if (batchResult.status === 'pending_multisig') {
+        logger.info('Monthly interest payment process queued for MultiSig approval');
+        return {
+          success: true,
+          status: 'pending_multisig',
+          paymentDate,
+          processed: payments.length,
+          message: 'Process queued for MultiSig approval. Database will be updated after execution.'
+        };
+      }
 
       // Registrar pagamentos - se houver múltiplas transações (batches), registrar todas
       if (batchResult.batches && batchResult.batches.length > 1) {

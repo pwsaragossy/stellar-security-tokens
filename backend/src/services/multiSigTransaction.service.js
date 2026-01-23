@@ -17,10 +17,10 @@ import { getNetworkPassphrase, stellarServer } from '../config/stellar.js';
  */
 export class MultiSigTransactionService {
     /**
-     * Default transaction expiration time (24 hours)
-     * To accommodate human signature collection and Ledger connection.
+     * Default transaction transaction expiration time (72 hours)
+     * Provides sufficient time for multi-admin coordination.
      */
-    static DEFAULT_EXPIRATION_MINUTES = 24 * 60;
+    static DEFAULT_EXPIRATION_MINUTES = 72 * 60;
 
     /**
      * Create a new pending transaction awaiting signatures
@@ -66,6 +66,17 @@ export class MultiSigTransactionService {
         });
 
         console.log(`[MultiSig] Created pending TX #${tx.id} (${operationType}) - requires ${thresholdRequired} of ${requiredSigners.length} signatures`);
+
+        // Broadcast new transaction to Pusher
+        const { broadcast } = await import('../config/pusher.js');
+        broadcast('admin-governance', 'new-proposal', {
+            id: tx.id,
+            operationType,
+            description,
+            initiatorId
+        });
+
+        return tx;
 
         return tx;
     }
@@ -180,6 +191,16 @@ export class MultiSigTransactionService {
 
         console.log(`[MultiSig] TX #${txId}: Signature added from ${publicKey.slice(0, 8)}... (${signatureCount}/${tx.thresholdRequired})`);
 
+        // Broadcast signature update to Pusher
+        const { broadcast } = await import('../config/pusher.js');
+        broadcast('admin-governance', 'signature-added', {
+            id: txId,
+            signer: publicKey,
+            signatureCount,
+            thresholdRequired: tx.thresholdRequired,
+            status: newStatus
+        });
+
         return {
             ...updated,
             signatureCount,
@@ -244,6 +265,14 @@ export class MultiSigTransactionService {
             });
 
             console.log(`[MultiSig] TX #${txId} executed successfully: ${result.hash}`);
+
+            // Broadcast execution success to Pusher
+            const { broadcast } = await import('../config/pusher.js');
+            broadcast('admin-governance', 'transaction-executed', {
+                id: txId,
+                hash: result.hash,
+                status: 'executed'
+            });
 
             return {
                 success: true,
@@ -376,6 +405,7 @@ export class MultiSigTransactionService {
         try {
             switch (operationType) {
                 case 'token_issue':
+                    // 1. Create the Token record
                     await prisma.token.create({
                         data: {
                             assetCode: metadata.assetCode,
@@ -387,7 +417,17 @@ export class MultiSigTransactionService {
                             sacContractId: metadata.sacContractId || null,
                         }
                     });
+
+                    // 2. Update the Offer status to active
+                    if (metadata.offerId) {
+                        await prisma.offer.update({
+                            where: { id: parseInt(metadata.offerId) },
+                            data: { status: 'active' }
+                        });
+                        console.log(`[MultiSig] Offer #${metadata.offerId} set to ACTIVE`);
+                    }
                     break;
+
                 case 'token_distribute':
                     await prisma.tokenDistribution.create({
                         data: {
@@ -400,11 +440,57 @@ export class MultiSigTransactionService {
                         }
                     });
                     break;
+
+                case 'treasury_payment':
+                    // Record the fee in the log
+                    await prisma.feeLog.create({
+                        data: {
+                            amount: metadata.amount,
+                            assetCode: metadata.assetCode || 'USDC',
+                            category: metadata.category || 'WITHDRAWAL',
+                            description: metadata.description || `Multisig payment: ${tx.description}`,
+                            transactionHash: txHash
+                        }
+                    });
+                    break;
+
+                case 'dividend_distribution':
+                    // Record all payments in the batch
+                    if (metadata.payments && Array.isArray(metadata.payments)) {
+                        await prisma.$transaction(
+                            metadata.payments.map((payment) =>
+                                prisma.interestPayment.create({
+                                    data: {
+                                        investorId: payment.investorId,
+                                        assetCode: payment.assetCode,
+                                        tokenBalance: payment.tokenBalance,
+                                        interestRate: payment.interestRate,
+                                        interestAmount: payment.interestAmount,
+                                        usdcAmount: payment.usdcAmount,
+                                        transactionHash: txHash,
+                                        paymentDate: new Date(metadata.paymentDate || Date.now()),
+                                        status: 'completed',
+                                        offerId: payment.offerId || null,
+                                    }
+                                })
+                            )
+                        );
+                        console.log(`[MultiSig] Recorded ${metadata.payments.length} interest payments for ${txHash}`);
+                    }
+                    break;
+
+                case 'disable_clawback':
+                    // If we had a flag in the DB for this, we would update it here.
+                    // Since it's on-chain only, we just log it.
+                    console.log(`[MultiSig] Clawback disabled on-chain for ${metadata.investorPublicKey} / ${metadata.assetCode}`);
+                    break;
+
                 default:
                     console.log(`[MultiSig] No post-execution hooks for ${operationType}`);
             }
         } catch (error) {
             console.error(`[MultiSig] Hook Error for TX #${tx.id}:`, error.message);
+            // We catch but don't rethrow to avoid breaking the transaction submission record update
         }
     }
 }

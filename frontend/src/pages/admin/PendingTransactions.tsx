@@ -17,6 +17,8 @@ import { FreighterConnect } from '../../components/admin/FreighterConnect';
 import { useLedger } from '../../hooks/useLedger';
 import { useFreighter } from '../../hooks/useFreighter';
 import { api } from '../../lib/api';
+import { usePusherSubscription } from '../../lib/pusher';
+import { toast } from 'sonner';
 
 type SigningMethod = 'ledger' | 'freighter';
 
@@ -69,7 +71,9 @@ const OP_TYPE_LABELS: Record<string, string> = {
     token_distribute: 'Token Distribution',
     freeze_account: 'Account Freeze',
     clawback: 'Token Clawback',
-    treasury_payment: 'Treasury Payment',
+    treasury_payment: 'Treasury Withdrawal',
+    dividend_distribution: 'Dividend Distribution',
+    opex_withdrawal: 'OpEx Withdrawal',
     trustline_auth: 'Trustline Authorization',
     account_setup: 'Account Setup',
     other: 'Other',
@@ -109,6 +113,22 @@ export function PendingTransactions() {
     useEffect(() => {
         fetchTransactions();
     }, [fetchTransactions]);
+
+    // Real-time synchronization
+    usePusherSubscription('admin-governance', 'new-proposal', (data) => {
+        toast.info(`New ${data.operationType.replace('_', ' ')} proposal created`);
+        fetchTransactions();
+    });
+
+    usePusherSubscription('admin-governance', 'signature-added', (data) => {
+        toast.success(`Signature added to TX #${data.id}`);
+        fetchTransactions();
+    });
+
+    usePusherSubscription('admin-governance', 'transaction-executed', (data) => {
+        toast.success(`Transaction #${data.id} executed successfully!`);
+        fetchTransactions();
+    });
 
     const handleSign = async (tx: PendingTransaction) => {
         if (!activeDevice) {
@@ -388,6 +408,28 @@ export function PendingTransactions() {
                                     <div>
                                         <p className="text-zinc-400">Initiated By</p>
                                         <p className="text-white">{selectedTx.initiator.name}</p>
+                                    </div>
+                                )}
+
+                                {selectedTx.metadata && Object.keys(selectedTx.metadata).length > 0 && (
+                                    <div className="pt-2 border-t border-zinc-700/50 mt-2">
+                                        <p className="text-zinc-400 mb-1 font-medium">Operation Context</p>
+                                        <div className="bg-black/20 rounded p-2 text-[11px] font-mono text-blue-300">
+                                            {selectedTx.operationType === 'dividend_distribution' && (
+                                                <div className="space-y-1">
+                                                    <div>Batch Size: {selectedTx.metadata.operationCount} payments</div>
+                                                    <div>Asset: {selectedTx.metadata.assetCode}</div>
+                                                    <div>Status: Batch Processed</div>
+                                                </div>
+                                            )}
+                                            {selectedTx.operationType === 'treasury_payment' && (
+                                                <div className="space-y-1">
+                                                    <div>Dest: {selectedTx.metadata.destination?.slice(0, 8)}...</div>
+                                                    <div>Amount: {selectedTx.metadata.amount} {selectedTx.metadata.assetCode}</div>
+                                                    <div>Note: {selectedTx.metadata.type?.replace('_', ' ')}</div>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </div>

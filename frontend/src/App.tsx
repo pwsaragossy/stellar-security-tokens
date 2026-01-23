@@ -42,6 +42,7 @@ import { AdminOffers } from './pages/admin/AdminOffers';
 import { PendingTransactions } from './pages/admin/PendingTransactions';
 import { AssetCompliance } from './pages/admin/AssetCompliance';
 import { EmergencyControls } from './pages/admin/EmergencyControls';
+import { Treasury } from './pages/admin/Treasury';
 
 function App() {
   return (
@@ -93,6 +94,7 @@ function App() {
           <Route path="transactions" element={<PendingTransactions />} />
           <Route path="compliance" element={<AssetCompliance />} />
           <Route path="emergency" element={<EmergencyControls />} />
+          <Route path="treasury" element={<Treasury />} />
           <Route path="wallets" element={<Wallets />} />
           <Route path="fees" element={<FeeConfig />} />
           <Route path="defaults" element={<DefaultCases />} />

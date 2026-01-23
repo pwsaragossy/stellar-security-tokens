@@ -12,7 +12,7 @@ import { QRCode } from '@/components/ui/qrcode';
 import { investorsApi } from '@/api/investors';
 
 interface DepositDialogProps {
-    investorId: number;
+    investorId?: number;
     walletAddress: string;
     network?: 'testnet' | 'mainnet';
 }
@@ -38,6 +38,7 @@ export function DepositDialog({ investorId, walletAddress }: DepositDialogProps)
     };
 
     const initiateDeposit = useCallback(async () => {
+        if (!investorId) return;
         setLoading(true);
         setError(null);
         try {
@@ -52,12 +53,14 @@ export function DepositDialog({ investorId, walletAddress }: DepositDialogProps)
 
     // Initial initiation
     useEffect(() => {
-        initiateDeposit();
-    }, [initiateDeposit]);
+        if (investorId) {
+            initiateDeposit();
+        }
+    }, [investorId, initiateDeposit]);
 
     // Status Polling
     useEffect(() => {
-        if (!deposit || deposit.status === 'completed' || deposit.status === 'failed' || deposit.status === 'expired') {
+        if (!investorId || !deposit || deposit.status === 'completed' || deposit.status === 'failed' || deposit.status === 'expired') {
             return;
         }
 

@@ -5,6 +5,7 @@ import { authenticateToken, generateToken } from '../middleware/auth.js';
 import { requirePlatformAdmin, requireAdminRole } from '../middleware/authorize.js';
 import { PlatformAdminController } from '../controllers/platformAdminController.js';
 import { InvestmentMetricsController } from '../controllers/investmentMetricsController.js';
+import { TreasuryController } from '../controllers/treasuryController.js';
 import prisma from '../config/prisma.js';
 import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
 import { WebAuthnService } from '../services/webauthn.service.js';
@@ -519,6 +520,49 @@ router.put('/:id', requirePlatformAdmin, PlatformAdminController.updatePlatformA
  *         description: Lista de investidores
  */
 router.get('/investors', authenticateToken, requirePlatformAdmin, PlatformAdminController.getAllInvestors);
+
+// ============ Treasury Management Routes ============
+
+/**
+ * @swagger
+ * /api/platform-admins/treasury/balances:
+ *   get:
+ *     summary: "[Admin] View Treasury balances"
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Treasury public key and balances
+ */
+router.get('/treasury/balances', authenticateToken, requirePlatformAdmin, TreasuryController.getBalances);
+
+/**
+ * @swagger
+ * /api/platform-admins/treasury/withdraw:
+ *   post:
+ *     summary: "[Admin] Request OpEx withdrawal"
+ *     description: Queues a withdrawal for multisig approval
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [destination, amount, assetCode, description]
+ *             properties:
+ *               destination: { type: string }
+ *               amount: { type: string }
+ *               assetCode: { type: string }
+ *               description: { type: string }
+ *     responses:
+ *       202:
+ *         description: Request queued (Pending Multisig)
+ */
+router.post('/treasury/withdraw', authenticateToken, requirePlatformAdmin, TreasuryController.withdraw);
 
 // ============ Company Management Routes ============
 

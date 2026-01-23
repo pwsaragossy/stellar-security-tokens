@@ -29,11 +29,13 @@
     "date-fns": "^4.1.0",
     "lucide-react": "^0.553.0",
     "passkey-kit": "^0.11.3",
+    "pusher-js": "^8.4.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-router-dom": "^7.9.5",
     "recharts": "^3.4.1",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {

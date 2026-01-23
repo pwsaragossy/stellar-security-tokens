@@ -616,6 +616,65 @@ export class StellarService {
   }
 
   /**
+   * Realiza uma retirada do Tesouro (OpEx)
+   * 
+   * @param {string} destination - Endereço de destino (G...)
+   * @param {string} amount - Valor a ser retirado
+   * @param {string} assetCode - Código do asset (ex: 'USDC')
+   * @param {string} description - Descrição da retirada
+   * @returns {Promise<Object>} Resultado da retirada
+   */
+  static async withdrawFromTreasury(destination, amount, assetCode, description) {
+    try {
+      const treasuryKeypair = getTreasuryKeypair();
+      const issuerKeypair = getIssuerKeypair();
+
+      const asset = assetCode === 'XLM'
+        ? Asset.native()
+        : new Asset(assetCode, issuerKeypair.publicKey());
+
+      const operations = [
+        Operation.payment({
+          destination,
+          asset,
+          amount: amount.toString(),
+          source: treasuryKeypair.publicKey(),
+        }),
+      ];
+
+      const transaction = await buildTransaction(treasuryKeypair, operations, {
+        memo: description.substring(0, 28) // Text memo limit
+      });
+
+      const result = await TransactionManager.submit({
+        transaction,
+        signingKeypair: treasuryKeypair,
+        operationType: 'treasury_payment',
+        description: `OpEx: ${description}`,
+        metadata: {
+          destination,
+          amount,
+          assetCode,
+          type: 'opex_withdrawal'
+        }
+      });
+
+      if (result.status === 'pending_multisig') {
+        return {
+          success: true,
+          status: 'pending_multisig',
+          ...result
+        };
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error in treasury withdrawal:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Obtém o Contract ID do Stellar Asset Contract (SAC) para um asset
    * @param {Asset} asset - Objeto Asset
    * @returns {string} Contract ID (C...)

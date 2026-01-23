@@ -124,6 +124,25 @@ app.listen(PORT, async () => {
     console.error('Failed to start overdue payment checker:', error.message);
   }
 
+  // Start MultiSig Expiry Checker (runs every 10 minutes)
+  try {
+    const cron = await import('node-cron');
+    const { MultiSigTransactionService } = await import('./services/multiSigTransaction.service.js');
+
+    cron.default.schedule('*/10 * * * *', async () => {
+      console.log('[MultiSigExpiry] Checking for expired governance proposals');
+      try {
+        await MultiSigTransactionService.expireOldTransactions();
+      } catch (error) {
+        console.error('[MultiSigExpiry] Error:', error);
+      }
+    });
+
+    console.log('MultiSig governance expiry checker enabled - checks every 10 minutes');
+  } catch (error) {
+    console.error('Failed to start MultiSig expiry checker:', error.message);
+  }
+
 
   // Iniciar monitoramento de pagamentos USDC em tempo real
   const enablePaymentMonitoring = process.env.ENABLE_PAYMENT_MONITORING !== 'false';

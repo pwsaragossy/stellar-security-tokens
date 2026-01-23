@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
     FileText, Search, Filter, Loader2, Check, X, Eye,
-    Building2, DollarSign, AlertTriangle, Rocket, Copy
+    Building2, DollarSign, AlertTriangle, Rocket, Copy,
+    Clock
 } from "lucide-react";
 import { offersApi } from "@/api/offers";
+import api from '@/api/client';
 import type { Offer } from "@/types";
 import {
     Dialog,
@@ -33,18 +35,31 @@ export function AdminOffers() {
     const [actionType, setActionType] = useState<'approve' | 'reject' | 'view' | 'issue' | 'activate' | null>(null);
     const [rejectionReason, setRejectionReason] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [pendingIssuances, setPendingIssuances] = useState<number[]>([]);
 
     const loadOffers = async () => {
         try {
             setLoading(true);
-            const response = await offersApi.getAllAdmin();
-            if (response.success && response.data) {
-                setOffers(response.data);
+            const [offersResponse, pendingResponse] = await Promise.all([
+                offersApi.getAllAdmin(),
+                api.get('/admin/transactions/pending')
+            ]);
+
+            if (offersResponse.success && offersResponse.data) {
+                setOffers(offersResponse.data);
             } else {
-                setError(response.error || 'Failed to load offers');
+                setError(offersResponse.error || 'Failed to load offers');
+            }
+
+            if (pendingResponse.data.success) {
+                const issuingOfferIds = pendingResponse.data.data.transactions
+                    .filter((tx: any) => tx.operationType === 'token_issue')
+                    .map((tx: any) => tx.metadata?.offerId)
+                    .filter(Boolean);
+                setPendingIssuances(issuingOfferIds);
             }
         } catch (err: any) {
-            setError(err.message || 'Failed to load offers');
+            setError(err.message || 'Failed to load data');
         } finally {
             setLoading(false);
         }
@@ -52,6 +67,9 @@ export function AdminOffers() {
 
     useEffect(() => {
         loadOffers();
+        // Poll for pending transactions every 30s to update "Issuing" labels
+        const interval = setInterval(loadOffers, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     const handleApprove = async () => {
@@ -107,7 +125,7 @@ export function AdminOffers() {
         try {
             const response = await offersApi.issueToken(selectedOffer.id);
             if (response.success) {
-                if (response.data?.status === 'pending_multisig') {
+                if (response.data?.status === 'pending_multisig' || (response as any).status === 'pending_multisig') {
                     setSuccess(
                         <div className="flex flex-col gap-1 text-left">
                             <span>Token issuance request queued for MultiSig approval</span>
@@ -116,6 +134,7 @@ export function AdminOffers() {
                             </Link>
                         </div>
                     );
+                    setPendingIssuances(prev => [...prev, selectedOffer.id]);
                 } else {
                     setSuccess('Token issued successfully');
                 }
@@ -335,7 +354,14 @@ export function AdminOffers() {
                                             <td className="py-3 px-2 text-white">
                                                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(parseFloat(offer.total_supply || '0'))}
                                             </td>
-                                            <td className="py-3 px-2">{getStatusBadge(offer.status)}</td>
+                                            <td className="py-3 px-2">
+                                                {pendingIssuances.includes(offer.id) ? (
+                                                    <Badge variant="outline" className="bg-blue-500/15 text-blue-400 border-blue-500/30 flex items-center gap-1 w-fit">
+                                                        <Clock className="w-3 h-3" />
+                                                        Issuing...
+                                                    </Badge>
+                                                ) : getStatusBadge(offer.status)}
+                                            </td>
                                             <td className="py-3 px-2 text-muted-foreground">
                                                 {new Date(offer.created_at).toLocaleDateString()}
                                             </td>
@@ -369,7 +395,7 @@ export function AdminOffers() {
                                                             </Button>
                                                         </>
                                                     )}
-                                                    {offer.status === 'approved' && (
+                                                    {offer.status === 'approved' && !pendingIssuances.includes(offer.id) && (
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"

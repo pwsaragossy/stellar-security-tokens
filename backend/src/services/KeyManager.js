@@ -246,6 +246,7 @@ class KeyManager {
             'freeze_account': 1,        // Single issuer (compliance action)
             'clawback': 2,              // 2-of-N (requires approval)
             'treasury_payment': 2,      // 2-of-3 for treasury (high value)
+            'dividend_distribution': 2, // 2-of-3 for dividend payments
             'trustline_auth': 1,        // Single issuer
             'account_setup': 1,         // Single operations
             'disable_clawback': 2,      // 2-of-3 consensus (Institutional Requirement)
@@ -277,7 +278,7 @@ class KeyManager {
         }
 
         // Operations that ALWAYS require multisig in production
-        const criticalOps = ['clawback', 'treasury_payment', 'disable_clawback'];
+        const criticalOps = ['clawback', 'treasury_payment', 'dividend_distribution', 'disable_clawback'];
         return criticalOps.includes(operationType) || this.getSignatureThreshold(operationType) > 1;
     }
 }

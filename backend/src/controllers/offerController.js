@@ -820,6 +820,25 @@ export class OfferController {
         });
       }
 
+      // PHASE 2.4: Prevent duplicate proposals in queue
+      const pendingTx = await prisma.multiSigTransaction.findFirst({
+        where: {
+          operationType: 'token_issue',
+          status: 'pending_signatures',
+          metadata: {
+            path: ['assetCode'],
+            equals: offer.assetCode
+          }
+        }
+      });
+      if (pendingTx) {
+        return res.status(409).json({
+          success: false,
+          error: 'An issuance proposal for this asset code is already pending in the multisig queue.',
+          data: { proposalId: pendingTx.id }
+        });
+      }
+
       // Emitir token usando o serviço
       const issuerPublicKey = process.env.STELLAR_ISSUER_PUBLIC_KEY;
       if (!issuerPublicKey) {
@@ -840,10 +859,24 @@ export class OfferController {
       const tokenResult = await StellarService.issueSecurityToken(
         offer.assetCode,
         offer.totalSupply.toString(),
-        { homeDomain }
+        {
+          homeDomain,
+          offerId: offer.id,
+          description: offer.description
+        }
       );
 
-      // Criar registro no banco usando o serviço
+      // PHASE 2.3: Defer DB update if MultiSig is required
+      if (tokenResult.status === 'pending_multisig') {
+        return res.status(202).json({
+          success: true,
+          status: 'pending_multisig',
+          message: 'Token issuance queued for MultiSig approval',
+          data: tokenResult
+        });
+      }
+
+      // Criar registro no banco usando o serviço (Immediate execution path)
       const token = await OfferService.issueTokenFromOffer(
         offer.id,
         req.user.userId,

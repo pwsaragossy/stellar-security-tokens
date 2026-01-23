@@ -31,6 +31,7 @@ export function AdminLayout() {
         { id: 'offers', label: 'Offers', icon: FileText, path: '/admin/offers' },
         { id: 'transactions', label: 'Transactions', icon: FileSignature, path: '/admin/transactions' },
         { id: 'wallets', label: 'Wallets', icon: Wallet, path: '/admin/wallets' },
+        { id: 'treasury', label: 'Treasury (OpEx)', icon: Building2, path: '/admin/treasury' },
         { id: 'fees', label: 'Fee Configuration', icon: DollarSign, path: '/admin/fees' },
         { id: 'defaults', label: 'Default Cases', icon: AlertTriangle, path: '/admin/defaults' },
         { id: 'compliance', label: 'Token Compliance', icon: Shield, path: '/admin/compliance' },
