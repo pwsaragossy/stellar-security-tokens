@@ -5,6 +5,7 @@ import { Investor } from '../models/Investor.js';
 import { StellarService } from './stellar.service.js';
 import { Token } from '../models/Token.js';
 import { EmailService } from './email.service.js';
+import { DepositRelayService } from './depositRelay.service.js';
 import crypto from 'crypto';
 
 // Issue 10 Fix: Require USDC_ISSUER from environment (no hardcoded fallback)
@@ -290,7 +291,17 @@ export class PaymentMonitor {
       return;
     }
 
-    console.log(`[PaymentMonitor] USDC payment detected: ${payment.amount} from ${payment.from}`);
+    console.log(`[PaymentMonitor] USDC payment detected: ${payment.amount} from ${payment.from}, memo: ${payment.memo}`);
+
+    // Check if it's a deposit relay payment (memo starts with DEP-)
+    if (payment.memo && payment.memo.startsWith(DepositRelayService.MEMO_PREFIX)) {
+      await DepositRelayService.handleIncomingPayment(
+        payment.memo,
+        payment.amount,
+        payment.transaction_hash
+      );
+      return;
+    }
 
     // Buscar investimento pendente correspondente
     const pendingInvestments = await Investment.findPendingByInvestor(

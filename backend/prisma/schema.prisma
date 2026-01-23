@@ -68,6 +68,15 @@ enum InvestmentStatus {
   cancelled
 }
 
+enum DepositStatus {
+  pending           // Awaiting payment
+  received          // USDC received at treasury
+  forwarding        // SAC transfer in progress
+  completed         // USDC in user's wallet
+  expired           // Memo expired (24h timeout)
+  failed            // SAC transfer failed
+}
+
 // ============================================
 // CORE MODELS
 // ============================================
@@ -116,6 +125,7 @@ model Investor {
   tokenDistributions  TokenDistribution[]
   interestPayments    InterestPayment[]
   investments         Investment[]
+  deposits            Deposit[]
   webauthnCredentials InvestorWebauthnCredential[]
 
   @@index([email])
@@ -614,4 +624,26 @@ model CompanyPenalty {
   @@index([status])
   @@index([penaltyType])
   @@map("company_penalties")
+}
+
+model Deposit {
+  id              Int           @id @default(autoincrement())
+  investorId      Int           @map("investor_id")
+  memo            String        @unique @db.VarChar(28)
+  expectedAmount  Decimal?      @map("expected_amount") @db.Decimal(20, 7)
+  actualAmount    Decimal?      @map("actual_amount") @db.Decimal(20, 7)
+  status          DepositStatus @default(pending)
+  incomingTxHash  String?       @map("incoming_tx_hash") @db.VarChar(64)
+  outgoingTxHash  String?       @map("outgoing_tx_hash") @db.VarChar(64)
+  errorMessage    String?       @map("error_message") @db.Text
+  expiresAt       DateTime      @map("expires_at") @db.Timestamp
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamp
+  updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+
+  investor Investor @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  
+  @@index([memo])
+  @@index([investorId])
+  @@index([status])
+  @@map("deposits")
 }

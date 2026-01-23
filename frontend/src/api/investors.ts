@@ -66,8 +66,13 @@ export const investorsApi = {
     return response.data;
   },
 
-  initSponsoredTrustline: async (investorId: number, assetCode: string): Promise<ApiResponse> => {
-    const response = await api.post(`/investors/${investorId}/init-sponsored-trustline`, { assetCode });
+  initiateDeposit: async (id: number, data?: { expectedAmount?: number }): Promise<ApiResponse> => {
+    const response = await api.post(`/investors/${id}/deposit/initiate`, data);
+    return response.data;
+  },
+
+  getDeposits: async (id: number): Promise<ApiResponse> => {
+    const response = await api.get(`/investors/${id}/deposits`);
     return response.data;
   },
 };

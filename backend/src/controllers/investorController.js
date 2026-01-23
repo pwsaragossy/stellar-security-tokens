@@ -1,6 +1,7 @@
 import { Investor } from '../models/Investor.js';
 import { StellarService } from '../services/stellar.service.js';
 import { PaymentService } from '../services/payment.service.js';
+import { DepositRelayService } from '../services/depositRelay.service.js';
 import { PasskeyWalletService, UserType } from '../services/passkeyWallet.service.js';
 import { EmailService } from '../services/email.service.js';
 import { generateToken } from '../middleware/auth.js';
@@ -979,51 +980,37 @@ export const submitWithdrawal = async (req, res, next) => {
 };
 
 /**
- * Inicia a configuração de uma trustline patrocinada para um investidor.
- * Se for custodial (temos a secret), a transação é submetida automaticamente.
- * Se for non-custodial (Freighter/Smart Wallet), retorna o XDR para assinatura.
+ * Initiate a new USDC deposit relay
+ * POST /api/investors/:id/deposit/initiate
  */
-export const initSponsoredTrustline = async (req, res, next) => {
+export const initiateDeposit = async (req, res, next) => {
   try {
-    const { investorId } = req.params;
-    const { assetCode } = req.body;
+    const investorId = parseInt(req.params.id, 10);
+    const { expectedAmount } = req.body;
 
-    if (!assetCode) {
-      return res.status(400).json({
-        success: false,
-        error: 'assetCode is required',
-      });
-    }
+    const deposit = await DepositRelayService.initiateDeposit(investorId, expectedAmount);
 
-    const investor = await Investor.findById(parseInt(investorId, 10));
-    if (!investor) {
-      return res.status(404).json({
-        success: false,
-        error: 'Investor not found',
-      });
-    }
-
-    const targetWallet = investor.stellarPublicKey || investor.stellarContractId;
-    if (!targetWallet) {
-      return res.status(400).json({
-        success: false,
-        error: 'Investor does not have a Stellar address configured',
-      });
-    }
-
-    // Nota: Por enquanto, o backend não armazena secrets no DB (KMS/Security).
-    // Para simplificar o teste de Phase 2, vamos assumir que se não tivermos
-    // a secret, retornamos o XDR.
-    const result = await StellarService.setupSponsoredTrustline(
-      targetWallet,
-      assetCode,
-      investor.stellarSecretKey || null // Use secret if available
-    );
-
-    res.json({
+    res.status(201).json({
       success: true,
-      message: result.requiresSignature ? 'Signature required' : 'Trustline setup successful',
-      data: result,
+      data: deposit,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get all deposit requests for an investor
+ * GET /api/investors/:id/deposits
+ */
+export const getInvestorDeposits = async (req, res, next) => {
+  try {
+    const investorId = parseInt(req.params.id, 10);
+    const deposits = await DepositRelayService.getInvestorDeposits(investorId);
+
+    res.status(200).json({
+      success: true,
+      data: deposits,
     });
   } catch (error) {
     next(error);

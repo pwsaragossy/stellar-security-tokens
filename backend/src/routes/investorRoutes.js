@@ -23,7 +23,8 @@ import {
   getWalletStatus,
   proposeWithdrawal,
   submitWithdrawal,
-  initSponsoredTrustline,
+  initiateDeposit,
+  getInvestorDeposits,
 } from '../controllers/investorController.js';
 import { requireInvestor, requireOwnData } from '../middleware/authorize.js';
 
@@ -465,7 +466,6 @@ router.get('/:investorId/payments', authenticateToken, getInvestorPayments);
  *         description: Status da wallet
  */
 router.get('/:investorId/wallet-status', getWalletStatus);
-router.post('/:investorId/init-sponsored-trustline', authenticateToken, initSponsoredTrustline);
 router.put('/:id', requireInvestor, requireOwnData, updateInvestor);
 
 /**
@@ -529,5 +529,45 @@ router.post('/:investorId/withdraw/propose', authenticateToken, proposeWithdrawa
  *         description: Transaction submitted successfully
  */
 router.post('/withdraw/submit', authenticateToken, submitWithdrawal);
+
+/**
+ * @swagger
+ * /api/investors/{id}/deposit/initiate:
+ *   post:
+ *     summary: Initiate a new USDC deposit relay
+ *     tags: [Investors]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       201:
+ *         description: Deposit relay initiated
+ */
+router.post('/:id/deposit/initiate', requireInvestor, requireOwnData, initiateDeposit);
+
+/**
+ * @swagger
+ * /api/investors/{id}/deposits:
+ *   get:
+ *     summary: Get all deposit requests for an investor
+ *     tags: [Investors]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: List of deposits
+ */
+router.get('/:id/deposits', requireInvestor, requireOwnData, getInvestorDeposits);
 
 export default router;

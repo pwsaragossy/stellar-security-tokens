@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Key, Shield, Check, ArrowUpRight, ArrowDownLeft, Copy, ExternalLink, Wallet as WalletIcon, Coins, TrendingUp, Calendar } from 'lucide-react';
-import { investorsApi } from '@/api/investors';
 import { api } from '@/lib/api';
 import { passkeyClient } from '@/lib/passkey';
 import {
@@ -57,7 +56,6 @@ export function Wallet() {
     const [withdrawData, setWithdrawData] = useState({ amount: '', destination: '', asset: 'USDC' });
     const [withdrawTx, setWithdrawTx] = useState<{ xdr: string; networkPassphrase: string } | null>(null);
     const [withdrawError, setWithdrawError] = useState<string | null>(null);
-    const [setupLoading, setSetupLoading] = useState(false);
 
     // Cache key for localStorage
     const getCacheKey = (userId: number | string) => `investor_wallet_cache_${userId}`;
@@ -168,31 +166,6 @@ export function Wallet() {
         fetchWalletStatus();
     }, []);
 
-    const handleSetupTrustline = async () => {
-        if (!user?.id) return;
-        setSetupLoading(true);
-        try {
-            // Hardcoding 'USDC' for now as it's the base asset, 
-            // but in a real scenario we might loop over active tokens
-            await investorsApi.initSponsoredTrustline(user.id, 'USDC');
-
-            // Refresh wallet status
-            const response = await api.get(`/investors/${user.id}/wallet-status`);
-            const data = response.data || response;
-            setWalletStatus({
-                hasWallet: data.hasWallet || !!data.contractId,
-                walletAddress: data.contractId || data.walletAddress,
-                passkeyRegistered: data.passkeyRegistered !== false,
-                balances: data.balances,
-                explorer: data.explorer,
-            });
-        } catch (err: any) {
-            console.error('Failed to setup trustline:', err);
-        } finally {
-            setSetupLoading(false);
-        }
-    };
-
     const handleProposeWithdrawal = async () => {
         if (!user?.id || !withdrawData.amount || !withdrawData.destination) return;
 
@@ -270,40 +243,6 @@ export function Wallet() {
                 <p className="text-muted-foreground">Manage your Stellar wallet and assets</p>
             </div>
 
-            {/* Verification / Setup Required */}
-            {walletStatus?.hasWallet && !walletStatus?.balances?.usdc && (
-                <div className="animate-fade-in-up">
-                    <Card className="bg-red-500/5 border-red-500/20 rounded-2xl">
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-sm font-medium text-red-400 flex items-center gap-2">
-                                <Shield className="w-4 h-4" />
-                                Action Required: Portfolio Initialization
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-sm text-red-300/80 mb-4 leading-relaxed">
-                                To receive security tokens and invest in assets, you need to initialize your portfolio trustline.
-                                <strong> We will sponsor the network reserve for you (XLM-Free).</strong>
-                            </p>
-                            <Button
-                                onClick={handleSetupTrustline}
-                                disabled={setupLoading}
-                                className="bg-red-500 hover:bg-red-600 text-white font-medium px-6"
-                            >
-                                {setupLoading ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                        Setting up...
-                                    </>
-                                ) : (
-                                    'Initialize Portfolio'
-                                )}
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-
             {/* Balance Cards */}
             {walletStatus?.walletAddress && (
                 <div className="grid gap-5 md:grid-cols-2 animate-fade-in-up animate-delay-1">
@@ -379,12 +318,15 @@ export function Wallet() {
                 <div className="flex gap-3 animate-fade-in-up animate-delay-2">
                     <Dialog open={depositOpen} onOpenChange={setDepositOpen}>
                         <DialogTrigger asChild>
-                            <Button className="flex-1 h-14 bg-[hsl(160_60%_40%)] hover:bg-[hsl(160_60%_35%)] text-white rounded-xl shadow-lg shadow-[hsl(160_60%_40%/0.2)]">
-                                <ArrowDownLeft className="w-5 h-5 mr-2" />
+                            <Button variant="default" className="flex-1 rounded-xl h-12 font-medium bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_45%)] text-white shadow-lg shadow-amber-900/10">
+                                <ArrowDownLeft className="w-4 h-4 mr-2" />
                                 Deposit
                             </Button>
                         </DialogTrigger>
-                        <DepositDialog walletAddress={walletStatus.walletAddress!} />
+                        <DepositDialog
+                            investorId={user.id}
+                            walletAddress={walletStatus.walletAddress || ''}
+                        />
                     </Dialog>
 
                     <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
