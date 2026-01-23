@@ -294,8 +294,9 @@ export const signAndSubmitTransaction = async (transaction, keypair, server = nu
   transaction.sign(keypair);
 
   // 2. Wrap in Fee Bump Transaction (Gas Station Logic)
-  // The 'Operations' wallet pays the fee, preventing the business wallets (Distributor/Issuer) from needing XLM.
-  const operationsKeypair = getOperationsKeypair();
+  // We pick a Channel Account from the pool to act as the source for this transaction.
+  // This prevents sequence number collisions during concurrent operations.
+  const channelKeypair = keyManager.getNextChannelKeypair();
 
   // For Soroban, the inner transaction fee might be higher than BASE_FEE.
   // The fee-bump fee must be at least (inner_fee + BASE_FEE).
@@ -304,14 +305,14 @@ export const signAndSubmitTransaction = async (transaction, keypair, server = nu
 
   // Create Fee Bump Transaction
   const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
-    operationsKeypair.publicKey(),
+    channelKeypair.publicKey(),
     feeBumpFee.toString(),
     transaction,
     getNetworkPassphrase()
   );
 
   // 3. Sign the outer Fee Bump Transaction (Gas Signature)
-  feeBumpTx.sign(operationsKeypair);
+  feeBumpTx.sign(channelKeypair);
 
   // Use provided server or fall back to default
   const targetServer = server || stellarServer;

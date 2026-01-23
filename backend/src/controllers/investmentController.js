@@ -68,6 +68,14 @@ export const purchaseInvestment = async (req, res, next) => {
       });
     }
 
+    // --- PHASE 2.1: AUTONOMOUS JIT ONBOARDING ---
+    // Ensure investor has the trustline for the asset they are buying.
+    // This happens in the background to avoid blocking the initial payment instructions response.
+    // We don't await this as it can take a few seconds and the user needs payment instructions immediately.
+    StellarService.setupSponsoredTrustline(investor.stellarPublicKey || investor.stellarContractId, assetCode)
+      .then(() => console.log(`[JIT Onboarding] Successfully ensured trustline for ${investor.id} / ${assetCode}`))
+      .catch(err => console.warn(`[JIT Onboarding] Non-critical failure during early trustline setup for ${investor.id}:`, err.message));
+
     // Issue 7 Fix: Check for existing pending investment from same investor/offer
     const existingPending = await Investment.findPendingByInvestorAndOffer(parseInt(investorId, 10), offerId);
     if (existingPending) {

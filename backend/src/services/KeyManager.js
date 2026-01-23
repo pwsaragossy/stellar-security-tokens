@@ -31,6 +31,43 @@ class KeyManager {
         } else {
             console.log('[KeyManager] Running in ENV mode - using .env secret keys');
         }
+
+        // Initialize Channel Pool for Sequencing (CAP-15)
+        this.channels = [];
+        this.currentChannelIndex = 0;
+        this.#initializeChannels();
+    }
+
+    /**
+     * Initializes the channel pool from environment variables (CHANNEL_1_SECRET_KEY, etc.)
+     * @private
+     */
+    #initializeChannels() {
+        if (this.isMultisigMode()) return;
+
+        // Load specific channels if defined
+        for (let i = 1; i <= 10; i++) {
+            const secret = process.env[`CHANNEL_${i}_SECRET_KEY`];
+            if (secret) {
+                try {
+                    this.channels.push(Keypair.fromSecret(secret));
+                } catch (e) {
+                    console.error(`[KeyManager] Invalid secret for CHANNEL_${i}`);
+                }
+            }
+        }
+
+        // Fallback: Use Operations wallet as the only channel if none defined
+        if (this.channels.length === 0) {
+            try {
+                this.channels.push(this.getOperationsKeypair());
+                console.log('[KeyManager] No channels defined. Using Operations wallet as primary channel.');
+            } catch (e) {
+                // Operations might not be defined yet during initial setup
+            }
+        } else {
+            console.log(`[KeyManager] Initialized channel pool with ${this.channels.length} accounts.`);
+        }
     }
 
     /**
@@ -107,6 +144,19 @@ class KeyManager {
         return Keypair.fromSecret(this.getSecretKey('OPERATIONS'));
     }
 
+    /**
+     * Get the next channel keypair from the pool (Round-Robin)
+     * @returns {Keypair}
+     */
+    getNextChannelKeypair() {
+        if (this.channels.length === 0) {
+            return this.getOperationsKeypair();
+        }
+        const channel = this.channels[this.currentChannelIndex];
+        this.currentChannelIndex = (this.currentChannelIndex + 1) % this.channels.length;
+        return channel;
+    }
+
     // ============================================
     // Public Key Getters (Both modes)
     // ============================================
@@ -147,6 +197,7 @@ class KeyManager {
                 'treasury_payment': [this.getTreasuryPublicKey()],
                 'trustline_auth': [this.getIssuerPublicKey()],
                 'account_setup': [this.getOperationsPublicKey()],
+                'channel_op': this.channels.map(c => c.publicKey()),
             };
             return signerMap[operationType] || [this.getOperationsPublicKey()];
         }
@@ -197,6 +248,7 @@ class KeyManager {
             'treasury_payment': 2,      // 2-of-3 for treasury (high value)
             'trustline_auth': 1,        // Single issuer
             'account_setup': 1,         // Single operations
+            'disable_clawback': 2,      // 2-of-3 consensus (Institutional Requirement)
         };
 
         return defaultThresholds[operationType] || 1;
@@ -225,7 +277,7 @@ class KeyManager {
         }
 
         // Operations that ALWAYS require multisig in production
-        const criticalOps = ['clawback', 'treasury_payment'];
+        const criticalOps = ['clawback', 'treasury_payment', 'disable_clawback'];
         return criticalOps.includes(operationType) || this.getSignatureThreshold(operationType) > 1;
     }
 }

@@ -157,6 +157,13 @@ export const WalletController = {
                             amount: amount.toString(),
                         });
                         break;
+                    case 'disable_clawback':
+                        operation = Operation.setTrustLineFlags({
+                            trustor: destination,
+                            asset: createAsset(assetCode, getIssuerKeypair().publicKey()),
+                            clearFlags: 4, // AuthClawbackEnabledFlag = 4
+                        });
+                        break;
                     default:
                         // Default to payment if no operationType is specified (backwards compatibility)
                         if (assetCode !== 'XLM') {
