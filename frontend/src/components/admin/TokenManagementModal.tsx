@@ -24,6 +24,7 @@ import {
     Shield,
     CheckCircle2
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '@/api/client';
 
 interface TokenHolder {
@@ -50,7 +51,7 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+    const [success, setSuccess] = useState<React.ReactNode | string>('');
     const [searchQuery, setSearchQuery] = useState('');
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [clawbackAmount, setClawbackAmount] = useState('');
@@ -96,11 +97,23 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
         setError('');
         setSuccess('');
         try {
-            await api.post(`/tokens/freeze`, {
+            const response = await api.post(`/tokens/freeze`, {
                 investorPublicKey: holderAddress,
                 assetCode: assetCode
             });
-            setSuccess(`Account frozen successfully`);
+
+            if (response.data.status === 'pending_multisig') {
+                setSuccess(
+                    <div className="flex flex-col gap-1">
+                        <span>Freeze request queued for MultiSig approval</span>
+                        <Link to="/admin/transactions" className="text-emerald-400 underline font-bold hover:text-emerald-300">
+                            Go to Transaction Queue →
+                        </Link>
+                    </div>
+                );
+            } else {
+                setSuccess(`Account frozen successfully`);
+            }
             setPendingAction(null);
             loadHolders();
         } catch (err: any) {
@@ -115,11 +128,23 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
         setError('');
         setSuccess('');
         try {
-            await api.post(`/tokens/unfreeze`, {
+            const response = await api.post(`/tokens/unfreeze`, {
                 investorPublicKey: holderAddress,
                 assetCode: assetCode
             });
-            setSuccess(`Account unfrozen successfully`);
+
+            if (response.data.status === 'pending_multisig') {
+                setSuccess(
+                    <div className="flex flex-col gap-1">
+                        <span>Unfreeze request queued for MultiSig approval</span>
+                        <Link to="/admin/transactions" className="text-emerald-400 underline font-bold hover:text-emerald-300">
+                            Go to Transaction Queue →
+                        </Link>
+                    </div>
+                );
+            } else {
+                setSuccess(`Account unfrozen successfully`);
+            }
             setPendingAction(null);
             loadHolders();
         } catch (err: any) {
@@ -139,12 +164,24 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
         setError('');
         setSuccess('');
         try {
-            await api.post(`/tokens/clawback`, {
+            const response = await api.post(`/tokens/clawback`, {
                 investorPublicKey: holderAddress,
                 assetCode: assetCode,
                 amount
             });
-            setSuccess(`Clawback of ${amount} ${assetCode} successful`);
+
+            if (response.data.status === 'pending_multisig') {
+                setSuccess(
+                    <div className="flex flex-col gap-1">
+                        <span>Clawback request queued for MultiSig approval</span>
+                        <Link to="/admin/transactions" className="text-emerald-400 underline font-bold hover:text-emerald-300">
+                            Go to Transaction Queue →
+                        </Link>
+                    </div>
+                );
+            } else {
+                setSuccess(`Clawback of ${amount} ${assetCode} successful`);
+            }
             setClawbackAmount('');
             setSelectedHolder(null);
             setPendingAction(null);

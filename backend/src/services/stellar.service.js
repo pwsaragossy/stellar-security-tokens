@@ -12,6 +12,7 @@ import {
   getOperationsKeypair,
   getSorobanRpcUrl,
 } from '../config/stellar.js';
+import { TransactionManager } from './transactionManager.service.js';
 import {
   Operation,
   Keypair,
@@ -389,7 +390,33 @@ export class StellarService {
       const freshIssuerAccount = await freshServer.loadAccount(issuerKeypair.publicKey());
 
       const transaction = buildTransactionWithAccount(freshIssuerAccount, operations);
-      const result = await signAndSubmitTransaction(transaction, issuerKeypair, freshServer);
+
+      const result = await TransactionManager.submit({
+        transaction,
+        signingKeypair: issuerKeypair,
+        operationType: 'token_issue',
+        description: `Issue ${amount} ${code} and deploy SAC`,
+        metadata: {
+          assetCode: code,
+          amount,
+          type: 'issuance_and_sac',
+          issuerPublicKey: issuerKeypair.publicKey(),
+          totalSupply: amount,
+          description: options.description,
+          offerId: options.offerId,
+          sacContractId
+        }
+      });
+
+      if (result.status === 'pending_multisig') {
+        return {
+          success: true,
+          status: 'pending_multisig',
+          assetCode: code,
+          sacContractId,
+          ...result
+        };
+      }
 
       if (!result.success) {
         throw new Error(`Failed to issue token and deploy SAC: ${result.userFriendlyError || result.error}`);
@@ -502,7 +529,20 @@ export class StellarService {
         console.log(`[StellarService] Simulating Soroban SAC transfer...`);
         transaction = await this.prepareSorobanTransaction(transaction);
 
-        result = await signAndSubmitTransaction(transaction, distributorKeypair);
+        result = await TransactionManager.submit({
+          transaction,
+          signingKeypair: distributorKeypair,
+          operationType: 'token_distribute',
+          description: `Distribute ${amountStr} ${assetCode} to ${investorPublicKey}`,
+          metadata: {
+            assetCode,
+            amount: amountStr,
+            investorPublicKey,
+            type: 'soroban_transfer',
+            investorId: options.investorId,
+            offerId: options.offerId
+          }
+        });
       } else {
         // --- CLASSIC STELLAR DISTRIBUTION ---
         try {
@@ -533,7 +573,22 @@ export class StellarService {
         const transaction = await buildTransaction(distributorKeypair, operations, {
           memo: options.memo || null,
         });
-        result = await signAndSubmitTransaction(transaction, distributorKeypair);
+
+        result = await TransactionManager.submit({
+          transaction,
+          signingKeypair: distributorKeypair,
+          operationType: 'token_distribute',
+          description: `Distribute ${amountStr} ${assetCode} to ${investorPublicKey}`,
+          metadata: {
+            assetCode,
+            amount: amountStr,
+            investorPublicKey,
+            type: 'classic_payment',
+            investorId: options.investorId,
+            offerId: options.offerId,
+            memo: options.memo
+          }
+        });
       }
 
       if (!result.success) {
@@ -631,7 +686,21 @@ export class StellarService {
       ];
 
       const transaction = await buildTransaction(issuerKeypair, operations);
-      const result = await signAndSubmitTransaction(transaction, issuerKeypair);
+      const result = await TransactionManager.submit({
+        transaction,
+        signingKeypair: issuerKeypair,
+        operationType: 'freeze_account',
+        description: `Freeze account ${investorPublicKey} for asset ${assetCode}`,
+        metadata: { investorPublicKey, assetCode }
+      });
+
+      if (result.status === 'pending_multisig') {
+        return {
+          success: true,
+          status: 'pending_multisig',
+          ...result
+        };
+      }
 
       if (!result.success) {
         if (result.resultCodes && result.resultCodes.operation === 'op_no_trust') {
@@ -706,7 +775,24 @@ export class StellarService {
       // For simplicity reusing standard internal flow
       const issuerAccount = await server.loadAccount(issuerKeypair.publicKey());
       const tx = buildTransactionWithAccount(issuerAccount, [op]);
-      return await signAndSubmitTransaction(tx, issuerKeypair);
+
+      const result = await TransactionManager.submit({
+        transaction: tx,
+        signingKeypair: issuerKeypair,
+        operationType: 'trustline_auth',
+        description: `Authorize investor ${investorPublicKey} for asset ${assetCode}`,
+        metadata: { investorPublicKey, assetCode }
+      });
+
+      if (result.status === 'pending_multisig') {
+        return {
+          success: true,
+          status: 'pending_multisig',
+          ...result
+        };
+      }
+
+      return result;
 
     } catch (error) {
       console.error(`[StellarService] Failed to authorize investor:`, error);
@@ -885,7 +971,21 @@ export class StellarService {
       ];
 
       const transaction = await buildTransaction(issuerKeypair, operations);
-      const result = await signAndSubmitTransaction(transaction, issuerKeypair);
+      const result = await TransactionManager.submit({
+        transaction,
+        signingKeypair: issuerKeypair,
+        operationType: 'freeze_account',
+        description: `Unfreeze account ${investorPublicKey} for asset ${assetCode}`,
+        metadata: { investorPublicKey, assetCode }
+      });
+
+      if (result.status === 'pending_multisig') {
+        return {
+          success: true,
+          status: 'pending_multisig',
+          ...result
+        };
+      }
 
       if (!result.success) {
         throw new Error(`Failed to unfreeze account: ${result.error}`);
@@ -936,7 +1036,21 @@ export class StellarService {
       ];
 
       const transaction = await buildTransaction(issuerKeypair, operations);
-      const result = await signAndSubmitTransaction(transaction, issuerKeypair);
+      const result = await TransactionManager.submit({
+        transaction,
+        signingKeypair: issuerKeypair,
+        operationType: 'disable_clawback',
+        description: `Disable clawback for ${investorPublicKey} for asset ${assetCode}`,
+        metadata: { investorPublicKey, assetCode }
+      });
+
+      if (result.status === 'pending_multisig') {
+        return {
+          success: true,
+          status: 'pending_multisig',
+          ...result
+        };
+      }
 
       if (!result.success) {
         throw new Error(`Failed to disable clawback: ${result.error}`);
@@ -1028,7 +1142,21 @@ export class StellarService {
       ];
 
       const transaction = await buildTransaction(issuerKeypair, operations);
-      const result = await signAndSubmitTransaction(transaction, issuerKeypair);
+      const result = await TransactionManager.submit({
+        transaction,
+        signingKeypair: issuerKeypair,
+        operationType: 'clawback',
+        description: `Clawback ${amount} ${assetCode} from ${investorPublicKey}`,
+        metadata: { assetCode, amount, investorPublicKey }
+      });
+
+      if (result.status === 'pending_multisig') {
+        return {
+          success: true,
+          status: 'pending_multisig',
+          ...result
+        };
+      }
 
       if (!result.success) {
         // Usar mensagem amigável se disponível
@@ -1328,7 +1456,21 @@ export class StellarService {
       );
 
       const transaction = await buildTransaction(issuerKeypair, operations);
-      const result = await signAndSubmitTransaction(transaction, issuerKeypair);
+      const result = await TransactionManager.submit({
+        transaction,
+        signingKeypair: issuerKeypair,
+        operationType: 'trustline_auth',
+        description: `Bulk authorization for investor ${investorPublicKey}`,
+        metadata: { investorPublicKey, assets: unauthorizedTrustlines.map(tl => tl.asset_code) }
+      });
+
+      if (result.status === 'pending_multisig') {
+        return {
+          success: true,
+          status: 'pending_multisig',
+          ...result
+        };
+      }
 
       if (!result.success) {
         throw new Error(`Failed to authorize trustlines: ${result.error}`);

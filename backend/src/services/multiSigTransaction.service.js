@@ -228,6 +228,10 @@ export class MultiSigTransactionService {
         try {
             const result = await stellarServer.submitTransaction(transaction);
 
+            // PHASE 2.2: Execute Side Effects (Post-Execution Hooks)
+            // This ensures DB state updates only happen after on-chain success
+            await this.processEffects(tx);
+
             // Update with success
             const updated = await prisma.multiSigTransaction.update({
                 where: { id: txId },
@@ -359,6 +363,49 @@ export class MultiSigTransactionService {
             expired,
             total: pending + executed + failed + expired,
         };
+    }
+
+    /**
+     * Executes post-transaction side effects (database updates)
+     * @param {Object} tx - The executed transaction record
+     */
+    static async processEffects(tx) {
+        const { operationType, metadata, txHash } = tx;
+        console.log(`[MultiSig] Processing effects for TX #${tx.id} (${operationType})`);
+
+        try {
+            switch (operationType) {
+                case 'token_issue':
+                    await prisma.token.create({
+                        data: {
+                            assetCode: metadata.assetCode,
+                            issuerPublicKey: metadata.issuerPublicKey,
+                            totalSupply: metadata.totalSupply,
+                            description: metadata.description,
+                            offerId: metadata.offerId ? parseInt(metadata.offerId) : null,
+                            issuedBy: tx.initiatorId,
+                            sacContractId: metadata.sacContractId || null,
+                        }
+                    });
+                    break;
+                case 'token_distribute':
+                    await prisma.tokenDistribution.create({
+                        data: {
+                            investorId: parseInt(metadata.investorId),
+                            assetCode: metadata.assetCode,
+                            amount: metadata.amount,
+                            transactionHash: txHash,
+                            offerId: metadata.offerId ? parseInt(metadata.offerId) : null,
+                            memo: metadata.memo || null,
+                        }
+                    });
+                    break;
+                default:
+                    console.log(`[MultiSig] No post-execution hooks for ${operationType}`);
+            }
+        } catch (error) {
+            console.error(`[MultiSig] Hook Error for TX #${tx.id}:`, error.message);
+        }
     }
 }
 

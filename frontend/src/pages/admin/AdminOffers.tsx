@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,9 +20,11 @@ import {
 } from "@/components/ui/dialog";
 
 export function AdminOffers() {
+    // const navigate = useNavigate(); // Added but not yet used, keeping for consistency with other admin pages
     const [offers, setOffers] = useState<Offer[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<React.ReactNode | string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -54,9 +57,12 @@ export function AdminOffers() {
     const handleApprove = async () => {
         if (!selectedOffer) return;
         setIsSubmitting(true);
+        setError(null);
+        setSuccess(null);
         try {
             const response = await offersApi.review(selectedOffer.id, { status: 'approved' });
             if (response.success) {
+                setSuccess('Offer approved successfully');
                 await loadOffers();
                 closeModal();
             } else {
@@ -72,12 +78,15 @@ export function AdminOffers() {
     const handleReject = async () => {
         if (!selectedOffer) return;
         setIsSubmitting(true);
+        setError(null);
+        setSuccess(null);
         try {
             const response = await offersApi.review(selectedOffer.id, {
                 status: 'rejected',
                 rejection_reason: rejectionReason
             });
             if (response.success) {
+                setSuccess('Offer rejected successfully');
                 await loadOffers();
                 closeModal();
             } else {
@@ -93,9 +102,23 @@ export function AdminOffers() {
     const handleIssueToken = async () => {
         if (!selectedOffer) return;
         setIsSubmitting(true);
+        setError(null);
+        setSuccess(null);
         try {
             const response = await offersApi.issueToken(selectedOffer.id);
             if (response.success) {
+                if (response.data?.status === 'pending_multisig') {
+                    setSuccess(
+                        <div className="flex flex-col gap-1 text-left">
+                            <span>Token issuance request queued for MultiSig approval</span>
+                            <Link to="/admin/transactions" className="text-emerald-400 underline font-bold hover:text-emerald-300">
+                                Go to Transaction Queue →
+                            </Link>
+                        </div>
+                    );
+                } else {
+                    setSuccess('Token issued successfully');
+                }
                 await loadOffers();
                 closeModal();
             } else {
@@ -111,9 +134,12 @@ export function AdminOffers() {
     const handleActivate = async () => {
         if (!selectedOffer) return;
         setIsSubmitting(true);
+        setError(null);
+        setSuccess(null);
         try {
             const response = await offersApi.activate(selectedOffer.id);
             if (response.success) {
+                setSuccess('Offer activated successfully');
                 await loadOffers();
                 closeModal();
             } else {
@@ -195,10 +221,21 @@ export function AdminOffers() {
 
             {/* Error Banner */}
             {error && (
-                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-3 text-red-400">
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-3 text-red-400 animate-in fade-in slide-in-from-top-1">
                     <AlertTriangle className="w-5 h-5" />
                     <span>{error}</span>
-                    <Button variant="ghost" size="sm" onClick={() => setError(null)} className="ml-auto">
+                    <Button variant="ghost" size="sm" onClick={() => setError(null)} className="ml-auto hover:bg-white/10">
+                        Dismiss
+                    </Button>
+                </div>
+            )}
+
+            {/* Success Banner */}
+            {success && (
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-3 text-emerald-400 animate-in fade-in slide-in-from-top-1">
+                    <Check className="w-5 h-5" />
+                    <span className="flex-1">{success}</span>
+                    <Button variant="ghost" size="sm" onClick={() => setSuccess(null)} className="hover:bg-white/10">
                         Dismiss
                     </Button>
                 </div>
@@ -212,7 +249,7 @@ export function AdminOffers() {
                         placeholder="Search offers..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-foreground"
+                        className="pl-10 glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-white"
                     />
                 </div>
                 <div className="relative">
@@ -515,3 +552,5 @@ export function AdminOffers() {
         </div>
     );
 }
+
+export default AdminOffers;

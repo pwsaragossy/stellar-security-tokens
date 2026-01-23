@@ -18,7 +18,22 @@ export const issueToken = async (req, res, next) => {
       });
     }
 
-    const stellarResult = await StellarService.issueSecurityToken(assetCode, totalSupply);
+    const stellarResult = await StellarService.issueSecurityToken(assetCode, totalSupply, {
+      description,
+      offerId
+    });
+
+    // PHASE 2.3: Handle MultiSig Deferral
+    // If multisig is required, the transaction is queued and we return 202 (Accepted)
+    // The DB record will be created later by the MultiSig service hook.
+    if (stellarResult.status === 'pending_multisig') {
+      return res.status(202).json({
+        success: true,
+        status: 'pending_multisig',
+        message: 'Security token issuance queued for MultiSig approval',
+        data: stellarResult
+      });
+    }
 
     const token = await Token.create({
       assetCode,
@@ -151,8 +166,19 @@ export const distributeTokens = async (req, res, next) => {
     const stellarResult = await StellarService.distributeTokens(
       targetWallet,
       amount,
-      assetCode
+      assetCode,
+      { investorId: parseInt(investorId) }
     );
+
+    // If multisig is required, return 202
+    if (stellarResult.status === 'pending_multisig') {
+      return res.status(202).json({
+        success: true,
+        status: 'pending_multisig',
+        message: 'Token distribution queued for MultiSig approval',
+        data: stellarResult
+      });
+    }
 
     // Buscar offerId do token se existir
     const offerId = token?.offerId || null;

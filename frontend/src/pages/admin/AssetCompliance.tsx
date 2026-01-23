@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +40,7 @@ interface Holder {
 }
 
 export function AssetCompliance() {
+    // const navigate = useNavigate(); // Removed unused
     const [tokens, setTokens] = useState<Token[]>([]);
     const [selectedAsset, setSelectedAsset] = useState<string>('');
     const [holders, setHolders] = useState<Holder[]>([]);
@@ -46,6 +48,7 @@ export function AssetCompliance() {
     const [loadingHolders, setLoadingHolders] = useState(false);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<React.ReactNode | string | null>(null);
     const [search, setSearch] = useState('');
 
     // Clawback Modal State
@@ -95,11 +98,26 @@ export function AssetCompliance() {
 
     const handleFreeze = async (holder: Holder) => {
         setActionLoading(holder.publicKey);
+        setError(null);
+        setSuccess(null);
         try {
-            await tokensApi.freeze({
+            const response = await tokensApi.freeze({
                 investorPublicKey: holder.publicKey,
                 assetCode: selectedAsset
             });
+
+            if (response.data.status === 'pending_multisig') {
+                setSuccess(
+                    <div className="flex flex-col gap-1">
+                        <span>Freeze request queued for MultiSig approval</span>
+                        <Link to="/admin/transactions" className="text-emerald-400 underline font-bold hover:text-emerald-300">
+                            Go to Transaction Queue →
+                        </Link>
+                    </div>
+                );
+            } else {
+                setSuccess('Account frozen successfully');
+            }
             await loadHolders();
         } catch (err: any) {
             setError(err.response?.data?.error || 'Failed to freeze account');
@@ -110,11 +128,26 @@ export function AssetCompliance() {
 
     const handleUnfreeze = async (holder: Holder) => {
         setActionLoading(holder.publicKey);
+        setError(null);
+        setSuccess(null);
         try {
-            await tokensApi.unfreeze({
+            const response = await tokensApi.unfreeze({
                 investorPublicKey: holder.publicKey,
                 assetCode: selectedAsset
             });
+
+            if (response.data.status === 'pending_multisig') {
+                setSuccess(
+                    <div className="flex flex-col gap-1">
+                        <span>Unfreeze request queued for MultiSig approval</span>
+                        <Link to="/admin/transactions" className="text-emerald-400 underline font-bold hover:text-emerald-300">
+                            Go to Transaction Queue →
+                        </Link>
+                    </div>
+                );
+            } else {
+                setSuccess('Account unfrozen successfully');
+            }
             await loadHolders();
         } catch (err: any) {
             setError(err.response?.data?.error || 'Failed to unfreeze account');
@@ -126,12 +159,27 @@ export function AssetCompliance() {
     const handleClawback = async () => {
         if (!clawbackModal.holder || !clawbackAmount) return;
         setActionLoading('clawback');
+        setError(null);
+        setSuccess(null);
         try {
-            await tokensApi.clawback({
+            const response = await tokensApi.clawback({
                 investorPublicKey: clawbackModal.holder.publicKey,
                 assetCode: selectedAsset,
                 amount: clawbackAmount
             });
+
+            if (response.data.status === 'pending_multisig') {
+                setSuccess(
+                    <div className="flex flex-col gap-1">
+                        <span>Clawback request queued for MultiSig approval</span>
+                        <Link to="/admin/transactions" className="text-emerald-400 underline font-bold hover:text-emerald-300">
+                            Go to Transaction Queue →
+                        </Link>
+                    </div>
+                );
+            } else {
+                setSuccess('Clawback successful');
+            }
             setClawbackModal({ open: false, holder: null });
             setClawbackAmount('');
             await loadHolders();
@@ -148,11 +196,26 @@ export function AssetCompliance() {
         }
 
         setActionLoading(holder.publicKey);
+        setError(null);
+        setSuccess(null);
         try {
-            await tokensApi.disableClawback({
+            const response = await tokensApi.disableClawback({
                 investorPublicKey: holder.publicKey,
                 assetCode: selectedAsset
             });
+
+            if (response.data.status === 'pending_multisig') {
+                setSuccess(
+                    <div className="flex flex-col gap-1">
+                        <span>Finality request queued for MultiSig approval</span>
+                        <Link to="/admin/transactions" className="text-emerald-400 underline font-bold hover:text-emerald-300">
+                            Go to Transaction Queue →
+                        </Link>
+                    </div>
+                );
+            } else {
+                setSuccess('Finality applied successfully');
+            }
             await loadHolders();
         } catch (err: any) {
             setError(err.response?.data?.error || 'Failed to disable clawback');
@@ -201,9 +264,16 @@ export function AssetCompliance() {
             </div>
 
             {error && (
-                <div className="p-3 bg-red-500/10 text-red-400 rounded-lg border border-red-500/20 text-sm flex items-center justify-between">
+                <div className="p-3 bg-red-500/10 text-red-400 rounded-lg border border-red-500/20 text-sm flex items-center justify-between text-left">
                     <span>{error}</span>
                     <Button variant="ghost" size="sm" onClick={() => setError(null)}>×</Button>
+                </div>
+            )}
+
+            {success && (
+                <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 text-sm flex items-center justify-between text-left animate-in fade-in slide-in-from-top-1">
+                    <span>{success}</span>
+                    <Button variant="ghost" size="sm" onClick={() => setSuccess(null)}>×</Button>
                 </div>
             )}
 
