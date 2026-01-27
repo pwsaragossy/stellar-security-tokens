@@ -105,7 +105,11 @@ export function DashboardLayout() {
                     <div className="flex items-center gap-2 md:gap-4">
                         <NotificationBell />
                         <div className="text-sm text-muted-foreground hidden sm:block">
-                            Connected: <span className="text-emerald-400">Passkey Wallet</span>
+                            {authStorage.getUser<any>('investor')?.email === 'test-investor@stellar-tokens.local' && (import.meta.env.DEV || import.meta.env.VITE_ENABLE_TEST_LOGIN === 'true') ? (
+                                <>Connected: <span className="text-emerald-400">Dev Investor (Auto-sign)</span></>
+                            ) : (
+                                <>Connected: <span className="text-emerald-400">Passkey Wallet</span></>
+                            )}
                         </div>
                         <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500" />
                     </div>

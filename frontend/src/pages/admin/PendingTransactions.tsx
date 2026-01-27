@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { authStorage } from '../../utils/authStorage';
 import {
     Clock,
     CheckCircle,
@@ -10,7 +11,8 @@ import {
     Send,
     ChevronRight,
     Usb,
-    Wallet
+    Wallet,
+    Shield
 } from 'lucide-react';
 import { LedgerConnect } from '../../components/admin/LedgerConnect';
 import { FreighterConnect } from '../../components/admin/FreighterConnect';
@@ -20,7 +22,7 @@ import { api } from '../../lib/api';
 import { usePusherSubscription } from '../../lib/pusher';
 import { toast } from 'sonner';
 
-type SigningMethod = 'ledger' | 'freighter';
+type SigningMethod = 'ledger' | 'freighter' | 'dev';
 
 interface PendingTransaction {
     id: number;
@@ -91,8 +93,13 @@ export function PendingTransactions() {
     const { device: ledgerDevice, signTransaction: ledgerSign, isSigning: isLedgerSigning } = useLedger();
     const { device: freighterDevice, signTransaction: freighterSign, isSigning: isFreighterSigning } = useFreighter();
 
+    const user = authStorage.getUser<any>('admin');
+    const isTestAdmin = user?.email === 'admin@stellar-tokens.local' && (import.meta.env.DEV || import.meta.env.VITE_ENABLE_TEST_LOGIN === 'true');
+
     // Determine active device and signing function based on selected method
-    const activeDevice = signingMethod === 'ledger' ? ledgerDevice : freighterDevice;
+    const activeDevice = signingMethod === 'dev'
+        ? { publicKey: 'Dev Admin', connected: true }
+        : (signingMethod === 'ledger' ? ledgerDevice : freighterDevice);
     const isSigning = signingMethod === 'ledger' ? isLedgerSigning : isFreighterSigning;
 
     const fetchTransactions = useCallback(async () => {
@@ -134,7 +141,9 @@ export function PendingTransactions() {
         if (!activeDevice) {
             setError(signingMethod === 'ledger'
                 ? 'Please connect your Ledger device first'
-                : 'Please enter your secret key first');
+                : signingMethod === 'freighter'
+                    ? 'Please connect your Freighter wallet first'
+                    : 'Dev signing not available');
             return;
         }
 
@@ -147,23 +156,64 @@ export function PendingTransactions() {
             }
 
             const { xdr, networkPassphrase } = xdrResponse.data;
+            let signedPublicKey = '';
+            let signature = '';
 
-            // Sign with selected method
+            if (signingMethod === 'dev') {
+                // Determine which signer to use (pick first remaining signer)
+                const remainingSigners = tx.signatureStatus?.remainingSigners || tx.requiredSigners;
+                if (!remainingSigners || remainingSigners.length === 0) {
+                    throw new Error('No signers required for this transaction');
+                }
+
+                // Call backend dev signing endpoint for each required signer (or just the first one)
+                const signResp = await api.post('/wallets/admin-sign', {
+                    xdr,
+                    publicKey: remainingSigners[0]
+                });
+
+                if (!signResp.success) {
+                    throw new Error(signResp.error || 'Dev signing failed');
+                }
+
+                // Since sign-admin returns signed XDR, and the current signature submission flow
+                // expects publicKey + signature, we need to adapt.
+                // However, our backend /transactions/:id/sign is designed for external signatures.
+                // For dev, it might be easier to just submit the signed XDR directly if we had a route,
+                // but let's stick to the signature submission or use the existing /transactions/:id/submit with signed XDR if possible.
+                // Wait, /transactions/:id/submit takes signedXDR!
+                const submitResponse = await api.post(`/admin/transactions/${tx.id}/submit`, {
+                    signedXDR: signResp.signedXdr
+                });
+
+                if (submitResponse.success) {
+                    await fetchTransactions();
+                    setSelectedTx(null);
+                    toast.success('Transaction signed and submitted via Dev Keys');
+                }
+                return;
+            }
+
+            // Standard signing (Ledger/Freighter)
             const signFn = signingMethod === 'ledger' ? ledgerSign : freighterSign;
             const signResult = await signFn(xdr, networkPassphrase);
             if (!signResult) {
                 throw new Error('Signing was cancelled or failed');
             }
 
+            signedPublicKey = signResult.publicKey;
+            signature = signResult.signature;
+
             // Submit signature to backend
             const submitResponse = await api.post(`/admin/transactions/${tx.id}/sign`, {
-                publicKey: signResult.publicKey,
-                signature: signResult.signature,
+                publicKey: signedPublicKey,
+                signature: signature,
             });
 
             if (submitResponse.success) {
                 await fetchTransactions();
                 setSelectedTx(null);
+                toast.success('Signature submitted');
             }
         } catch (err: any) {
             setError(err.message || 'Failed to sign transaction');
@@ -359,14 +409,41 @@ export function PendingTransactions() {
                                 <Wallet className="w-4 h-4" />
                                 Freighter
                             </button>
+                            {isTestAdmin && (
+                                <button
+                                    onClick={() => setSigningMethod('dev')}
+                                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors ${signingMethod === 'dev'
+                                        ? 'bg-red-600 text-white'
+                                        : 'text-zinc-400 hover:text-white'
+                                        }`}
+                                >
+                                    <Shield className="w-4 h-4" />
+                                    Dev
+                                </button>
+                            )}
                         </div>
                     </div>
 
                     {/* Connection Component (based on selected method) */}
                     {signingMethod === 'ledger' ? (
                         <LedgerConnect onConnected={() => fetchTransactions()} />
-                    ) : (
+                    ) : signingMethod === 'freighter' ? (
                         <FreighterConnect onConnected={() => fetchTransactions()} />
+                    ) : (
+                        <div className="bg-red-950/20 border border-red-500/30 rounded-lg p-4">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="p-2 bg-red-500/20 rounded-lg">
+                                    <Shield className="w-5 h-5 text-red-500" />
+                                </div>
+                                <div>
+                                    <h3 className="font-medium text-white text-sm">Dev Tools Active</h3>
+                                    <p className="text-[10px] text-zinc-400">Auto-sign with .env keys</p>
+                                </div>
+                            </div>
+                            <p className="text-xs text-zinc-400 leading-relaxed italic">
+                                Signing as Test Admin using local environment secrets. This is for development purposes only.
+                            </p>
+                        </div>
                     )}
 
                     {/* Selected Transaction Details */}
@@ -463,7 +540,7 @@ export function PendingTransactions() {
                                             <Wallet className="w-4 h-4" />
                                         )}
                                         {activeDevice
-                                            ? (signingMethod === 'ledger' ? 'Sign with Ledger' : 'Sign with Freighter')
+                                            ? (signingMethod === 'ledger' ? 'Sign with Ledger' : signingMethod === 'freighter' ? 'Sign with Freighter' : 'Sign with Dev Keys')
                                             : (signingMethod === 'ledger' ? 'Connect Ledger First' : 'Connect Freighter First')}
                                     </button>
                                 )}

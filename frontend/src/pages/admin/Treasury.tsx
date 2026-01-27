@@ -34,11 +34,21 @@ interface TreasuryData {
     balances: Balance[];
 }
 
+interface TTLStats {
+    sacCount: number;
+    walletCount: number;
+    threshold: number;
+    extensionAmount: number;
+    status: string;
+    nextSweep: string;
+}
+
 export function Treasury() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [treasuryData, setTreasuryData] = useState<TreasuryData | null>(null);
+    const [ttlStats, setTtlStats] = useState<TTLStats | null>(null);
     const [withdrawForm, setWithdrawForm] = useState({
         destination: '',
         amount: '',
@@ -49,11 +59,15 @@ export function Treasury() {
     const fetchBalances = async () => {
         try {
             setLoading(true);
-            const response = await api.get('/platform-admins/treasury/balances');
-            setTreasuryData(response.data.data);
+            const [balanceRes, ttlRes] = await Promise.all([
+                api.get('/platform-admins/treasury/balances'),
+                api.get('/platform-admins/maintenance/ttl-stats')
+            ]);
+            setTreasuryData(balanceRes.data.data);
+            setTtlStats(ttlRes.data.data);
         } catch (error) {
-            console.error('Failed to fetch treasury balances:', error);
-            toast.error('Failed to load treasury balances');
+            console.error('Failed to fetch treasury data:', error);
+            toast.error('Failed to load treasury data');
         } finally {
             setLoading(false);
         }
@@ -181,6 +195,40 @@ export function Treasury() {
                     </p>
                 </Card>
             </div>
+
+            {/* TTL Maintenance Section */}
+            {ttlStats && (
+                <Card className="p-6 bg-slate-900/40 border-white/5 border-l-4 border-l-emerald-500/50">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                                <RefreshCcw className="w-6 h-6 text-emerald-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                    Soroban State Durability
+                                    <span className="px-2 py-0.5 text-[10px] bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/30">LIVESTREAM</span>
+                                </h3>
+                                <p className="text-sm text-muted-foreground">Automatic TTL extension for smart contracts and wallets is active.</p>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-8">
+                            <div>
+                                <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Audited Entities</p>
+                                <p className="text-xl font-mono text-white">{(ttlStats.sacCount + ttlStats.walletCount).toString().padStart(2, '0')}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Maintenance Cycle</p>
+                                <p className="text-xl font-mono text-white">{ttlStats.nextSweep}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Safety Margin</p>
+                                <p className="text-xl font-mono text-white">{ttlStats.threshold.toLocaleString()} L</p>
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Withdrawal Form */}

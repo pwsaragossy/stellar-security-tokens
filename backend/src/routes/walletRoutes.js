@@ -242,4 +242,33 @@ router.post('/test-sign',
     }
 );
 
+/**
+ * @swagger
+ * /api/wallets/admin-sign:
+ *   post:
+ *     summary: Sign a transaction using a system wallet secret key from .env (Development Only)
+ *     tags: [Wallets]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [xdr, publicKey]
+ *             properties:
+ *               xdr:
+ *                 type: string
+ *               publicKey:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Transaction signed successfully
+ */
+router.post('/admin-sign',
+    body('xdr').isString().notEmpty().withMessage('xdr is required'),
+    body('publicKey').isString().notEmpty().withMessage('publicKey is required'),
+    validate,
+    WalletController.adminSignTransaction
+);
+
 export default router;

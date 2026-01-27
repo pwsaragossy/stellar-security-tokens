@@ -483,5 +483,35 @@ export class PlatformAdminController {
       });
     }
   }
+
+  /**
+   * Obtém estatísticas de manutenção de TTL (Soroban)
+   * GET /api/platform-admins/maintenance/ttl-stats
+   */
+  static async getTTLStats(req, res) {
+    try {
+      const sacCount = await prisma.token.count({
+        where: { sacContractId: { not: null } }
+      });
+      const walletCount = await prisma.investor.count({
+        where: { stellarContractId: { startsWith: 'C' } }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          sacCount,
+          walletCount,
+          threshold: 50000, // Matching MaintenanceService.TTL_THRESHOLD
+          extensionAmount: 500000, // Matching MaintenanceService.EXTEND_AMOUNT
+          status: 'active',
+          nextSweep: 'Daily at 03:00 UTC'
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching TTL stats:', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch TTL stats' });
+    }
+  }
 }
 

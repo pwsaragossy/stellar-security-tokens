@@ -536,6 +536,7 @@ router.get('/investors', authenticateToken, requirePlatformAdmin, PlatformAdminC
  *         description: Treasury public key and balances
  */
 router.get('/treasury/balances', authenticateToken, requirePlatformAdmin, TreasuryController.getBalances);
+router.get('/maintenance/ttl-stats', authenticateToken, requirePlatformAdmin, PlatformAdminController.getTTLStats);
 
 /**
  * @swagger

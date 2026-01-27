@@ -113,7 +113,11 @@ export function AdminLayout() {
                     <div className="flex items-center gap-2 md:gap-4">
                         <NotificationBell />
                         <div className="text-sm text-muted-foreground hidden sm:block">
-                            Role: <span className="text-red-400">Platform Admin</span>
+                            {authStorage.getUser<any>('admin')?.email === 'admin@stellar-tokens.local' && (import.meta.env.DEV || import.meta.env.VITE_ENABLE_TEST_LOGIN === 'true') ? (
+                                <>Admin Status: <span className="text-emerald-400 font-medium">Dev Admin (Auto-sign)</span></>
+                            ) : (
+                                <>Role: <span className="text-red-400">Platform Admin</span></>
+                            )}
                         </div>
                         <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-red-500 to-orange-500" />
                     </div>
