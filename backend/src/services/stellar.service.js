@@ -685,7 +685,7 @@ export class StellarService {
 
     // Preimage from Asset
     const xdrAsset = asset.toXDR();
-    const preimage = xdr.ContractIdPreimage.contractIdPreimageFromAsset(xdrAsset);
+    const contractIdPreimage = xdr.ContractIdPreimage.contractIdPreimageFromAsset(xdrAsset);
 
     const contractIdHash = hash(
       xdr.HashIdPreimage.envelopeTypeContractId(new xdr.HashIdPreimageContractId({
