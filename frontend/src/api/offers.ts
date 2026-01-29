@@ -49,6 +49,7 @@ export const offersApi = {
     offer_name: string;
     description: string;
     total_supply: string;
+    unit_price?: string;
     annual_interest_rate?: number;
     payment_type?: 'monthly' | 'quarterly' | 'semi_annual' | 'annual' | 'bullet';
     payment_day?: number;
@@ -68,6 +69,14 @@ export const offersApi = {
     formData.append('offer_name', data.offer_name);
     formData.append('description', data.description);
     formData.append('total_supply', data.total_supply);
+
+    // Default unit_price to 1 if not provided, but CreateOffer will provide it
+    // If interface includes unit_price (we need to update interface above first/same time? No, TS ignores extra props in formData usually, but we should update type too)
+    // Actually the interface IS defined above in 'data' arg.
+    if ((data as any).unit_price) {
+      formData.append('unit_price', (data as any).unit_price);
+    }
+
     formData.append('offer_type', data.offer_type);
 
     if (data.annual_interest_rate !== undefined) {

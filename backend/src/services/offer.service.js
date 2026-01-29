@@ -171,6 +171,14 @@ export class OfferService {
       throw new Error('Invalid asset_code. Must be uppercase alphanumeric, max 12 characters');
     }
 
+    if (!offerData.total_supply || parseFloat(offerData.total_supply) <= 0) {
+      throw new Error('Total supply must be a positive number');
+    }
+
+    if (offerData.unit_price && parseFloat(offerData.unit_price) < 0) {
+      throw new Error('Unit price must be a non-negative number');
+    }
+
     // Validar campos de pagamento
     const paymentValidation = this.validatePaymentFields(
       offerData.payment_type || 'monthly',
@@ -208,6 +216,7 @@ export class OfferService {
           offerName: offerData.offer_name,
           description: offerData.description,
           totalSupply: offerData.total_supply,
+          unitPrice: offerData.unit_price,
           annualInterestRate: offerData.annual_interest_rate,
           offerType: offerData.offer_type,
           paymentType: offerData.payment_type || 'monthly',
