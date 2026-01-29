@@ -53,8 +53,14 @@ export class Token {
    * @param {number} [offerId] - Filtrar por ID da oferta (opcional)
    * @returns {Promise<Array>} Array de tokens ordenados por data de criação (mais recentes primeiro)
    */
-  static async findAll(limit = 100, offset = 0, offerId = null) {
-    const where = offerId ? { offerId } : {};
+  static async findAll(limit = 100, offset = 0, offerId = null, companyId = null) {
+    const where = {};
+    if (offerId) where.offerId = offerId;
+    if (companyId) {
+      where.offer = {
+        companyId: companyId
+      };
+    }
 
     return await prisma.token.findMany({
       where,

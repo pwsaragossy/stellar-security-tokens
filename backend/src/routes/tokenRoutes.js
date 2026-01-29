@@ -2,6 +2,7 @@ import express from 'express';
 import { body } from 'express-validator';
 import { validate } from '../middleware/validator.js';
 import { requirePlatformAdmin } from '../middleware/authorize.js';
+import { optionalAuth } from '../middleware/auth.js';
 import {
   issueToken,
   getTokens,
@@ -99,7 +100,7 @@ router.post('/issue', requirePlatformAdmin, issueTokenValidation, issueToken);
  *                   items:
  *                     $ref: '#/components/schemas/Token'
  */
-router.get('/', getTokens);
+router.get('/', optionalAuth, getTokens);
 
 /**
  * @swagger

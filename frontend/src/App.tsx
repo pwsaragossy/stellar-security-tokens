@@ -32,6 +32,7 @@ import { PayInvestors } from './pages/company/PayInvestors';
 import { Reports } from './pages/company/Reports';
 import { Settings as CompanySettings } from './pages/company/Settings';
 import { Wallet as CompanyWallet } from './pages/company/Wallet';
+import { Tokens as CompanyTokens } from './pages/company/Tokens';
 import { SelectOfferType } from './pages/company/SelectOfferType';
 import { Documents } from './pages/company/Documents';
 import { IPFSInfo } from './pages/company/IPFSInfo';
@@ -76,6 +77,7 @@ function App() {
           <Route path="offers/new" element={<SelectOfferType />} />
           <Route path="offers/create" element={<CreateOffer />} />
           <Route path="offers/:id" element={<CompanyOfferDetails />} />
+          <Route path="tokens" element={<CompanyTokens />} />
           <Route path="payments/:offerId" element={<PayInvestors />} />
           <Route path="wallet" element={<CompanyWallet />} />
           <Route path="documents" element={<Documents />} />

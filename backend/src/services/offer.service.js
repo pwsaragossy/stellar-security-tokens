@@ -112,10 +112,13 @@ export class OfferService {
       if (offerRules.max_investment && typeof offerRules.max_investment !== 'number') {
         errors.push('max_investment must be a number');
       }
-      if (offerRules.min_investment && offerRules.max_investment &&
-        offerRules.min_investment > offerRules.max_investment) {
-        errors.push('min_investment cannot be greater than max_investment');
+      if (offerRules.max_investment && offerRules.max_investment > 0 && offerRules.min_investment && offerRules.max_investment < offerRules.min_investment) {
+        errors.push('max_investment must be greater than min_investment');
       }
+
+      // New Validation: max_investment cannot exceed total raise (handled dynamically in controller but good to enforce logic here if data available exists)
+      // Note: total_supply and unit_price are checked in calculateTotalRaise() context, but createOffer receives flat data.
+      // We will leave the strictly simple check here.  }
       if (offerRules.loan_term && (typeof offerRules.loan_term !== 'number' || offerRules.loan_term < 1)) {
         errors.push('loan_term must be a positive number');
       }

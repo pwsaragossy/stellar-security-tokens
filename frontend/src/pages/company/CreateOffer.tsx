@@ -501,25 +501,75 @@ export function CreateOffer() {
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                                         <Input
                                             type="number"
+                                            min="0"
                                             placeholder="100"
                                             value={formData.min_investment}
-                                            onChange={(e) => updateFormData({ min_investment: e.target.value })}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val === '' || parseFloat(val) >= 0) {
+                                                    updateFormData({ min_investment: val });
+                                                }
+                                            }}
                                             className="pl-8 glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-foreground"
                                         />
                                     </div>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-white">Maximum Investment (USD)</label>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                        <Input
-                                            type="number"
-                                            placeholder="No limit"
-                                            value={formData.max_investment}
-                                            onChange={(e) => updateFormData({ max_investment: e.target.value })}
-                                            className="pl-8 glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-foreground"
-                                        />
+                                    <div className="flex gap-2">
+                                        <div className="relative flex-1">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                            <Input
+                                                type="number"
+                                                min={formData.min_investment || "0"}
+                                                max={(parseFloat(formData.total_supply || '0') * parseFloat(formData.unit_price || '0')).toString()}
+                                                placeholder="No limit"
+                                                value={formData.max_investment}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    const totalRaise = parseFloat(formData.total_supply || '0') * parseFloat(formData.unit_price || '0');
+
+                                                    // Allow clearing
+                                                    if (val === '') {
+                                                        updateFormData({ max_investment: '' });
+                                                        return;
+                                                    }
+
+                                                    // Strict positive number check
+                                                    if (parseFloat(val) < 0) return;
+
+                                                    // Check against total raise if supply/price are set
+                                                    if (totalRaise > 0 && parseFloat(val) > totalRaise) {
+                                                        // Cap at total raise visually or just let them type? 
+                                                        // User asked to cap it. Let's strictly cap it.
+                                                        updateFormData({ max_investment: totalRaise.toString() });
+                                                    } else {
+                                                        updateFormData({ max_investment: val });
+                                                    }
+                                                }}
+                                                className="pl-8 glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-foreground"
+                                            />
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="border-white/10 hover:bg-white/5 hover:text-emerald-400"
+                                            onClick={() => {
+                                                const totalRaise = parseFloat(formData.total_supply || '0') * parseFloat(formData.unit_price || '0');
+                                                if (totalRaise > 0) {
+                                                    updateFormData({ max_investment: totalRaise.toString() });
+                                                }
+                                            }}
+                                            disabled={!formData.total_supply || !formData.unit_price}
+                                        >
+                                            Max
+                                        </Button>
                                     </div>
+                                    {formData.max_investment && formData.min_investment && parseFloat(formData.max_investment) < parseFloat(formData.min_investment) && (
+                                        <p className="text-xs text-red-400">
+                                            Must be greater than minimum ({new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(parseFloat(formData.min_investment))})
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </CardContent>

@@ -64,7 +64,19 @@ export const getTokens = async (req, res, next) => {
     const offset = parseInt(req.query.offset || '0', 10);
     const offerId = req.query.offer_id ? parseInt(req.query.offer_id, 10) : null;
 
-    const tokens = await Token.findAll(limit, offset, offerId);
+    // Check if user is a company user to restrict visibility
+    let companyId = null;
+
+    // Check for company user via userType (new flow) or specific roles (legacy)
+    if (req.user && (
+      req.user.userType === 'company' ||
+      req.user.role === 'company_admin' ||
+      req.user.role === 'company_user'
+    )) {
+      companyId = req.user.companyId;
+    }
+
+    const tokens = await Token.findAll(limit, offset, offerId, companyId);
 
     res.json({
       success: true,
