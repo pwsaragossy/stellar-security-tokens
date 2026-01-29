@@ -970,5 +970,128 @@ export class OfferController {
       });
     }
   }
+  /**
+   * Ativa oferta pelo próprio owner (company_user)
+   * POST /api/companies/offers/:id/activate
+   */
+  static async activateCompanyOffer(req, res) {
+    try {
+      const { id } = req.params;
+      const offer = await Offer.findById(parseInt(id));
+
+      if (!offer) {
+        return res.status(404).json({
+          success: false,
+          error: 'Offer not found',
+        });
+      }
+
+      // Check ownership
+      const isCompanyAccess = req.user.role === 'company_user' || req.user.userType === 'company';
+      if (isCompanyAccess && offer.companyId !== req.user.companyId) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied',
+        });
+      }
+
+      if (offer.status === 'active') {
+        return res.status(400).json({
+          success: false,
+          error: 'Offer is already active',
+        });
+      }
+
+      // Must have token issued
+      if (!offer.token && (!offer.tokens || offer.tokens.length === 0)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cannot activate offer: Token not yet issued',
+        });
+      }
+
+      // Check for Admin Verification (stored in offerRules)
+      const offerRules = typeof offer.offerRules === 'string'
+        ? JSON.parse(offer.offerRules)
+        : offer.offerRules || {};
+
+      if (!offerRules.admin_verified) {
+        return res.status(400).json({
+          success: false,
+          error: 'Offer is pending final admin verification',
+        });
+      }
+
+      // Ativar usando o serviço
+      const updatedOffer = await OfferService.activateOffer(parseInt(id));
+
+      res.json({
+        success: true,
+        data: OfferController.formatOfferForResponse(updatedOffer),
+      });
+    } catch (error) {
+      console.error('Error activating offer by company:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to activate offer',
+        details: error.message,
+      });
+    }
+  }
+
+  /**
+   * Verifica a emissão do token e habilita o launch para a empresa (platform_admin)
+   * POST /api/admin/offers/:id/verify
+   */
+  static async verifyOfferIssuance(req, res) {
+    try {
+      const { id } = req.params;
+      const offer = await Offer.findById(parseInt(id));
+
+      if (!offer) {
+        return res.status(404).json({
+          success: false,
+          error: 'Offer not found',
+        });
+      }
+
+      if (offer.status !== 'approved') {
+        return res.status(400).json({
+          success: false,
+          error: 'Offer must be approved',
+        });
+      }
+
+      // Ensure token is issued
+      const token = await Token.findByAssetCode(offer.assetCode);
+      if (!token) {
+        return res.status(400).json({
+          success: false,
+          error: 'Token must be issued before verification',
+        });
+      }
+
+      // Update offerRules with admin_verified flag
+      let offerRules = typeof offer.offerRules === 'string'
+        ? JSON.parse(offer.offerRules)
+        : offer.offerRules || {};
+
+      offerRules = { ...offerRules, admin_verified: true, verified_at: new Date().toISOString() };
+
+      const updatedOffer = await Offer.updateOfferRules(parseInt(id), offerRules);
+
+      res.json({
+        success: true,
+        data: OfferController.formatOfferForResponse(updatedOffer),
+      });
+    } catch (error) {
+      console.error('Error verifying offer issuance:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to verify offer',
+        details: error.message,
+      });
+    }
+  }
 }
 
