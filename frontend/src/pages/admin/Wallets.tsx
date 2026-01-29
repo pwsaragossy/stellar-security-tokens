@@ -16,11 +16,17 @@ import {
     DialogDescription,
 } from "@/components/ui/dialog";
 
+// Use a more generic interface that matches what TokenManagementModal expects
 interface TokenBalance {
     asset_type: string;
     asset_code?: string;
     asset_issuer?: string;
     balance: string;
+    // Compatibility fields for the new ManagedToken interface
+    id?: number;
+    assetCode?: string;
+    issuerPublicKey?: string;
+    totalSupply?: string;
 }
 
 // Wallet Detail Modal Component
@@ -138,6 +144,7 @@ function WalletDetailModal({ wallet, onClose }: { wallet: WalletStatus; onClose:
                     <TokenManagementModal
                         token={selectedToken}
                         walletName={wallet.name}
+                        distributorPublicKey={null} // Will be enhanced later if needed
                         onClose={() => setSelectedToken(null)}
                     />
                 )}

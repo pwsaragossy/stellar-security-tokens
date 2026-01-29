@@ -82,6 +82,8 @@ export interface Offer {
   company?: Company;
   created_at: string;
   updated_at: string;
+  maturity_date?: string;
+  payment_type?: string;
 }
 
 // Token Types
@@ -98,6 +100,7 @@ export interface Token {
   issuanceTransactionHash?: string;
   createdAt: string;
   updatedAt: string;
+  offer?: Offer;
 }
 
 // Investment Types

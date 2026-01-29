@@ -1750,4 +1750,26 @@ export class StellarService {
       throw error;
     }
   }
+
+  /**
+   * Lists all assets held by a specific account (usually the Distributor)
+   * @param {string} publicKey - The public key of the account to check
+   * @returns {Promise<Array>} List of assets with their balances
+   */
+  static async listAccountAssets(publicKey) {
+    try {
+      const account = await stellarServer.loadAccount(publicKey);
+      return account.balances
+        .filter(b => b.asset_type !== 'native')
+        .map(b => ({
+          assetCode: b.asset_code,
+          assetIssuer: b.asset_issuer,
+          balance: b.balance,
+          isAuthorized: b.is_authorized,
+        }));
+    } catch (error) {
+      console.error(`[StellarService] Error listing assets for account ${publicKey}:`, error);
+      throw new Error(`Failed to list account assets: ${error.message}`);
+    }
+  }
 }
