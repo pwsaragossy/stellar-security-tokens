@@ -3,21 +3,39 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Loader2, Coins, Copy } from 'lucide-react';
+import { Search, Loader2, Coins, RefreshCw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { tokensApi } from '@/api/tokens';
+import { walletsApi } from '@/api/wallets';
 import type { Token } from '@/types';
 import { formatCurrency } from '@/utils/format';
 import { TransactionLink } from '@/components/ui/TransactionLink';
-// Removed Tooltip usage
+import { TokenManagementModal } from '@/components/admin/TokenManagementModal';
 
 export function TokensPage() {
     const [tokens, setTokens] = useState<Token[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedToken, setSelectedToken] = useState<Token | null>(null);
+    const [syncing, setSyncing] = useState(false);
+    const [distributorKey, setDistributorKey] = useState<string | null>(null);
 
     useEffect(() => {
         fetchTokens();
+        fetchDistributorKey();
     }, []);
+
+    const fetchDistributorKey = async () => {
+        try {
+            const response = await walletsApi.getWalletStatuses();
+            if (response.data) {
+                const dist = response.data.find(w => w.name === 'Distributor');
+                if (dist) setDistributorKey(dist.publicKey);
+            }
+        } catch (error) {
+            console.error('Failed to fetch distributor key:', error);
+        }
+    };
 
     const fetchTokens = async () => {
         try {
@@ -38,12 +56,19 @@ export function TokensPage() {
         token.issuerPublicKey.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
-        // toast.success('Copied to clipboard');
+    const handleSync = async () => {
+        try {
+            setSyncing(true);
+            const response = await tokensApi.sync();
+            if (response.success) {
+                fetchTokens();
+            }
+        } catch (error) {
+            console.error('Sync failed:', error);
+        } finally {
+            setSyncing(false);
+        }
     };
-
-    const truncateKey = (key: string) => `${key.substring(0, 6)}...${key.substring(key.length - 4)}`;
 
     return (
         <div className="space-y-6">
@@ -56,6 +81,16 @@ export function TokensPage() {
                     <p className="text-muted-foreground">Manage and monitor all security tokens issued on the platform.</p>
                 </div>
                 <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSync}
+                        disabled={syncing || loading}
+                        className="bg-primary/10 border-primary/20 hover:bg-primary/20 text-primary gap-2"
+                    >
+                        {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                        Sync Ledger
+                    </Button>
                     <Button variant="outline" size="icon" onClick={fetchTokens} title="Refresh">
                         <Loader2 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                     </Button>
@@ -80,10 +115,10 @@ export function TokensPage() {
                         <TableHeader>
                             <TableRow className="border-white/5 hover:bg-white/5">
                                 <TableHead className="text-muted-foreground">Asset Code</TableHead>
+                                <TableHead className="text-muted-foreground">Offer & Status</TableHead>
                                 <TableHead className="text-muted-foreground">Supply</TableHead>
-                                <TableHead className="text-muted-foreground">Issuer Account</TableHead>
-                                <TableHead className="text-muted-foreground">SAC Contract</TableHead>
-                                <TableHead className="text-muted-foreground">Issuance Date</TableHead>
+                                <TableHead className="text-muted-foreground text-center">Rate (%)</TableHead>
+                                <TableHead className="text-muted-foreground">Maturity</TableHead>
                                 <TableHead className="text-muted-foreground text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -111,35 +146,30 @@ export function TokensPage() {
                                                 <span className="font-medium text-white">{token.assetCode}</span>
                                             </div>
                                         </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col gap-1">
+                                                {token.offer ? (
+                                                    <>
+                                                        <span className="text-white font-medium">{token.offer.offer_name}</span>
+                                                        <Badge variant="outline" className={`w-fit text-[10px] py-0 px-1.5 uppercase ${token.offer.status === 'active' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
+                                                            'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                                                            }`}>
+                                                            {token.offer.status.replace('_', ' ')}
+                                                        </Badge>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-muted-foreground italic text-xs">No active offer</span>
+                                                )}
+                                            </div>
+                                        </TableCell>
                                         <TableCell className="text-white font-mono">
                                             {formatCurrency(token.totalSupply || 0).replace('$', '')}
                                         </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-sm font-mono text-muted-foreground" title={token.issuerPublicKey}>
-                                                    {truncateKey(token.issuerPublicKey)}
-                                                </span>
-                                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(token.issuerPublicKey)}>
-                                                    <Copy className="w-3 h-3" />
-                                                </Button>
-                                            </div>
+                                        <TableCell className="text-center text-primary font-medium">
+                                            {token.offer?.annual_interest_rate ? `${token.offer.annual_interest_rate}%` : '-'}
                                         </TableCell>
-                                        <TableCell>
-                                            {token.sacContractId ? (
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm font-mono text-muted-foreground" title={token.sacContractId}>
-                                                        {truncateKey(token.sacContractId)}
-                                                    </span>
-                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(token.sacContractId!)}>
-                                                        <Copy className="w-3 h-3" />
-                                                    </Button>
-                                                </div>
-                                            ) : (
-                                                <span className="text-muted-foreground">-</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground">
-                                            {new Date(token.createdAt).toLocaleDateString()}
+                                        <TableCell className="text-muted-foreground text-sm">
+                                            {token.offer?.maturity_date ? new Date(token.offer.maturity_date as any).toLocaleDateString() : '-'}
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-2">
@@ -151,7 +181,13 @@ export function TokensPage() {
                                                         className="h-8 px-2 text-xs"
                                                     />
                                                 )}
-                                                <Button variant="ghost" size="sm">Details</Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setSelectedToken(token)}
+                                                >
+                                                    Details
+                                                </Button>
                                             </div>
                                         </TableCell>
                                     </TableRow>
@@ -161,6 +197,15 @@ export function TokensPage() {
                     </Table>
                 </CardContent>
             </Card>
+
+            {selectedToken && (
+                <TokenManagementModal
+                    token={selectedToken}
+                    distributorPublicKey={distributorKey}
+                    walletName="Security Tokens"
+                    onClose={() => setSelectedToken(null)}
+                />
+            )}
         </div>
     );
 }

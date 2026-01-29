@@ -62,5 +62,10 @@ export const tokensApi = {
     const response = await api.post('/tokens/disable-clawback', data);
     return response.data;
   },
+
+  sync: async (): Promise<ApiResponse> => {
+    const response = await api.post('/tokens/sync');
+    return response.data;
+  },
 };
 

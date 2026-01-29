@@ -34,19 +34,27 @@ interface TokenHolder {
 }
 
 interface TokenBalance {
-    asset_type: string;
+    id?: number;
+    assetCode?: string;
+    issuerPublicKey?: string;
+    totalSupply?: string;
+    offer?: any;
+    sacContractId?: string;
+    // Add Horizon balance fields for compatibility with Wallets.tsx
+    asset_type?: string;
     asset_code?: string;
     asset_issuer?: string;
-    balance: string;
+    balance?: string;
 }
 
 interface TokenManagementModalProps {
     token: TokenBalance;
     walletName: string;
+    distributorPublicKey: string | null;
     onClose: () => void;
 }
 
-export function TokenManagementModal({ token, walletName, onClose }: TokenManagementModalProps) {
+export function TokenManagementModal({ token, walletName, distributorPublicKey, onClose }: TokenManagementModalProps) {
     const [holders, setHolders] = useState<TokenHolder[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -58,12 +66,13 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
     const [selectedHolder, setSelectedHolder] = useState<string | null>(null);
     const [pendingAction, setPendingAction] = useState<string | null>(null); // format: "type:address"
 
-    const assetCode = token.asset_code || 'XLM';
-    const isNative = token.asset_type === 'native';
+    const assetCode = token.assetCode || token.asset_code || 'XLM';
+    const isNative = token.asset_type === 'native' || assetCode === 'XLM';
+    const issuer = token.issuerPublicKey || token.asset_issuer;
 
     const explorerUrl = isNative
         ? 'https://stellar.expert/explorer/testnet/asset/native'
-        : `https://stellar.expert/explorer/testnet/asset/${assetCode}-${token.asset_issuer}`;
+        : `https://stellar.expert/explorer/testnet/asset/${assetCode}-${issuer}`;
 
     const loadHolders = useCallback(async (isInitial = false) => {
         if (isInitial) setLoading(true);
@@ -218,6 +227,11 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
                             </DialogTitle>
                             <DialogDescription className="text-slate-400">
                                 Controlling assets from {walletName} wallet
+                                {token.sacContractId && (
+                                    <span className="block text-[10px] mt-0.5 text-emerald-400/60 font-mono truncate max-w-xs">
+                                        SAC: {token.sacContractId}
+                                    </span>
+                                )}
                             </DialogDescription>
                         </div>
                     </div>
@@ -248,9 +262,14 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {[
                             { label: 'Asset Code', value: assetCode, color: 'text-emerald-400' },
-                            { label: 'In Wallet', value: parseFloat(token.balance).toLocaleString(undefined, { maximumFractionDigits: 4 }) },
-                            { label: 'Holders', value: isNative ? 'N/A' : (refreshing ? '...' : holders.length), icon: <Users className="w-3 h-3" /> },
-                            { label: 'Circulating', value: isNative ? 'N/A' : (refreshing ? '...' : totalCirculating.toLocaleString(undefined, { maximumFractionDigits: 0 })) },
+                            { label: 'Total Issued', value: parseFloat(token.totalSupply || '0').toLocaleString(undefined, { maximumFractionDigits: 0 }) },
+                            { label: 'Holders', value: refreshing ? '...' : holders.length, icon: <Users className="w-3 h-3" /> },
+                            {
+                                label: 'Investor Circulation',
+                                value: refreshing ? '...' : (
+                                    totalCirculating - (distributorPublicKey ? parseFloat(holders.find(h => h.publicKey === distributorPublicKey)?.balance || '0') : 0)
+                                ).toLocaleString(undefined, { maximumFractionDigits: 0 })
+                            },
                         ].map((item, i) => (
                             <div key={i} className="bg-white/5 border border-white/10 p-4 rounded-xl">
                                 <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">{item.label}</div>
@@ -262,15 +281,67 @@ export function TokenManagementModal({ token, walletName, onClose }: TokenManage
                         ))}
                     </div>
 
+                    {/* Offer Summary */}
+                    {token.offer && (
+                        <div className="bg-primary/5 border border-primary/10 p-4 rounded-xl space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-bold text-primary flex items-center gap-2">
+                                    <Shield className="w-4 h-4" />
+                                    Offer Summary: {token.offer.offer_name}
+                                </h4>
+                                <Badge className="bg-primary/10 text-primary border-primary/20 uppercase text-[10px]">
+                                    {token.offer.status}
+                                </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-6 text-sm">
+                                <div>
+                                    <div className="text-slate-500 text-xs mb-1 uppercase tracking-tight">Interest Rate</div>
+                                    <div className="text-white font-medium">{token.offer.annual_interest_rate}% per year</div>
+                                </div>
+                                <div>
+                                    <div className="text-slate-500 text-xs mb-1 uppercase tracking-tight">Maturity</div>
+                                    <div className="text-white font-medium">{token.offer.maturity_date ? new Date(token.offer.maturity_date).toLocaleDateString() : 'N/A'}</div>
+                                </div>
+                                <div>
+                                    <div className="text-slate-500 text-xs mb-1 uppercase tracking-tight">Payment Type</div>
+                                    <div className="text-white font-medium capitalize">{token.offer.payment_type || 'Monthly'}</div>
+                                </div>
+                            </div>
+
+                            {/* Documents specifically requested by user */}
+                            {token.offer.legal_documents && Object.keys(token.offer.legal_documents).length > 0 && (
+                                <div className="pt-2 border-t border-primary/10">
+                                    <div className="text-slate-500 text-[10px] mb-2 uppercase tracking-widest font-bold">Legal Documents</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {Object.entries(token.offer.legal_documents).map(([key, doc]: [string, any]) => (
+                                            doc?.url && (
+                                                <Button
+                                                    key={key}
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 text-[10px] bg-white/5 border-white/10 hover:bg-white/10 text-slate-300 capitalize"
+                                                    onClick={() => window.open(doc.url, '_blank')}
+                                                >
+                                                    <ExternalLink className="w-3 h-3 mr-1" />
+                                                    {key.replace('_', ' ')}
+                                                </Button>
+                                            )
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Action Bar */}
                     <div className="flex flex-col sm:flex-row gap-3">
-                        {!isNative && token.asset_issuer && (
+                        {issuer && (
                             <div className="flex-1 bg-white/5 border border-white/10 p-3 rounded-lg flex items-center justify-between">
                                 <div className="min-w-0">
                                     <div className="text-[10px] uppercase text-slate-500 font-bold mb-0.5">Issuer</div>
-                                    <div className="text-xs text-white truncate font-mono">{token.asset_issuer}</div>
+                                    <div className="text-xs text-white truncate font-mono">{issuer}</div>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => navigator.clipboard.writeText(token.asset_issuer!)}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => navigator.clipboard.writeText(issuer)}>
                                     <Copy className="w-3.5 h-3.5" />
                                 </Button>
                             </div>

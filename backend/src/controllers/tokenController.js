@@ -113,6 +113,38 @@ export const getTokenByAssetCode = async (req, res, next) => {
   }
 };
 
+export const syncTokens = async (req, res, next) => {
+  try {
+    const distributorPublicKey = keyManager.getDistributorPublicKey();
+    const assets = await StellarService.listAccountAssets(distributorPublicKey);
+
+    const syncResults = [];
+    for (const asset of assets) {
+      const existing = await Token.findByAssetCode(asset.assetCode);
+      if (!existing) {
+        // Create "orphan" token in database if it doesn't exist
+        const newToken = await Token.create({
+          assetCode: asset.assetCode,
+          issuerPublicKey: asset.assetIssuer,
+          totalSupply: asset.balance, // Use current balance as initial total supply for orphan tokens
+          description: `Discovered from Distributor account ${distributorPublicKey}`,
+        });
+        syncResults.push({ assetCode: asset.assetCode, status: 'created', id: newToken.id });
+      } else {
+        syncResults.push({ assetCode: asset.assetCode, status: 'exists', id: existing.id });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Tokens synced with Distributor wallet',
+      data: syncResults,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const distributeTokens = async (req, res, next) => {
   try {
     const { investorId, assetCode, amount } = req.body;

@@ -13,6 +13,7 @@ import {
   clawbackTokens,
   disableClawback,
   listAssetHolders,
+  syncTokens,
 } from '../controllers/tokenController.js';
 
 const router = express.Router();
@@ -125,6 +126,21 @@ router.get('/', getTokens);
  *         description: Token não encontrado
  */
 router.get('/:assetCode', getTokenByAssetCode);
+
+/**
+ * @swagger
+ * /api/tokens/sync:
+ *   post:
+ *     summary: Sincronizar tokens com a carteira distribuidora
+ *     description: Descobre tokens na rede Stellar que não estão no banco de dados
+ *     tags: [Tokens]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Resumo da sincronização
+ */
+router.post('/sync', requirePlatformAdmin, syncTokens);
 
 /**
  * @swagger
