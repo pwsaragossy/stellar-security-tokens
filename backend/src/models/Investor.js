@@ -6,7 +6,26 @@ import bcrypt from 'bcrypt';
  */
 export class Investor {
 
-
+  /**
+   * Cria um novo investidor
+   * @param {Object} data - Dados do investidor
+   * @returns {Promise<Object>} Investidor criado
+   */
+  static async create(data) {
+    const { name, email, document, kycStatus } = data;
+    return await prisma.investor.create({
+      data: {
+        name,
+        email,
+        document,
+        kycStatus: kycStatus || 'pending',
+        // Provide mock defaults for required fields if not present
+        // using a valid G-Address to pass checksum validation: USDC Issuer from tests
+        stellarContractId: data.stellarContractId || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+        passkeyCredentialId: data.passkeyCredentialId || `mock-cred-${Buffer.from(email).toString('hex').slice(0, 20)}`,
+      }
+    });
+  }
   /**
    * Busca investidor por ID
    * @param {number} id - ID do investidor

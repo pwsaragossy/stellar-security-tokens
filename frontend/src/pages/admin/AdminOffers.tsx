@@ -33,7 +33,7 @@ export function AdminOffers() {
 
     // Modal states
     const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
-    const [actionType, setActionType] = useState<'approve' | 'reject' | 'view' | 'issue' | 'activate' | null>(null);
+    const [actionType, setActionType] = useState<'approve' | 'reject' | 'view' | 'issue' | 'activate' | 'verify' | null>(null);
     const [rejectionReason, setRejectionReason] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [pendingIssuances, setPendingIssuances] = useState<number[]>([]);
@@ -73,60 +73,30 @@ export function AdminOffers() {
         return () => clearInterval(interval);
     }, []);
 
-    const handleApprove = async () => {
-        if (!selectedOffer) return;
+    const handleAction = async () => {
+        if (!selectedOffer || !actionType) return;
         setIsSubmitting(true);
         setError(null);
         setSuccess(null);
-        try {
-            const response = await offersApi.review(selectedOffer.id, { status: 'approved' });
-            if (response.success) {
-                setSuccess('Offer approved successfully');
-                await loadOffers();
-                closeModal();
-            } else {
-                setError(response.error || 'Failed to approve offer');
-            }
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
 
-    const handleReject = async () => {
-        if (!selectedOffer) return;
-        setIsSubmitting(true);
-        setError(null);
-        setSuccess(null);
         try {
-            const response = await offersApi.review(selectedOffer.id, {
-                status: 'rejected',
-                rejection_reason: rejectionReason
-            });
-            if (response.success) {
-                setSuccess('Offer rejected successfully');
-                await loadOffers();
-                closeModal();
-            } else {
-                setError(response.error || 'Failed to reject offer');
+            let response;
+            if (actionType === 'approve') {
+                response = await offersApi.review(selectedOffer.id, { status: 'approved' });
+            } else if (actionType === 'reject') {
+                response = await offersApi.review(selectedOffer.id, { status: 'rejected', rejection_reason: rejectionReason });
+            } else if (actionType === 'issue') {
+                response = await offersApi.issueToken(selectedOffer.id);
+            } else if (actionType === 'activate') {
+                // Even though we have verify, admin can still force activate if needed via this, or we remove this option.
+                // For now, let's keep it but maybe it's less used.
+                response = await offersApi.activate(selectedOffer.id);
+            } else if (actionType === 'verify') {
+                response = await offersApi.verifyIssuance(selectedOffer.id);
             }
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
 
-    const handleIssueToken = async () => {
-        if (!selectedOffer) return;
-        setIsSubmitting(true);
-        setError(null);
-        setSuccess(null);
-        try {
-            const response = await offersApi.issueToken(selectedOffer.id);
-            if (response.success) {
-                if (response.data?.status === 'pending_multisig' || (response as any).status === 'pending_multisig') {
+            if (response && response.success) {
+                if (actionType === 'issue' && (response.data?.status === 'pending_multisig' || (response as any).status === 'pending_multisig')) {
                     setSuccess(
                         <div className="flex flex-col gap-1 text-left">
                             <span>Token issuance request queued for MultiSig approval</span>
@@ -136,9 +106,7 @@ export function AdminOffers() {
                         </div>
                     );
                     setPendingIssuances(prev => [...prev, selectedOffer.id]);
-                } else {
-                    // Extract transaction hash from response structure
-                    // Structure is Response -> data -> stellar_transaction -> transactionHash
+                } else if (actionType === 'issue') {
                     const txHash =
                         (response.data as any)?.stellar_transaction?.transactionHash ||
                         response.data?.transactionHash ||
@@ -160,32 +128,13 @@ export function AdminOffers() {
                             )}
                         </div>
                     );
+                } else {
+                    setSuccess(`Offer ${actionType}d successfully`);
                 }
                 await loadOffers();
                 closeModal();
             } else {
-                setError(response.error || 'Failed to issue token');
-            }
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleActivate = async () => {
-        if (!selectedOffer) return;
-        setIsSubmitting(true);
-        setError(null);
-        setSuccess(null);
-        try {
-            const response = await offersApi.activate(selectedOffer.id);
-            if (response.success) {
-                setSuccess('Offer activated successfully');
-                await loadOffers();
-                closeModal();
-            } else {
-                setError(response.error || 'Failed to activate offer');
+                setError(response?.error || `Failed to ${actionType} offer`);
             }
         } catch (err: any) {
             setError(err.message);
@@ -418,24 +367,37 @@ export function AdminOffers() {
                                                             </Button>
                                                         </>
                                                     )}
-                                                    {offer.status === 'approved' && !pendingIssuances.includes(offer.id) && (
+                                                    {offer.status === 'approved' && !pendingIssuances.includes(offer.id) && !(offer as any).token && (
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
                                                             onClick={() => openAction(offer, 'issue')}
+                                                            title="Issue Token"
                                                             className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                                                         >
                                                             <DollarSign className="w-4 h-4" />
                                                         </Button>
                                                     )}
-                                                    {(offer as any).token_issued && offer.status !== 'active' && (
+                                                    {(offer as any).token && !(offer.offer_rules as any)?.admin_verified && offer.status !== 'active' && (
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            onClick={() => openAction(offer, 'activate')}
-                                                            className="text-primary hover:text-primary/80 hover:bg-primary/10"
+                                                            onClick={() => openAction(offer, 'verify')}
+                                                            title="Verify & Enable Launch"
+                                                            className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
                                                         >
-                                                            <Rocket className="w-4 h-4" />
+                                                            <Check className="w-4 h-4" />
+                                                        </Button>
+                                                    )}
+                                                    {(offer as any).token && offer.status !== 'active' && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => openAction(offer, 'reject')}
+                                                            title="Revoke / Deny"
+                                                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                                        >
+                                                            <X className="w-4 h-4" />
                                                         </Button>
                                                     )}
                                                 </div>
@@ -531,7 +493,7 @@ export function AdminOffers() {
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={closeModal} className="border-white/10">Cancel</Button>
-                        <Button onClick={handleApprove} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700">
+                        <Button onClick={handleAction} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700">
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
                             Approve
                         </Button>
@@ -555,7 +517,7 @@ export function AdminOffers() {
                     />
                     <DialogFooter>
                         <Button variant="outline" onClick={closeModal} className="border-white/10">Cancel</Button>
-                        <Button onClick={handleReject} disabled={isSubmitting || !rejectionReason} className="bg-red-600 hover:bg-red-700">
+                        <Button onClick={handleAction} disabled={isSubmitting || !rejectionReason} className="bg-red-600 hover:bg-red-700">
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <X className="w-4 h-4 mr-2" />}
                             Decline
                         </Button>
@@ -573,7 +535,7 @@ export function AdminOffers() {
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={closeModal} className="border-white/10">Cancel</Button>
-                        <Button onClick={handleIssueToken} disabled={isSubmitting} className="bg-blue-600 hover:bg-blue-700">
+                        <Button onClick={handleAction} disabled={isSubmitting} className="bg-blue-600 hover:bg-blue-700">
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
                             Issue Token
                         </Button>
@@ -591,9 +553,27 @@ export function AdminOffers() {
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={closeModal} className="border-white/10">Cancel</Button>
-                        <Button onClick={handleActivate} disabled={isSubmitting} className="bg-primary hover:bg-primary/90">
+                        <Button onClick={handleAction} disabled={isSubmitting} className="bg-primary hover:bg-primary/90">
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Rocket className="w-4 h-4 mr-2" />}
                             Activate
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={actionType === 'verify' && !!selectedOffer} onOpenChange={() => closeModal()}>
+                <DialogContent className="bg-slate-900 border-white/10 text-white">
+                    <DialogHeader>
+                        <DialogTitle className="text-emerald-400">Verify Issuance</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to verify the token issuance for "{selectedOffer?.offer_name}"? This will enable the company to launch the offer.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeModal} className="border-white/10">Cancel</Button>
+                        <Button onClick={handleAction} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700">
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                            Verify & Enable
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -193,6 +193,7 @@ router.get('/companies/offers', requireCompanyUser, OfferController.getCompanyOf
  */
 router.get('/companies/offers/:id', requireCompanyUser, OfferController.getOfferDetails);
 router.put('/companies/offers/:id', requireCompanyUser, upload.any(), OfferController.updateOffer);
+router.post('/companies/offers/:id/activate', requireCompanyUser, OfferController.activateCompanyOffer);
 
 /**
  * @swagger
@@ -435,6 +436,27 @@ router.post('/admin/offers/:id/issue', requirePlatformAdmin, OfferController.iss
  *         description: Oferta ativada
  */
 router.post('/admin/offers/:id/activate', requirePlatformAdmin, OfferController.activateOffer);
+
+/**
+ * @swagger
+ * /api/admin/offers/{id}/verify:
+ *   post:
+ *     summary: "[Admin] Verificar emissão e habilitar launch"
+ *     description: Marca a emissão como verificada, permitindo que a empresa lance a oferta
+ *     tags: [Offers]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Oferta verificada
+ */
+router.post('/admin/offers/:id/verify', requirePlatformAdmin, OfferController.verifyOfferIssuance);
 
 export default router;
 

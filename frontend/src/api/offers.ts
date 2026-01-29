@@ -152,8 +152,18 @@ export const offersApi = {
     return response.data;
   },
 
+  verifyIssuance: async (id: number): Promise<ApiResponse> => {
+    const response = await api.post(`/admin/offers/${id}/verify`);
+    return response.data;
+  },
+
   activate: async (id: number): Promise<ApiResponse> => {
     const response = await api.post(`/admin/offers/${id}/activate`);
+    return response.data;
+  },
+
+  activateCompany: async (id: number): Promise<ApiResponse> => {
+    const response = await api.post(`/companies/offers/${id}/activate`);
     return response.data;
   },
 
