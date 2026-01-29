@@ -345,6 +345,7 @@ model Offer {
   collateralValue       Decimal?  @map("collateral_value") @db.Decimal(20, 2)
   collateralLTV         Decimal?  @map("collateral_ltv") @db.Decimal(5, 2)
   totalSupply         Decimal     @map("total_supply") @db.Decimal(20, 7)
+  unitPrice           Decimal     @default(1.0) @map("unit_price") @db.Decimal(20, 7)
   annualInterestRate  Decimal?    @map("annual_interest_rate") @db.Decimal(10, 7)
   offerType           OfferType   @map("offer_type")
   offerRules          Json        @default("{}") @map("offer_rules")

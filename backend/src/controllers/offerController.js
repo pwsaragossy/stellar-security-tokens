@@ -180,6 +180,16 @@ export class OfferController {
       if (payment_frequency) payment_frequency = parseInt(payment_frequency, 10);
       if (collateral_ltv) collateral_ltv = parseFloat(collateral_ltv);
 
+      // Parse unit_price if provided
+      let unit_price = 1.0;
+      if (req.body.unit_price) {
+        unit_price = parseFloat(req.body.unit_price);
+      }
+
+
+
+
+
       // Parse offer_rules se enviado como string JSON (comum em multipart)
       if (typeof offer_rules === 'string') {
         try {
@@ -300,11 +310,12 @@ export class OfferController {
       const offer = await OfferService.createOffer({
         company_id: companyId,
         requested_by: requestedBy,
-        asset_code,
-        offer_name,
+        asset_code: asset_code,
+        offer_name: offer_name,
         description,
-        total_supply,
-        annual_interest_rate,
+        total_supply: total_supply,
+        unit_price: unit_price,
+        annual_interest_rate: annual_interest_rate,
         offer_type,
         payment_type,
         maturity_date,

@@ -12,6 +12,7 @@ interface OfferFormData {
     description: string;
     offer_type: 'collateral' | 'sale';
     total_supply: string;
+    unit_price: string;
     annual_interest_rate: string;
     min_investment: string;
     max_investment: string;
@@ -32,6 +33,7 @@ const initialFormData: OfferFormData = {
     description: '',
     offer_type: 'collateral',
     total_supply: '',
+    unit_price: '1.00',
     annual_interest_rate: '',
     min_investment: '100',
     max_investment: '',
@@ -175,6 +177,7 @@ export function CreateOffer() {
                 description: formData.description,
                 offer_type: formData.offer_type,
                 total_supply: formData.total_supply,
+                unit_price: formData.unit_price,
                 annual_interest_rate: formData.offer_type === 'collateral' ? parseFloat(formData.annual_interest_rate) : undefined,
                 payment_type: formData.offer_type === 'collateral' ? formData.payment_type : undefined,
                 payment_day: formData.offer_type === 'collateral' && formData.payment_type !== 'bullet' ? parseInt(formData.payment_day) : undefined,
@@ -212,8 +215,9 @@ export function CreateOffer() {
             case 1:
                 return formData.offer_name && formData.asset_code && formData.description;
             case 2:
-                return formData.total_supply &&
-                    (formData.offer_type === 'sale' || formData.annual_interest_rate);
+                // Require supply and price
+                return !!formData.total_supply && !!formData.unit_price &&
+                    (formData.offer_type === 'sale' || !!formData.annual_interest_rate);
             case 3:
                 return true; // Documents are optional for now
             case 4:
@@ -350,21 +354,60 @@ export function CreateOffer() {
                             <CardDescription>Set the financial parameters of your offer</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-white">Total Supply (USD) *</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-white">Token Supply (Qty) *</label>
                                     <Input
                                         type="number"
                                         placeholder="1000000"
+                                        min="0"
                                         value={formData.total_supply}
-                                        onChange={(e) => updateFormData({ total_supply: e.target.value })}
-                                        className="pl-8 glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-foreground"
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === '' || parseFloat(val) >= 0) {
+                                                updateFormData({ total_supply: val });
+                                            }
+                                        }}
+                                        className="glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-foreground"
                                     />
+                                    <p className="text-xs text-muted-foreground">
+                                        Number of tokens to issue
+                                    </p>
                                 </div>
-                                <p className="text-xs text-muted-foreground">
-                                    Total value of tokens to be issued
-                                </p>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-white">Price per Token (USD) *</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                        <Input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            placeholder="1.00"
+                                            value={formData.unit_price}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val === '' || parseFloat(val) >= 0) {
+                                                    updateFormData({ unit_price: val });
+                                                }
+                                            }}
+                                            className="pl-8 glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-foreground"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        Initial offering price
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="p-4 rounded-lg bg-white/5 border border-white/10 animate-fade-in">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm text-muted-foreground">Total Target Raise</span>
+                                    <span className="text-xl font-bold text-emerald-400">
+                                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
+                                            (parseFloat(formData.total_supply || '0') * parseFloat(formData.unit_price || '0'))
+                                        )}
+                                    </span>
+                                </div>
                             </div>
 
                             {formData.offer_type === 'collateral' && (

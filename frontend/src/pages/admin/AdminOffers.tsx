@@ -137,18 +137,24 @@ export function AdminOffers() {
                     );
                     setPendingIssuances(prev => [...prev, selectedOffer.id]);
                 } else {
-                    const txHash = response.data?.transactionHash || (response as any).transactionHash;
+                    // Extract transaction hash from response structure
+                    // Structure is Response -> data -> stellar_transaction -> transactionHash
+                    const txHash =
+                        (response.data as any)?.stellar_transaction?.transactionHash ||
+                        response.data?.transactionHash ||
+                        (response as any).transactionHash;
+
                     setSuccess(
                         <div className="flex flex-col gap-1 text-left">
                             <span>Token issued successfully</span>
                             {txHash && (
                                 <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-sm text-emerald-300">View transaction:</span>
+                                    <span className="text-xs text-emerald-300">View transaction:</span>
                                     <TransactionLink
                                         hash={txHash}
                                         label="Stellar Expert"
                                         variant="link"
-                                        className="text-emerald-400 underline h-auto p-0 font-bold hover:text-emerald-300"
+                                        className="text-emerald-400 underline h-auto p-0 font-bold hover:text-emerald-300 text-xs"
                                     />
                                 </div>
                             )}
