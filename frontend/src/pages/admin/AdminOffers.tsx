@@ -20,6 +20,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { TransactionLink } from "@/components/ui/TransactionLink";
 
 export function AdminOffers() {
     // const navigate = useNavigate(); // Added but not yet used, keeping for consistency with other admin pages
@@ -136,7 +137,23 @@ export function AdminOffers() {
                     );
                     setPendingIssuances(prev => [...prev, selectedOffer.id]);
                 } else {
-                    setSuccess('Token issued successfully');
+                    const txHash = response.data?.transactionHash || (response as any).transactionHash;
+                    setSuccess(
+                        <div className="flex flex-col gap-1 text-left">
+                            <span>Token issued successfully</span>
+                            {txHash && (
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-sm text-emerald-300">View transaction:</span>
+                                    <TransactionLink
+                                        hash={txHash}
+                                        label="Stellar Expert"
+                                        variant="link"
+                                        className="text-emerald-400 underline h-auto p-0 font-bold hover:text-emerald-300"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    );
                 }
                 await loadOffers();
                 closeModal();

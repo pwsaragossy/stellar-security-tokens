@@ -90,7 +90,7 @@ export function EmergencyControls() {
             setTokens(tokensRes.data || []);
             setOffers(offersRes.data.data || []);
             if (tokensRes.data && tokensRes.data.length > 0) {
-                setSelectedAsset(tokensRes.data[0].asset_code);
+                setSelectedAsset(tokensRes.data[0].assetCode);
             }
         } catch (err: any) {
             setError('Failed to load data');
@@ -373,8 +373,8 @@ export function EmergencyControls() {
                                 className="bg-slate-900 border border-white/10 rounded-md px-2 py-1 text-xs"
                             >
                                 {tokens.map(t => (
-                                    <option key={t.asset_code} value={t.asset_code}>
-                                        {t.asset_code}
+                                    <option key={t.assetCode} value={t.assetCode}>
+                                        {t.assetCode}
                                     </option>
                                 ))}
                             </select>

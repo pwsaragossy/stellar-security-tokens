@@ -43,6 +43,7 @@ import { PendingTransactions } from './pages/admin/PendingTransactions';
 import { AssetCompliance } from './pages/admin/AssetCompliance';
 import { EmergencyControls } from './pages/admin/EmergencyControls';
 import { Treasury } from './pages/admin/Treasury';
+import { TokensPage } from './pages/admin/TokensPage';
 
 function App() {
   return (
@@ -96,6 +97,7 @@ function App() {
           <Route path="emergency" element={<EmergencyControls />} />
           <Route path="treasury" element={<Treasury />} />
           <Route path="wallets" element={<Wallets />} />
+          <Route path="tokens" element={<TokensPage />} />
           <Route path="fees" element={<FeeConfig />} />
           <Route path="defaults" element={<DefaultCases />} />
           <Route path="settings" element={<AdminSettings />} />

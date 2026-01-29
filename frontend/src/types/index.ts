@@ -87,16 +87,17 @@ export interface Offer {
 // Token Types
 export interface Token {
   id: number;
-  asset_code: string;
-  issuer_public_key: string;
-  total_supply: string;
+  assetCode: string;
+  issuerPublicKey: string;
+  totalSupply: string;
   description?: string;
-  annual_interest_rate?: number;
-  offer_id?: number;
-  issued_by?: number;
+  annualInterestRate?: number;
+  offerId?: number;
+  issuedBy?: number;
   sacContractId?: string;
-  created_at: string;
-  updated_at: string;
+  issuanceTransactionHash?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Investment Types

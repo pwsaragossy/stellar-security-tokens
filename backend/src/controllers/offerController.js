@@ -883,7 +883,8 @@ export class OfferController {
       const token = await OfferService.issueTokenFromOffer(
         offer.id,
         req.user.userId,
-        issuerPublicKey
+        issuerPublicKey,
+        tokenResult.transactionHash
       );
 
       // Se home domain configurado e documentos IPFS existem, gerar stellar.toml

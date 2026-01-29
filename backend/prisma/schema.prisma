@@ -149,6 +149,7 @@ model Token {
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamp
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp
   sacContractId      String?  @map("sac_contract_id") @db.VarChar(56)
+  issuanceTransactionHash String? @map("issuance_transaction_hash") @db.VarChar(64)
 
   // Relations
   offer            Offer?              @relation(fields: [offerId], references: [id], onDelete: SetNull)

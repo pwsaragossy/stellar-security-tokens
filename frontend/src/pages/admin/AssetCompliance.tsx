@@ -77,7 +77,7 @@ export function AssetCompliance() {
             const data = response.data || [];
             setTokens(data);
             if (data.length > 0 && !selectedAsset) {
-                setSelectedAsset(data[0].asset_code);
+                setSelectedAsset(data[0].assetCode);
             }
         } catch (err: any) {
             setError('Failed to load assets');
@@ -272,8 +272,8 @@ export function AssetCompliance() {
                         >
                             <option value="" disabled>Select Asset</option>
                             {tokens.map(token => (
-                                <option key={token.asset_code} value={token.asset_code}>
-                                    {token.asset_code}
+                                <option key={token.assetCode} value={token.assetCode}>
+                                    {token.assetCode}
                                 </option>
                             ))}
                         </select>
@@ -309,15 +309,15 @@ export function AssetCompliance() {
                         <div>
                             <p className="text-2xl font-bold text-white">{selectedAsset || '---'}</p>
                             <p className="text-xs text-muted-foreground mb-2">Active Security Token</p>
-                            {tokens.find(t => t.asset_code === selectedAsset)?.sacContractId && (
+                            {tokens.find(t => t.assetCode === selectedAsset)?.sacContractId && (
                                 <div className="p-2 bg-white/5 rounded-lg border border-white/10 mt-2">
                                     <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Soroban SAC ID</p>
                                     <div className="flex items-center justify-between gap-1">
                                         <code className="text-[10px] text-emerald-400 truncate flex-1">
-                                            {tokens.find(t => t.asset_code === selectedAsset)?.sacContractId}
+                                            {tokens.find(t => t.assetCode === selectedAsset)?.sacContractId}
                                         </code>
                                         <button
-                                            onClick={() => navigator.clipboard.writeText(tokens.find(t => t.asset_code === selectedAsset)?.sacContractId || '')}
+                                            onClick={() => navigator.clipboard.writeText(tokens.find(t => t.assetCode === selectedAsset)?.sacContractId || '')}
                                             className="text-muted-foreground hover:text-white"
                                         >
                                             <Copy className="w-3 h-3" />

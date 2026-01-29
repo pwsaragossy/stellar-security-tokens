@@ -272,7 +272,7 @@ export class OfferService {
    * @param {string} issuerPublicKey - Chave pública do issuer Stellar
    * @returns {Promise<Object>} Token criado
    */
-  static async issueTokenFromOffer(offerId, issuedBy, issuerPublicKey) {
+  static async issueTokenFromOffer(offerId, issuedBy, issuerPublicKey, transactionHash = null) {
     const offer = await Offer.findById(offerId);
     if (!offer) {
       throw new Error('Offer not found');
@@ -296,6 +296,7 @@ export class OfferService {
       description: offer.description,
       offerId: offer.id,
       issuedBy: issuedBy,
+      issuanceTransactionHash: transactionHash,
     });
 
     return token;
