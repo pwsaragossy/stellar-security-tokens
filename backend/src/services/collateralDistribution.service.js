@@ -4,6 +4,7 @@
  */
 import prisma from '../config/prisma.js';
 import { StellarService } from './stellar.service.js';
+import { PaymentService } from './payment.service.js';
 import { NotificationService } from './notification.service.js';
 import { EmailService } from './email.service.js';
 import { Asset, Operation, Keypair } from '@stellar/stellar-sdk';
@@ -35,37 +36,128 @@ export class CollateralDistributionService {
             orderBy: { updatedAt: 'desc' }
         });
 
-        return offers.map(offer => ({
-            offerId: offer.id,
-            assetCode: offer.assetCode,
-            offerName: offer.offerName,
-            companyId: offer.companyId,
-            companyName: offer.company.name,
-            defaultedAt: offer.updatedAt,
-            totalInvested: offer.investments.reduce((sum, inv) => sum + parseFloat(inv.usdcAmount), 0),
-            investorCount: offer.investments.length,
-            collateralType: offer.collateralType,
-            collateralDescription: offer.collateralDescription,
-            collateralValue: parseFloat(offer.collateralValue || 0),
-            // Calculate pro-rata distribution
-            distributions: offer.investments.map(inv => {
-                const investedAmount = parseFloat(inv.usdcAmount);
-                const totalInvested = offer.investments.reduce((s, i) => s + parseFloat(i.usdcAmount), 0);
-                const proportion = totalInvested > 0 ? investedAmount / totalInvested : 0;
+        // Process each offer, checking for unlocked tokens
+        const processedOffers = await Promise.all(offers.map(async offer => {
+            // For unlocked tokens, use on-chain balances for proportional distribution
+            if (offer.isTokenLocked === false) {
+                return this._getDefaultedOfferOnChain(offer);
+            }
+
+            // For locked tokens, use DB-based calculation
+            return {
+                offerId: offer.id,
+                assetCode: offer.assetCode,
+                offerName: offer.offerName,
+                companyId: offer.companyId,
+                companyName: offer.company.name,
+                defaultedAt: offer.updatedAt,
+                totalInvested: offer.investments.reduce((sum, inv) => sum + parseFloat(inv.usdcAmount), 0),
+                investorCount: offer.investments.length,
+                collateralType: offer.collateralType,
+                collateralDescription: offer.collateralDescription,
+                collateralValue: parseFloat(offer.collateralValue || 0),
+                balanceSource: 'database',
+                // Calculate pro-rata distribution based on DB investments
+                distributions: offer.investments.map(inv => {
+                    const investedAmount = parseFloat(inv.usdcAmount);
+                    const totalInvested = offer.investments.reduce((s, i) => s + parseFloat(i.usdcAmount), 0);
+                    const proportion = totalInvested > 0 ? investedAmount / totalInvested : 0;
+
+                    return {
+                        investorId: inv.investorId,
+                        investorName: inv.investor.name,
+                        investorEmail: inv.investor.email,
+                        investorWallet: inv.investor.stellarPublicKey,
+                        tokenBalance: parseFloat(inv.tokenAmount),
+                        proportion,
+                        collateralShare: parseFloat(offer.collateralValue || 0) * proportion,
+                        tokenAmount: parseFloat(inv.tokenAmount),
+                    };
+                })
+            };
+        }));
+
+        return processedOffers;
+    }
+
+    /**
+     * Get defaulted offer details using on-chain balances (for unlocked tokens)
+     * @param {Object} offer - Offer object with investments and company included
+     * @returns {Promise<Object>} Offer details with on-chain proportional distributions
+     * @private
+     */
+    static async _getDefaultedOfferOnChain(offer) {
+        try {
+            const investorsWithBalances = await PaymentService.getInvestorsWithBalancesByOffer(offer.id);
+
+            if (!investorsWithBalances || investorsWithBalances.length === 0) {
+                console.log(`[CollateralDistribution] No on-chain balances found for offer ${offer.id}`);
+                return {
+                    offerId: offer.id,
+                    assetCode: offer.assetCode,
+                    offerName: offer.offerName,
+                    companyId: offer.companyId,
+                    companyName: offer.company.name,
+                    defaultedAt: offer.updatedAt,
+                    totalInvested: 0,
+                    investorCount: 0,
+                    collateralType: offer.collateralType,
+                    collateralDescription: offer.collateralDescription,
+                    collateralValue: parseFloat(offer.collateralValue || 0),
+                    balanceSource: 'on_chain',
+                    distributions: []
+                };
+            }
+
+            // Calculate total tokens held on-chain
+            const totalTokensHeld = investorsWithBalances.reduce(
+                (sum, inv) => sum + parseFloat(inv.token_balance || 0),
+                0
+            );
+
+            // Build distributions based on on-chain holdings
+            const distributions = investorsWithBalances.map(inv => {
+                const tokenBalance = parseFloat(inv.token_balance || 0);
+                const proportion = totalTokensHeld > 0 ? tokenBalance / totalTokensHeld : 0;
 
                 return {
-                    investorId: inv.investorId,
-                    investorName: inv.investor.name,
-                    investorEmail: inv.investor.email,
-                    investorWallet: inv.investor.stellarPublicKey,
-                    investedAmount,
+                    investorId: inv.id,
+                    investorName: inv.name,
+                    investorEmail: inv.email,
+                    investorWallet: inv.stellarContractId || inv.stellarPublicKey,
+                    tokenBalance,
                     proportion,
                     collateralShare: parseFloat(offer.collateralValue || 0) * proportion,
-                    // Token amount to receive
-                    tokenAmount: parseFloat(inv.tokenAmount),
+                    tokenAmount: tokenBalance, // For unlocked tokens, tokenAmount = current balance
                 };
-            })
-        }));
+            }).filter(d => d.tokenBalance > 0);
+
+            console.log(`[CollateralDistribution] On-chain calculation for defaulted offer ${offer.id}:`, {
+                investorCount: distributions.length,
+                totalTokensHeld,
+                collateralValue: offer.collateralValue,
+                balanceSource: 'on_chain'
+            });
+
+            return {
+                offerId: offer.id,
+                assetCode: offer.assetCode,
+                offerName: offer.offerName,
+                companyId: offer.companyId,
+                companyName: offer.company.name,
+                defaultedAt: offer.updatedAt,
+                totalInvested: totalTokensHeld,
+                investorCount: distributions.length,
+                collateralType: offer.collateralType,
+                collateralDescription: offer.collateralDescription,
+                collateralValue: parseFloat(offer.collateralValue || 0),
+                balanceSource: 'on_chain',
+                distributions
+            };
+        } catch (error) {
+            console.error(`[CollateralDistribution] Error fetching on-chain balances for offer ${offer.id}:`, error);
+            throw new Error(`Failed to calculate on-chain collateral distribution: ${error.message}`);
+        }
     }
 
     /**

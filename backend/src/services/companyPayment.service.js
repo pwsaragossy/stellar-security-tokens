@@ -4,6 +4,7 @@
  */
 import prisma from '../config/prisma.js';
 import { StellarService } from './stellar.service.js';
+import { PaymentService } from './payment.service.js';
 import { EmailService } from './email.service.js';
 import { Keypair, Asset, Operation, TransactionBuilder, Networks } from '@stellar/stellar-sdk';
 
@@ -50,6 +51,12 @@ export class CompanyPaymentService {
             throw new Error(`Offer ${offerId} not found`);
         }
 
+        // For unlocked tokens, use on-chain balances instead of DB investment records
+        // This ensures accurate interest calculations when tokens have been traded on DEXes
+        if (offer.isTokenLocked === false) {
+            return this._calculateOwedAmountOnChain(offer);
+        }
+
         // Calculate total tokens distributed (USDC invested)
         const totalInvested = offer.investments.reduce(
             (sum, inv) => sum + parseFloat(inv.usdcAmount),
@@ -63,7 +70,8 @@ export class CompanyPaymentService {
                 investorCount: 0,
                 paymentType: offer.paymentType,
                 nextPaymentDue: offer.nextPaymentDue,
-                breakdown: []
+                breakdown: [],
+                balanceSource: 'database'
             };
         }
 
@@ -80,7 +88,7 @@ export class CompanyPaymentService {
                 investorId: inv.investorId,
                 investorName: inv.investor.name,
                 investorWallet: inv.investor.stellarPublicKey,
-                investedAmount,
+                tokenBalance: investedAmount, // For locked tokens, invested = balance
                 interestOwed: Math.round(interestOwed * 100) / 100, // Round to cents
             };
         });
@@ -100,8 +108,82 @@ export class CompanyPaymentService {
             nextPaymentDue: offer.nextPaymentDue,
             lastPaymentDate: offer.lastPaymentDate,
             paymentDueStatus: offer.paymentDueStatus,
+            balanceSource: 'database',
             breakdown
         };
+    }
+
+    /**
+     * Calculate owed amount using on-chain token balances (for unlocked tokens)
+     * @param {Object} offer - Offer object with investments included
+     * @returns {Promise<Object>} Payment details based on on-chain holdings
+     * @private
+     */
+    static async _calculateOwedAmountOnChain(offer) {
+        try {
+            // Use PaymentService to get on-chain balances via Soroban RPC
+            const investorsWithBalances = await PaymentService.getInvestorsWithBalancesByOffer(offer.id);
+
+            if (!investorsWithBalances || investorsWithBalances.length === 0) {
+                return {
+                    offerId: offer.id,
+                    totalOwed: 0,
+                    investorCount: 0,
+                    paymentType: offer.paymentType,
+                    nextPaymentDue: offer.nextPaymentDue,
+                    breakdown: [],
+                    balanceSource: 'on_chain'
+                };
+            }
+
+            const annualRate = parseFloat(offer.annualInterestRate || 0);
+            const periodsPerYear = this.getPeriodsPerYear(offer.paymentType);
+            const periodRate = annualRate / 100 / periodsPerYear;
+
+            // Calculate per-investor owed amounts based on current on-chain holdings
+            const breakdown = investorsWithBalances.map(inv => {
+                const tokenBalance = parseFloat(inv.token_balance || 0);
+                const interestOwed = tokenBalance * periodRate;
+
+                return {
+                    investorId: inv.id,
+                    investorName: inv.name,
+                    investorWallet: inv.stellarContractId || inv.stellarPublicKey,
+                    tokenBalance,
+                    interestOwed: Math.round(interestOwed * 100) / 100,
+                };
+            }).filter(b => b.interestOwed > 0); // Only include holders with non-zero interest
+
+            const totalTokensHeld = breakdown.reduce((sum, b) => sum + b.tokenBalance, 0);
+            const totalOwed = breakdown.reduce((sum, b) => sum + b.interestOwed, 0);
+
+            console.log(`[CompanyPayment] On-chain calculation for offer ${offer.id}:`, {
+                investorCount: breakdown.length,
+                totalTokensHeld,
+                totalOwed,
+                balanceSource: 'on_chain'
+            });
+
+            return {
+                offerId: offer.id,
+                assetCode: offer.assetCode,
+                offerName: offer.offerName,
+                totalInvested: totalTokensHeld, // Current token holdings, not original investment
+                totalOwed: Math.round(totalOwed * 100) / 100,
+                investorCount: breakdown.length,
+                paymentType: offer.paymentType,
+                annualInterestRate: annualRate,
+                periodRate: periodRate * 100,
+                nextPaymentDue: offer.nextPaymentDue,
+                lastPaymentDate: offer.lastPaymentDate,
+                paymentDueStatus: offer.paymentDueStatus,
+                balanceSource: 'on_chain',
+                breakdown
+            };
+        } catch (error) {
+            console.error(`[CompanyPayment] Error calculating on-chain owed amount for offer ${offer.id}:`, error);
+            throw new Error(`Failed to calculate on-chain balances: ${error.message}`);
+        }
     }
 
     /**
@@ -128,14 +210,19 @@ export class CompanyPaymentService {
             throw new Error(`Offer ${offerId} is not a bullet payment offer`);
         }
 
+        if (!offer.maturityDate) {
+            throw new Error('Bullet offer has no maturity date set');
+        }
+
+        // For unlocked tokens, use on-chain balances for principal calculation
+        if (offer.isTokenLocked === false) {
+            return this._calculateBulletPaymentOnChain(offer);
+        }
+
         const totalInvested = offer.investments.reduce(
             (sum, inv) => sum + parseFloat(inv.usdcAmount),
             0
         );
-
-        if (!offer.maturityDate) {
-            throw new Error('Bullet offer has no maturity date set');
-        }
 
         const annualRate = parseFloat(offer.annualInterestRate || 0);
         const offerStartDate = offer.createdAt;
@@ -173,8 +260,89 @@ export class CompanyPaymentService {
             totalInterest: totalInterestOwed,
             totalPayout,
             investorCount: breakdown.length,
+            balanceSource: 'database',
             breakdown
         };
+    }
+
+    /**
+     * Calculate bullet payment using on-chain token balances (for unlocked tokens)
+     * @param {Object} offer - Offer object with maturityDate
+     * @returns {Promise<Object>} Bullet payment details based on on-chain holdings
+     * @private
+     */
+    static async _calculateBulletPaymentOnChain(offer) {
+        try {
+            const investorsWithBalances = await PaymentService.getInvestorsWithBalancesByOffer(offer.id);
+
+            if (!investorsWithBalances || investorsWithBalances.length === 0) {
+                return {
+                    offerId: offer.id,
+                    totalPrincipal: 0,
+                    totalInterest: 0,
+                    totalPayout: 0,
+                    investorCount: 0,
+                    balanceSource: 'on_chain',
+                    breakdown: []
+                };
+            }
+
+            // Calculate total tokens held on-chain
+            const totalTokensHeld = investorsWithBalances.reduce(
+                (sum, inv) => sum + parseFloat(inv.token_balance || 0),
+                0
+            );
+
+            const annualRate = parseFloat(offer.annualInterestRate || 0);
+            const offerStartDate = offer.createdAt;
+            const maturityDate = new Date(offer.maturityDate);
+            const yearsToMaturity = (maturityDate - offerStartDate) / (365 * 24 * 60 * 60 * 1000);
+            const totalInterest = totalTokensHeld * (annualRate / 100) * yearsToMaturity;
+
+            const breakdown = investorsWithBalances.map(inv => {
+                const tokenBalance = parseFloat(inv.token_balance || 0);
+                const proportion = totalTokensHeld > 0 ? tokenBalance / totalTokensHeld : 0;
+                const principalReturn = tokenBalance; // Principal = current token holdings
+                const interestEarned = totalInterest * proportion;
+
+                return {
+                    investorId: inv.id,
+                    investorName: inv.name,
+                    investorWallet: inv.stellarContractId || inv.stellarPublicKey,
+                    principal: principalReturn,
+                    interest: Math.round(interestEarned * 100) / 100,
+                    totalPayout: Math.round((principalReturn + interestEarned) * 100) / 100,
+                };
+            }).filter(b => b.principal > 0);
+
+            const totalInterestOwed = Math.round(totalInterest * 100) / 100;
+            const totalPayout = totalTokensHeld + totalInterestOwed;
+
+            console.log(`[CompanyPayment] On-chain bullet calculation for offer ${offer.id}:`, {
+                investorCount: breakdown.length,
+                totalTokensHeld,
+                totalInterest: totalInterestOwed,
+                totalPayout,
+                balanceSource: 'on_chain'
+            });
+
+            return {
+                offerId: offer.id,
+                assetCode: offer.assetCode,
+                offerName: offer.offerName,
+                maturityDate,
+                daysUntilMaturity: Math.ceil((maturityDate - new Date()) / (24 * 60 * 60 * 1000)),
+                totalPrincipal: totalTokensHeld,
+                totalInterest: totalInterestOwed,
+                totalPayout,
+                investorCount: breakdown.length,
+                balanceSource: 'on_chain',
+                breakdown
+            };
+        } catch (error) {
+            console.error(`[CompanyPayment] Error calculating on-chain bullet payment for offer ${offer.id}:`, error);
+            throw new Error(`Failed to calculate on-chain bullet payment: ${error.message}`);
+        }
     }
 
     /**
@@ -343,7 +511,7 @@ export class CompanyPaymentService {
                         data: {
                             investorId: payment.investorId,
                             assetCode: offer.assetCode,
-                            tokenBalance: payment.investedAmount,
+                            tokenBalance: payment.tokenBalance,
                             interestRate: offer.annualInterestRate,
                             interestAmount: payment.interestOwed,
                             usdcAmount: payment.interestOwed,
