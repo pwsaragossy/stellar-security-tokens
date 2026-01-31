@@ -185,12 +185,29 @@ export const seedTestData = async () => {
       },
     });
 
+    // Create test offer for token unlock tests
+    const offer = await prisma.offer.create({
+      data: {
+        companyId: company.id,
+        requestedBy: companyUser.id,
+        assetCode: `TOFF${timestamp}`.slice(0, 12), // Unique asset code
+        offerName: 'Test Offer for Token Unlock',
+        description: 'Test offer description',
+        totalSupply: 10000,
+        unitPrice: 1.0,
+        offerType: 'sale',
+        status: 'approved',
+        isTokenLocked: true, // Start locked, ready for unlock tests
+      },
+    });
+
     return {
       investor,
       token,
       admin,
       company,
       companyUser,
+      offer,
     };
   } catch (error) {
     console.error('Error seeding test data:', error);
