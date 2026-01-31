@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Loader2, Coins, ArrowUpRight } from 'lucide-react';
+import { Search, Loader2, Coins, ArrowUpRight, Lock, Unlock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { tokensApi } from '@/api/tokens';
 import type { Token } from '@/types';
@@ -77,6 +77,7 @@ export function Tokens() {
                                     <TableHead className="text-white">Asset Code</TableHead>
                                     <TableHead className="text-white">Total Supply</TableHead>
                                     <TableHead className="text-white">Description</TableHead>
+                                    <TableHead className="text-white">Status</TableHead>
                                     <TableHead className="text-white">Created At</TableHead>
                                     <TableHead className="text-right text-white">Stellar Explorer</TableHead>
                                 </TableRow>
@@ -84,13 +85,13 @@ export function Tokens() {
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
-                                        <TableCell colSpan={5} className="h-24 text-center">
+                                        <TableCell colSpan={6} className="h-24 text-center">
                                             <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" />
                                         </TableCell>
                                     </TableRow>
                                 ) : filteredTokens.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                                             No tokens found. Create an offer to issue tokens.
                                         </TableCell>
                                     </TableRow>
@@ -107,6 +108,19 @@ export function Tokens() {
                                             </TableCell>
                                             <TableCell className="text-muted-foreground max-w-xs truncate">
                                                 {token.description}
+                                            </TableCell>
+                                            <TableCell>
+                                                {token.offer?.isTokenLocked !== false ? (
+                                                    <Badge variant="outline" className="gap-1 text-amber-400 border-amber-400/30 bg-amber-400/10">
+                                                        <Lock className="w-3 h-3" />
+                                                        Locked
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="gap-1 text-emerald-400 border-emerald-400/30 bg-emerald-400/10">
+                                                        <Unlock className="w-3 h-3" />
+                                                        Unlocked
+                                                    </Badge>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">
                                                 {new Date(token.createdAt).toLocaleDateString()}

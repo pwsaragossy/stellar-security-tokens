@@ -84,6 +84,9 @@ export interface Offer {
   updated_at: string;
   maturity_date?: string;
   payment_type?: string;
+  // Token Lifecycle
+  isTokenLocked?: boolean;
+  tokenUnlockedAt?: string;
 }
 
 // Token Types

@@ -9,13 +9,21 @@ import {
   stellarServer,
   getDistributorKeypair,
   buildTransaction,
+  getSorobanRpcUrl,
+  getIssuerKeypair,
 } from '../config/stellar.js';
 import { TransactionManager } from './transactionManager.service.js';
-import { Operation, Asset } from '@stellar/stellar-sdk';
+import { Operation, Asset, rpc, scValToNative, Address } from '@stellar/stellar-sdk';
 import cron from 'node-cron';
 
 const DEFAULT_ANNUAL_INTEREST_RATE = 10.0; // Fallback se não encontrar no banco
 const MAX_OPERATIONS_PER_TX = 95; // Buffer de segurança (Stellar limit is 100)
+
+// Balance source types for dividend calculations
+const BALANCE_SOURCE = {
+  DATABASE: 'database',      // Token is locked, DB is source of truth
+  ON_CHAIN: 'on_chain',       // Token is unlocked, ledger is source of truth
+};
 
 /**
  * Gets the USDC configuration from ConfigService
@@ -83,6 +91,91 @@ const retryOperation = async (operation, maxRetries = 3, delayMs = 1000) => {
  * Calcula juros proporcionais, cria transações batch no Stellar e envia confirmações por email
  */
 export class PaymentService {
+  /**
+   * Determines the balance source for dividend calculations.
+   * 
+   * - LOCKED tokens: DB is source of truth (all transfers controlled by platform)
+   * - UNLOCKED tokens: Ledger is source of truth (free trading on DEXes)
+   * 
+   * @param {Object} offer - Offer with isTokenLocked field
+   * @returns {string} BALANCE_SOURCE.DATABASE or BALANCE_SOURCE.ON_CHAIN
+   */
+  static getBalanceSource(offer) {
+    // If token is locked, platform controls all transfers → DB is accurate
+    // If token is unlocked, DEX trades can move tokens → must query ledger
+    if (offer.isTokenLocked === false) {
+      return BALANCE_SOURCE.ON_CHAIN;
+    }
+    return BALANCE_SOURCE.DATABASE;
+  }
+
+  /**
+   * Query on-chain token balance for a given investor/wallet on a SAC (Stellar Asset Contract).
+   * 
+   * Uses Soroban RPC to query the SAC's balance function directly.
+   * 
+   * @param {string} assetCode - The token asset code
+   * @param {string} investorAddress - Investor's wallet address (G... or C...)
+   * @returns {Promise<string>} Token balance as string (7 decimal precision)
+   */
+  static async getOnChainTokenBalance(assetCode, investorAddress) {
+    try {
+      const sorobanUrl = getSorobanRpcUrl();
+      const sorobanServer = new rpc.Server(sorobanUrl);
+
+      // Get the SAC contract ID for this asset
+      const issuerPublicKey = getIssuerKeypair().publicKey();
+      const asset = new Asset(assetCode, issuerPublicKey);
+      const sacContractId = StellarService.getSACContractId(asset);
+
+      // Convert investor address to ScVal
+      const addressScVal = new Address(investorAddress).toScVal();
+
+      // Build the balance query
+      const balanceKey = {
+        type: 'LedgerKeyContractData',
+        contract: sacContractId,
+        key: {
+          vec: [
+            { sym: 'Balance' },
+            addressScVal
+          ]
+        },
+        durability: 'persistent'
+      };
+
+      // Query the ledger
+      const result = await sorobanServer.getContractData(
+        sacContractId,
+        addressScVal,
+        'persistent'
+      );
+
+      if (!result || !result.val) {
+        return '0'; // No balance entry = 0 tokens
+      }
+
+      // Parse the balance from ScVal
+      const balanceRaw = scValToNative(result.val);
+
+      // SAC balances are stored as i128, we need to convert to decimal string
+      // Assumes 7 decimal places (Stellar default)
+      const balance = typeof balanceRaw === 'bigint'
+        ? (Number(balanceRaw) / 10_000_000).toFixed(7)
+        : balanceRaw.toString();
+
+      logger.info(`On-chain balance for ${investorAddress}: ${balance} ${assetCode}`);
+      return balance;
+    } catch (error) {
+      // If contract data not found, investor has 0 balance
+      if (error.code === 404 || error.message?.includes('not found')) {
+        return '0';
+      }
+      logger.error(`Error querying on-chain balance for ${investorAddress}`, error);
+      throw error;
+    }
+  }
+
   /**
    * Busca lista de investidores aprovados com saldos de tokens do banco de dados
    * @param {string} assetCode - Código do asset a consultar (REQUIRED)
@@ -809,10 +902,7 @@ export class PaymentService {
    * @param {string} assetCode - Código do asset (REQUIRED)
    * @returns {Promise<Object>} Resultado do processamento
    */
-  static async processBulletPayments(assetCode) {
-    if (!assetCode) {
-      throw new Error('assetCode is required');
-    }
+  static async processBulletPayments(assetCode = null) {
     const startTime = Date.now();
     const paymentDate = new Date().toISOString().split('T')[0];
 
@@ -820,7 +910,12 @@ export class PaymentService {
 
     try {
       // Buscar ofertas bullet ativas que venceram hoje
-      const expiredBulletOffers = await this.getExpiredBulletOffers();
+      let expiredBulletOffers = await this.getExpiredBulletOffers();
+
+      // Se assetCode for fornecido, filtrar apenas essa oferta
+      if (assetCode) {
+        expiredBulletOffers = expiredBulletOffers.filter(o => o.assetCode === assetCode);
+      }
 
       if (expiredBulletOffers.length === 0) {
         logger.info('No expired bullet offers found');
@@ -1020,8 +1115,8 @@ export class PaymentService {
 
       const expiredOffers = await prisma.offer.findMany({
         where: {
-          payment_type: 'bullet',
-          maturity_date: {
+          paymentType: 'bullet',
+          maturityDate: {
             lte: new Date(today + 'T23:59:59.999Z'), // Até o final do dia
           },
           status: 'active',
@@ -1040,17 +1135,41 @@ export class PaymentService {
 
   /**
    * Busca investidores com saldos em uma oferta específica
+   * 
+   * For LOCKED tokens (isTokenLocked=true): Uses DB balances (platform controls all transfers)
+   * For UNLOCKED tokens (isTokenLocked=false): Queries on-chain SAC balances via Soroban RPC
+   * 
    * @param {number} offerId - ID da oferta
    * @returns {Promise<Array>} Array de investidores com saldos
    */
   static async getInvestorsWithBalancesByOffer(offerId) {
     try {
-      const result = await prisma.$queryRaw`
+      // First, get the offer to check isTokenLocked status
+      const offer = await prisma.offer.findUnique({
+        where: { id: offerId },
+        select: {
+          id: true,
+          assetCode: true,
+          isTokenLocked: true,
+          annualInterestRate: true
+        }
+      });
+
+      if (!offer) {
+        throw new Error(`Offer ${offerId} not found`);
+      }
+
+      const balanceSource = this.getBalanceSource(offer);
+      logger.info(`Balance source for offer ${offerId}: ${balanceSource}`, { assetCode: offer.assetCode });
+
+      // Get the list of investors who have ever held this token (from DB)
+      const dbResult = await prisma.$queryRaw`
         SELECT
           i.id,
           i.name,
           i.email,
           i.stellar_public_key as "stellarPublicKey",
+          i.stellar_contract_id as "stellarContractId",
           i.kyc_status::text as "kycStatus",
           COALESCE(SUM(td.amount), 0) as token_balance
         FROM investors i
@@ -1058,12 +1177,53 @@ export class PaymentService {
         LEFT JOIN tokens t ON t.asset_code = td.asset_code
         WHERE t.offer_id = ${offerId}
           AND i.kyc_status = 'approved'
-        GROUP BY i.id, i.name, i.email, i.stellar_public_key, i.kyc_status
+        GROUP BY i.id, i.name, i.email, i.stellar_public_key, i.stellar_contract_id, i.kyc_status
         HAVING COALESCE(SUM(td.amount), 0) > 0
         ORDER BY i.id
       `;
 
-      return result;
+      // If token is locked, DB is authoritative - return DB balances
+      if (balanceSource === BALANCE_SOURCE.DATABASE) {
+        logger.info(`Using DB balances for locked token ${offer.assetCode}`);
+        return dbResult;
+      }
+
+      // Token is unlocked - query on-chain balances for each investor
+      logger.info(`Querying on-chain balances for unlocked token ${offer.assetCode}`);
+
+      const investorsWithOnChainBalances = await Promise.all(
+        dbResult.map(async (investor) => {
+          try {
+            // Use stellarContractId (Smart Wallet) if available, otherwise stellarPublicKey
+            const walletAddress = investor.stellarContractId || investor.stellarPublicKey;
+
+            if (!walletAddress) {
+              logger.warn(`Investor ${investor.id} has no wallet address`);
+              return { ...investor, token_balance: '0' };
+            }
+
+            const onChainBalance = await this.getOnChainTokenBalance(offer.assetCode, walletAddress);
+
+            return {
+              ...investor,
+              token_balance: onChainBalance,
+              _balanceSource: 'on_chain'
+            };
+          } catch (error) {
+            logger.error(`Failed to get on-chain balance for investor ${investor.id}`, error);
+            // Fallback to DB balance if on-chain query fails
+            return { ...investor, _balanceSource: 'db_fallback' };
+          }
+        })
+      );
+
+      // Filter out investors with 0 balance (may have sold all tokens on DEX)
+      const activeHolders = investorsWithOnChainBalances.filter(
+        inv => parseFloat(inv.token_balance) > 0
+      );
+
+      logger.info(`Found ${activeHolders.length} active holders on-chain (${dbResult.length} in DB)`);
+      return activeHolders;
     } catch (error) {
       logger.error('Error fetching investors with balances by offer', error);
       throw new Error(`Failed to get investors with balances: ${error.message}`);
@@ -1101,7 +1261,7 @@ export class PaymentService {
       logger.info(`Recorded ${paymentRecords.length} bullet payments`, { transactionHash });
     } catch (error) {
       logger.error('Error recording bullet payments', error);
-      throw new Error(`Failed to record bullet payments: ${error.message}`);
+      throw new Error(`Failed to record bullet payments: ${error.message} `);
     }
   }
 
@@ -1151,10 +1311,10 @@ export class PaymentService {
           }
         );
 
-        logger.info(`Bullet payment confirmation email sent to ${investor.email}`);
+        logger.info(`Bullet payment confirmation email sent to ${investor.email} `);
         return { success: true, investorId: investorData.investorId };
       } catch (error) {
-        logger.error(`Failed to send bullet payment email to investor ${investorData.investorId}`, error);
+        logger.error(`Failed to send bullet payment email to investor ${investorData.investorId} `, error);
         return { success: false, investorId: investorData.investorId, error: error.message };
       }
     });
@@ -1175,7 +1335,7 @@ export class PaymentService {
     const job = cron.schedule('0 1 * * *', async () => {
       logger.info('Scheduled bullet payment job triggered');
       try {
-        await this.processBulletPayments();
+        await this.processAllScheduledPayments();
       } catch (error) {
         logger.error('Scheduled bullet payment job failed', error);
       }
@@ -1186,6 +1346,80 @@ export class PaymentService {
 
     logger.info('Bullet payment schedule activated');
     return job;
+  }
+
+  /**
+   * Processa todos os pagamentos agendados (Bullet e Periódicos)
+   * Executa diariamente:
+   * 1. Verifica vencimentos de ofertas Bullet (diário)
+   * 2. Se for dia 1 do mês, processa pagamentos mensais, trimestrais, etc.
+   */
+  static async processAllScheduledPayments() {
+    const today = new Date();
+    const isFirstOfMonth = today.getDate() === 1;
+    const currentMonth = today.getMonth() + 1; // 1-12
+
+    logger.info('Starting unified scheduled payment process', {
+      date: today.toISOString().split('T')[0],
+      isFirstOfMonth
+    });
+
+    // 1. Processar pagamentos Bullet (sempre verifica vencimentos diários)
+    try {
+      await this.processBulletPayments();
+    } catch (error) {
+      logger.error('Error during automatic bullet payment processing', error);
+    }
+
+    // 2. Processar pagamentos periódicos no primeiro dia do mês
+    if (isFirstOfMonth) {
+      try {
+        // Buscar todas as ofertas ativas que não são bullet
+        const periodicOffers = await prisma.offer.findMany({
+          where: {
+            status: 'active',
+            paymentType: { not: 'bullet' }
+          }
+        });
+
+        logger.info(`Found ${periodicOffers.length} periodic offers to evaluate`);
+
+        for (const offer of periodicOffers) {
+          try {
+            const frequency = offer.paymentFrequency || 1;
+
+            // Lógica simplificada: processar se (mês atual - 1) % frequência == 0
+            // Ex: Mensal (freq 1): todos os meses
+            // Ex: Trimestral (freq 3): meses 1, 4, 7, 10
+            // Ex: Semestral (freq 6): meses 1, 7
+            if ((currentMonth - 1) % frequency === 0) {
+              logger.info(`Processing ${offer.paymentType} payment for ${offer.assetCode}`, {
+                frequency,
+                currentMonth
+              });
+
+              if (offer.paymentType === 'monthly') {
+                await this.processMonthlyInterestPayments(offer.assetCode);
+              } else if (offer.paymentType === 'quarterly') {
+                await this.processQuarterlyPayments(offer.assetCode);
+              } else if (offer.paymentType === 'semi_annual') {
+                await this.processSemiAnnualPayments(offer.assetCode);
+              } else if (offer.paymentType === 'annual') {
+                // Para annual, usamos processPeriodicPayments diretamente ou criamos um wrapper
+                const paymentDate = today.toISOString().split('T')[0];
+                await this.processPeriodicPayments(offer.assetCode, [offer], paymentDate, 'annual');
+              }
+            }
+          } catch (error) {
+            logger.error(`Error processing periodic payment for offer ${offer.assetCode}`, error);
+          }
+        }
+      } catch (error) {
+        logger.error('Error during automatic periodic payment processing', error);
+      }
+    }
+
+    return { success: true };
   }
 
   /**
@@ -1286,7 +1520,7 @@ export class PaymentService {
       return {
         success: false,
         error: error.message,
-        duration: `${duration}ms`,
+        duration: `${duration} ms`,
       };
     }
   }
@@ -1327,7 +1561,7 @@ export class PaymentService {
       return {
         success: false,
         error: error.message,
-        duration: `${duration}ms`,
+        duration: `${duration} ms`,
       };
     }
   }
@@ -1354,7 +1588,7 @@ export class PaymentService {
       return offers.filter(offer => offer.tokens.length > 0);
     } catch (error) {
       logger.error('Error fetching offers by payment type and frequency', error);
-      throw new Error(`Failed to get offers: ${error.message}`);
+      throw new Error(`Failed to get offers: ${error.message} `);
     }
   }
 
@@ -1404,7 +1638,7 @@ export class PaymentService {
             });
           }
         } catch (error) {
-          logger.error(`Failed to process ${paymentType} offer ${offer.asset_code}`, error);
+          logger.error(`Failed to process ${paymentType} offer ${offer.asset_code} `, error);
         }
       }
 
@@ -1451,7 +1685,7 @@ export class PaymentService {
       const duration = Date.now() - startTime;
 
       logger.info(`${paymentType} payment process completed`, {
-        duration: `${duration}ms`,
+        duration: `${duration} ms`,
         paymentsProcessed: allPayments.length,
         transactionHash: batchResult.transactionHash,
         emailsSent: successfulEmails,
@@ -1468,7 +1702,7 @@ export class PaymentService {
           transactionHash: batchResult.transactionHash,
           emailsSent: successfulEmails,
           emailsFailed: failedEmails,
-          duration: `${duration}ms`,
+          duration: `${duration} ms`,
         },
       };
     } catch (error) {
@@ -1509,7 +1743,7 @@ export class PaymentService {
       logger.info(`Recorded ${paymentRecords.length} ${paymentType} payments`, { transactionHash });
     } catch (error) {
       logger.error(`Error recording ${paymentType} payments`, error);
-      throw new Error(`Failed to record ${paymentType} payments: ${error.message}`);
+      throw new Error(`Failed to record ${paymentType} payments: ${error.message} `);
     }
   }
 
@@ -1562,10 +1796,10 @@ export class PaymentService {
           }
         );
 
-        logger.info(`${paymentType} payment confirmation email sent to ${investor.email}`);
+        logger.info(`${paymentType} payment confirmation email sent to ${investor.email} `);
         return { success: true, investorId: investorData.investorId };
       } catch (error) {
-        logger.error(`Failed to send ${paymentType} payment email to investor ${investorData.investorId}`, error);
+        logger.error(`Failed to send ${paymentType} payment email to investor ${investorData.investorId} `, error);
         return { success: false, investorId: investorData.investorId, error: error.message };
       }
     });

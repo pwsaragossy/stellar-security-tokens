@@ -3,9 +3,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Loader2, Coins, RefreshCw } from 'lucide-react';
+import { Search, Loader2, Coins, RefreshCw, Lock, Unlock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { tokensApi } from '@/api/tokens';
+import { offersApi } from '@/api/offers';
 import { walletsApi } from '@/api/wallets';
 import type { Token } from '@/types';
 import { formatCurrency } from '@/utils/format';
@@ -19,6 +20,7 @@ export function TokensPage() {
     const [selectedToken, setSelectedToken] = useState<Token | null>(null);
     const [syncing, setSyncing] = useState(false);
     const [distributorKey, setDistributorKey] = useState<string | null>(null);
+    const [unlocking, setUnlocking] = useState<number | null>(null); // offerId being unlocked
 
     useEffect(() => {
         fetchTokens();
@@ -70,6 +72,40 @@ export function TokensPage() {
         }
     };
 
+    const handleUnlock = async (token: Token) => {
+        if (!token.offer?.id) {
+            alert('Token has no associated offer');
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `⚠️ IRREVERSIBLE ACTION\n\nThis will unlock token "${token.assetCode}" for free trading on DEX.\n\n` +
+            `Once unlocked:\n` +
+            `• Investors can trade freely without platform approval\n` +
+            `• Dividend calculations will use on-chain balances\n` +
+            `• This action CANNOT be undone\n\n` +
+            `Are you sure you want to proceed?`
+        );
+
+        if (!confirmed) return;
+
+        try {
+            setUnlocking(token.offer.id);
+            const response = await offersApi.unlockToken(token.offer.id);
+            if (response.success) {
+                alert(`✅ Token ${token.assetCode} unlocked successfully!\n\nStellar TX: ${response.data?.stellarTxHash || 'N/A'}`);
+                fetchTokens(); // Refresh data
+            } else {
+                alert(`❌ Unlock failed: ${response.error || 'Unknown error'}`);
+            }
+        } catch (error: any) {
+            console.error('Unlock failed:', error);
+            alert(`❌ Error: ${error.message || 'Failed to unlock token'}`);
+        } finally {
+            setUnlocking(null);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -118,6 +154,7 @@ export function TokensPage() {
                                 <TableHead className="text-muted-foreground">Offer & Status</TableHead>
                                 <TableHead className="text-muted-foreground">Supply</TableHead>
                                 <TableHead className="text-muted-foreground text-center">Rate (%)</TableHead>
+                                <TableHead className="text-muted-foreground text-center">Lock Status</TableHead>
                                 <TableHead className="text-muted-foreground">Maturity</TableHead>
                                 <TableHead className="text-muted-foreground text-right">Actions</TableHead>
                             </TableRow>
@@ -131,7 +168,7 @@ export function TokensPage() {
                                 </TableRow>
                             ) : filteredTokens.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                    <TableCell colSpan={7} className="h-24 text-center">
                                         No tokens found.
                                     </TableCell>
                                 </TableRow>
@@ -168,11 +205,40 @@ export function TokensPage() {
                                         <TableCell className="text-center text-primary font-medium">
                                             {token.offer?.annual_interest_rate ? `${token.offer.annual_interest_rate}%` : '-'}
                                         </TableCell>
+                                        <TableCell className="text-center">
+                                            {token.offer?.isTokenLocked !== false ? (
+                                                <Badge variant="outline" className="gap-1 text-amber-400 border-amber-400/30 bg-amber-400/10">
+                                                    <Lock className="w-3 h-3" />
+                                                    Locked
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="gap-1 text-emerald-400 border-emerald-400/30 bg-emerald-400/10">
+                                                    <Unlock className="w-3 h-3" />
+                                                    Unlocked
+                                                </Badge>
+                                            )}
+                                        </TableCell>
                                         <TableCell className="text-muted-foreground text-sm">
                                             {token.offer?.maturity_date ? new Date(token.offer.maturity_date as any).toLocaleDateString() : '-'}
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-2">
+                                                {token.offer?.isTokenLocked !== false && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleUnlock(token)}
+                                                        disabled={unlocking === token.offer?.id}
+                                                        className="h-8 px-2 text-xs text-amber-400 border-amber-400/30 hover:bg-amber-400/10"
+                                                    >
+                                                        {unlocking === token.offer?.id ? (
+                                                            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                                        ) : (
+                                                            <Unlock className="w-3 h-3 mr-1" />
+                                                        )}
+                                                        Unlock
+                                                    </Button>
+                                                )}
                                                 {token.issuanceTransactionHash && (
                                                     <TransactionLink
                                                         hash={token.issuanceTransactionHash}

@@ -1482,5 +1482,121 @@ router.post('/defaults/:offerId/distribute', authenticateToken, requirePlatformA
   }
 });
 
+// ============ Token Lifecycle Management Routes ============
+
+/**
+ * @swagger
+ * /api/platform-admins/offers/{offerId}/unlock-token:
+ *   post:
+ *     summary: "[Admin] Unlock a token for DEX trading"
+ *     description: Clears AUTH_REQUIRED flag on Stellar, allowing free trading on DEXes
+ *     tags: [Platform Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: offerId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - confirm
+ *             properties:
+ *               confirm:
+ *                 type: boolean
+ *                 description: Must be true to confirm the irreversible action
+ *     responses:
+ *       200:
+ *         description: Token unlocked successfully
+ *       400:
+ *         description: Confirmation required or token already unlocked
+ *       404:
+ *         description: Offer not found
+ */
+router.post('/offers/:offerId/unlock-token', authenticateToken, requirePlatformAdmin, async (req, res) => {
+  try {
+    const { offerId } = req.params;
+    const { confirm } = req.body;
+
+    // Safety check - require explicit confirmation
+    if (confirm !== true) {
+      return res.status(400).json({
+        success: false,
+        error: 'Confirmation required. This action cannot be undone.',
+        message: 'Set { "confirm": true } to proceed. Once unlocked, the token will be freely tradable on DEXes.'
+      });
+    }
+
+    // Find the offer
+    const offer = await prisma.offer.findUnique({
+      where: { id: parseInt(offerId) },
+      include: {
+        tokens: true,
+        company: { select: { id: true, name: true } }
+      }
+    });
+
+    if (!offer) {
+      return res.status(404).json({ success: false, error: 'Offer not found' });
+    }
+
+    // Check if already unlocked
+    if (offer.isTokenLocked === false) {
+      return res.status(400).json({
+        success: false,
+        error: 'Token is already unlocked',
+        unlockedAt: offer.tokenUnlockedAt
+      });
+    }
+
+    // Import StellarService dynamically to avoid circular deps
+    const { StellarService } = await import('../services/stellar.service.js');
+
+    // Call Stellar to unlock (clear AUTH_REQUIRED)
+    const stellarResult = await StellarService.unlockToken(offer.assetCode);
+
+    if (!stellarResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Stellar operation failed',
+        details: stellarResult
+      });
+    }
+
+    // Update database
+    const updatedOffer = await prisma.offer.update({
+      where: { id: parseInt(offerId) },
+      data: {
+        isTokenLocked: false,
+        tokenUnlockedAt: new Date()
+      }
+    });
+
+    console.log(`[Admin] Token ${offer.assetCode} unlocked by admin ${req.user.userId}. TxHash: ${stellarResult.txHash || 'N/A'}`);
+
+    res.json({
+      success: true,
+      message: `Token ${offer.assetCode} is now unlocked for DEX trading`,
+      data: {
+        offerId: updatedOffer.id,
+        assetCode: offer.assetCode,
+        isTokenLocked: updatedOffer.isTokenLocked,
+        tokenUnlockedAt: updatedOffer.tokenUnlockedAt,
+        stellarTxHash: stellarResult.txHash || null,
+        alreadyUnlocked: stellarResult.alreadyUnlocked || false
+      }
+    });
+  } catch (error) {
+    console.error('[Token Unlock] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
 

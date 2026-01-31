@@ -363,6 +363,12 @@ model Offer {
   nextPaymentDue      DateTime?   @map("next_payment_due")
   lastPaymentDate     DateTime?   @map("last_payment_date")
   paymentDueStatus    PaymentDueStatus @default(current) @map("payment_due_status")
+
+  // Token Lifecycle: Locked = AUTH_REQUIRED set on Issuer, all transfers require platform approval
+  // When unlocked, the token is freely tradable on DEXes and on-chain balance becomes source of truth
+  isTokenLocked       Boolean   @default(true) @map("is_token_locked")
+  tokenUnlockedAt     DateTime? @map("token_unlocked_at") @db.Timestamp
+
   createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamp
   updatedAt           DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamp
 

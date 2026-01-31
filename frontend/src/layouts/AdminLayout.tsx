@@ -1,11 +1,193 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, DollarSign, Shield, Wallet, AlertTriangle, Settings, Building2, FileText, FileSignature, Siren, Coins } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, DollarSign, Shield, Wallet, AlertTriangle, Settings, Building2, FileText, FileSignature, Siren, Coins, Info, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/NotificationBell';
 import { MobileSidebar, MenuToggleButton, useMobileSidebar } from '@/components/MobileSidebar';
 import { useEffect } from 'react';
 import { authStorage } from '@/utils/authStorage';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog"
+
+const PAGE_DESCRIPTIONS: Record<string, { title: string, description: string, keyFeatures: string[] }> = {
+    '/admin/dashboard': {
+        title: 'Admin Dashboard',
+        description: 'Real-time overview of platform activity and key performance indicators.',
+        keyFeatures: [
+            'Total revenue and investment volume metrics',
+            'Live fundraising progress for active campaigns',
+            'Revenue breakdown by source',
+            'User growth and retention statistics'
+        ]
+    },
+    '/admin/users': {
+        title: 'Investor Management',
+        description: 'Manage individual investor accounts and their compliance status.',
+        keyFeatures: [
+            'Approve or reject KYC submissions',
+            'View investor portfolio and transaction history',
+            'Manage investor account flags and restrictions',
+            'Update investor profile information'
+        ]
+    },
+    '/admin/companies': {
+        title: 'Company Management',
+        description: 'Manage and approve corporate issuers on the platform.',
+        keyFeatures: [
+            'Verify company registration and legal documents',
+            'Approve companies to issue security tokens',
+            'Monitor company-specific activity',
+            'Manage platform-issuer relationships'
+        ]
+    },
+    '/admin/tokens': {
+        title: 'Token Catalog',
+        description: 'Central registry of all security tokens issued on the platform.',
+        keyFeatures: [
+            'Monitor total supply and circulating tokens',
+            'View asset metadata and contract IDs',
+            'Track token holder distribution',
+            'Audit token issuance and lifecycle'
+        ]
+    },
+    '/admin/offers': {
+        title: 'Offer Management',
+        description: 'Manage primary market offerings (STOs) and fundraising campaigns.',
+        keyFeatures: [
+            'Review and approve new token offers',
+            'Monitor fundraising progress in real-time',
+            'Pause or resume offerings if necessary',
+            'Finalize or cancel completed campaigns'
+        ]
+    },
+    '/admin/transactions': {
+        title: 'Transaction Monitor',
+        description: 'Track and audit all on-chain activity within the platform.',
+        keyFeatures: [
+            'Monitor pending and completed Stellar transactions',
+            'Direct links to Stellar Expert for verification',
+            'Audit Trail of all financial flows',
+            'Debug failed or stuck transactions'
+        ]
+    },
+    '/admin/wallets': {
+        title: 'Platform Wallets',
+        description: 'Monitor balances and status of platform-controlled Stellar accounts.',
+        keyFeatures: [
+            'View Treasury, Distributor, and Fee account balances',
+            'Verify account flags (Auth Required, Revokable)',
+            'Monitor XLM reserves for transaction fees',
+            'Audit internal fund movements'
+        ]
+    },
+    '/admin/treasury': {
+        title: 'Treasury (OpEx)',
+        description: 'Manage operational expenses and platform revenue accounts.',
+        keyFeatures: [
+            'Monitor platform revenue from fees',
+            'Manage operating capital and liquidity',
+            'Track fund transfers to operational wallets',
+            'Audit platform financial health'
+        ]
+    },
+    '/admin/fees': {
+        title: 'Fee Configuration',
+        description: 'Manage global fee structures for platform services.',
+        keyFeatures: [
+            'Set flat fees or percentages for issuances',
+            'Configure secondary market transaction fees',
+            'Enable or disable specific fee types',
+            'Apply changes globally across the platform'
+        ]
+    },
+    '/admin/defaults': {
+        title: 'Default Cases',
+        description: 'Manage default system behaviors and fallback parameters.',
+        keyFeatures: [
+            'Configure default compliance settings',
+            'Manage template data for new issuances',
+            'Set fallback values for system-wide triggers',
+            'Ensure consistency across new platform entities'
+        ]
+    },
+    '/admin/compliance': {
+        title: 'Token Compliance',
+        description: 'Enforce regulatory rules and asset controls.',
+        keyFeatures: [
+            'Manage whitelists and authorization rules',
+            'Execute clawbacks for restricted assets',
+            'Set account flags (Auth Required, Revokable, Clawback Enabled)',
+            'Ensure FATF/AML compliance across transfers'
+        ]
+    },
+    '/admin/emergency': {
+        title: 'Emergency Controls',
+        description: 'Safety switches and high-level intervention tools.',
+        keyFeatures: [
+            'Freeze specific user wallets or asset codes',
+            'Halt platform-wide trading or distributions',
+            'Recover from technical incidents or security breaches',
+            'Revoke authorization for compromised accounts'
+        ]
+    },
+    '/admin/settings': {
+        title: 'Admin Settings',
+        description: 'Manage admin profile and system-wide preferences.',
+        keyFeatures: [
+            'Update admin contact and security information',
+            'Configure platform notification settings',
+            'Manage system-wide UI preferences',
+            'Change platform-level operational parameters'
+        ]
+    }
+}
+
+function PageInfo({ path }: { path: string }) {
+    const info = PAGE_DESCRIPTIONS[path];
+    if (!info) return null;
+
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-400/10 rounded-full">
+                    <Info className="w-4 h-4" />
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md bg-slate-900 border-white/10 text-white">
+                <DialogHeader>
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="p-2 bg-blue-500/20 rounded-lg">
+                            <Info className="w-5 h-5 text-blue-400" />
+                        </div>
+                        <DialogTitle className="text-xl font-bold">{info.title}</DialogTitle>
+                    </div>
+                    <DialogDescription className="text-slate-400 text-base">
+                        {info.description}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Key Functionalities</h4>
+                        <div className="grid gap-2">
+                            {info.keyFeatures.map((feature, idx) => (
+                                <div key={idx} className="flex items-start gap-3 p-2 rounded-lg bg-white/5 border border-white/5">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                                    <span className="text-sm text-slate-300">{feature}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export function AdminLayout() {
     const navigate = useNavigate();
@@ -107,9 +289,12 @@ export function AdminLayout() {
                 <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-6 bg-card/50 backdrop-blur-sm relative z-30">
                     <div className="flex items-center gap-3">
                         <MenuToggleButton onClick={open} />
-                        <h1 className="text-lg font-semibold text-white">
-                            {navItems.find(item => isActive(item.path))?.label || 'Admin Dashboard'}
-                        </h1>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-lg font-semibold text-white">
+                                {navItems.find(item => isActive(item.path))?.label || 'Admin Dashboard'}
+                            </h1>
+                            <PageInfo path={location.pathname} />
+                        </div>
                     </div>
                     <div className="flex items-center gap-2 md:gap-4">
                         <NotificationBell />

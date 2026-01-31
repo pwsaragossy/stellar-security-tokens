@@ -215,6 +215,83 @@ export class StellarService {
   }
 
   /**
+   * Unlock a token for DEX trading by clearing AUTH_REQUIRED flag on the Issuer.
+   * 
+   * When AUTH_REQUIRED is cleared:
+   * - New trustlines are automatically authorized
+   * - Token holders can freely transfer/trade without platform approval
+   * - The blockchain becomes the source of truth for balances
+   * 
+   * NOTE: AUTH_REVOCABLE and AUTH_CLAWBACK_ENABLED are retained for compliance.
+   * 
+   * @param {string} assetCode - The asset code to unlock
+   * @returns {Promise<Object>} Transaction result
+   * @returns {boolean} returns.success - Whether the operation succeeded
+   * @returns {string} returns.txHash - Transaction hash
+   * @returns {number} returns.ledger - Ledger number
+   * @throws {Error} If the operation fails
+   */
+  static async unlockToken(assetCode) {
+    try {
+      console.log(`[StellarService] Unlocking token ${assetCode} for DEX trading...`);
+
+      const issuerKeypair = getIssuerKeypair();
+
+      // Verify the account currently has AUTH_REQUIRED set
+      const account = await stellarServer.loadAccount(issuerKeypair.publicKey());
+      if (!account.flags.auth_required) {
+        console.log(`[StellarService] Token ${assetCode} is already unlocked (AUTH_REQUIRED not set)`);
+        return {
+          success: true,
+          alreadyUnlocked: true,
+          message: `Token ${assetCode} is already unlocked for DEX trading`,
+        };
+      }
+
+      // Build transaction to clear AUTH_REQUIRED_FLAG
+      // We use clearFlags (not setFlags) to remove the flag
+      const operations = [
+        Operation.setOptions({
+          source: issuerKeypair.publicKey(),
+          clearFlags: AuthRequiredFlag, // 0x1 - only clear AUTH_REQUIRED
+        }),
+      ];
+
+      // Check if this should go through MultiSig (production mode)
+      const transactionManager = new TransactionManager();
+      if (transactionManager.requiresMultisig('unlock_token')) {
+        // Queue for approval
+        return transactionManager.queueForMultisig(
+          operations,
+          issuerKeypair.publicKey(),
+          'unlock_token',
+          { assetCode, description: `Unlock ${assetCode} for DEX trading` }
+        );
+      }
+
+      // Immediate execution (dev/testnet mode)
+      const transaction = await buildTransaction(issuerKeypair, operations);
+      const result = await signAndSubmitTransaction(transaction, issuerKeypair);
+
+      if (!result.success) {
+        throw new Error(`Failed to unlock token: ${result.error}`);
+      }
+
+      console.log(`[StellarService] Token ${assetCode} unlocked successfully. TxHash: ${result.hash}`);
+
+      return {
+        success: true,
+        txHash: result.hash,
+        ledger: result.ledger,
+        message: `Token ${assetCode} is now unlocked for DEX trading`,
+      };
+    } catch (error) {
+      console.error(`[StellarService] Error unlocking token ${assetCode}:`, error);
+      throw new Error(`Token unlock failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Cria conta Stellar para investidor
    * Gera um novo keypair aleatório e financia via Friendbot (testnet)
    * @returns {Promise<Object>} Resultado da criação da conta

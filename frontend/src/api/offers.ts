@@ -171,5 +171,11 @@ export const offersApi = {
     const response = await api.get(`/companies/offers/${id}/investors`);
     return response.data;
   },
+
+  // Platform Admin: Unlock token for DEX trading
+  unlockToken: async (offerId: number): Promise<ApiResponse> => {
+    const response = await api.post(`/platform-admins/offers/${offerId}/unlock-token`, { confirm: true });
+    return response.data;
+  },
 };
 
