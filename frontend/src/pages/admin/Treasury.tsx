@@ -14,6 +14,8 @@ import {
     Shield
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { HELP_CONTENT } from '@/constants/help-content';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -130,6 +132,7 @@ export function Treasury() {
                     <h2 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
                         <Building2 className="w-8 h-8 text-blue-500" />
                         Institutional Treasury
+                        <InfoTooltip content={HELP_CONTENT.treasury.institutionalTreasury.content} side="right" />
                     </h2>
                     <p className="text-muted-foreground mt-1">
                         Manage operational expenses and monitor foundation balances.
@@ -208,6 +211,7 @@ export function Treasury() {
                                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                                     Soroban State Durability
                                     <span className="px-2 py-0.5 text-[10px] bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/30">LIVESTREAM</span>
+                                    <InfoTooltip content={HELP_CONTENT.treasury.sorobanDurability.content} side="right" />
                                 </h3>
                                 <p className="text-sm text-muted-foreground">Automatic TTL extension for smart contracts and wallets is active.</p>
                             </div>
@@ -238,7 +242,10 @@ export function Treasury() {
                             <ArrowUpRight className="w-5 h-5 text-blue-400" />
                         </div>
                         <div>
-                            <h3 className="text-xl font-bold text-white">OpEx Withdrawal</h3>
+                            <h3 className="text-xl font-bold text-white flex items-center gap-1.5">
+                                OpEx Withdrawal
+                                <InfoTooltip content={HELP_CONTENT.treasury.opexWithdrawal.content} side="right" />
+                            </h3>
                             <p className="text-sm text-muted-foreground">Request a manual payment to a service provider.</p>
                         </div>
                     </div>

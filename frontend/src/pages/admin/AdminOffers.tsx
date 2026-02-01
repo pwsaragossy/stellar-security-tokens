@@ -21,6 +21,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { TransactionLink } from "@/components/ui/TransactionLink";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { HELP_CONTENT } from "@/constants/help-content";
 
 export function AdminOffers() {
     // const navigate = useNavigate(); // Added but not yet used, keeping for consistency with other admin pages
@@ -294,8 +296,18 @@ export function AdminOffers() {
                                         <th className="text-left py-3 px-2 text-muted-foreground font-medium">Offer</th>
                                         <th className="text-left py-3 px-2 text-muted-foreground font-medium">Company</th>
                                         <th className="text-left py-3 px-2 text-muted-foreground font-medium">Type</th>
-                                        <th className="text-left py-3 px-2 text-muted-foreground font-medium">Supply</th>
-                                        <th className="text-left py-3 px-2 text-muted-foreground font-medium">Status</th>
+                                        <th className="text-left py-3 px-2 text-muted-foreground font-medium">
+                                            <div className="flex items-center gap-1.5">
+                                                Supply
+                                                <InfoTooltip content={HELP_CONTENT.offers.amountToRaise.content} side="top" />
+                                            </div>
+                                        </th>
+                                        <th className="text-left py-3 px-2 text-muted-foreground font-medium">
+                                            <div className="flex items-center gap-1.5">
+                                                Status
+                                                <InfoTooltip content={HELP_CONTENT.offers.offerStatus.content} side="top" />
+                                            </div>
+                                        </th>
                                         <th className="text-left py-3 px-2 text-muted-foreground font-medium">Created</th>
                                         <th className="text-right py-3 px-2 text-muted-foreground font-medium">Actions</th>
                                     </tr>
@@ -368,15 +380,18 @@ export function AdminOffers() {
                                                         </>
                                                     )}
                                                     {offer.status === 'approved' && !pendingIssuances.includes(offer.id) && !(offer as any).token && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => openAction(offer, 'issue')}
-                                                            title="Issue Token"
-                                                            className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
-                                                        >
-                                                            <DollarSign className="w-4 h-4" />
-                                                        </Button>
+                                                        <div className="flex items-center gap-1">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => openAction(offer, 'issue')}
+                                                                title="Issue Token"
+                                                                className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                                                            >
+                                                                <DollarSign className="w-4 h-4" />
+                                                            </Button>
+                                                            <InfoTooltip content={HELP_CONTENT.tokens.distributionControls.content} side="left" maxWidth="400px" />
+                                                        </div>
                                                     )}
                                                     {(offer as any).token && !(offer.offer_rules as any)?.admin_verified && offer.status !== 'active' && (
                                                         <Button

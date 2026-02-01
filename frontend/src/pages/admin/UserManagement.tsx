@@ -22,6 +22,8 @@ import { Label } from '@/components/ui/label';
 import { Loader2, CheckCircle, XCircle, Search, RefreshCw, Wallet, ExternalLink, MoreVertical, User, Copy, History } from 'lucide-react';
 import { platformAdminsApi, type Investor } from '@/api/platformAdmins';
 import api from '@/api/client';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { HELP_CONTENT } from '@/constants/help-content';
 
 // Extended investor with wallet details
 interface InvestorDetails extends Investor {
@@ -229,7 +231,12 @@ export function UserManagement() {
                                         <th className="text-left py-3 px-2 text-muted-foreground font-medium">Name</th>
                                         <th className="text-left py-3 px-2 text-muted-foreground font-medium">Email</th>
                                         <th className="text-left py-3 px-2 text-muted-foreground font-medium">Document</th>
-                                        <th className="text-left py-3 px-2 text-muted-foreground font-medium">Status</th>
+                                        <th className="text-left py-3 px-2 text-muted-foreground font-medium">
+                                            <div className="flex items-center gap-1.5">
+                                                Status
+                                                <InfoTooltip content={HELP_CONTENT.userManagement.kycStatus.content} side="top" />
+                                            </div>
+                                        </th>
                                         <th className="text-left py-3 px-2 text-muted-foreground font-medium">Registered</th>
                                         <th className="text-right py-3 px-2 text-muted-foreground font-medium">Actions</th>
                                         <th className="py-3 px-2 text-muted-foreground font-medium w-10"></th>
@@ -248,39 +255,48 @@ export function UserManagement() {
                                             <td className="py-3 px-2 text-right">
                                                 {investor.status === 'pending' && (
                                                     <div className="flex gap-2 justify-end">
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="border-emerald-500 text-emerald-500 hover:bg-emerald-500/10"
-                                                            onClick={() => handleApprove(investor)}
-                                                            disabled={actionLoading}
-                                                        >
-                                                            <CheckCircle className="w-4 h-4 mr-1" />
-                                                            Approve
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="border-red-500 text-red-500 hover:bg-red-500/10"
-                                                            onClick={() => setRejectModal({ open: true, investor })}
-                                                            disabled={actionLoading}
-                                                        >
-                                                            <XCircle className="w-4 h-4 mr-1" />
-                                                            Reject
-                                                        </Button>
+                                                        <div className="flex items-center gap-1">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="border-emerald-500 text-emerald-500 hover:bg-emerald-500/10"
+                                                                onClick={() => handleApprove(investor)}
+                                                                disabled={actionLoading}
+                                                            >
+                                                                <CheckCircle className="w-4 h-4 mr-1" />
+                                                                Approve
+                                                            </Button>
+                                                            <InfoTooltip content={HELP_CONTENT.userManagement.approveButton.content} side="left" maxWidth="400px" />
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="border-red-500 text-red-500 hover:bg-red-500/10"
+                                                                onClick={() => setRejectModal({ open: true, investor })}
+                                                                disabled={actionLoading}
+                                                            >
+                                                                <XCircle className="w-4 h-4 mr-1" />
+                                                                Reject
+                                                            </Button>
+                                                            <InfoTooltip content={HELP_CONTENT.userManagement.rejectButton.content} side="left" maxWidth="400px" />
+                                                        </div>
                                                     </div>
                                                 )}
                                                 {investor.status === 'approved' && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        className="border-blue-500 text-blue-500 hover:bg-blue-500/10"
-                                                        onClick={() => setSponsorModal({ open: true, investor, result: undefined })}
-                                                        disabled={actionLoading}
-                                                    >
-                                                        <Wallet className="w-4 h-4 mr-1" />
-                                                        Sponsor
-                                                    </Button>
+                                                    <div className="flex items-center gap-1">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="border-blue-500 text-blue-500 hover:bg-blue-500/10"
+                                                            onClick={() => setSponsorModal({ open: true, investor, result: undefined })}
+                                                            disabled={actionLoading}
+                                                        >
+                                                            <Wallet className="w-4 h-4 mr-1" />
+                                                            Sponsor
+                                                        </Button>
+                                                        <InfoTooltip content={HELP_CONTENT.userManagement.sponsorTrustline.content} side="left" maxWidth="400px" />
+                                                    </div>
                                                 )}
                                             </td>
                                             <td className="py-3 px-2">
@@ -470,8 +486,9 @@ export function UserManagement() {
 
                             {/* Wallet Info */}
                             <div className="p-4 bg-white/5 rounded-lg space-y-3">
-                                <Label className="text-muted-foreground text-xs flex items-center gap-1">
+                                <Label className="text-muted-foreground text-xs flex items-center gap-1.5">
                                     <Wallet className="w-3 h-3" /> Wallet Address
+                                    <InfoTooltip content={HELP_CONTENT.userManagement.walletAddress.content} side="right" maxWidth="400px" />
                                 </Label>
                                 {detailModal.investor.stellarContractId ? (
                                     <div className="flex items-center gap-2">
