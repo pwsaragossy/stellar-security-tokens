@@ -906,15 +906,15 @@ export class PaymentService {
   }
 
   /**
-   * Processa pagamentos bullet (pagamento único na data de vencimento)
-   * @param {string} assetCode - Código do asset (REQUIRED)
+   * Processa ofertas bullet que atingiram a maturidade
+   * MVP: Marca ofertas como 'matured' e notifica a empresa ao invés de processar pagamentos automaticamente
+   * @param {string} assetCode - Código do asset (opcional, para filtrar)
    * @returns {Promise<Object>} Resultado do processamento
    */
   static async processBulletPayments(assetCode = null) {
     const startTime = Date.now();
-    const paymentDate = new Date().toISOString().split('T')[0];
 
-    logger.info('Starting bullet payment process', { assetCode, paymentDate });
+    logger.info('[MVP] Checking for matured bullet offers (notification-only mode)', { assetCode });
 
     try {
       // Buscar ofertas bullet ativas que venceram hoje
@@ -934,175 +934,73 @@ export class PaymentService {
         };
       }
 
-      logger.info(`Processing ${expiredBulletOffers.length} expired bullet offers`);
+      logger.info(`[MVP] Found ${expiredBulletOffers.length} matured bullet offers - marking for manual payment`);
 
-      const allPayments = [];
-      let totalProcessed = 0;
+      const processedOffers = [];
 
       for (const offer of expiredBulletOffers) {
         try {
-          // Buscar investidores com saldos nesta oferta
-          const investorsWithBalances = await this.getInvestorsWithBalancesByOffer(offer.id);
+          // Mark offer as matured (no automatic payment)
+          await prisma.offer.update({
+            where: { id: offer.id },
+            data: { status: 'matured' }
+          });
 
-          if (investorsWithBalances.length === 0) {
-            logger.warn(`No investors found for expired bullet offer ${offer.asset_code}`);
-            continue;
-          }
+          // Get company users to notify
+          const companyUsers = await prisma.companyUser.findMany({
+            where: {
+              companyId: offer.companyId,
+              isActive: true
+            },
+            select: { id: true, email: true, name: true }
+          });
 
-          // Calcular pagamentos bullet para cada investidor
-          for (const investor of investorsWithBalances) {
-            const tokenBalance = parseFloat(investor.token_balance);
-            // Calculate payment based on Annual Interest Rate and Duration
-            const startDate = new Date(offer.createdAt).getTime();
-            const endDate = new Date(offer.maturityDate).getTime();
-            const durationMs = endDate - startDate;
-            const msPerYear = 1000 * 60 * 60 * 24 * 365;
-            const durationYears = durationMs / msPerYear;
-
-            const annualRatePercent = parseFloat(offer.annualInterestRate || 0);
-            const totalRoiPercent = (annualRatePercent * durationYears) / 100;
-
-            // Formula: Balance * (1 + KPI%)
-            // 1 (Principal) + ROI (Interest)
-            const multiplier = 1 + totalRoiPercent;
-
-            const totalPayment = tokenBalance * multiplier;
-
-            if (tokenBalance <= 0 || totalPayment <= 0) {
-              logger.warn('Skipping investor - invalid balance or payment amount', {
-                investorId: investor.id,
-                balance: tokenBalance,
-                payment: totalPayment,
-                multiplier,
-                durationYears
-              });
-              continue;
-            }
-
-            allPayments.push({
-              investorId: investor.id,
-              assetCode: offer.asset_code,
-              tokenBalance: tokenBalance.toString(),
-              interestRate: annualRatePercent.toString(),
-              interestAmount: (totalPayment - tokenBalance).toFixed(7), // Amount that is interest
-              usdcAmount: totalPayment.toFixed(7), // Total including principal
-              offerId: offer.id,
-              isBulletPayment: true,
-              paymentType: 'bullet',
+          // Create notification for each company user
+          for (const user of companyUsers) {
+            await prisma.notification.create({
+              data: {
+                userId: user.id,
+                userType: 'company_user',
+                type: 'warning',
+                title: 'Bullet Payment Due',
+                message: `Your offer "${offer.offerName}" (${offer.assetCode}) has reached maturity. Please initiate the bullet payment to investors.`,
+                actionLink: `/company/payments/${offer.id}`,
+              }
             });
           }
 
-          totalProcessed += investorsWithBalances.length;
+          logger.info(`[MVP] Offer ${offer.assetCode} marked as matured, ${companyUsers.length} users notified`);
+
+          processedOffers.push({
+            offerId: offer.id,
+            assetCode: offer.assetCode,
+            maturityDate: offer.maturityDate,
+            usersNotified: companyUsers.length
+          });
+
         } catch (error) {
-          logger.error(`Failed to process bullet offer ${offer.asset_code}`, error);
-          // Continue with other offers
+          logger.error(`[MVP] Failed to process matured offer ${offer.assetCode}`, error);
         }
       }
-
-      if (allPayments.length === 0) {
-        logger.warn('No bullet payments to process');
-        return {
-          success: true,
-          message: 'No bullet payments to process',
-          processed: 0,
-        };
-      }
-
-      logger.info(`Calculated ${allPayments.length} bullet payments`);
-
-      // Buscar dados completos dos investidores para processamento
-      const investorIds = [...new Set(allPayments.map(p => p.investorId))];
-      const investors = await prisma.investor.findMany({
-        where: {
-          id: { in: investorIds },
-          kycStatus: 'approved'
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          stellarPublicKey: true,
-          kycStatus: true,
-        }
-      });
-
-      // Filtrar apenas investidores com chave Stellar válida
-      const validInvestors = investors.filter(inv => inv.stellarPublicKey);
-
-      if (validInvestors.length === 0) {
-        logger.warn('No valid investors found for bullet payments');
-        return {
-          success: true,
-          message: 'No valid investors to process',
-          processed: 0,
-        };
-      }
-
-      // Processar pagamentos em lotes
-      const batchResult = await retryOperation(
-        () => this.createBatchUSDCPayment(validInvestors, allPayments),
-        3,
-        2000
-      );
-
-      // Registrar pagamentos bullet
-      if (batchResult.batches && batchResult.batches.length > 1) {
-        let paymentIndex = 0;
-        for (const batch of batchResult.batches) {
-          const batchPayments = allPayments.slice(
-            paymentIndex,
-            paymentIndex + batch.operationsCount
-          );
-          await retryOperation(
-            () => this.recordBulletPayments(batchPayments, batch.transactionHash, paymentDate),
-            3
-          );
-          paymentIndex += batch.operationsCount;
-        }
-      } else {
-        await retryOperation(
-          () => this.recordBulletPayments(allPayments, batchResult.transactionHash, paymentDate),
-          3
-        );
-      }
-
-      // Enviar emails de confirmação
-      const emailResults = await this.sendBulletPaymentEmails(
-        allPayments,
-        batchResult.transactionHash,
-        paymentDate
-      );
-
-      const successfulEmails = emailResults.filter(r => r.success).length;
-      const failedEmails = emailResults.filter(r => !r.success).length;
 
       const duration = Date.now() - startTime;
 
-      logger.info('Bullet payment process completed', {
+      logger.info('[MVP] Bullet maturity check completed', {
         duration: `${duration}ms`,
-        offersProcessed: expiredBulletOffers.length,
-        paymentsProcessed: allPayments.length,
-        transactionHash: batchResult.transactionHash,
-        emailsSent: successfulEmails,
-        emailsFailed: failedEmails,
+        offersMatured: processedOffers.length,
       });
 
       return {
         success: true,
-        message: 'Bullet payments processed successfully',
+        message: 'Offers marked as matured - awaiting company payment',
         data: {
-          paymentDate,
-          offersProcessed: expiredBulletOffers.length,
-          paymentsProcessed: allPayments.length,
-          totalAmount: allPayments.reduce((sum, p) => sum + parseFloat(p.usdcAmount), 0),
-          transactionHash: batchResult.transactionHash,
-          emailsSent: successfulEmails,
-          emailsFailed: failedEmails,
+          offersMatured: processedOffers.length,
+          offers: processedOffers,
           duration: `${duration}ms`,
         },
       };
     } catch (error) {
-      logger.error('Bullet payment process failed', error);
+      logger.error('[MVP] Bullet maturity check failed', error);
 
       const duration = Date.now() - startTime;
       return {

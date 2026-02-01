@@ -125,22 +125,25 @@ app.listen(PORT, async () => {
     console.error('Failed to start overdue payment checker:', error.message);
   }
 
-  // Start MultiSig Expiry Checker (runs every 10 minutes)
+  // Start MultiSig Expiry Checker (runs once daily at midnight UTC)
   try {
     const cron = await import('node-cron');
     const { MultiSigTransactionService } = await import('./services/multiSigTransaction.service.js');
 
-    // Run hourly (at minute 0)
-    cron.default.schedule('0 * * * *', async () => {
+    // Run daily at midnight UTC
+    cron.default.schedule('0 0 * * *', async () => {
       console.log('[MultiSigExpiry] Checking for expired governance proposals');
       try {
         await MultiSigTransactionService.expireOldTransactions();
       } catch (error) {
         console.error('[MultiSigExpiry] Error:', error);
       }
+    }, {
+      scheduled: true,
+      timezone: 'UTC'
     });
 
-    console.log('MultiSig governance expiry checker enabled - checks every hour');
+    console.log('MultiSig governance expiry checker enabled - runs daily at midnight UTC');
   } catch (error) {
     console.error('Failed to start MultiSig expiry checker:', error.message);
   }
