@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Wallet, ArrowRightLeft, PenTool, CheckCircle, Loader2, Copy, Clock, AlertCircle, ExternalLink, Info, Settings } from 'lucide-react';
 import { walletsApi } from '@/api/wallets';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { HELP_CONTENT } from '@/constants/help-content';
 import type { WalletStatus, MultiSigTransaction } from '@/api/wallets';
 import { TokenManagementModal } from '@/components/admin/TokenManagementModal';
 import {
@@ -288,7 +290,17 @@ export function Wallets() {
                             onClick={() => setSelectedWallet(wallet)}
                         >
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-white">{wallet.name}</CardTitle>
+                                <CardTitle className="text-sm font-medium text-white flex items-center gap-1.5">
+                                    {wallet.name}
+                                    <InfoTooltip
+                                        content={
+                                            wallet.name === 'Treasury' ? HELP_CONTENT.wallets.treasuryWallet.content :
+                                                wallet.name === 'Issuer' ? HELP_CONTENT.wallets.distributorWallet.content :
+                                                    HELP_CONTENT.wallets.distributorWallet.content
+                                        }
+                                        side="top"
+                                    />
+                                </CardTitle>
                                 <Wallet className="h-4 w-4 text-emerald-400" />
                             </CardHeader>
                             <CardContent>
@@ -334,6 +346,7 @@ export function Wallets() {
                         <CardTitle className="text-white flex items-center gap-2">
                             <ArrowRightLeft className="w-5 h-5" />
                             New Transfer
+                            <InfoTooltip content={HELP_CONTENT.walletsAdditions.systemWalletsOverview.content} side="right" />
                         </CardTitle>
                         <CardDescription>Propose a new transaction from a system wallet</CardDescription>
                     </CardHeader>
@@ -366,7 +379,13 @@ export function Wallets() {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="asset">Asset</Label>
+                                    <Label htmlFor="asset" className="flex items-center gap-1.5">
+                                        Asset
+                                        <InfoTooltip
+                                            content={HELP_CONTENT.walletsAdditions.assetField.content}
+                                            side="right"
+                                        />
+                                    </Label>
                                     <Input id="asset" value="XLM" disabled />
                                 </div>
                             </div>

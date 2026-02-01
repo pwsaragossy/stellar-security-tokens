@@ -11,6 +11,8 @@
  */
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { HELP_CONTENT } from '@/constants/help-content';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -204,6 +206,7 @@ export function EmergencyControls() {
                     <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                         <AlertTriangle className="w-6 h-6 text-amber-500" />
                         Emergency Controls
+                        <InfoTooltip content={HELP_CONTENT.emergencyControls.platformPause.content} side="right" />
                     </h2>
                     <p className="text-muted-foreground mt-1">
                         Quick access to emergency actions for compliance and security
@@ -364,6 +367,7 @@ export function EmergencyControls() {
                                 <CardTitle className="text-lg flex items-center gap-2">
                                     <Lock className="w-5 h-5 text-red-500" />
                                     Account Freeze
+                                    <InfoTooltip content={HELP_CONTENT.assetCompliance.freezeAccount.content} side="right" />
                                 </CardTitle>
                                 <CardDescription>Freeze/unfreeze investor accounts</CardDescription>
                             </div>
@@ -428,6 +432,7 @@ export function EmergencyControls() {
                                                     ) : (
                                                         'Freeze'
                                                     )}
+                                                    <InfoTooltip content={HELP_CONTENT.assetCompliance.freezeAccount.content} side="top" />
                                                 </Button>
                                             ) : (
                                                 <Button
@@ -452,6 +457,7 @@ export function EmergencyControls() {
                                                 disabled={!!actionLoading}
                                             >
                                                 <ArrowDownToLine className="w-3 h-3" />
+                                                <InfoTooltip content={HELP_CONTENT.assetCompliance.clawback.content} side="top" />
                                             </Button>
                                         </div>
                                     </div>

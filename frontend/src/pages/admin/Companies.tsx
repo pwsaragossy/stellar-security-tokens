@@ -21,6 +21,8 @@ import {
 import { Label } from '@/components/ui/label';
 import { Loader2, Search, RefreshCw, Building2, MoreVertical, ExternalLink, Copy, Users, Wallet, FileText, CheckCircle, XCircle } from 'lucide-react';
 import api from '@/api/client';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { HELP_CONTENT } from '@/constants/help-content';
 
 interface Company {
     id: number;
@@ -243,8 +245,18 @@ export function Companies() {
                                     <tr className="border-b border-white/10">
                                         <th className="text-left py-3 px-2 text-muted-foreground font-medium">Company</th>
                                         <th className="text-left py-3 px-2 text-muted-foreground font-medium">Email</th>
-                                        <th className="text-left py-3 px-2 text-muted-foreground font-medium">Status</th>
-                                        <th className="text-left py-3 px-2 text-muted-foreground font-medium">Offers</th>
+                                        <th className="text-left py-3 px-2 text-muted-foreground font-medium">
+                                            <div className="flex items-center gap-1.5">
+                                                Status
+                                                <InfoTooltip content={HELP_CONTENT.companies.companyStatus.content} side="top" />
+                                            </div>
+                                        </th>
+                                        <th className="text-left py-3 px-2 text-muted-foreground font-medium">
+                                            <div className="flex items-center gap-1.5">
+                                                Offers
+                                                <InfoTooltip content={HELP_CONTENT.companies.activeOffersCount.content} side="top" />
+                                            </div>
+                                        </th>
                                         <th className="text-right py-3 px-2 text-muted-foreground font-medium">Actions</th>
                                         <th className="py-3 px-2 text-muted-foreground font-medium w-10"></th>
                                     </tr>
@@ -259,16 +271,19 @@ export function Companies() {
                                             <td className="py-3 px-2 text-right">
                                                 {company.status === 'pending' && (
                                                     <div className="flex gap-2 justify-end">
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="border-emerald-500 text-emerald-500 hover:bg-emerald-500/10"
-                                                            onClick={() => handleApprove(company)}
-                                                            disabled={actionLoading}
-                                                        >
-                                                            <CheckCircle className="w-4 h-4 mr-1" />
-                                                            Approve
-                                                        </Button>
+                                                        <div className="flex items-center gap-1">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="border-emerald-500 text-emerald-500 hover:bg-emerald-500/10"
+                                                                onClick={() => handleApprove(company)}
+                                                                disabled={actionLoading}
+                                                            >
+                                                                <CheckCircle className="w-4 h-4 mr-1" />
+                                                                Approve
+                                                            </Button>
+                                                            <InfoTooltip content={HELP_CONTENT.companies.approveCompany.content} side="left" maxWidth="400px" />
+                                                        </div>
                                                         <Button
                                                             size="sm"
                                                             variant="outline"
@@ -282,16 +297,19 @@ export function Companies() {
                                                     </div>
                                                 )}
                                                 {(company.status === 'approved' || company.status === 'active') && company.stellarContractId && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        className="border-blue-500 text-blue-500 hover:bg-blue-500/10"
-                                                        onClick={() => setSponsorModal({ open: true, company, result: undefined })}
-                                                        disabled={actionLoading}
-                                                    >
-                                                        <Wallet className="w-4 h-4 mr-1" />
-                                                        Sponsor
-                                                    </Button>
+                                                    <div className="flex items-center gap-1">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="border-blue-500 text-blue-500 hover:bg-blue-500/10"
+                                                            onClick={() => setSponsorModal({ open: true, company, result: undefined })}
+                                                            disabled={actionLoading}
+                                                        >
+                                                            <Wallet className="w-4 h-4 mr-1" />
+                                                            Sponsor
+                                                        </Button>
+                                                        <InfoTooltip content={HELP_CONTENT.companies.walletSponsorship.content} side="left" maxWidth="400px" />
+                                                    </div>
                                                 )}
                                             </td>
                                             <td className="py-3 px-2">
@@ -357,7 +375,10 @@ export function Companies() {
                             {/* Basic Info */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <Label className="text-muted-foreground text-xs">CNPJ</Label>
+                                    <Label className="text-muted-foreground text-xs flex items-center gap-1.5">
+                                        CNPJ
+                                        <InfoTooltip content={HELP_CONTENT.companies.cnpjField.content} side="right" />
+                                    </Label>
                                     <p className="text-white">{detailModal.company.cnpj}</p>
                                 </div>
                                 <div>
@@ -368,8 +389,9 @@ export function Companies() {
 
                             {/* Wallet Info */}
                             <div className="p-4 bg-white/5 rounded-lg space-y-3">
-                                <Label className="text-muted-foreground text-xs flex items-center gap-1">
+                                <Label className="text-muted-foreground text-xs flex items-center gap-1.5">
                                     <Wallet className="w-3 h-3" /> Wallet Address
+                                    <InfoTooltip content={HELP_CONTENT.companies.walletSponsorship.content} side="right" maxWidth="400px" />
                                 </Label>
                                 {detailModal.company.stellarContractId ? (
                                     <div className="flex items-center gap-2">

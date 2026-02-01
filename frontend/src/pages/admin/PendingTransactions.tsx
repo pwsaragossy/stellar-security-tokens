@@ -21,6 +21,8 @@ import { useFreighter } from '../../hooks/useFreighter';
 import { api } from '../../lib/api';
 import { usePusherSubscription } from '../../lib/pusher';
 import { toast } from 'sonner';
+import { InfoTooltip } from '../../components/ui/InfoTooltip';
+import { HELP_CONTENT } from '../../constants/help-content';
 
 type SigningMethod = 'ledger' | 'freighter' | 'dev';
 
@@ -352,15 +354,17 @@ export function PendingTransactions() {
                                 <div className="flex items-start justify-between">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <span className={`px-2 py-0.5 text-xs font-medium rounded border ${STATUS_COLORS[tx.status]}`}>
+                                            <span className={`px-2 py-0.5 text-xs font-medium rounded border flex items-center gap-1 ${STATUS_COLORS[tx.status]}`}>
                                                 {tx.status.replace('_', ' ').toUpperCase()}
+                                                <InfoTooltip content={HELP_CONTENT.transactions.transactionStatus.content} side="top" variant="inline" className="text-current hover:text-current" />
                                             </span>
                                             <span className="text-sm text-zinc-400">
                                                 #{tx.id}
                                             </span>
                                         </div>
-                                        <h3 className="font-medium text-white">
+                                        <h3 className="font-medium text-white flex items-center gap-2">
                                             {OP_TYPE_LABELS[tx.operationType] || tx.operationType}
+                                            <InfoTooltip content={HELP_CONTENT.transactions.transactionTypes.content} side="right" />
                                         </h3>
                                         {tx.description && (
                                             <p className="text-sm text-zinc-400 mt-1">{tx.description}</p>

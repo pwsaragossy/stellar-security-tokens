@@ -12,6 +12,8 @@ import type { Token } from '@/types';
 import { formatCurrency } from '@/utils/format';
 import { TransactionLink } from '@/components/ui/TransactionLink';
 import { TokenManagementModal } from '@/components/admin/TokenManagementModal';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { HELP_CONTENT } from '@/constants/help-content';
 
 export function TokensPage() {
     const [tokens, setTokens] = useState<Token[]>([]);
@@ -150,11 +152,26 @@ export function TokensPage() {
                     <Table>
                         <TableHeader>
                             <TableRow className="border-white/5 hover:bg-white/5">
-                                <TableHead className="text-muted-foreground">Asset Code</TableHead>
+                                <TableHead className="text-muted-foreground">
+                                    <div className="flex items-center gap-1.5">
+                                        Asset Code
+                                        <InfoTooltip content={HELP_CONTENT.tokens.stellarAssetCode.content} side="top" />
+                                    </div>
+                                </TableHead>
                                 <TableHead className="text-muted-foreground">Offer & Status</TableHead>
-                                <TableHead className="text-muted-foreground">Supply</TableHead>
+                                <TableHead className="text-muted-foreground">
+                                    <div className="flex items-center gap-1.5">
+                                        Supply
+                                        <InfoTooltip content={HELP_CONTENT.tokens.supplyVsCirculating.content} side="top" />
+                                    </div>
+                                </TableHead>
                                 <TableHead className="text-muted-foreground text-center">Rate (%)</TableHead>
-                                <TableHead className="text-muted-foreground text-center">Lock Status</TableHead>
+                                <TableHead className="text-muted-foreground text-center">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                        Lock Status
+                                        <InfoTooltip content={HELP_CONTENT.tokens.tokenStatus.content} side="top" />
+                                    </div>
+                                </TableHead>
                                 <TableHead className="text-muted-foreground">Maturity</TableHead>
                                 <TableHead className="text-muted-foreground text-right">Actions</TableHead>
                             </TableRow>
@@ -224,20 +241,23 @@ export function TokensPage() {
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 {token.offer?.isTokenLocked !== false && (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => handleUnlock(token)}
-                                                        disabled={unlocking === token.offer?.id}
-                                                        className="h-8 px-2 text-xs text-amber-400 border-amber-400/30 hover:bg-amber-400/10"
-                                                    >
-                                                        {unlocking === token.offer?.id ? (
-                                                            <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                                                        ) : (
-                                                            <Unlock className="w-3 h-3 mr-1" />
-                                                        )}
-                                                        Unlock
-                                                    </Button>
+                                                    <div className="flex items-center gap-1">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleUnlock(token)}
+                                                            disabled={unlocking === token.offer?.id}
+                                                            className="h-8 px-2 text-xs text-amber-400 border-amber-400/30 hover:bg-amber-400/10"
+                                                        >
+                                                            {unlocking === token.offer?.id ? (
+                                                                <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                                            ) : (
+                                                                <Unlock className="w-3 h-3 mr-1" />
+                                                            )}
+                                                            Unlock
+                                                        </Button>
+                                                        <InfoTooltip content={HELP_CONTENT.tokens.unlockButton.content} side="left" maxWidth="400px" />
+                                                    </div>
                                                 )}
                                                 {token.issuanceTransactionHash && (
                                                     <TransactionLink

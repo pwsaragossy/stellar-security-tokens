@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Save, AlertCircle, CheckCircle } from 'lucide-react';
 import { platformAdminsApi } from '@/api/platformAdmins';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { HELP_CONTENT } from '@/constants/help-content';
 
 const FEE_KEYS = [
     {
@@ -96,7 +98,10 @@ export function FeeConfig() {
         <div className="space-y-6 max-w-2xl">
             <Card className="glass-panel border-white/5 bg-white/5">
                 <CardHeader>
-                    <CardTitle>Fee Configuration</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                        Fee Configuration
+                        <InfoTooltip content={HELP_CONTENT.feeConfigAdditions.systemFeeOverview.content} side="right" />
+                    </CardTitle>
                     <CardDescription>
                         Configure platform fees. Changes take effect immediately for new transactions.
                     </CardDescription>
@@ -118,7 +123,17 @@ export function FeeConfig() {
 
                     {FEE_KEYS.map((fee) => (
                         <div key={fee.key} className="space-y-2">
-                            <Label htmlFor={fee.key}>{fee.label}</Label>
+                            <Label htmlFor={fee.key} className="flex items-center gap-1.5">
+                                {fee.label}
+                                <InfoTooltip
+                                    content={
+                                        fee.key === 'INVESTMENT_FEE_PERCENT' ? HELP_CONTENT.feeConfigAdditions.investmentFee.content :
+                                            fee.key === 'DIVIDEND_FEE_PERCENT' ? HELP_CONTENT.feeConfigAdditions.dividendFee.content :
+                                                HELP_CONTENT.feeConfigAdditions.blockchainFee.content
+                                    }
+                                    side="right"
+                                />
+                            </Label>
                             <div className="flex gap-2 items-center">
                                 <Input
                                     id={fee.key}
@@ -163,7 +178,10 @@ export function FeeConfig() {
             {/* Preview */}
             <Card className="glass-panel border-white/5 bg-white/5">
                 <CardHeader>
-                    <CardTitle className="text-base">Fee Preview</CardTitle>
+                    <CardTitle className="text-base flex items-center gap-1.5">
+                        Fee Preview
+                        <InfoTooltip content={HELP_CONTENT.feeConfigAdditions.systemFeeOverview.content} side="top" />
+                    </CardTitle>
                     <CardDescription>Example calculation for a $100 investment</CardDescription>
                 </CardHeader>
                 <CardContent>

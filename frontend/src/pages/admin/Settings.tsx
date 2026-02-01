@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { HELP_CONTENT } from '@/constants/help-content';
 import { Button } from '@/components/ui/button';
 import { Fingerprint, Loader2, CheckCircle, XCircle, Shield } from 'lucide-react';
 import api from '@/api/client';
@@ -104,6 +106,7 @@ export function AdminSettings() {
                     <CardTitle className="flex items-center gap-2">
                         <Fingerprint className="w-5 h-5 text-red-400" />
                         Passkey Authentication
+                        <InfoTooltip content={HELP_CONTENT.adminSettings.passkeyRegistration.content} side="right" />
                     </CardTitle>
                     <CardDescription>
                         Register a passkey for passwordless login. This uses your device's biometric (Face ID, Touch ID) or PIN.
