@@ -152,6 +152,55 @@ export function generate6DigitCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// ====================
+// Token Blocklist (for proper logout)
+// ====================
+
+const TOKEN_BLOCKLIST_PREFIX = 'token_blocklist:';
+const TOKEN_BLOCKLIST_TTL = 86400; // 24 hours (matches JWT expiry)
+
+/**
+ * Add a token to the blocklist (invalidate it)
+ * @param {string} token - JWT token to blocklist
+ * @param {number} [ttlSeconds] - Optional TTL, defaults to 24h
+ * @returns {Promise<boolean>} Success
+ */
+export async function blocklistToken(token, ttlSeconds = TOKEN_BLOCKLIST_TTL) {
+    const client = await getRedisClient();
+    if (!client) {
+        console.warn('[Redis] Not available, token blocklist disabled');
+        return false;
+    }
+
+    // Use token hash as key (more efficient than storing full token)
+    const crypto = await import('crypto');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const key = `${TOKEN_BLOCKLIST_PREFIX}${tokenHash}`;
+
+    await client.setEx(key, ttlSeconds, '1');
+    return true;
+}
+
+/**
+ * Check if a token is blocklisted
+ * @param {string} token - JWT token to check
+ * @returns {Promise<boolean>} True if token is blocklisted (invalid)
+ */
+export async function isTokenBlocklisted(token) {
+    const client = await getRedisClient();
+    if (!client) {
+        // If Redis unavailable, allow token (fail open for availability)
+        return false;
+    }
+
+    const crypto = await import('crypto');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const key = `${TOKEN_BLOCKLIST_PREFIX}${tokenHash}`;
+
+    const exists = await client.exists(key);
+    return exists === 1;
+}
+
 export default {
     getRedisClient,
     isRedisAvailable,
@@ -159,4 +208,6 @@ export default {
     verifyEmailCode,
     deleteEmailCode,
     generate6DigitCode,
+    blocklistToken,
+    isTokenBlocklisted,
 };

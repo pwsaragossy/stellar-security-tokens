@@ -4,10 +4,17 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// SECURITY: Prevent running this script in production with hardcoded passwords
+if (process.env.NODE_ENV === 'production') {
+  console.error('❌ ERROR: This script cannot be run in production environment.');
+  console.error('   Use the createAdmin.js script with CLI arguments instead.');
+  process.exit(1);
+}
+
 async function checkAndCreateAdmin() {
   try {
     console.log('🔍 Verificando admins existentes...\n');
-    
+
     // Verificar admins existentes
     const existing = await prisma.platformAdmin.findMany({
       select: {
@@ -36,15 +43,15 @@ async function checkAndCreateAdmin() {
     } else {
       console.log('❌ Nenhum admin encontrado.\n');
       console.log('📝 Criando admin padrão...\n');
-      
+
       // Criar admin padrão
       const defaultEmail = 'admin@platform.com';
       const defaultPassword = 'admin123456';
       const defaultName = 'Platform Admin';
       const defaultRole = 'super_admin';
-      
+
       const passwordHash = await bcrypt.hash(defaultPassword, 10);
-      
+
       const admin = await prisma.platformAdmin.create({
         data: {
           email: defaultEmail,
@@ -62,7 +69,7 @@ async function checkAndCreateAdmin() {
           createdAt: true,
         },
       });
-      
+
       console.log('✅ Admin padrão criado com sucesso!\n');
       console.log('📋 Credenciais de login:');
       console.log(`   Email: ${admin.email}`);
@@ -72,7 +79,7 @@ async function checkAndCreateAdmin() {
       console.log(`   ID: ${admin.id}`);
       console.log(`\n⚠️  IMPORTANTE: Altere a senha após o primeiro login!`);
     }
-    
+
     await prisma.$disconnect();
     process.exit(0);
   } catch (error) {

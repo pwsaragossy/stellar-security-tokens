@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 
 import path from 'path';
+import { isTokenBlocklisted } from '../config/redis.js';
 
 // Try loading from current dir, then parent dir
 dotenv.config();
@@ -17,12 +18,13 @@ if (!JWT_SECRET) {
 /**
  * Middleware de autenticação JWT obrigatória
  * Verifica o token JWT no header Authorization e adiciona o usuário ao req.user
+ * Also checks if token has been blocklisted (logged out)
  * @param {Object} req - Objeto de requisição Express
  * @param {Object} res - Objeto de resposta Express
  * @param {Function} next - Função next do Express
  * @returns {void|Object} Retorna erro 401 se token não fornecido, 403 se inválido/expirado, ou chama next()
  */
-export const authenticateToken = (req, res, next) => {
+export const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -31,6 +33,20 @@ export const authenticateToken = (req, res, next) => {
       success: false,
       error: 'Access token required',
     });
+  }
+
+  // Check if token has been blocklisted (user logged out)
+  try {
+    const isBlocklisted = await isTokenBlocklisted(token);
+    if (isBlocklisted) {
+      return res.status(401).json({
+        success: false,
+        error: 'Token has been invalidated. Please login again.',
+      });
+    }
+  } catch (err) {
+    // If blocklist check fails, continue with validation (fail open)
+    console.warn('[Auth] Blocklist check failed:', err.message);
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {

@@ -2,10 +2,15 @@ import { Investor } from '../models/Investor.js';
 import prisma from '../config/prisma.js';
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
-import path from 'path';
 
-// Load .env from root
-dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
+dotenv.config();
+
+// SECURITY: Prevent running seed script in production with hardcoded passwords
+if (process.env.NODE_ENV === 'production') {
+  console.error('❌ ERROR: Seed script cannot be run in production environment.');
+  console.error('   This script contains hardcoded test data and weak passwords.');
+  process.exit(1);
+}
 
 const seedData = async () => {
   try {
