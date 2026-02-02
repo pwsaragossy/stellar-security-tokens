@@ -1,20 +1,57 @@
+# =============================================================================
+# Docker Compose for Production (MAINNET)
+# =============================================================================
+# PREREQUISITES:
+#   - Create .env.production with ALL required variables (see below)
+#   - Generate strong passwords for DB and Redis
+#   - Use mainnet Stellar keys (NEVER testnet keys)
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#
+# To stop:
+#   docker compose -f docker-compose.prod.yml down
+#
+# REQUIRED ENV VARS (will fail if not set):
+#   - POSTGRES_PASSWORD
+#   - JWT_SECRET
+#   - ISSUER_PUBLIC_KEY, DISTRIBUTOR_PUBLIC_KEY, OPERATIONS_PUBLIC_KEY, TREASURY_PUBLIC_KEY
+#   - USDC_ISSUER (mainnet Circle USDC issuer)
+#   - XLM_SAC_CONTRACT_ID, USDC_SAC_CONTRACT_ID (mainnet SAC IDs)
+#   - WEBAUTHN_RP_ID, WEBAUTHN_ORIGIN (your production domain)
+#   - FRONTEND_URL
+#   - LAUNCHTUBE_JWT, FACTORY_CONTRACT_ID
+#
+# NOTE: No wallet secret keys! All admin signing via Freighter/Ledger multisig.
+# =============================================================================
+
 services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: stellar_tokens
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-stellar_tokens}
+      POSTGRES_USER: ${POSTGRES_USER:-stellar_prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-stellar_prod}" ]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - stellar_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   redis:
     image: redis:7-alpine
@@ -28,71 +65,107 @@ services:
     networks:
       - stellar_network
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   backend:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
     environment:
       NODE_ENV: production
       PORT: 3000
+      # Database - REQUIRED
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: stellar_tokens
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/stellar_tokens
-      STELLAR_NETWORK: ${STELLAR_NETWORK:-testnet}
-      STELLAR_HORIZON_URL: ${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
-      HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
-      ISSUER_SECRET_KEY: ${ISSUER_SECRET_KEY}
-      ISSUER_PUBLIC_KEY: ${ISSUER_PUBLIC_KEY}
-      DISTRIBUTOR_SECRET_KEY: ${DISTRIBUTOR_SECRET_KEY}
-      DISTRIBUTOR_PUBLIC_KEY: ${DISTRIBUTOR_PUBLIC_KEY}
-      OPERATIONS_SECRET_KEY: ${OPERATIONS_SECRET_KEY}
-      OPERATIONS_PUBLIC_KEY: ${OPERATIONS_PUBLIC_KEY}
-      TREASURY_SECRET_KEY: ${TREASURY_SECRET_KEY}
-      TREASURY_PUBLIC_KEY: ${TREASURY_PUBLIC_KEY}
-      # ASSET_CODE removed - using offer-specific assets
-      USDC_ISSUER: ${USDC_ISSUER:-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN}
-      JWT_SECRET: ${JWT_SECRET:-change_this_in_production}
+      DB_NAME: ${POSTGRES_DB:-stellar_tokens}
+      DB_USER: ${POSTGRES_USER:-stellar_prod}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-stellar_prod}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-stellar_tokens}
+      # Stellar Network - MAINNET DEFAULTS
+      STELLAR_NETWORK: ${STELLAR_NETWORK:-public}
+      STELLAR_HORIZON_URL: ${STELLAR_HORIZON_URL:-https://horizon.stellar.org}
+      HORIZON_URL: ${HORIZON_URL:-https://horizon.stellar.org}
+      SOROBAN_RPC_URL: ${SOROBAN_RPC_URL:-https://mainnet.sorobanrpc.com}
+      # Stellar Accounts - PUBLIC KEYS ONLY (signing via Freighter/Ledger multisig)
+      ISSUER_PUBLIC_KEY: ${ISSUER_PUBLIC_KEY:?ISSUER_PUBLIC_KEY is required}
+      DISTRIBUTOR_PUBLIC_KEY: ${DISTRIBUTOR_PUBLIC_KEY:?DISTRIBUTOR_PUBLIC_KEY is required}
+      OPERATIONS_PUBLIC_KEY: ${OPERATIONS_PUBLIC_KEY:?OPERATIONS_PUBLIC_KEY is required}
+      TREASURY_PUBLIC_KEY: ${TREASURY_PUBLIC_KEY:?TREASURY_PUBLIC_KEY is required}
+      # USDC - REQUIRED (mainnet issuer differs from testnet)
+      USDC_ISSUER: ${USDC_ISSUER:?USDC_ISSUER is required for mainnet}
+      # Soroban Asset Contracts - REQUIRED for balance queries
+      XLM_SAC_CONTRACT_ID: ${XLM_SAC_CONTRACT_ID:?XLM_SAC_CONTRACT_ID is required}
+      USDC_SAC_CONTRACT_ID: ${USDC_SAC_CONTRACT_ID:?USDC_SAC_CONTRACT_ID is required}
+      # Security - REQUIRED (no insecure defaults)
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       API_KEY: ${API_KEY}
+      # Frontend URL for emails/links
+      FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
+      # Email Configuration
       SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT}
-      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-true}
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_FROM: ${SMTP_FROM}
+      # Payment Scheduler
       ENABLE_AUTO_PAYMENTS: ${ENABLE_AUTO_PAYMENTS:-true}
       # Redis Configuration
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      # Pinata Web3 (IPFS)
+      # Pinata/IPFS
       PINATA_JWT: ${PINATA_JWT}
-      # WebAuthn
-      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
-      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-http://localhost}
+      # WebAuthn - REQUIRED (must match production domain)
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:?WEBAUTHN_RP_ID is required}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:?WEBAUTHN_ORIGIN is required}
       # Stellar Passkey Kit & Smart Wallets
-      SOROBAN_RPC_URL: ${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
       LAUNCHTUBE_URL: ${LAUNCHTUBE_URL:-https://launchtube.xyz}
-      LAUNCHTUBE_JWT: ${LAUNCHTUBE_JWT}
-      FACTORY_CONTRACT_ID: ${FACTORY_CONTRACT_ID}
+      LAUNCHTUBE_JWT: ${LAUNCHTUBE_JWT:?LAUNCHTUBE_JWT is required}
+      FACTORY_CONTRACT_ID: ${FACTORY_CONTRACT_ID:?FACTORY_CONTRACT_ID is required}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:3000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - stellar_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
     command: >
       sh -c "
         echo 'Waiting for database...' &&
         sleep 5 &&
-        node backend/src/database/migrate.js &&
-        node backend/src/index.js
+        cd backend &&
+        node --import tsx src/database/migrate.js &&
+        node --import tsx src/index.js
       "
 
   frontend:
@@ -103,11 +176,28 @@ services:
         VITE_API_URL: /api
     ports:
       - "80:80"
+      # SSL handled by external reverse proxy (Cloudflare, nginx, etc)
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:80" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - stellar_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
@@ -116,4 +206,5 @@ volumes:
 
 networks:
   stellar_network:
+    name: ${COMPOSE_PROJECT_NAME:-stellar}_network
     driver: bridge

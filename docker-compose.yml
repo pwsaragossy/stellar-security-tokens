@@ -39,7 +39,7 @@ services:
       dockerfile: Dockerfile
     container_name: stellar_backend
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-development}
       PORT: 3000
       DB_HOST: postgres
       DB_PORT: 5432
@@ -134,4 +134,5 @@ volumes:
 
 networks:
   stellar_network:
+    name: ${COMPOSE_PROJECT_NAME:-stellar}_network
     driver: bridge
