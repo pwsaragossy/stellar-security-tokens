@@ -54,8 +54,8 @@ app.use(helmet({
 app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
 app.use(hpp()); // HTTP Parameter Pollution protection
 app.use(morgan('combined'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '100kb' })); // Limit body size to prevent large payload attacks
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
 // Apply global rate limiting to all routes (100 req/min per IP)
 app.use(globalLimiter);

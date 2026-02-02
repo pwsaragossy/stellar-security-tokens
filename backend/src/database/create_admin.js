@@ -1,6 +1,12 @@
 import prisma from '../config/prisma.js';
 import bcrypt from 'bcrypt';
 
+// SECURITY: Prevent running this script in production with hardcoded passwords
+if (process.env.NODE_ENV === 'production') {
+    console.error('❌ ERROR: This script cannot be run in production environment.');
+    console.error('   Use the createAdmin.js script with CLI arguments instead.');
+    process.exit(1);
+}
 async function main() {
     const email = 'admin@test.com';
     const password = 'admin123';

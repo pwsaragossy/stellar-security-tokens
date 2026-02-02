@@ -2,12 +2,13 @@ import crypto from 'crypto';
 import express from 'express';
 import { body } from 'express-validator';
 import { validate } from '../middleware/validator.js';
-import { generateToken } from '../middleware/auth.js';
+import { generateToken, authenticateToken } from '../middleware/auth.js';
 import { Investor } from '../models/Investor.js';
 import { CompanyUser } from '../models/CompanyUser.js';
 import prisma from '../config/prisma.js';
 import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
 import { WebAuthnService } from '../services/webauthn.service.js';
+import { blocklistToken } from '../config/redis.js';
 
 const router = express.Router();
 
@@ -348,6 +349,42 @@ router.post('/test-login', async (req, res, next) => {
         user: userData,
         userType: user.userType
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Logout and invalidate token
+ *     description: Adds the current JWT token to the blocklist, preventing further use.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully logged out
+ *       401:
+ *         description: No token provided
+ */
+router.post('/logout', authenticateToken, async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (token) {
+      const success = await blocklistToken(token);
+      if (!success) {
+        console.warn('[Auth] Failed to blocklist token (Redis unavailable)');
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Successfully logged out',
     });
   } catch (error) {
     next(error);
