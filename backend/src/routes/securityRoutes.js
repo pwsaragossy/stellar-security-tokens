@@ -335,4 +335,164 @@ router.get('/passkey-config', async (req, res) => {
     }
 });
 
+// =========================================================================
+// ED25519 RECOVERY SIGNERS (Ledger)
+// =========================================================================
+
+/**
+ * @swagger
+ * /api/security/recovery-signers:
+ *   get:
+ *     summary: List all Ed25519 recovery signers (e.g., Ledger)
+ *     tags: [Security]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of registered recovery signers
+ */
+router.get('/recovery-signers', authenticateToken, async (req, res) => {
+    try {
+        const { userType, userId } = req.user;
+        const serviceUserType = userType === 'investor' ? UserType.INVESTOR : UserType.COMPANY_USER;
+
+        const signers = await PasskeyWalletService.listEd25519Signers(serviceUserType, userId);
+
+        res.json({
+            success: true,
+            data: signers,
+        });
+    } catch (error) {
+        console.error('Error listing recovery signers:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+
+/**
+ * @swagger
+ * /api/security/recovery-signers/add:
+ *   post:
+ *     summary: Add an Ed25519 recovery signer (Ledger public key)
+ *     tags: [Security]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - publicKey
+ *             properties:
+ *               publicKey:
+ *                 type: string
+ *                 description: Stellar public key from Ledger (G... address)
+ *               name:
+ *                 type: string
+ *                 description: Human-readable name (default "Ledger")
+ *     responses:
+ *       200:
+ *         description: Recovery signer added successfully
+ *       400:
+ *         description: Invalid public key format
+ */
+router.post('/recovery-signers/add', authenticateToken, async (req, res) => {
+    try {
+        const { userType, userId } = req.user;
+        const { publicKey, name } = req.body;
+
+        if (!publicKey) {
+            return res.status(400).json({
+                success: false,
+                error: 'publicKey is required',
+            });
+        }
+
+        if (!publicKey.startsWith('G') || publicKey.length !== 56) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid Stellar public key format. Must be a G... address.',
+            });
+        }
+
+        const serviceUserType = userType === 'investor' ? UserType.INVESTOR : UserType.COMPANY_USER;
+
+        const result = await PasskeyWalletService.addEd25519Signer(
+            serviceUserType,
+            userId,
+            publicKey,
+            name || 'Ledger'
+        );
+
+        res.json({
+            success: true,
+            data: result,
+            message: 'Recovery signer added. Your Ledger can now be used to recover your wallet.',
+        });
+    } catch (error) {
+        console.error('Error adding recovery signer:', error);
+        res.status(400).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+
+/**
+ * @swagger
+ * /api/security/recovery-signers/{signerId}:
+ *   delete:
+ *     summary: Remove an Ed25519 recovery signer
+ *     tags: [Security]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: signerId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Recovery signer removed successfully
+ */
+router.delete('/recovery-signers/:signerId', authenticateToken, async (req, res) => {
+    try {
+        const { userType, userId } = req.user;
+        const signerId = parseInt(req.params.signerId, 10);
+
+        if (isNaN(signerId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid signer ID',
+            });
+        }
+
+        const serviceUserType = userType === 'investor' ? UserType.INVESTOR : UserType.COMPANY_USER;
+
+        const result = await PasskeyWalletService.removeEd25519Signer(
+            serviceUserType,
+            userId,
+            signerId
+        );
+
+        res.json({
+            success: true,
+            data: result,
+            message: 'Recovery signer removed.',
+        });
+    } catch (error) {
+        console.error('Error removing recovery signer:', error);
+        res.status(400).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+
 export default router;
+

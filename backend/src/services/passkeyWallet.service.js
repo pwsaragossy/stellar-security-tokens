@@ -524,7 +524,24 @@ export class PasskeyWalletService {
       // 4. Submit directly to Horizon
       console.log('[PasskeyWalletService] Submitting self-sponsored fee bump to Horizon...');
       console.log('[PasskeyWalletService] Fee bump source:', feeBumpTx.feeSource);
-      const result = await stellarServer.submitTransaction(feeBumpTx);
+
+      // RUNTIME FIX: Ensure URL doesn't have /transactions (SDK appends it)
+      let targetServer = stellarServer;
+      try {
+        if (targetServer.serverURL) {
+          const urlStr = targetServer.serverURL.toString();
+          if (urlStr.includes('/transactions')) {
+            console.warn('[PasskeyWalletService] DETECTED MALFORMED URL:', urlStr);
+            const { createFreshServer } = await import('../config/stellar.js');
+            targetServer = createFreshServer();
+            console.warn('[PasskeyWalletService] Using fresh server');
+          }
+        }
+      } catch (urlErr) {
+        console.error('[PasskeyWalletService] Error checking URL:', urlErr);
+      }
+
+      const result = await targetServer.submitTransaction(feeBumpTx);
 
       return {
         success: true,
@@ -1215,9 +1232,6 @@ export class PasskeyWalletService {
     }
   }
 
-  /**
-   * Update the last used timestamp for a passkey
-   */
   static async updatePasskeyLastUsed(userType, credentialId) {
     const credentialModel = this.#getCredentialModel(userType);
     if (!credentialModel) return;
@@ -1229,6 +1243,243 @@ export class PasskeyWalletService {
       });
     } catch (error) {
       console.error('Error updating passkey last used:', error);
+    }
+  }
+
+  // =========================================================================
+  // ED25519 SIGNER MANAGEMENT (Ledger Recovery)
+  // =========================================================================
+
+  /**
+   * Get the Ed25519 signer model for a user type
+   * @private
+   */
+  static #getEd25519SignerModel(userType) {
+    // For now, we'll use the same credential table with a type field
+    // Or create a new table. Using same table for simplicity.
+    const models = {
+      [UserType.INVESTOR]: 'investorEd25519Signer',
+      [UserType.COMPANY_USER]: 'companyUserEd25519Signer',
+    };
+    return models[userType];
+  }
+
+  /**
+   * List all Ed25519 recovery signers for a user
+   * @param {string} userType - UserType.INVESTOR or UserType.COMPANY_USER
+   * @param {number} userId - User ID
+   * @returns {Promise<Array>} List of Ed25519 signers
+   */
+  static async listEd25519Signers(userType, userId) {
+    try {
+      const model = this.#getPrismaModel(userType);
+      if (!model) throw new Error(`Invalid user type: ${userType}`);
+
+      const user = await prisma[model].findUnique({
+        where: { id: userId },
+        select: { id: true, stellarContractId: true },
+      });
+
+      if (!user) throw new Error('User not found');
+
+      // Query signers from database
+      // Note: You'll need to add InvestorEd25519Signer/CompanyUserEd25519Signer models to Prisma
+      const signerModel = this.#getEd25519SignerModel(userType);
+      const fkField = userType === UserType.INVESTOR ? 'investorId' : 'companyUserId';
+
+      const signers = await prisma[signerModel].findMany({
+        where: { [fkField]: userId },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      return signers.map(s => ({
+        id: s.id,
+        publicKey: s.publicKey,
+        name: s.name,
+        createdAt: s.createdAt,
+        lastUsedAt: s.lastUsedAt,
+      }));
+    } catch (error) {
+      // If table doesn't exist yet, return empty
+      if (error.code === 'P2021') {
+        return [];
+      }
+      console.error('Error listing Ed25519 signers:', error);
+      throw new Error(`Failed to list Ed25519 signers: ${error.message}`);
+    }
+  }
+
+  /**
+   * Add an Ed25519 signer (e.g., Ledger) to user's smart wallet
+   * @param {string} userType - UserType.INVESTOR or UserType.COMPANY_USER
+   * @param {number} userId - User ID
+   * @param {string} publicKey - Stellar public key (G... address)
+   * @param {string} name - Human-readable name for the signer
+   * @returns {Promise<Object>} Result with signerId and transactionHash
+   */
+  static async addEd25519Signer(userType, userId, publicKey, name = 'Ledger') {
+    try {
+      const model = this.#getPrismaModel(userType);
+      const signerModel = this.#getEd25519SignerModel(userType);
+      const fkField = userType === UserType.INVESTOR ? 'investorId' : 'companyUserId';
+
+      if (!model) throw new Error(`Invalid user type: ${userType}`);
+
+      // Validate public key format
+      if (!publicKey || !publicKey.startsWith('G') || publicKey.length !== 56) {
+        throw new Error('Invalid Stellar public key format');
+      }
+
+      const user = await prisma[model].findUnique({
+        where: { id: userId },
+        select: { id: true, stellarContractId: true },
+      });
+
+      if (!user) throw new Error('User not found');
+      if (!user.stellarContractId) throw new Error('User does not have a smart wallet');
+
+      // Check if signer already exists
+      const existingSigners = await prisma[signerModel].findMany({
+        where: { [fkField]: userId },
+      });
+
+      if (existingSigners.some(s => s.publicKey === publicKey)) {
+        throw new Error('This signer is already registered');
+      }
+
+      // Add signer to smart wallet contract
+      const walletContract = new Contract(user.stellarContractId);
+      const server = this.getServer();
+      const networkPassphrase = getNetworkPassphrase();
+      const issuerKeypair = getIssuerKeypair();
+
+      // Convert public key to raw bytes for the contract
+      const publicKeyBytes = StrKey.decodeEd25519PublicKey(publicKey);
+
+      const addSignerOp = walletContract.call(
+        'add_sig',
+        xdr.ScVal.scvBytes(publicKeyBytes),
+        xdr.ScVal.scvBool(false) // Not a secp256r1 key - it's Ed25519
+      );
+
+      let tx = new TransactionBuilder(
+        await server.rpc.getAccount(issuerKeypair.publicKey()),
+        { fee: BASE_FEE, networkPassphrase }
+      )
+        .addOperation(addSignerOp)
+        .setTimeout(30)
+        .build();
+
+      tx = await StellarService.prepareSorobanTransaction(tx);
+      tx.sign(issuerKeypair);
+
+      let result;
+      try {
+        result = await server.send(tx);
+        if (!result?.hash) throw new Error('No hash returned from transaction');
+      } catch (sendError) {
+        console.log('[Ed25519Signer] Direct send failed, trying sponsorship:', sendError.message);
+        result = await this.submitWithSponsorship(tx.toXDR());
+      }
+
+      // Store in database
+      const newSigner = await prisma[signerModel].create({
+        data: {
+          [fkField]: userId,
+          publicKey,
+          name,
+        },
+      });
+
+      console.log(`[Ed25519Signer] Added signer ${publicKey} for user ${userId}. TX: ${result.hash}`);
+
+      return {
+        success: true,
+        signerId: newSigner.id,
+        publicKey,
+        name,
+        transactionHash: result.hash,
+      };
+    } catch (error) {
+      console.error('Error adding Ed25519 signer:', error);
+      throw new Error(`Failed to add Ed25519 signer: ${error.message}`);
+    }
+  }
+
+  /**
+   * Remove an Ed25519 signer from user's smart wallet
+   * Note: Always requires at least 1 passkey to remain
+   * @param {string} userType - UserType.INVESTOR or UserType.COMPANY_USER
+   * @param {number} userId - User ID
+   * @param {number} signerId - Signer ID to remove
+   * @returns {Promise<Object>} Result with removedId and transactionHash
+   */
+  static async removeEd25519Signer(userType, userId, signerId) {
+    try {
+      const model = this.#getPrismaModel(userType);
+      const signerModel = this.#getEd25519SignerModel(userType);
+      const fkField = userType === UserType.INVESTOR ? 'investorId' : 'companyUserId';
+
+      if (!model) throw new Error(`Invalid user type: ${userType}`);
+
+      const user = await prisma[model].findUnique({
+        where: { id: userId },
+        select: { id: true, stellarContractId: true },
+      });
+
+      if (!user) throw new Error('User not found');
+      if (!user.stellarContractId) throw new Error('User does not have a smart wallet');
+
+      const signerToRemove = await prisma[signerModel].findFirst({
+        where: { id: signerId, [fkField]: userId },
+      });
+
+      if (!signerToRemove) throw new Error('Signer not found');
+
+      // Remove from contract
+      const publicKeyBytes = StrKey.decodeEd25519PublicKey(signerToRemove.publicKey);
+      const walletContract = new Contract(user.stellarContractId);
+      const server = this.getServer();
+      const networkPassphrase = getNetworkPassphrase();
+      const issuerKeypair = getIssuerKeypair();
+
+      const removeSignerOp = walletContract.call(
+        'rm_sig',
+        xdr.ScVal.scvBytes(publicKeyBytes)
+      );
+
+      let tx = new TransactionBuilder(
+        await server.rpc.getAccount(issuerKeypair.publicKey()),
+        { fee: BASE_FEE, networkPassphrase }
+      )
+        .addOperation(removeSignerOp)
+        .setTimeout(30)
+        .build();
+
+      tx = await StellarService.prepareSorobanTransaction(tx);
+      tx.sign(issuerKeypair);
+
+      let result;
+      try {
+        result = await server.send(tx);
+        if (!result?.hash) throw new Error('No hash returned');
+      } catch (err) {
+        result = await this.submitWithSponsorship(tx.toXDR());
+      }
+
+      // Remove from database
+      await prisma[signerModel].delete({ where: { id: signerId } });
+
+      console.log(`[Ed25519Signer] Removed signer ${signerToRemove.publicKey} for user ${userId}. TX: ${result.hash}`);
+
+      return {
+        success: true,
+        removedId: signerId,
+        transactionHash: result.hash,
+      };
+    } catch (error) {
+      console.error('Error removing Ed25519 signer:', error);
+      throw new Error(`Failed to remove Ed25519 signer: ${error.message}`);
     }
   }
 }

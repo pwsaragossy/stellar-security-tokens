@@ -128,6 +128,7 @@ model Investor {
   investments         Investment[]
   deposits            Deposit[]
   webauthnCredentials InvestorWebauthnCredential[]
+  ed25519Signers      InvestorEd25519Signer[]
 
   @@index([email])
   @@index([document])
@@ -296,6 +297,7 @@ model CompanyUser {
   // Relations
   company             Company                         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   webauthnCredentials CompanyUserWebauthnCredential[]
+  ed25519Signers      CompanyUserEd25519Signer[]
   offers              Offer[]
 
   @@index([email])
@@ -462,6 +464,40 @@ model CompanyUserWebauthnCredential {
   @@index([credentialId])
   @@map("company_user_webauthn_credentials")
 }
+
+// Ed25519 Recovery Signers (e.g., Ledger hardware wallets)
+model InvestorEd25519Signer {
+  id         Int       @id @default(autoincrement())
+  investorId Int       @map("investor_id")
+  publicKey  String    @unique @map("public_key") @db.VarChar(56) // G... address
+  name       String    @default("Ledger") @db.VarChar(255)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamp
+
+  // Relations
+  investor Investor @relation(fields: [investorId], references: [id], onDelete: Cascade)
+
+  @@unique([investorId, publicKey])
+  @@index([investorId])
+  @@map("investor_ed25519_signers")
+}
+
+model CompanyUserEd25519Signer {
+  id            Int       @id @default(autoincrement())
+  companyUserId Int       @map("company_user_id")
+  publicKey     String    @unique @map("public_key") @db.VarChar(56) // G... address
+  name          String    @default("Ledger") @db.VarChar(255)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp
+  lastUsedAt    DateTime? @map("last_used_at") @db.Timestamp
+
+  // Relations
+  companyUser CompanyUser @relation(fields: [companyUserId], references: [id], onDelete: Cascade)
+
+  @@unique([companyUserId, publicKey])
+  @@index([companyUserId])
+  @@map("company_user_ed25519_signers")
+}
+
 
 model PlatformAdminWebauthnCredential {
   id              Int       @id @default(autoincrement())

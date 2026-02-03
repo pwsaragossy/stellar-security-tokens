@@ -4,10 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, User, Mail, Check, Pencil, Save, X, Shield, Smartphone, Plus, Trash2 } from 'lucide-react';
+import { Loader2, User, Mail, Check, Pencil, Save, X, Shield, Smartphone, Plus, Trash2, HardDrive, AlertTriangle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { authStorage } from '@/utils/authStorage';
 import { usePasskeys } from '@/hooks/usePasskeys';
+import { useLedger } from '@/hooks/useLedger';
+import { useRecoverySigners } from '@/hooks/useRecoverySigners';
 
 export function Settings() {
     const [user, setUser] = useState<any>(null);
@@ -25,6 +27,11 @@ export function Settings() {
     const { passkeys, loading: passkeyLoading, error: passkeyError, addPasskey, removePasskey } = usePasskeys();
     const [addingPasskey, setAddingPasskey] = useState(false);
     const [removingPasskeyId, setRemovingPasskeyId] = useState<number | null>(null);
+
+    // Ledger recovery management
+    const { connect: connectLedger, isConnecting: ledgerConnecting, isSupported: ledgerSupported, error: ledgerError, clearError: clearLedgerError } = useLedger();
+    const { signers: recoverySigners, isLoading: signersLoading, addSigner: addRecoverySigner, removeSigner: removeRecoverySigner, isAdding: addingRecovery, isRemoving: removingRecovery } = useRecoverySigners();
+    const [removingSignerId, setRemovingSignerId] = useState<number | null>(null);
 
     useEffect(() => {
         async function fetchSettings() {
@@ -408,6 +415,117 @@ export function Settings() {
                     </p>
                 </CardContent>
             </Card>
+
+            {/* Ledger Recovery */}
+            <Card className="glass-panel rounded-2xl animate-fade-in-up animate-delay-4">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="text-xl flex items-center gap-2">
+                                <HardDrive className="w-5 h-5 text-[hsl(43_45%_55%)]" />
+                                Ledger Recovery
+                            </CardTitle>
+                            <CardDescription>Add your Ledger hardware wallet as a backup recovery method</CardDescription>
+                        </div>
+                        {ledgerSupported && (
+                            <Button
+                                size="sm"
+                                onClick={async () => {
+                                    clearLedgerError();
+                                    const connectedDevice = await connectLedger();
+                                    if (connectedDevice?.publicKey) {
+                                        await addRecoverySigner(connectedDevice.publicKey, 'Ledger');
+                                    }
+                                }}
+                                disabled={ledgerConnecting || addingRecovery}
+                                className="bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_50%)] text-white rounded-xl"
+                            >
+                                {ledgerConnecting || addingRecovery ? (
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                ) : (
+                                    <Plus className="w-4 h-4 mr-2" />
+                                )}
+                                Connect Ledger
+                            </Button>
+                        )}
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {!ledgerSupported && (
+                        <div className="p-3 rounded-xl text-sm bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            <span>
+                                Ledger requires <strong>Chrome</strong> or <strong>Edge</strong> browser.
+                                Please switch browsers to add a Ledger recovery key.
+                            </span>
+                        </div>
+                    )}
+
+                    {ledgerError && (
+                        <div className="p-3 rounded-xl text-sm bg-red-500/10 text-red-400 border border-red-500/20">
+                            {ledgerError}
+                        </div>
+                    )}
+
+                    {signersLoading ? (
+                        <div className="flex justify-center py-4">
+                            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : recoverySigners.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                            No recovery signers registered. Connect your Ledger to add a backup.
+                        </p>
+                    ) : (
+                        <div className="space-y-3">
+                            {recoverySigners.map((signer) => (
+                                <div
+                                    key={signer.id}
+                                    className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-border/50"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <HardDrive className="w-5 h-5 text-muted-foreground" />
+                                        <div>
+                                            <p className="font-medium">{signer.name}</p>
+                                            <p className="text-xs text-muted-foreground font-mono">
+                                                {signer.publicKey.slice(0, 8)}...{signer.publicKey.slice(-8)}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Added {new Date(signer.createdAt).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={async () => {
+                                            setRemovingSignerId(signer.id);
+                                            try {
+                                                await removeRecoverySigner(signer.id);
+                                            } finally {
+                                                setRemovingSignerId(null);
+                                            }
+                                        }}
+                                        disabled={removingSignerId === signer.id || removingRecovery}
+                                        className="text-red-400 hover:text-red-500 hover:bg-red-500/10"
+                                    >
+                                        {removingSignerId === signer.id ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="w-4 h-4" />
+                                        )}
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <p className="text-xs text-muted-foreground mt-4">
+                        🔐 Your Ledger's 24-word seed phrase is the true backup. If you lose all passkeys,
+                        you can recover using your Ledger.
+                    </p>
+                </CardContent>
+            </Card>
         </div>
     );
 }
+
