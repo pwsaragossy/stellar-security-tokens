@@ -25,6 +25,7 @@ services:
     volumes:
       - ./backend/src:/app/backend/src
       - ./backend/prisma:/app/backend/prisma
+      - ./backend/tests:/app/backend/tests
 
   frontend:
     build:

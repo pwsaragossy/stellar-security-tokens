@@ -30,7 +30,7 @@ describe('Auth Middleware', () => {
     }
   });
 
-  test('authenticateToken() - permite acesso com token válido', () => {
+  test('authenticateToken() - permite acesso com token válido', async () => {
     const payload = { id: 1, email: 'test@example.com', role: 'investor' };
     const token = generateToken(payload);
 
@@ -42,7 +42,10 @@ describe('Auth Middleware', () => {
     const res = createMockResponse();
     const next = createMockNext();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
+
+    // Give jwt.verify callback time to execute
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     assert.strictEqual(next.called, true);
     assert.strictEqual(next.error, null);
@@ -50,14 +53,14 @@ describe('Auth Middleware', () => {
     assert.strictEqual(req.user.email, payload.email);
   });
 
-  test('authenticateToken() - retorna 401 quando token não fornecido', () => {
+  test('authenticateToken() - retorna 401 quando token não fornecido', async () => {
     const req = createMockRequest({
       headers: {},
     });
     const res = createMockResponse();
     const next = createMockNext();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
 
     assert.strictEqual(next.called, false);
     assert.strictEqual(res.statusCode, 401);
@@ -65,18 +68,18 @@ describe('Auth Middleware', () => {
     assert.strictEqual(res.body.error, 'Access token required');
   });
 
-  test('authenticateToken() - retorna 401 quando header Authorization ausente', () => {
+  test('authenticateToken() - retorna 401 quando header Authorization ausente', async () => {
     const req = createMockRequest();
     const res = createMockResponse();
     const next = createMockNext();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
 
     assert.strictEqual(next.called, false);
     assert.strictEqual(res.statusCode, 401);
   });
 
-  test('authenticateToken() - retorna 403 quando token inválido', () => {
+  test('authenticateToken() - retorna 403 quando token inválido', async () => {
     const req = createMockRequest({
       headers: {
         authorization: 'Bearer invalid_token_here',
@@ -85,7 +88,10 @@ describe('Auth Middleware', () => {
     const res = createMockResponse();
     const next = createMockNext();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
+
+    // Give jwt.verify callback time to execute
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     assert.strictEqual(next.called, false);
     assert.strictEqual(res.statusCode, 403);
@@ -93,7 +99,7 @@ describe('Auth Middleware', () => {
     assert.strictEqual(res.body.error, 'Invalid or expired token');
   });
 
-  test('authenticateToken() - retorna 403 quando token expirado', () => {
+  test('authenticateToken() - retorna 403 quando token expirado', async () => {
     const expiredToken = jwt.sign(
       { id: 1, email: 'test@example.com' },
       JWT_SECRET,
@@ -108,13 +114,16 @@ describe('Auth Middleware', () => {
     const res = createMockResponse();
     const next = createMockNext();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
+
+    // Give jwt.verify callback time to execute
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     assert.strictEqual(next.called, false);
     assert.strictEqual(res.statusCode, 403);
   });
 
-  test('authenticateToken() - retorna 403 quando token assinado com secret diferente', () => {
+  test('authenticateToken() - retorna 403 quando token assinado com secret diferente', async () => {
     const wrongSecretToken = jwt.sign(
       { id: 1, email: 'test@example.com' },
       'wrong_secret',
@@ -129,7 +138,10 @@ describe('Auth Middleware', () => {
     const res = createMockResponse();
     const next = createMockNext();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
+
+    // Give jwt.verify callback time to execute
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     assert.strictEqual(next.called, false);
     assert.strictEqual(res.statusCode, 403);
