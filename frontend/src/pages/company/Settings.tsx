@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Save, CheckCircle, Clock, AlertCircle, Building2, Shield, Smartphone, Plus, Trash2 } from "lucide-react";
+import { Loader2, Save, CheckCircle, Clock, AlertCircle, Building2, Shield, Smartphone, Plus, Trash2, Usb, AlertTriangle } from "lucide-react";
 import { useCompany } from "@/hooks/useCompany";
 import { companiesApi } from "@/api/companies";
 import { usePasskeys } from "@/hooks/usePasskeys";
+import { useLedger } from "@/hooks/useLedger";
+import { useRecoverySigners } from "@/hooks/useRecoverySigners";
+
 
 export function Settings() {
     const { company, loading, error, refetch } = useCompany();
@@ -395,6 +398,113 @@ export function Settings() {
 
                     <p className="text-xs text-muted-foreground mt-4">
                         💡 Add multiple devices for backup access. You need at least one passkey to sign in.
+                    </p>
+                </CardContent>
+            </Card>
+
+            {/* Ledger Recovery */}
+            <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in-up animate-delay-5">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="font-heading flex items-center gap-2">
+                                <Usb className="w-5 h-5 text-primary" />
+                                Ledger Recovery
+                            </CardTitle>
+                            <CardDescription>Add a Ledger hardware wallet as a backup recovery method</CardDescription>
+                        </div>
+                        <Button
+                            size="sm"
+                            onClick={async () => {
+                                clearLedgerError();
+                                try {
+                                    const result = await connectLedger();
+                                    if (result?.publicKey) {
+                                        await addRecoverySigner(result.publicKey, 'Ledger Nano');
+                                    }
+                                } catch (e) {
+                                    console.error('Ledger connection error:', e);
+                                }
+                            }}
+                            disabled={ledgerConnecting || addingRecovery || !ledgerSupported}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                        >
+                            {ledgerConnecting || addingRecovery ? (
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            ) : (
+                                <Plus className="w-4 h-4 mr-2" />
+                            )}
+                            Connect Ledger
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {!ledgerSupported && (
+                        <div className="p-3 rounded-lg text-sm bg-warning/10 text-warning border border-warning/20 flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                            Ledger requires Chrome or Edge browser with WebHID support.
+                        </div>
+                    )}
+
+                    {ledgerError && (
+                        <div className="p-3 rounded-lg text-sm bg-red-500/10 text-red-400 border border-red-500/20">
+                            {ledgerError}
+                        </div>
+                    )}
+
+                    {signersLoading ? (
+                        <div className="flex justify-center py-4">
+                            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : recoverySigners.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                            No recovery signers registered. Connect a Ledger device to add one.
+                        </p>
+                    ) : (
+                        <div className="space-y-3">
+                            {recoverySigners.map((signer) => (
+                                <div
+                                    key={signer.id}
+                                    className="flex items-center justify-between p-3 rounded-lg bg-muted/20 border border-white/10"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <Usb className="w-5 h-5 text-muted-foreground" />
+                                        <div>
+                                            <p className="font-medium text-white">{signer.name}</p>
+                                            <p className="text-xs text-muted-foreground font-mono">
+                                                {signer.publicKey.substring(0, 8)}...{signer.publicKey.substring(signer.publicKey.length - 8)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={async () => {
+                                            setRemovingSignerId(signer.id);
+                                            try {
+                                                await removeRecoverySigner(signer.id);
+                                            } catch (e) {
+                                                console.error(e);
+                                            } finally {
+                                                setRemovingSignerId(null);
+                                            }
+                                        }}
+                                        disabled={removingSignerId === signer.id || removingRecovery}
+                                        className="text-red-400 hover:text-red-500 hover:bg-red-500/10"
+                                    >
+                                        {removingSignerId === signer.id ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="w-4 h-4" />
+                                        )}
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <p className="text-xs text-muted-foreground mt-4">
+                        🔐 Your Ledger's public key is stored as a recovery signer. Private keys never leave your device.
                     </p>
                 </CardContent>
             </Card>
