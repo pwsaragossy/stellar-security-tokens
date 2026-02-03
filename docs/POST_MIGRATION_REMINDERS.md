@@ -88,3 +88,80 @@ This document tracks items that need to be addressed **after** the initial Mainn
 - Admin passkeys can serve as signer authorization mechanism
 - No external dependencies needed - pure Stellar native feature
 
+## 7. Passkey Recovery (Database Loss Protection)
+
+> 💡 **Feature Priority**: Nice-to-have (resilience feature)
+
+### The Problem
+If the database is lost (Docker reinstall, migration failure, etc.), the server loses the mapping between passkey credential IDs and user accounts/smart wallets. However:
+- **The passkey (private key)** remains on the user's device (browser/OS keychain)
+- **The smart wallet contract** remains deployed on the Stellar blockchain
+- **The contract ID is deterministic** — derived from the passkey public key
+
+This means recovery IS possible without any data loss to the user.
+
+### How Passkey Recovery Works
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     PASSKEY RECOVERY FLOW                           │
+├─────────────────────────────────────────────────────────────────────┤
+│ 1. User clicks "Login with Passkey"                                 │
+│    ↓                                                                │
+│ 2. Browser prompts for passkey (FaceID/TouchID/PIN)                │
+│    ↓                                                                │
+│ 3. Server receives credential_id + signed challenge                 │
+│    ↓                                                                │
+│ 4. Server checks DB → credential_id NOT FOUND (DB was wiped)       │
+│    ↓                                                                │
+│ 5. Instead of failing, initiate RECOVERY:                          │
+│    a) Verify the WebAuthn signature is valid                        │
+│    b) Extract the public key from the assertion                     │
+│    c) Derive the Stellar contract ID deterministically              │
+│    d) Query Stellar RPC: does this contract exist on-chain?         │
+│    ↓                                                                │
+│ 6. If contract EXISTS on-chain:                                     │
+│    a) Create new investor/company record in DB                      │
+│    b) Link passkey_credential_id + passkey_public_key               │
+│    c) Link stellar_contract_id                                      │
+│    d) Log the user in (issue JWT)                                   │
+│    ↓                                                                │
+│ 7. User is fully recovered! No funds lost, no new wallet needed.   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Implementation Checklist
+
+- [ ] **Backend: Recovery Endpoint** (`POST /api/auth/passkey/recover`)
+  - Accept WebAuthn assertion (same as login)
+  - If credential not found → trigger recovery flow
+  - Derive contract ID from public key using Factory Contract logic
+  - Query Soroban RPC to verify contract exists
+  - Create DB records and issue JWT
+
+- [ ] **Backend: Email Re-verification**
+  - After recovery, prompt user to re-verify email
+  - Send verification email to the address stored in the contract (if available) or prompt for new email
+
+- [ ] **Frontend: Recovery UI**
+  - If login fails with "credential not found", show "Recover Account" option
+  - Explain: "Your wallet still exists. Click to recover your account."
+  - After recovery, show confirmation with wallet balance
+
+- [ ] **Fallback: Manual Recovery**
+  - Admin endpoint to manually link a passkey to an existing on-chain contract
+  - Useful for edge cases where automatic recovery fails
+
+### Security Considerations
+- **The blockchain is the source of truth** — if the contract exists and the user can sign with the correct passkey, they are the legitimate owner
+- **No email/password required** — the passkey cryptographically proves ownership
+- **Rate limit recovery attempts** — prevent enumeration attacks
+
+### Code References
+- Contract ID derivation: `StellarService.deriveSmartWalletAddress()`
+- WebAuthn verification: `authController.verifyPasskeyAssertion()`
+- Factory contract: `FACTORY_CONTRACT_ID` env variable
+
+### Benefit
+This feature makes the system **resilient to database loss** while maintaining full user fund safety. The Stellar blockchain acts as an immutable backup of account existence.
+

@@ -49,18 +49,28 @@ export const authenticateToken = async (req, res, next) => {
     console.warn('[Auth] Blocklist check failed:', err.message);
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({
-        success: false,
-        error: 'Invalid or expired token',
+  // Wrap jwt.verify in a Promise to make it properly awaitable
+  try {
+    const user = await new Promise((resolve, reject) => {
+      jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(decoded);
+        }
       });
-    }
+    });
 
     req.user = user;
     next();
-  });
+  } catch (err) {
+    return res.status(403).json({
+      success: false,
+      error: 'Invalid or expired token',
+    });
+  }
 };
+
 
 /**
  * Gera um token JWT com payload fornecido
