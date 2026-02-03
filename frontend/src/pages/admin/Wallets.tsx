@@ -167,6 +167,8 @@ export function Wallets() {
     const [sourceWallet, setSourceWallet] = useState('treasury');
     const [destination, setDestination] = useState('');
     const [amount, setAmount] = useState('');
+    const [assetCode, setAssetCode] = useState('XLM');
+    const [memo, setMemo] = useState('');
     const [description, setDescription] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
@@ -211,12 +213,14 @@ export function Wallets() {
                 sourceWallet,
                 destination,
                 amount,
-                assetCode: 'XLM', // Defaulting for now
+                assetCode,
+                memo,
                 description
             });
             setSuccess('Transaction proposed successfully');
             setDestination('');
             setAmount('');
+            setMemo('');
             setDescription('');
             loadData(); // Reload data
         } catch (error: any) {
@@ -369,7 +373,7 @@ export function Wallets() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="amount">Amount (XLM)</Label>
+                                    <Label htmlFor="amount">Amount</Label>
                                     <Input
                                         id="amount"
                                         placeholder="0.00"
@@ -386,7 +390,15 @@ export function Wallets() {
                                             side="right"
                                         />
                                     </Label>
-                                    <Input id="asset" value="XLM" disabled />
+                                    <select
+                                        id="asset"
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                                        value={assetCode}
+                                        onChange={(e) => setAssetCode(e.target.value)}
+                                    >
+                                        <option value="XLM">XLM</option>
+                                        <option value="USDC">USDC</option>
+                                    </select>
                                 </div>
                             </div>
 
@@ -402,10 +414,22 @@ export function Wallets() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="desc">Description</Label>
+                                <Label htmlFor="memo">Memo (optional)</Label>
+                                <Input
+                                    id="memo"
+                                    placeholder="Payment reference..."
+                                    value={memo}
+                                    onChange={(e) => setMemo(e.target.value)}
+                                    maxLength={28}
+                                />
+                                <p className="text-xs text-muted-foreground">Max 28 characters. Visible on-chain.</p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="desc">Internal Description</Label>
                                 <Input
                                     id="desc"
-                                    placeholder="Reason for transfer..."
+                                    placeholder="Reason for transfer (internal only)..."
                                     value={description}
                                     onChange={(e) => setDescription(e.target.value)}
                                 />

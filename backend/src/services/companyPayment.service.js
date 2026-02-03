@@ -7,6 +7,7 @@ import { StellarService } from './stellar.service.js';
 import { PaymentService } from './payment.service.js';
 import { EmailService } from './email.service.js';
 import { Keypair, Asset, Operation, TransactionBuilder, Networks } from '@stellar/stellar-sdk';
+import { getUsdcIssuer } from '../config/stellar.js';
 
 // Configuration
 const PLATFORM_FEE_PERCENT = 0.01; // 1% MVP
@@ -15,7 +16,7 @@ const GRACE_PERIOD_DAYS = 10;
 const DEFAULT_FEE_PERCENT = 0.05; // 5% of owed amount
 
 const USDC_ASSET_CODE = 'USDC';
-const USDC_ISSUER = process.env.USDC_ISSUER || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
+const USDC_ISSUER = getUsdcIssuer();
 
 /**
  * Company Payment Service

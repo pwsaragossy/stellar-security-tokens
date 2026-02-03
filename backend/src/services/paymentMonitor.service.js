@@ -1,4 +1,4 @@
-import { stellarServer } from '../config/stellar.js';
+import { stellarServer, getUsdcIssuer } from '../config/stellar.js';
 import { getTreasuryKeypair } from '../config/stellar.js';
 import { Investment } from '../models/Investment.js';
 import { Investor } from '../models/Investor.js';
@@ -8,11 +8,9 @@ import { EmailService } from './email.service.js';
 import { DepositRelayService } from './depositRelay.service.js';
 import crypto from 'crypto';
 
-// Issue 10 Fix: Require USDC_ISSUER from environment (no hardcoded fallback)
-const USDC_ISSUER = process.env.USDC_ISSUER;
-if (!USDC_ISSUER) {
-  console.warn('[PaymentMonitor] USDC_ISSUER not configured. Payment monitoring may not work correctly.');
-}
+// Use centralized getUsdcIssuer() for automatic testnet/mainnet detection
+const USDC_ISSUER = getUsdcIssuer();
+console.log(`[PaymentMonitor] Using USDC issuer: ${USDC_ISSUER}`);
 const USDC_ASSET_CODE = 'USDC';
 const RECONNECT_DELAY = parseInt(process.env.PAYMENT_MONITOR_RECONNECT_DELAY || '5000', 10);
 
@@ -277,31 +275,52 @@ export class PaymentMonitor {
    * @private
    */
   async handlePayment(payment) {
-    // Filtrar apenas pagamentos USDC
+    // Only process payment operations
     if (payment.type !== 'payment') {
       return;
     }
 
-    if (payment.asset_code !== USDC_ASSET_CODE || payment.asset_issuer !== USDC_ISSUER) {
-      return;
-    }
-
-    // Verificar se é pagamento para treasury
+    // Verify payment is to treasury
     if (payment.to !== this.treasuryPublicKey) {
       return;
     }
 
-    console.log(`[PaymentMonitor] USDC payment detected: ${payment.amount} from ${payment.from}, memo: ${payment.memo}`);
+    // Determine asset info for logging
+    const isNative = payment.asset_type === 'native';
+    const assetCode = isNative ? 'XLM' : payment.asset_code;
+    const isUSDC = !isNative && payment.asset_code === USDC_ASSET_CODE && payment.asset_issuer === USDC_ISSUER;
+
+    // IMPORTANT: Payment operations don't have memo directly - it's on the transaction
+    // We need to fetch the transaction to get the memo
+    let memo = null;
+    try {
+      const tx = await stellarServer.transactions().transaction(payment.transaction_hash).call();
+      if (tx.memo_type === 'text' && tx.memo) {
+        memo = tx.memo;
+      }
+    } catch (err) {
+      console.warn(`[PaymentMonitor] Could not fetch transaction ${payment.transaction_hash} for memo:`, err.message);
+    }
 
     // Check if it's a deposit relay payment (memo starts with DEP-)
-    if (payment.memo && payment.memo.startsWith(DepositRelayService.MEMO_PREFIX)) {
+    // Deposit relay accepts ANY asset (XLM or USDC)
+    if (memo && memo.startsWith(DepositRelayService.MEMO_PREFIX)) {
+      console.log(`[PaymentMonitor] Deposit relay payment detected: ${payment.amount} ${assetCode} from ${payment.from}, memo: ${memo}`);
       await DepositRelayService.handleIncomingPayment(
-        payment.memo,
+        memo,
         payment.amount,
-        payment.transaction_hash
+        payment.transaction_hash,
+        assetCode // Pass asset code so relay knows what was sent
       );
       return;
     }
+
+    // For investment payments, only accept USDC
+    if (!isUSDC) {
+      return;
+    }
+
+    console.log(`[PaymentMonitor] USDC investment payment detected: ${payment.amount} from ${payment.from}, memo: ${memo}`);
 
     // Buscar investimento pendente correspondente
     const pendingInvestments = await Investment.findPendingByInvestor(

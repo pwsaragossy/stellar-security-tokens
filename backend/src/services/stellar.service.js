@@ -11,6 +11,7 @@ import {
   getTreasuryKeypair,
   getOperationsKeypair,
   getSorobanRpcUrl,
+  getUsdcIssuer,
 } from '../config/stellar.js';
 import { TransactionManager } from './transactionManager.service.js';
 import {
@@ -591,23 +592,31 @@ export class StellarService {
   /**
    * Deploys the Stellar Asset Contract (SAC) for an existing asset.
    * @param {string} code - Asset code
+   * @param {string} [issuer] - Optional issuer public key (defaults to platform issuer)
    * @returns {Promise<Object>} Deployment result
    */
-  static async deploySACForAsset(code) {
+  static async deploySACForAsset(code, issuer = null) {
     try {
       const issuerKeypair = getIssuerKeypair();
-      const asset = createAsset(code, issuerKeypair.publicKey());
+
+      // Use provided issuer or default to platform issuer
+      const assetIssuer = issuer || issuerKeypair.publicKey();
+      const asset = new Asset(code, assetIssuer);
       const sacContractId = this.getSACContractId(asset);
 
       console.log(`[StellarService] Deploying SAC for existing asset ${code} (${sacContractId})`);
 
-      const op = Operation.createAssetContract({
+      const op = Operation.createStellarAssetContract({
         asset: asset,
         source: issuerKeypair.publicKey(),
       });
 
       const issuerAccount = await this.getAccountRPC(issuerKeypair.publicKey());
-      const transaction = buildTransactionWithAccount(issuerAccount, [op]);
+      let transaction = buildTransactionWithAccount(issuerAccount, [op]);
+
+      // SAC deployment is a Soroban operation, requires preparation
+      transaction = await this.prepareSorobanTransaction(transaction);
+
       const result = await signAndSubmitTransaction(transaction, issuerKeypair);
 
       return {
@@ -763,10 +772,11 @@ export class StellarService {
 
   /**
    * Realiza uma retirada do Tesouro (OpEx)
+   * Suporta destinos clássicos (G...) e Smart Wallets (C...)
    * 
-   * @param {string} destination - Endereço de destino (G...)
+   * @param {string} destination - Endereço de destino (G... ou C...)
    * @param {string} amount - Valor a ser retirado
-   * @param {string} assetCode - Código do asset (ex: 'USDC')
+   * @param {string} assetCode - Código do asset (ex: 'USDC', 'XLM')
    * @param {string} description - Descrição da retirada
    * @returns {Promise<Object>} Resultado da retirada
    */
@@ -775,37 +785,94 @@ export class StellarService {
       const treasuryKeypair = getTreasuryKeypair();
       const issuerKeypair = getIssuerKeypair();
 
-      const asset = assetCode === 'XLM'
-        ? Asset.native()
-        : new Asset(assetCode, issuerKeypair.publicKey());
+      const isContract = destination.startsWith('C');
+      const isNative = assetCode === 'XLM';
+      const isUSDC = assetCode === 'USDC';
 
-      const operations = [
-        Operation.payment({
-          destination,
-          asset,
-          amount: amount.toString(),
-          source: treasuryKeypair.publicKey(),
-        }),
-      ];
+      // For USDC, use getUsdcIssuer() which returns the correct issuer for the current network
+      // For other assets, use the platform issuer
+      let asset;
+      if (isNative) {
+        asset = Asset.native();
+      } else if (isUSDC) {
+        asset = new Asset('USDC', getUsdcIssuer());
+      } else {
+        asset = new Asset(assetCode, issuerKeypair.publicKey());
+      }
 
-      // Use RPC for sequence
-      const treasuryAccount = await this.getAccountRPC(treasuryKeypair.publicKey());
-      const transaction = await buildTransactionWithAccount(treasuryAccount, operations, {
-        memo: description.substring(0, 28) // Text memo limit
-      });
+      const amountStr = amount.toString();
+      let result;
 
-      const result = await TransactionManager.submit({
-        transaction,
-        signingKeypair: treasuryKeypair,
-        operationType: 'treasury_payment',
-        description: `OpEx: ${description}`,
-        metadata: {
-          destination,
-          amount,
-          assetCode,
-          type: 'opex_withdrawal'
+      if (isContract) {
+        // --- SOROBAN SAC TRANSFER (for C-addresses) ---
+        console.log(`[StellarService] Treasury withdrawal via SAC to contract ${destination}`);
+
+        if (isNative) {
+          // Native XLM cannot be sent via SAC, need to wrap or use different approach
+          // For now, throw an error - XLM direct to C-address requires different handling
+          throw new Error('Native XLM cannot be sent directly to smart contracts via classic operations. Use wrapped XLM or fund the contract sponsor account.');
         }
-      });
+
+        const sacContractId = this.getSACContractId(asset);
+        const contract = new Contract(sacContractId);
+
+        // Build 'transfer' call: transfer(from, to, amount)
+        const transferOp = contract.call(
+          'transfer',
+          new Address(treasuryKeypair.publicKey()).toScVal(),
+          new Address(destination).toScVal(),
+          nativeToScVal(BigInt(Math.floor(parseFloat(amountStr) * 10000000)), { type: 'i128' })
+        );
+
+        const treasuryAccount = await this.getAccountRPC(treasuryKeypair.publicKey());
+        let transaction = buildTransactionWithAccount(treasuryAccount, [transferOp]);
+
+        // Soroban Simulation & Preparation
+        console.log(`[StellarService] Simulating Soroban SAC treasury transfer...`);
+        transaction = await this.prepareSorobanTransaction(transaction);
+
+        result = await TransactionManager.submit({
+          transaction,
+          signingKeypair: treasuryKeypair,
+          operationType: 'treasury_payment',
+          description: `OpEx: ${description}`,
+          metadata: {
+            destination,
+            amount: amountStr,
+            assetCode,
+            type: 'soroban_treasury_transfer'
+          }
+        });
+      } else {
+        // --- CLASSIC STELLAR PAYMENT (for G-addresses) ---
+        const operations = [
+          Operation.payment({
+            destination,
+            asset,
+            amount: amountStr,
+            source: treasuryKeypair.publicKey(),
+          }),
+        ];
+
+        // Use RPC for sequence
+        const treasuryAccount = await this.getAccountRPC(treasuryKeypair.publicKey());
+        const transaction = await buildTransactionWithAccount(treasuryAccount, operations, {
+          memo: description.substring(0, 28) // Text memo limit
+        });
+
+        result = await TransactionManager.submit({
+          transaction,
+          signingKeypair: treasuryKeypair,
+          operationType: 'treasury_payment',
+          description: `OpEx: ${description}`,
+          metadata: {
+            destination,
+            amount: amountStr,
+            assetCode,
+            type: 'classic_treasury_payment'
+          }
+        });
+      }
 
       if (result.status === 'pending_multisig') {
         return {
@@ -1489,7 +1556,7 @@ export class StellarService {
         throw new Error('TREASURY_PUBLIC_KEY not configured');
       }
 
-      const USDC_ISSUER = process.env.USDC_ISSUER || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
+      const USDC_ISSUER = getUsdcIssuer();
       const USDC_ASSET_CODE = 'USDC';
 
       // Buscar pagamentos recentes na Treasury Account

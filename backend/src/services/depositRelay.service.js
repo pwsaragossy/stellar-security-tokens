@@ -52,9 +52,10 @@ export class DepositRelayService {
      * @param {string} memoText 
      * @param {string} amount 
      * @param {string} txHash 
+     * @param {string} assetCode - 'XLM' or 'USDC'
      */
-    static async handleIncomingPayment(memoText, amount, txHash) {
-        console.log(`[DepositRelay] Processing incoming payment: ${amount} USDC, memo: ${memoText}, tx: ${txHash}`);
+    static async handleIncomingPayment(memoText, amount, txHash, assetCode = 'USDC') {
+        console.log(`[DepositRelay] Processing incoming payment: ${amount} ${assetCode}, memo: ${memoText}, tx: ${txHash}`);
 
         const deposit = await prisma.deposit.findUnique({
             where: { memo: memoText },
@@ -82,15 +83,17 @@ export class DepositRelayService {
             }
         });
 
-        // Start forwarding process
-        await this.forwardUSDC(deposit.id);
+        // Start forwarding process with the correct asset
+        await this.forwardAsset(deposit.id, assetCode);
     }
 
     /**
-     * Forward USDC to the investor's smart wallet
+     * Forward asset (XLM or USDC) to the investor's smart wallet
+     * Uses withdrawFromTreasury since funds were deposited to Treasury
      * @param {number} depositId 
+     * @param {string} assetCode - 'XLM' or 'USDC'
      */
-    static async forwardUSDC(depositId) {
+    static async forwardAsset(depositId, assetCode = 'USDC') {
         const deposit = await prisma.deposit.findUnique({
             where: { id: depositId },
             include: { investor: true }
@@ -104,17 +107,34 @@ export class DepositRelayService {
                 data: { status: 'forwarding' }
             });
 
-            console.log(`[DepositRelay] Forwarding ${deposit.actualAmount} USDC to ${deposit.investor.stellarContractId}`);
+            const destination = deposit.investor.stellarContractId;
+            console.log(`[DepositRelay] Forwarding ${deposit.actualAmount} ${assetCode} to ${destination}`);
 
-            // We use the treasury account to send the USDC
-            // The USDC is already in the treasury account (because that's where the investor sent it)
-            // We use StellarService.distributeTokens which knows how to handle SAC transfers
-
-            const txResult = await StellarService.distributeTokens(
-                deposit.investor.stellarContractId, // C... address
+            // Use withdrawFromTreasury since the funds were deposited to Treasury
+            // This method handles both XLM (native) and USDC correctly
+            const txResult = await StellarService.withdrawFromTreasury(
+                destination,
                 deposit.actualAmount,
-                'USDC'
+                assetCode,
+                `Deposit relay ${deposit.memo}`
             );
+
+            // Handle multisig pending case
+            if (txResult.status === 'pending_multisig') {
+                await prisma.deposit.update({
+                    where: { id: depositId },
+                    data: {
+                        status: 'pending_approval',
+                        updatedAt: new Date()
+                    }
+                });
+                console.log(`[DepositRelay] Deposit ${depositId} requires multisig approval.`);
+                return;
+            }
+
+            if (!txResult.success) {
+                throw new Error(txResult.error || 'Unknown error during forwarding');
+            }
 
             await prisma.deposit.update({
                 where: { id: depositId },
@@ -125,10 +145,10 @@ export class DepositRelayService {
                 }
             });
 
-            console.log(`[DepositRelay] Deposit ${depositId} completed successfully.`);
+            console.log(`[DepositRelay] Deposit ${depositId} completed successfully. Hash: ${txResult.hash}`);
 
         } catch (error) {
-            console.error(`[DepositRelay] Failed to forward USDC for deposit ${depositId}:`, error);
+            console.error(`[DepositRelay] Failed to forward ${assetCode} for deposit ${depositId}:`, error);
 
             await prisma.deposit.update({
                 where: { id: depositId },
