@@ -12,6 +12,7 @@ import {
   buildTransactionWithAccount,
   getSorobanRpcUrl,
   getIssuerKeypair,
+  getUsdcIssuer,
 } from '../config/stellar.js';
 import { TransactionManager } from './transactionManager.service.js';
 import { Operation, Asset, rpc, scValToNative, Address } from '@stellar/stellar-sdk';
@@ -27,11 +28,12 @@ const BALANCE_SOURCE = {
 };
 
 /**
- * Gets the USDC configuration from ConfigService
+ * Gets the USDC configuration
+ * Uses centralized getUsdcIssuer() for automatic testnet/mainnet detection
  * @returns {Promise<{issuer: string, code: string}>}
  */
 const getUSDCConfig = async () => {
-  const issuer = await ConfigService.get('USDC_ISSUER', process.env.USDC_ISSUER || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN');
+  const issuer = getUsdcIssuer();
   const code = await ConfigService.get('USDC_ASSET_CODE', 'USDC');
   return { issuer, code };
 };

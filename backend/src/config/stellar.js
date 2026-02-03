@@ -58,6 +58,38 @@ export const getNetworkPassphrase = () => {
   return network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC;
 };
 
+// Circle USDC Issuer addresses (official)
+// https://developers.circle.com/stablecoins/docs/usdc-on-stellar
+const USDC_ISSUERS = {
+  testnet: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+  mainnet: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+};
+
+/**
+ * Get the USDC issuer for the current network
+ * Uses env variable if explicitly set, otherwise auto-detects based on STELLAR_NETWORK
+ * @returns {string} USDC issuer public key
+ */
+export const getUsdcIssuer = () => {
+  // Allow env override for custom USDC (testing), but default to Circle
+  // Check for non-empty to allow automatic detection when not explicitly set
+  if (process.env.USDC_ISSUER && process.env.USDC_ISSUER.trim()) {
+    return process.env.USDC_ISSUER.trim();
+  }
+  // Auto-detect based on network
+  const selectedIssuer = network === 'testnet' ? USDC_ISSUERS.testnet : USDC_ISSUERS.mainnet;
+  console.log(`[StellarConfig] Auto-detected USDC issuer for ${network}: ${selectedIssuer}`);
+  return selectedIssuer;
+};
+
+/**
+ * Get the USDC Asset object for the current network
+ * @returns {Asset} USDC Asset configured for current network
+ */
+export const getUsdcAsset = () => {
+  return new Asset('USDC', getUsdcIssuer());
+};
+
 import { keyManager } from '../services/KeyManager.js';
 
 /**
@@ -190,8 +222,14 @@ export const buildUnsignedTransaction = async (sourcePublicKey, operations, opti
 export const submitSignedTransaction = async (signedXDR) => {
   const transaction = TransactionBuilder.fromXDR(signedXDR, getNetworkPassphrase());
 
+  // CRITICAL: Use a fresh server instance to avoid URL mutation issues
+  // The SDK modifies stellarServer.serverURL internally during operations,
+  // which can cause double /transactions path (405 errors)
+  const freshServer = createFreshServer();
+  console.log(`[submitSignedTransaction] Using fresh server: ${freshServer.serverURL}`);
+
   try {
-    const result = await stellarServer.submitTransaction(transaction);
+    const result = await freshServer.submitTransaction(transaction);
     return {
       success: true,
       hash: result.hash,
@@ -391,5 +429,7 @@ export default {
   buildUnsignedTransaction,
   submitSignedTransaction,
   signAndSubmitTransaction,
+  getUsdcIssuer,
+  getUsdcAsset,
 };
 

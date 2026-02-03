@@ -5,6 +5,7 @@ import {
     stellarServer,
     buildTransaction,
     createAsset,
+    getUsdcIssuer,
 } from '../config/stellar.js';
 import prisma from '../config/prisma.js';
 import { TransactionBuilder, Transaction, Networks as StellarNetworks, Operation, Asset } from '@stellar/stellar-sdk';
@@ -23,7 +24,9 @@ export const WalletController = {
 
             const statuses = await Promise.all(wallets.map(async (w) => {
                 try {
+                    console.log(`[WalletController] Loading ${w.name} account: ${w.keypair.publicKey()}`);
                     const account = await stellarServer.loadAccount(w.keypair.publicKey());
+                    console.log(`[WalletController] ${w.name} account loaded successfully`);
                     return {
                         name: w.name,
                         publicKey: w.keypair.publicKey(),
@@ -31,8 +34,17 @@ export const WalletController = {
                         exists: true,
                     };
                 } catch (error) {
+                    // Comprehensive 404 detection for different SDK versions
+                    const is404 =
+                        error.message === 'Not Found' ||
+                        (error.response && error.response.status === 404) ||
+                        error.name === 'NotFoundError' ||
+                        (error.response && error.response.data && error.response.data.status === 404);
+
                     console.error(`[WalletController] Error loading ${w.name} account:`, error.message);
-                    if (error.response && error.response.status === 404) {
+                    console.log(`[WalletController] Error details - name: ${error.name}, is404: ${is404}`);
+
+                    if (is404) {
                         return {
                             name: w.name,
                             publicKey: w.keypair.publicKey(),
@@ -63,7 +75,7 @@ export const WalletController = {
      */
     createTransactionProposal: async (req, res) => {
         try {
-            const { sourceWallet, destination, amount, assetCode, description } = req.body;
+            const { sourceWallet, destination, amount, assetCode, memo, description } = req.body;
             const adminId = req.user.id;
 
             let sourceKeypair;
@@ -173,27 +185,44 @@ export const WalletController = {
                         break;
                     default:
                         // Default to payment if no operationType is specified (backwards compatibility)
-                        if (assetCode !== 'XLM') {
-                            return res.status(400).json({ error: 'Only XLM transfers supported currently' });
+                        let paymentAsset;
+                        if (!assetCode || assetCode === 'XLM') {
+                            paymentAsset = Asset.native();
+                        } else if (assetCode === 'USDC') {
+                            paymentAsset = new Asset('USDC', getUsdcIssuer());
+                        } else {
+                            return res.status(400).json({ error: `Unsupported asset: ${assetCode}. Use XLM or USDC.` });
                         }
 
                         operation = Operation.payment({
                             destination: destination,
-                            asset: Asset.native(),
+                            asset: paymentAsset,
                             amount: amount.toString(),
                         });
                 }
 
-                transaction = new TransactionBuilder(sourceAccount, {
+                let txBuilder = new TransactionBuilder(sourceAccount, {
                     fee: '100', // Base fee
                     networkPassphrase: process.env.STELLAR_NETWORK === 'public' ? StellarNetworks.PUBLIC : StellarNetworks.TESTNET,
                 })
                     .addOperation(operation)
-                    .setTimeout(24 * 60 * 60) // 24 hours for multisig
-                    .build();
+                    .setTimeout(24 * 60 * 60); // 24 hours for multisig
+
+                // Add memo if provided
+                if (memo && memo.trim()) {
+                    const { Memo } = await import('@stellar/stellar-sdk');
+                    txBuilder = txBuilder.addMemo(Memo.text(memo.trim().substring(0, 28)));
+                }
+
+                transaction = txBuilder.build();
             }
 
             const xdr = transaction.toEnvelope().toXDR('base64');
+
+            // Determine required signers based on key management mode
+            // In dev mode (KEY_MANAGEMENT_MODE=env), the source wallet's public key is the signer
+            const requiredSigners = [sourceKeypair.publicKey()];
+            const thresholdRequired = 1;
 
             const proposal = await prisma.multiSigTransaction.create({
                 data: {
@@ -201,6 +230,8 @@ export const WalletController = {
                     description,
                     initiatorId: adminId,
                     status: 'pending',
+                    requiredSigners,
+                    thresholdRequired,
                     networkPassphrase: process.env.STELLAR_NETWORK === 'public' ? 'Public Global Stellar Network ; September 2015' : 'Test SDF Network ; September 2015',
                     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
                 }

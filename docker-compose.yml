@@ -62,7 +62,9 @@ services:
       TREASURY_PUBLIC_KEY: ${TREASURY_PUBLIC_KEY}
       # Token Details
       # ASSET_CODE and ASSET_SUPPLY removed - using offer-specific assets
-      USDC_ISSUER: ${USDC_ISSUER:-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN}
+      # USDC_ISSUER is auto-detected based on STELLAR_NETWORK (testnet/mainnet)
+      # Set explicitly only if using a custom USDC issuer
+      USDC_ISSUER: ${USDC_ISSUER:-}
       # Security
       JWT_SECRET: ${JWT_SECRET:-change_this_in_production}
       API_KEY: ${API_KEY}

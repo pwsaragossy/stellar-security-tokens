@@ -45,6 +45,7 @@ export const walletsApi = {
         destination: string;
         amount: string;
         assetCode?: string;
+        memo?: string;
         description: string;
     }) => {
         const response = await api.post('/wallets/transactions', data);
