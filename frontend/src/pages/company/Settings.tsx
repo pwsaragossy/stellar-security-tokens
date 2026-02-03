@@ -19,6 +19,11 @@ export function Settings() {
     const [addingPasskey, setAddingPasskey] = useState(false);
     const [removingPasskeyId, setRemovingPasskeyId] = useState<number | null>(null);
 
+    // Ledger recovery management
+    const { connect: connectLedger, isConnecting: ledgerConnecting, isSupported: ledgerSupported, error: ledgerError, clearError: clearLedgerError } = useLedger();
+    const { signers: recoverySigners, isLoading: signersLoading, addSigner: addRecoverySigner, removeSigner: removeRecoverySigner, isAdding: addingRecovery, isRemoving: removingRecovery } = useRecoverySigners();
+    const [removingSignerId, setRemovingSignerId] = useState<number | null>(null);
+
     const [formData, setFormData] = useState({
         address: '',
         phone: '',
