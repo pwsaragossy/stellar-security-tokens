@@ -42,6 +42,13 @@ services:
 
   tunnel:
     image: cloudflare/cloudflared:latest
-    command: tunnel --url http://frontend:80
+    command: tunnel run radox-dev
+    volumes:
+      - /Users/pedrosaragossy/.cloudflared:/etc/cloudflared
+    environment:
+      TUNNEL_ORIGIN_CERT: /etc/cloudflared/cert.pem
     networks:
       - stellar_network
+    depends_on:
+      - frontend
+      - backend
