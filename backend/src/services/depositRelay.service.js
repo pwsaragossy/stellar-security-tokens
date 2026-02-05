@@ -22,11 +22,30 @@ export class DepositRelayService {
             throw new Error('Investor not found');
         }
 
-        // Generate a unique memo for this deposit
-        // Format: DEP-<8 random hex chars> (total ~12 chars)
+        // Generate a deterministic memo for this investor
+        // Format: DEP-<8 hex chars from hash> (total 12 chars)
         // Stellar Text Memo limit is 28 chars.
-        const randomSuffix = crypto.randomBytes(4).toString('hex').toUpperCase();
-        const memo = `${this.MEMO_PREFIX}${randomSuffix}`;
+        // Using investor ID ensures the same memo is always generated for the same investor.
+        const hash = crypto.createHash('sha256').update(`investor-${investorId}`).digest('hex');
+        const memoSuffix = hash.substring(0, 8).toUpperCase();
+        const memo = `${this.MEMO_PREFIX}${memoSuffix}`;
+
+        // Check if there's already an active (pending) deposit for this investor
+        const existingDeposit = await prisma.deposit.findFirst({
+            where: {
+                investorId: investor.id,
+                memo,
+                status: 'pending'
+            }
+        });
+
+        if (existingDeposit) {
+            // Return the existing pending deposit
+            return {
+                ...existingDeposit,
+                treasuryAddress: process.env.TREASURY_PUBLIC_KEY
+            };
+        }
 
         const expiresAt = new Date();
         expiresAt.setMinutes(expiresAt.getMinutes() + this.EXPIRE_MINUTES);
