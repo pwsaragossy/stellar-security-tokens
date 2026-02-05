@@ -52,7 +52,38 @@ app.use(helmet({
         },
     },
 }));
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
+// CORS: Support multiple origins (comma-separated in FRONTEND_URL)
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
+    .split(',')
+    .map(origin => origin.trim());
+
+// In development, also allow common localhost variants
+if (process.env.NODE_ENV !== 'production') {
+    allowedOrigins.push('http://localhost:5173', 'http://localhost:80', 'http://localhost');
+}
+
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin) return callback(null, true);
+
+        // Check if origin matches any allowed origin (including wildcard subdomains for tunnels)
+        const isAllowed = allowedOrigins.some(allowed => {
+            if (allowed.includes('trycloudflare.com') && origin.includes('trycloudflare.com')) {
+                return true; // Allow any cloudflare tunnel
+            }
+            return allowed === origin;
+        });
+
+        if (isAllowed) {
+            callback(null, true);
+        } else {
+            console.warn(`[CORS] Blocked origin: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
+}));
 app.use(hpp()); // HTTP Parameter Pollution protection
 app.use(morgan('combined'));
 app.use(express.json({ limit: '100kb' })); // Limit body size to prevent large payload attacks
