@@ -1,7 +1,10 @@
 import prisma from '../config/prisma.js';
 import { TransactionBuilder, Keypair } from '@stellar/stellar-sdk';
 import { getNetworkPassphrase, stellarServer } from '../config/stellar.js';
+import logger from '../utils/logger.js';
 
+// Scoped logger for this service
+const log = logger.scope('MultiSig');
 /**
  * MultiSig Transaction Service
  * 
@@ -65,7 +68,7 @@ export class MultiSigTransactionService {
             },
         });
 
-        console.log(`[MultiSig] Created pending TX #${tx.id} (${operationType}) - requires ${thresholdRequired} of ${requiredSigners.length} signatures`);
+        log.info(`Created pending TX #${tx.id} (${operationType}) - requires ${thresholdRequired} of ${requiredSigners.length} signatures`);
 
         // Broadcast new transaction to Pusher
         const { broadcast } = await import('../config/pusher.js');
@@ -160,7 +163,7 @@ export class MultiSigTransactionService {
                 throw new Error('Invalid signature: verification failed');
             }
         } catch (verificationError) {
-            console.error(`[MultiSig] Cryptographic verification failed for TX #${txId}:`, verificationError.message);
+            log.error(`Cryptographic verification failed for TX #${txId}: ${verificationError.message}`);
             throw new Error(`Signature verification failed: ${verificationError.message}`);
         }
 
@@ -189,7 +192,7 @@ export class MultiSigTransactionService {
             },
         });
 
-        console.log(`[MultiSig] TX #${txId}: Signature added from ${publicKey.slice(0, 8)}... (${signatureCount}/${tx.thresholdRequired})`);
+        log.info(`TX #${txId}: Signature added from ${publicKey.slice(0, 8)}... (${signatureCount}/${tx.thresholdRequired})`);
 
         // Broadcast signature update to Pusher
         const { broadcast } = await import('../config/pusher.js');
@@ -264,7 +267,7 @@ export class MultiSigTransactionService {
                 },
             });
 
-            console.log(`[MultiSig] TX #${txId} executed successfully: ${result.hash}`);
+            log.info(`TX #${txId} executed successfully: ${result.hash}`);
 
             // Broadcast execution success to Pusher
             const { broadcast } = await import('../config/pusher.js');
@@ -295,7 +298,7 @@ export class MultiSigTransactionService {
                 },
             });
 
-            console.error(`[MultiSig] TX #${txId} failed:`, errorMessage);
+            log.error(`TX #${txId} failed: ${errorMessage}`);
 
             return {
                 success: false,
@@ -329,7 +332,7 @@ export class MultiSigTransactionService {
             },
         });
 
-        console.log(`[MultiSig] TX #${txId} rejected: ${reason || 'No reason provided'}`);
+        log.info(`TX #${txId} rejected: ${reason || 'No reason provided'}`);
 
         return updated;
     }
@@ -367,7 +370,7 @@ export class MultiSigTransactionService {
         });
 
         if (result.count > 0) {
-            console.log(`[MultiSig] Expired ${result.count} pending transactions`);
+            log.info(`Expired ${result.count} pending transactions`);
         }
 
         return result.count;
@@ -400,7 +403,7 @@ export class MultiSigTransactionService {
      */
     static async processEffects(tx) {
         const { operationType, metadata, txHash } = tx;
-        console.log(`[MultiSig] Processing effects for TX #${tx.id} (${operationType})`);
+        log.debug(`Processing effects for TX #${tx.id} (${operationType})`);
 
         try {
             switch (operationType) {
@@ -424,7 +427,7 @@ export class MultiSigTransactionService {
                             where: { id: parseInt(metadata.offerId) },
                             data: { status: 'active' }
                         });
-                        console.log(`[MultiSig] Offer #${metadata.offerId} set to ACTIVE`);
+                        log.info(`Offer #${metadata.offerId} set to ACTIVE`);
                     }
                     break;
 
@@ -475,21 +478,21 @@ export class MultiSigTransactionService {
                                 })
                             )
                         );
-                        console.log(`[MultiSig] Recorded ${metadata.payments.length} interest payments for ${txHash}`);
+                        log.info(`Recorded ${metadata.payments.length} interest payments for ${txHash}`);
                     }
                     break;
 
                 case 'disable_clawback':
                     // If we had a flag in the DB for this, we would update it here.
                     // Since it's on-chain only, we just log it.
-                    console.log(`[MultiSig] Clawback disabled on-chain for ${metadata.investorPublicKey} / ${metadata.assetCode}`);
+                    log.debug(`Clawback disabled on-chain for ${metadata.investorPublicKey} / ${metadata.assetCode}`);
                     break;
 
                 default:
-                    console.log(`[MultiSig] No post-execution hooks for ${operationType}`);
+                    log.debug(`No post-execution hooks for ${operationType}`);
             }
         } catch (error) {
-            console.error(`[MultiSig] Hook Error for TX #${tx.id}:`, error.message);
+            log.error(`Hook Error for TX #${tx.id}: ${error.message}`);
             // We catch but don't rethrow to avoid breaking the transaction submission record update
         }
     }

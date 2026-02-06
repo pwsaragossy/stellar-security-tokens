@@ -8,7 +8,10 @@ import { PaymentService } from './payment.service.js';
 import { EmailService } from './email.service.js';
 import { Keypair, Asset, Operation, TransactionBuilder, Networks } from '@stellar/stellar-sdk';
 import { getUsdcIssuer } from '../config/stellar.js';
+import logger from '../utils/logger.js';
 
+// Scoped logger for this service
+const log = logger.scope('CompanyPayment');
 // Configuration
 const PLATFORM_FEE_PERCENT = 0.01; // 1% MVP
 const LATE_FEE_PERCENT_PER_DAY = 0.001; // 0.1% per day
@@ -158,7 +161,7 @@ export class CompanyPaymentService {
             const totalTokensHeld = breakdown.reduce((sum, b) => sum + b.tokenBalance, 0);
             const totalOwed = breakdown.reduce((sum, b) => sum + b.interestOwed, 0);
 
-            console.log(`[CompanyPayment] On-chain calculation for offer ${offer.id}:`, {
+            log.debug(`On-chain calculation for offer ${offer.id}:`, {
                 investorCount: breakdown.length,
                 totalTokensHeld,
                 totalOwed,
@@ -182,7 +185,7 @@ export class CompanyPaymentService {
                 breakdown
             };
         } catch (error) {
-            console.error(`[CompanyPayment] Error calculating on-chain owed amount for offer ${offer.id}:`, error);
+            log.error(`Error calculating on-chain owed amount for offer ${offer.id}:`, error);
             throw new Error(`Failed to calculate on-chain balances: ${error.message}`);
         }
     }
@@ -319,7 +322,7 @@ export class CompanyPaymentService {
             const totalInterestOwed = Math.round(totalInterest * 100) / 100;
             const totalPayout = totalTokensHeld + totalInterestOwed;
 
-            console.log(`[CompanyPayment] On-chain bullet calculation for offer ${offer.id}:`, {
+            log.debug(`On-chain bullet calculation for offer ${offer.id}:`, {
                 investorCount: breakdown.length,
                 totalTokensHeld,
                 totalInterest: totalInterestOwed,
@@ -341,7 +344,7 @@ export class CompanyPaymentService {
                 breakdown
             };
         } catch (error) {
-            console.error(`[CompanyPayment] Error calculating on-chain bullet payment for offer ${offer.id}:`, error);
+            log.error(`Error calculating on-chain bullet payment for offer ${offer.id}:`, error);
             throw new Error(`Failed to calculate on-chain bullet payment: ${error.message}`);
         }
     }
@@ -402,7 +405,7 @@ export class CompanyPaymentService {
         // Platform fee goes to platform wallet
         // Company proceeds go to company wallet
 
-        console.log(`[CompanyPayment] Token sale processed:`, {
+        log.info(`Token sale processed:`, {
             investorId,
             offerId,
             totalPaid: usdcAmount,
@@ -525,7 +528,7 @@ export class CompanyPaymentService {
                     });
                 }
 
-                console.log(`[CompanyPayment] Payment processed successfully`, {
+                log.info(`Payment processed successfully`, {
                     offerId,
                     transactionHash: result.transactionHash,
                     investorsPaid: paymentDetails.breakdown.length,
@@ -542,7 +545,7 @@ export class CompanyPaymentService {
                 throw new Error(result.error || 'Transaction failed');
             }
         } catch (error) {
-            console.error(`[CompanyPayment] Payment failed`, { offerId, error: error.message });
+            log.error(`Payment failed`, { offerId, error: error.message });
             throw error;
         }
     }
@@ -596,7 +599,7 @@ export class CompanyPaymentService {
                     }
                 });
 
-                console.log(`[CompanyPayment] DEFAULT: Offer ${offer.id} defaulted after ${daysOverdue} days`);
+                log.warn(`DEFAULT: Offer ${offer.id} defaulted after ${daysOverdue} days`);
 
             } else if (daysOverdue > 0) {
                 // Apply daily late fee
@@ -684,18 +687,18 @@ export class CompanyPaymentService {
                     }
                 });
 
-                console.log(`[CompanyPayment] BULLET DEFAULT: Offer ${offer.id} defaulted ${daysOverdue} days after maturity`);
+                log.warn(`BULLET DEFAULT: Offer ${offer.id} defaulted ${daysOverdue} days after maturity`);
 
             } else if (daysOverdue > 0) {
                 // Mark as overdue (maturity passed, grace period active)
                 newStatus = 'overdue';
 
                 // Notify company about matured bullet payment
-                console.log(`[CompanyPayment] BULLET DUE: Offer ${offer.id} matured ${daysOverdue} days ago`);
+                log.info(`BULLET DUE: Offer ${offer.id} matured ${daysOverdue} days ago`);
             } else if (daysOverdue === 0) {
                 // Maturity day - mark as due
                 newStatus = 'due';
-                console.log(`[CompanyPayment] BULLET MATURED: Offer ${offer.id} reached maturity today`);
+                log.info(`BULLET MATURED: Offer ${offer.id} reached maturity today`);
             }
 
             // Update offer status

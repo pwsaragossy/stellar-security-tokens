@@ -1,7 +1,7 @@
 ---
 tags: [audit, deprecation, maintenance]
 status: verified
-last_verified: 2026-02-05
+last_verified: 2026-02-06
 ---
 
 # Deprecation Audit Report
@@ -12,21 +12,50 @@ last_verified: 2026-02-05
 
 ## Executive Summary
 
-| Category | Count | Severity |
-|----------|-------|----------|
-| Actionable TODOs | 4 | 🟡 Medium |
-| Console.log in production | ~50+ | 🟡 Medium |
-| Duplicate/Redundant Files | 0 | ✅ None |
-| Deprecated Code Markers | 0 | ✅ None |
-| Orphaned Files | 0 | ✅ None |
+| Category | Status | Notes |
+|----------|--------|-------|
+| Actionable TODOs | 4 remaining | 🟡 Medium priority |
+| Console.log in production | ✅ **COMPLETE** | All services migrated |
+| Duplicate/Redundant Files | ✅ None | Verified |
+| Env Templates | ✅ **FIXED** | Consolidated |
+| Deprecated Code Markers | ✅ None | Clean |
+| Orphaned Files | ✅ None | Clean |
 
-**Overall Assessment**: 🟢 Codebase is clean with no major deprecated code.
+**Overall Assessment**: 🟢 Logger infrastructure complete. All production services migrated.
 
 ---
 
-## 1. Actionable TODOs
+## ✅ Completed Fixes (2026-02-05)
 
-These represent incomplete features that should be addressed:
+### 1. Logger Utility Created
+**File**: `backend/src/utils/logger.js`
+
+- Scoped loggers: `logger.scope('ServiceName')`
+- 4 levels: `error`, `warn`, `info`, `debug`
+- JSON output in production, human-readable in dev
+- Configurable via `LOG_LEVEL` env var
+
+### 2. Services Migrated to Logger
+
+| Service | Calls Updated |
+|---------|---------------|
+| `paymentMonitor.service.js` | ~25 |
+| `KeyManager.js` | ~6 |
+| `multiSigTransaction.service.js` | ~13 |
+| `depositRelay.service.js` | ~7 |
+| `companyPayment.service.js` | ~11 |
+| `maintenance.service.js` | ~10 |
+| `passkeyWallet.service.js` | ~35 |
+| **Total** | **~107** |
+
+### 3. Env Templates Consolidated
+- Merged `.env.production.example` + `.env.production.template`
+- Single consolidated template: `.env.production.template`
+- Added `LOG_LEVEL` and `KEY_MANAGEMENT_MODE` settings
+
+---
+
+## 🟡 Remaining TODOs
 
 ### Backend TODOs
 
@@ -36,94 +65,48 @@ These represent incomplete features that should be addressed:
 | `companyController.js` | 202-203 | Send registration email/notification to admins | Medium |
 | `offerController.js` | 916 | Save stellar.toml to web server | Low |
 
-### Recommendation
-- **Email notifications**: Should be implemented for company registration flow
-- **TOML saving**: Currently handled via Pinata but manual save may be needed
+---
+
+## 📋 Next Steps
+
+| Action | Priority | Effort | Status |
+|--------|----------|--------|--------|
+| ~~Create logger utility~~ | ~~Low~~ | ~~1h~~ | ✅ Done |
+| ~~Consolidate env templates~~ | ~~Low~~ | ~~15min~~ | ✅ Done |
+| ~~Migrate all services to logger~~ | ~~Low~~ | ~~2h~~ | ✅ Done |
+| ~~Delete old `.env.production.example`~~ | ~~Low~~ | ~~Manual~~ | ✅ Done |
+| Implement company registration emails | Medium | 2h | Pending |
+
+All production services now use the centralized logger utility.
 
 ---
 
-## 2. Console.log Usage
+## Verified Clean Areas
 
-Found ~50+ `console.log` statements in production services:
+### ✅ No Duplicate Hooks
+- `usePasskey.ts` (signing) vs `usePasskeys.ts` (device mgmt) — both needed
 
-### Services with Console.log
+### ✅ No Orphaned Tests
+All test files correspond to active source files.
 
-| Service | Approx Count | Purpose |
-|---------|--------------|---------|
-| `paymentMonitor.service.js` | ~15 | Stream debugging |
-| `multiSigTransaction.service.js` | ~10 | TX lifecycle |
-| `depositRelay.service.js` | ~5 | Relay debugging |
-| `companyPayment.service.js` | ~8 | Payment processing |
-| `maintenance.service.js` | ~6 | TTL maintenance |
-| `KeyManager.js` | ~4 | Initialization |
-
-### Recommendation
-- **Action**: Replace with proper logging (e.g., `logger.info()`)
-- **Exception**: Keep for development/debugging if intentional
-- **Priority**: Low (operational logging, not noise)
+### ✅ No Deprecated Code Markers
+No `@deprecated` or DEPRECATED comments found.
 
 ---
 
-## 3. Potential Duplicates (False Positive)
-
-### `usePasskey.ts` vs `usePasskeys.ts`
-
-Upon investigation, these are **NOT duplicates**:
-
-| File | Purpose | Usage |
-|------|---------|-------|
-| `usePasskey.ts` (18 lines) | Simple transaction signing wrapper | Used in 2 pages |
-| `usePasskeys.ts` (194 lines) | Multi-device passkey management (add/remove/list) | Settings page |
-
-**Verdict**: ✅ Both are necessary and serve different purposes.
-
----
-
-## 4. Stale Comments (HACK)
-
-Found 1 HACK comment:
+## Logger Usage Guide
 
 ```javascript
-// ipfs.service.js:67
-// We attach the name via a File object construction or hacked blob if File is not global
+import logger from '../utils/logger.js';
+const log = logger.scope('MyService');
+
+log.info('Processing payment', { amount: 100 });
+log.warn('Rate limited, retrying...');
+log.error('Failed to process', error);
+log.debug('Detailed info'); // Only shown if LOG_LEVEL=debug
 ```
 
-**Verdict**: This is a legitimate workaround for Node.js File API compatibility, not technical debt.
-
----
-
-## 5. Environment Files
-
-| File | Status | Notes |
-|------|--------|-------|
-| `.env` | Active | Main config |
-| `.env.example` | Needed | Template |
-| `.env.development` | Active | Dev overrides |
-| `.env.production` | Active | Prod config |
-| `.env.production.example` | ⚠️ Consider merge | Could merge with `.env.production.template` |
-| `.env.production.template` | ⚠️ Consider merge | Redundant with above |
-
-### Recommendation
-Consolidate `.env.production.example` and `.env.production.template` into a single template.
-
----
-
-## 6. Orphaned Test Files
-
-No orphaned tests detected. All test files in `backend/tests/` correspond to active source files.
-
----
-
-## Summary Actions
-
-| Action | Priority | Effort |
-|--------|----------|--------|
-| Implement company registration emails | Medium | 2h |
-| Replace console.log with proper logger | Low | 4h |
-| Consolidate .env.production templates | Low | 15min |
-
----
-
-## Conclusion
-
-The codebase is in **good health** with no critical deprecated code or orphaned files. The few TODOs are feature-related rather than technical debt. Console.log usage is primarily for operational visibility and can be addressed gradually.
+Production output (JSON):
+```json
+{"timestamp":"2026-02-06T09:00:00.000Z","level":"info","component":"MyService","message":"Processing payment","meta":{"amount":100}}
+```

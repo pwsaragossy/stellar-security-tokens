@@ -15,7 +15,10 @@ import {
   FeeBumpTransaction
 } from '@stellar/stellar-sdk';
 import { StellarService } from './stellar.service.js';
+import logger from '../utils/logger.js';
 
+// Scoped logger for this service
+const log = logger.scope('PasskeyWallet');
 /**
  * Supported user types for passkey wallet
  */
@@ -129,7 +132,7 @@ export class PasskeyWalletService {
         .build();
 
       // Soroban Simulation & Preparation
-      console.log('[PasskeyWalletService] Simulating Smart Wallet deployment...');
+      log.info('Simulating Smart Wallet deployment...');
       tx = await StellarService.prepareSorobanTransaction(tx);
 
       tx.sign(issuerKeypair);
@@ -142,8 +145,8 @@ export class PasskeyWalletService {
           throw new Error('No hash returned from Launchtube');
         }
       } catch (launchtubeError) {
-        console.log('[PasskeyWalletService] Launchtube failed during deploySmartWallet:', launchtubeError.message);
-        console.log('[PasskeyWalletService] Attempting self-sponsorship fallback for deployment...');
+        log.warn(`Launchtube failed during deploySmartWallet: ${launchtubeError.message}`);
+        log.info('Attempting self-sponsorship fallback for deployment...');
         result = await this.submitWithSponsorship(tx.toXDR());
       }
 
@@ -172,7 +175,7 @@ export class PasskeyWalletService {
       };
 
     } catch (error) {
-      console.error('Error deploying smart wallet:', error);
+      log.error('Error deploying smart wallet:', error);
       throw new Error(`Smart wallet deployment failed: ${error.message}`);
     }
   }
@@ -255,8 +258,8 @@ export class PasskeyWalletService {
           throw new Error('No hash returned from Launchtube');
         }
       } catch (launchtubeError) {
-        console.log('[PasskeyWalletService] Launchtube failed during createSmartWallet:', launchtubeError.message);
-        console.log('[PasskeyWalletService] Attempting self-sponsorship fallback for creation...');
+        log.warn(`Launchtube failed during createSmartWallet: ${launchtubeError.message}`);
+        log.info('Attempting self-sponsorship fallback for creation...');
         result = await this.submitWithSponsorship(tx.toXDR());
       }
 
@@ -315,7 +318,7 @@ export class PasskeyWalletService {
       };
 
     } catch (error) {
-      console.error('Error creating smart wallet:', error);
+      log.error('Error creating smart wallet:', error);
       throw new Error(`Smart wallet creation failed: ${error.message}`);
     }
   }
@@ -407,7 +410,7 @@ export class PasskeyWalletService {
         signedAuth,
       };
     } catch (error) {
-      console.error('Error signing transaction:', error);
+      log.error('Error signing transaction:', error);
       throw new Error(`Transaction signing failed: ${error.message}`);
     }
   }
@@ -469,9 +472,9 @@ export class PasskeyWalletService {
         ledger: result.ledger,
       };
     } catch (error) {
-      console.error('Error sending transaction via Launchtube:', error.message);
+      log.error(`Error sending transaction via Launchtube: ${error.message}`);
       // Fallback to self-sponsorship if Launchtube fails
-      console.log('[PasskeyWalletService] Launchtube failed or unreachable, attempting self-sponsorship fallback...');
+      log.info('Launchtube failed or unreachable, attempting self-sponsorship fallback...');
       return this.submitWithSponsorship(transaction);
     }
   }
@@ -502,9 +505,9 @@ export class PasskeyWalletService {
 
       // 2. Wrap in Fee Bump Transaction
       // Note: We use a slightly higher fee or double the base fee to ensure priority
-      console.log('[PasskeyWalletService] Inner TX source:', innerTx.source);
-      console.log('[PasskeyWalletService] Inner TX operations count:', innerTx.operations?.length);
-      console.log('[PasskeyWalletService] Operations keypair:', operationsKeypair.publicKey());
+      log.debug(`Inner TX source: ${innerTx.source}`);
+      log.debug(`Inner TX operations count: ${innerTx.operations?.length}`);
+      log.debug(`Operations keypair: ${operationsKeypair.publicKey()}`);
 
       // Calculate dynamic fee for Fee Bump
       // For Soroban, the inner transaction fee is significantly higher.
@@ -522,8 +525,8 @@ export class PasskeyWalletService {
       feeBumpTx.sign(operationsKeypair);
 
       // 4. Submit directly to Horizon
-      console.log('[PasskeyWalletService] Submitting self-sponsored fee bump to Horizon...');
-      console.log('[PasskeyWalletService] Fee bump source:', feeBumpTx.feeSource);
+      log.info('Submitting self-sponsored fee bump to Horizon...');
+      log.debug(`Fee bump source: ${feeBumpTx.feeSource}`);
 
       // RUNTIME FIX: Ensure URL doesn't have /transactions (SDK appends it)
       let targetServer = stellarServer;
@@ -531,14 +534,14 @@ export class PasskeyWalletService {
         if (targetServer.serverURL) {
           const urlStr = targetServer.serverURL.toString();
           if (urlStr.includes('/transactions')) {
-            console.warn('[PasskeyWalletService] DETECTED MALFORMED URL:', urlStr);
+            log.warn(`DETECTED MALFORMED URL: ${urlStr}`);
             const { createFreshServer } = await import('../config/stellar.js');
             targetServer = createFreshServer();
-            console.warn('[PasskeyWalletService] Using fresh server');
+            log.info('Using fresh server');
           }
         }
       } catch (urlErr) {
-        console.error('[PasskeyWalletService] Error checking URL:', urlErr);
+        log.error('Error checking URL:', urlErr);
       }
 
       const result = await targetServer.submitTransaction(feeBumpTx);
@@ -550,7 +553,7 @@ export class PasskeyWalletService {
         sponsored: true
       };
     } catch (error) {
-      console.error('Self-sponsorship failed:', error);
+      log.error('Self-sponsorship failed:', error);
       if (error.response && error.response.data) {
         const resultCodes = error.response.data.extras?.result_codes;
         const detail = error.response.data.detail || JSON.stringify(resultCodes);
@@ -679,7 +682,7 @@ export class PasskeyWalletService {
           result.explorer = `https://stellar.expert/explorer/${isTestnet() ? 'testnet' : 'public'}/account/${user.stellarContractId}`;
         }
       } catch (error) {
-        console.error('Failed to fetch wallet balances:', error);
+        log.error('Failed to fetch wallet balances:', error);
         // Don't fail the whole request, return zeros instead of error
         result.balances = {
           xlm: '0',
@@ -717,9 +720,9 @@ export class PasskeyWalletService {
 
     // Helper to query SAC balance
     const querySacBalance = async (sacContractId, walletAddress) => {
-      console.log(`[Balance Debug] Querying SAC: ${sacContractId} for wallet ${walletAddress}`);
+      log.debug(`Querying SAC: ${sacContractId} for wallet ${walletAddress}`);
       if (!sacContractId) {
-        console.log('[Balance Debug] Missing SAC Contract ID');
+        log.debug('Missing SAC Contract ID');
         return '0';
       }
 
@@ -750,13 +753,13 @@ export class PasskeyWalletService {
           const balanceRaw = scValToNative(balanceScVal);
           // Convert from stroops (7 decimals) to display value
           const balance = (Number(balanceRaw) / 10_000_000).toFixed(7);
-          console.log(`[Balance Debug] Success. Raw: ${balanceRaw}, Formatted: ${balance}`);
+          log.debug(`Success. Raw: ${balanceRaw}, Formatted: ${balance}`);
           return balance;
         } else {
-          console.log('[Balance Debug] Simulation returned no result:', JSON.stringify(simResult));
+          log.debug(`Simulation returned no result: ${JSON.stringify(simResult)}`);
         }
       } catch (err) {
-        console.log(`SAC balance query failed for ${sacContractId}:`, err.message);
+        log.debug(`SAC balance query failed for ${sacContractId}: ${err.message}`);
       }
       return '0';
     };
@@ -864,7 +867,7 @@ export class PasskeyWalletService {
       .build();
 
     // Soroban Simulation & Preparation
-    console.log('[PasskeyWalletService] Simulating withdrawal transaction...');
+    log.info('Simulating withdrawal transaction...');
     tx = await StellarService.prepareSorobanTransaction(tx);
 
     // Sign with issuer (sponsor)
@@ -1174,7 +1177,7 @@ export class PasskeyWalletService {
         transactionHash: result.hash,
       };
     } catch (error) {
-      console.error('Error adding passkey signer:', error);
+      log.error('Error adding passkey signer:', error);
       throw new Error(`Failed to add passkey: ${error.message}`);
     }
   }
@@ -1257,7 +1260,7 @@ export class PasskeyWalletService {
         remainingPasskeys: allPasskeys.length - 1,
       };
     } catch (error) {
-      console.error('Error removing passkey:', error);
+      log.error('Error removing passkey:', error);
       throw new Error(`Failed to remove passkey: ${error.message}`);
     }
   }
@@ -1272,7 +1275,7 @@ export class PasskeyWalletService {
         data: { lastUsedAt: new Date() },
       });
     } catch (error) {
-      console.error('Error updating passkey last used:', error);
+      log.error('Error updating passkey last used:', error);
     }
   }
 
@@ -1334,7 +1337,7 @@ export class PasskeyWalletService {
       if (error.code === 'P2021') {
         return [];
       }
-      console.error('Error listing Ed25519 signers:', error);
+      log.error('Error listing Ed25519 signers:', error);
       throw new Error(`Failed to list Ed25519 signers: ${error.message}`);
     }
   }
@@ -1408,7 +1411,7 @@ export class PasskeyWalletService {
         result = await server.send(tx);
         if (!result?.hash) throw new Error('No hash returned from transaction');
       } catch (sendError) {
-        console.log('[Ed25519Signer] Direct send failed, trying sponsorship:', sendError.message);
+        log.warn(`Direct send failed, trying sponsorship: ${sendError.message}`);
         result = await this.submitWithSponsorship(tx.toXDR());
       }
 
@@ -1421,7 +1424,7 @@ export class PasskeyWalletService {
         },
       });
 
-      console.log(`[Ed25519Signer] Added signer ${publicKey} for user ${userId}. TX: ${result.hash}`);
+      log.info(`Added signer ${publicKey} for user ${userId}. TX: ${result.hash}`);
 
       return {
         success: true,
@@ -1431,7 +1434,7 @@ export class PasskeyWalletService {
         transactionHash: result.hash,
       };
     } catch (error) {
-      console.error('Error adding Ed25519 signer:', error);
+      log.error('Error adding Ed25519 signer:', error);
       throw new Error(`Failed to add Ed25519 signer: ${error.message}`);
     }
   }
@@ -1500,7 +1503,7 @@ export class PasskeyWalletService {
       // Remove from database
       await prisma[signerModel].delete({ where: { id: signerId } });
 
-      console.log(`[Ed25519Signer] Removed signer ${signerToRemove.publicKey} for user ${userId}. TX: ${result.hash}`);
+      log.info(`Removed signer ${signerToRemove.publicKey} for user ${userId}. TX: ${result.hash}`);
 
       return {
         success: true,
@@ -1508,7 +1511,7 @@ export class PasskeyWalletService {
         transactionHash: result.hash,
       };
     } catch (error) {
-      console.error('Error removing Ed25519 signer:', error);
+      log.error('Error removing Ed25519 signer:', error);
       throw new Error(`Failed to remove Ed25519 signer: ${error.message}`);
     }
   }

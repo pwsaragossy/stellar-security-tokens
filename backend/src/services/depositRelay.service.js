@@ -1,8 +1,11 @@
 import prisma from '../config/prisma.js';
 import { StellarService } from './stellar.service.js';
 import { Asset, Operation, TransactionBuilder, Networks, Keypair } from '@stellar/stellar-sdk';
+import logger from '../utils/logger.js';
 import crypto from 'crypto';
 
+// Scoped logger for this service
+const log = logger.scope('DepositRelay');
 export class DepositRelayService {
     static MEMO_PREFIX = 'DEP-';
     static EXPIRE_MINUTES = 60 * 24; // 24 hours
@@ -74,7 +77,7 @@ export class DepositRelayService {
      * @param {string} assetCode - 'XLM' or 'USDC'
      */
     static async handleIncomingPayment(memoText, amount, txHash, assetCode = 'USDC') {
-        console.log(`[DepositRelay] Processing incoming payment: ${amount} ${assetCode}, memo: ${memoText}, tx: ${txHash}`);
+        log.info(`Processing incoming payment: ${amount} ${assetCode}, memo: ${memoText}, tx: ${txHash}`);
 
         const deposit = await prisma.deposit.findUnique({
             where: { memo: memoText },
@@ -82,12 +85,12 @@ export class DepositRelayService {
         });
 
         if (!deposit) {
-            console.warn(`[DepositRelay] No pending deposit found for memo ${memoText}`);
+            log.warn(`No pending deposit found for memo ${memoText}`);
             return;
         }
 
         if (deposit.status !== 'pending' && deposit.status !== 'received') {
-            console.warn(`[DepositRelay] Deposit ${deposit.id} is in status ${deposit.status}, skipping.`);
+            log.warn(`Deposit ${deposit.id} is in status ${deposit.status}, skipping.`);
             return;
         }
 
@@ -127,7 +130,7 @@ export class DepositRelayService {
             });
 
             const destination = deposit.investor.stellarContractId;
-            console.log(`[DepositRelay] Forwarding ${deposit.actualAmount} ${assetCode} to ${destination}`);
+            log.info(`Forwarding ${deposit.actualAmount} ${assetCode} to ${destination}`);
 
             // Use withdrawFromTreasury since the funds were deposited to Treasury
             // This method handles both XLM (native) and USDC correctly
@@ -147,7 +150,7 @@ export class DepositRelayService {
                         updatedAt: new Date()
                     }
                 });
-                console.log(`[DepositRelay] Deposit ${depositId} requires multisig approval.`);
+                log.info(`Deposit ${depositId} requires multisig approval.`);
                 return;
             }
 
@@ -164,10 +167,10 @@ export class DepositRelayService {
                 }
             });
 
-            console.log(`[DepositRelay] Deposit ${depositId} completed successfully. Hash: ${txResult.hash}`);
+            log.info(`Deposit ${depositId} completed successfully. Hash: ${txResult.hash}`);
 
         } catch (error) {
-            console.error(`[DepositRelay] Failed to forward ${assetCode} for deposit ${depositId}:`, error);
+            log.error(`Failed to forward ${assetCode} for deposit ${depositId}:`, error);
 
             await prisma.deposit.update({
                 where: { id: depositId },
