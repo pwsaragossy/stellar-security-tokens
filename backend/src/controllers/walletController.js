@@ -1,14 +1,21 @@
 import {
-    getTreasuryKeypair,
-    getIssuerKeypair,
-    getDistributorKeypair,
     stellarServer,
     buildTransaction,
     createAsset,
     getUsdcIssuer,
 } from '../config/stellar.js';
+import { keyManager } from '../services/KeyManager.js';
 import prisma from '../config/prisma.js';
 import { TransactionBuilder, Transaction, Networks as StellarNetworks, Operation, Asset } from '@stellar/stellar-sdk';
+
+/**
+ * Resolve wallet role name to its public key via KeyManager.
+ * Works in both `env` (dev) and `multisig` (prod) modes.
+ */
+function getWalletPublicKey(walletName) {
+    const role = walletName.toUpperCase();
+    return keyManager.getPublicKey(role);
+}
 
 export const WalletController = {
     /**
@@ -16,20 +23,21 @@ export const WalletController = {
      */
     getWalletStatuses: async (req, res) => {
         try {
-            const wallets = [
-                { name: 'Treasury', keypair: getTreasuryKeypair() },
-                { name: 'Issuer', keypair: getIssuerKeypair() },
-                { name: 'Distributor', keypair: getDistributorKeypair() },
+            const walletRoles = [
+                { name: 'Treasury', role: 'TREASURY' },
+                { name: 'Issuer', role: 'ISSUER' },
+                { name: 'Distributor', role: 'DISTRIBUTOR' },
             ];
 
-            const statuses = await Promise.all(wallets.map(async (w) => {
+            const statuses = await Promise.all(walletRoles.map(async (w) => {
+                const publicKey = keyManager.getPublicKey(w.role);
                 try {
-                    console.log(`[WalletController] Loading ${w.name} account: ${w.keypair.publicKey()}`);
-                    const account = await stellarServer.loadAccount(w.keypair.publicKey());
+                    console.log(`[WalletController] Loading ${w.name} account: ${publicKey}`);
+                    const account = await stellarServer.loadAccount(publicKey);
                     console.log(`[WalletController] ${w.name} account loaded successfully`);
                     return {
                         name: w.name,
-                        publicKey: w.keypair.publicKey(),
+                        publicKey,
                         balances: account.balances,
                         exists: true,
                     };
@@ -47,7 +55,7 @@ export const WalletController = {
                     if (is404) {
                         return {
                             name: w.name,
-                            publicKey: w.keypair.publicKey(),
+                            publicKey,
                             exists: false,
                             balances: [],
                         };
@@ -56,7 +64,7 @@ export const WalletController = {
                     console.error(`[WalletController] ${w.name} full error:`, error);
                     return {
                         name: w.name,
-                        publicKey: w.keypair.publicKey(),
+                        publicKey,
                         exists: false,
                         error: `Error loading account: ${error.message}`,
                     };
@@ -78,24 +86,24 @@ export const WalletController = {
             const { sourceWallet, destination, amount, assetCode, memo, description } = req.body;
             const adminId = req.user.id;
 
-            let sourceKeypair;
-            switch (sourceWallet.toLowerCase()) {
-                case 'treasury': sourceKeypair = getTreasuryKeypair(); break;
-                case 'issuer': sourceKeypair = getIssuerKeypair(); break;
-                case 'distributor': sourceKeypair = getDistributorKeypair(); break;
-                default: return res.status(400).json({ error: 'Invalid source wallet' });
+            // Resolve source wallet to public key only (no secret key needed for proposal building)
+            let sourcePublicKey;
+            const validWallets = ['treasury', 'issuer', 'distributor'];
+            if (!validWallets.includes(sourceWallet.toLowerCase())) {
+                return res.status(400).json({ error: 'Invalid source wallet' });
             }
+            sourcePublicKey = getWalletPublicKey(sourceWallet);
 
             // Check if source account exists and get fresh sequence from RPC
             let sourceAccount;
             try {
                 // Use RPC for sequence number safety (Hybrid Pattern)
                 const { StellarService } = await import('../services/stellar.service.js');
-                sourceAccount = await StellarService.getAccountRPC(sourceKeypair.publicKey());
+                sourceAccount = await StellarService.getAccountRPC(sourcePublicKey);
             } catch (e) {
                 console.warn('[WalletController] RPC fetch failed, falling back to Horizon check:', e.message);
                 try {
-                    sourceAccount = await stellarServer.loadAccount(sourceKeypair.publicKey());
+                    sourceAccount = await stellarServer.loadAccount(sourcePublicKey);
                 } catch (innerError) {
                     return res.status(400).json({ error: 'Source wallet not found on network' });
                 }
@@ -123,7 +131,7 @@ export const WalletController = {
 
                 const transferOp = xlmSac.call(
                     'transfer',
-                    nativeToScVal(sourceKeypair.publicKey(), { type: 'address' }),
+                    nativeToScVal(sourcePublicKey, { type: 'address' }),
                     nativeToScVal(destination, { type: 'address' }),
                     nativeToScVal(amountStroops, { type: 'i128' })
                 );
@@ -158,20 +166,20 @@ export const WalletController = {
                     case 'freeze_account':
                         operation = Operation.setTrustLineFlags({
                             trustor: destination,
-                            asset: createAsset(assetCode, getIssuerKeypair().publicKey()),
+                            asset: createAsset(assetCode, keyManager.getPublicKey('ISSUER')),
                             clearFlags: 1, // AUTHORIZED_FLAG = 1
                         });
                         break;
                     case 'unfreeze_account':
                         operation = Operation.setTrustLineFlags({
                             trustor: destination,
-                            asset: createAsset(assetCode, getIssuerKeypair().publicKey()),
+                            asset: createAsset(assetCode, keyManager.getPublicKey('ISSUER')),
                             setFlags: 1, // AUTHORIZED_FLAG = 1
                         });
                         break;
                     case 'clawback':
                         operation = Operation.clawback({
-                            asset: createAsset(assetCode, getIssuerKeypair().publicKey()),
+                            asset: createAsset(assetCode, keyManager.getPublicKey('ISSUER')),
                             from: destination,
                             amount: amount.toString(),
                         });
@@ -179,7 +187,7 @@ export const WalletController = {
                     case 'disable_clawback':
                         operation = Operation.setTrustLineFlags({
                             trustor: destination,
-                            asset: createAsset(assetCode, getIssuerKeypair().publicKey()),
+                            asset: createAsset(assetCode, keyManager.getPublicKey('ISSUER')),
                             clearFlags: 4, // AuthClawbackEnabledFlag = 4
                         });
                         break;
@@ -221,7 +229,7 @@ export const WalletController = {
 
             // Determine required signers based on key management mode
             // In dev mode (KEY_MANAGEMENT_MODE=env), the source wallet's public key is the signer
-            const requiredSigners = [sourceKeypair.publicKey()];
+            const requiredSigners = [sourcePublicKey];
             const thresholdRequired = 1;
 
             const proposal = await prisma.multiSigTransaction.create({
