@@ -15,7 +15,7 @@ export class TransactionManager {
      * 
      * @param {Object} params - Submission parameters
      * @param {Transaction} params.transaction - The built, unsigned Stellar transaction
-     * @param {Keypair} params.signingKeypair - The keypair that would sign (in ENV mode)
+     * @param {string} params.signingRole - Role for signing: 'ISSUER', 'DISTRIBUTOR', 'TREASURY', 'OPERATIONS'
      * @param {string} params.operationType - Type of operation for threshold checking (e.g., 'token_issue')
      * @param {Object} [params.metadata={}] - Context metadata for multisig records
      * @param {string} [params.description] - Description for admins in multisig queue
@@ -24,7 +24,7 @@ export class TransactionManager {
      */
     static async submit({
         transaction,
-        signingKeypair,
+        signingRole,
         operationType,
         metadata = {},
         description = null,
@@ -35,6 +35,7 @@ export class TransactionManager {
         if (!requiresMultisig) {
             // --- DIRECT SIGNING (ENV MODE) ---
             console.log(`[TransactionManager] Direct signing ${operationType} (Auto-signing enabled)`);
+            const signingKeypair = keyManager.getKeypairForRole(signingRole);
             return await signAndSubmitTransaction(transaction, signingKeypair);
         }
 

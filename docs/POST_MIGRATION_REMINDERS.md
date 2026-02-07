@@ -22,9 +22,12 @@ This document tracks items that need to be addressed **after** the initial Mainn
 
 ### 🌐 Frontend & Marketing
 - [ ] **Landing Page**: Develop a professional landing page for the main domain.
-- [ ] **Redirect**: The current "Functional App" should be a subdomain (e.g., `app.tokenizadora.com`).
+- [ ] **Redirect**: The current "Functional App" should be a subdomain (e.g., `app.radox.net`).
 
 ### 📦 Infrastructure
+- [ ] **Target: Google Cloud Platform** (Cloud Run or GCE for backend, Cloud SQL for Postgres, Memorystore for Redis).
+- [ ] **GCP Secret Manager**: Migrate Operations secret key from `.env` to Secret Manager (~$0.06/10k accesses). Use `@google-cloud/secret-manager` SDK in `KeyManager.js`.
+- [ ] **Operations Hot Wallet**: Only the Operations account keeps a secret key for automated tasks (wallet sponsorship, trustline auth). Fund with ~500 XLM buffer. Issuer/Treasury/Distributor stay cold (Freighter/multisig only).
 - [x] ~~**Pinata / IPFS**: Configured for production (`PINATA_JWT` in prod `.env`). Dev intentionally uses **MOCK MODE** via `docker-compose.dev.yml`.~~
 - [x] ~~**Pinata Routes**: Routing works in production. Dev "broken links" are expected (mock hashes).~~
 
@@ -53,7 +56,7 @@ This document tracks items that need to be addressed **after** the initial Mainn
 - [ ] **AlertService External Integrations**: Add Slack/Discord webhooks, Email, SMS for CRITICAL/ERROR alerts. Currently just logs. See [alert.service.js L44](file:///Users/pedrosaragossy/Workspace/Tokenizadora/stellar-security-tokens/backend/src/services/alert.service.js#L44).
 
 ## 4. Housekeeping
-- [x] ~~**Clean `.env`**: Created separate `.env.development` (testnet) and `.env.production` (mainnet template). Use `--env-file` flag with docker compose.~~
+- [x] ~~**Clean `.env`**: `.env` is the base dev config (multisig mode), `.env.tests` for test suite (env mode with all secrets), `.env.production` for mainnet. Docker Compose reads `.env` automatically.~~
 
 ## 5. Security Hardening
 - [x] ~~**Admin Seeding Scripts**: Added `NODE_ENV=production` check to `seed.js`, `checkAndCreateAdmin.js`, and `create_admin.js` — scripts now refuse to run in production. Use `createAdmin.js` with CLI args for prod.~~

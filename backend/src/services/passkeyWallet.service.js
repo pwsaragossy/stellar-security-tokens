@@ -1,5 +1,5 @@
 import { PasskeyServer } from 'passkey-kit';
-import { getNetworkPassphrase, getIssuerKeypair, getSorobanRpcUrl, isTestnet, getTreasuryKeypair } from '../config/stellar.js';
+import { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl, isTestnet, getTreasuryKeypair } from '../config/stellar.js';
 import prisma from '../config/prisma.js';
 import {
   Contract,
@@ -106,7 +106,7 @@ export class PasskeyWalletService {
       const server = this.getServer();
       const factoryContractId = process.env.FACTORY_CONTRACT_ID;
       const networkPassphrase = getNetworkPassphrase();
-      const issuerKeypair = getIssuerKeypair();
+      const opsKeypair = getOperationsKeypair();
 
       // 1. Prepare Arguments
       if (!credentialId) throw new Error('Credential ID is required for deployment');
@@ -124,7 +124,7 @@ export class PasskeyWalletService {
       );
 
       let tx = new TransactionBuilder(
-        await server.rpc.getAccount(issuerKeypair.publicKey()),
+        await server.rpc.getAccount(opsKeypair.publicKey()),
         { fee: BASE_FEE, networkPassphrase }
       )
         .addOperation(deployOp)
@@ -135,7 +135,7 @@ export class PasskeyWalletService {
       log.info('Simulating Smart Wallet deployment...');
       tx = await StellarService.prepareSorobanTransaction(tx);
 
-      tx.sign(issuerKeypair);
+      tx.sign(opsKeypair);
 
       // 3. Send via Launchtube (Sponsoring) with fallback
       let result;
@@ -218,7 +218,7 @@ export class PasskeyWalletService {
 
       const factoryContractId = process.env.FACTORY_CONTRACT_ID;
       const networkPassphrase = getNetworkPassphrase();
-      const issuerKeypair = getIssuerKeypair(); // Use issuer as source/signer for deployment tx
+      const opsKeypair = getOperationsKeypair(); // Use issuer as source/signer for deployment tx
 
       // 1. Prepare Arguments
       // credentialId is base64 string -> Buffer
@@ -237,7 +237,7 @@ export class PasskeyWalletService {
       );
 
       const tx = new TransactionBuilder(
-        await server.rpc.getAccount(issuerKeypair.publicKey()), // Fetch sequence from RPC using Server's connection (server extends Base which works with rpc)
+        await server.rpc.getAccount(opsKeypair.publicKey()), // Fetch sequence from RPC using Server's connection (server extends Base which works with rpc)
         // Wait, PasskeyServer extends PasskeyBase which has 'rpc'.
         // But getAccount needs Horizon or RPC? PasskeyBase takes rpcUrl. 
         // PasskeyBase from 'passkey-kit' usually wraps rpc. 
@@ -248,7 +248,7 @@ export class PasskeyWalletService {
         .setTimeout(30)
         .build();
 
-      tx.sign(issuerKeypair);
+      tx.sign(opsKeypair);
 
       // 3. Send via Launchtube (Sponsoring) with fallback
       let result;
@@ -841,7 +841,7 @@ export class PasskeyWalletService {
 
     // Build the transaction
     const networkPassphrase = getNetworkPassphrase();
-    const issuerKeypair = getIssuerKeypair(); // Sponsor/Source
+    const opsKeypair = getOperationsKeypair(); // Sponsor/Source
 
     // Function: transfer(from, to, amount)
     const walletAddress = Address.fromString(user.stellarContractId);
@@ -859,7 +859,7 @@ export class PasskeyWalletService {
     );
 
     let tx = new TransactionBuilder(
-      await server.rpc.getAccount(issuerKeypair.publicKey()),
+      await server.rpc.getAccount(opsKeypair.publicKey()),
       { fee: BASE_FEE, networkPassphrase }
     )
       .addOperation(transferOp)
@@ -871,7 +871,7 @@ export class PasskeyWalletService {
     tx = await StellarService.prepareSorobanTransaction(tx);
 
     // Sign with issuer (sponsor)
-    tx.sign(issuerKeypair);
+    tx.sign(opsKeypair);
 
     return {
       xdr: tx.toXDR(),
@@ -961,7 +961,7 @@ export class PasskeyWalletService {
 
     // Build the transaction
     const networkPassphrase = getNetworkPassphrase();
-    const issuerKeypair = getIssuerKeypair();
+    const opsKeypair = getOperationsKeypair();
 
     const walletAddress = Address.fromString(company.stellarContractId);
     const destination = Address.fromString(destinationAddress);
@@ -977,14 +977,14 @@ export class PasskeyWalletService {
     );
 
     const tx = new TransactionBuilder(
-      await server.rpc.getAccount(issuerKeypair.publicKey()),
+      await server.rpc.getAccount(opsKeypair.publicKey()),
       { fee: BASE_FEE, networkPassphrase }
     )
       .addOperation(transferOp)
       .setTimeout(180)
       .build();
 
-    tx.sign(issuerKeypair);
+    tx.sign(opsKeypair);
 
     return {
       xdr: tx.toXDR(),
@@ -1131,7 +1131,7 @@ export class PasskeyWalletService {
       const walletContract = new Contract(user.stellarContractId);
       const server = this.getServer();
       const networkPassphrase = getNetworkPassphrase();
-      const issuerKeypair = getIssuerKeypair();
+      const opsKeypair = getOperationsKeypair();
 
       const addSignerOp = walletContract.call(
         'add_sig',
@@ -1140,7 +1140,7 @@ export class PasskeyWalletService {
       );
 
       let tx = new TransactionBuilder(
-        await server.rpc.getAccount(issuerKeypair.publicKey()),
+        await server.rpc.getAccount(opsKeypair.publicKey()),
         { fee: BASE_FEE, networkPassphrase }
       )
         .addOperation(addSignerOp)
@@ -1148,7 +1148,7 @@ export class PasskeyWalletService {
         .build();
 
       tx = await StellarService.prepareSorobanTransaction(tx);
-      tx.sign(issuerKeypair);
+      tx.sign(opsKeypair);
 
       // 5. Send transaction
       let result;
@@ -1224,7 +1224,7 @@ export class PasskeyWalletService {
       const walletContract = new Contract(user.stellarContractId);
       const server = this.getServer();
       const networkPassphrase = getNetworkPassphrase();
-      const issuerKeypair = getIssuerKeypair();
+      const opsKeypair = getOperationsKeypair();
 
       const removeSignerOp = walletContract.call(
         'rm_sig',
@@ -1232,7 +1232,7 @@ export class PasskeyWalletService {
       );
 
       let tx = new TransactionBuilder(
-        await server.rpc.getAccount(issuerKeypair.publicKey()),
+        await server.rpc.getAccount(opsKeypair.publicKey()),
         { fee: BASE_FEE, networkPassphrase }
       )
         .addOperation(removeSignerOp)
@@ -1240,7 +1240,7 @@ export class PasskeyWalletService {
         .build();
 
       tx = await StellarService.prepareSorobanTransaction(tx);
-      tx.sign(issuerKeypair);
+      tx.sign(opsKeypair);
 
       let result;
       try {
@@ -1384,7 +1384,7 @@ export class PasskeyWalletService {
       const walletContract = new Contract(user.stellarContractId);
       const server = this.getServer();
       const networkPassphrase = getNetworkPassphrase();
-      const issuerKeypair = getIssuerKeypair();
+      const opsKeypair = getOperationsKeypair();
 
       // Convert public key to raw bytes for the contract
       const publicKeyBytes = StrKey.decodeEd25519PublicKey(publicKey);
@@ -1396,7 +1396,7 @@ export class PasskeyWalletService {
       );
 
       let tx = new TransactionBuilder(
-        await server.rpc.getAccount(issuerKeypair.publicKey()),
+        await server.rpc.getAccount(opsKeypair.publicKey()),
         { fee: BASE_FEE, networkPassphrase }
       )
         .addOperation(addSignerOp)
@@ -1404,7 +1404,7 @@ export class PasskeyWalletService {
         .build();
 
       tx = await StellarService.prepareSorobanTransaction(tx);
-      tx.sign(issuerKeypair);
+      tx.sign(opsKeypair);
 
       let result;
       try {
@@ -1474,7 +1474,7 @@ export class PasskeyWalletService {
       const walletContract = new Contract(user.stellarContractId);
       const server = this.getServer();
       const networkPassphrase = getNetworkPassphrase();
-      const issuerKeypair = getIssuerKeypair();
+      const opsKeypair = getOperationsKeypair();
 
       const removeSignerOp = walletContract.call(
         'rm_sig',
@@ -1482,7 +1482,7 @@ export class PasskeyWalletService {
       );
 
       let tx = new TransactionBuilder(
-        await server.rpc.getAccount(issuerKeypair.publicKey()),
+        await server.rpc.getAccount(opsKeypair.publicKey()),
         { fee: BASE_FEE, networkPassphrase }
       )
         .addOperation(removeSignerOp)
@@ -1490,7 +1490,7 @@ export class PasskeyWalletService {
         .build();
 
       tx = await StellarService.prepareSorobanTransaction(tx);
-      tx.sign(issuerKeypair);
+      tx.sign(opsKeypair);
 
       let result;
       try {

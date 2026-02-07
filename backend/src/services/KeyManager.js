@@ -22,8 +22,10 @@ const log = logger.scope('KeyManager');
  * - Private keys stay on Ledger hardware wallets
  * - Transactions are queued for manual signing
  * 
- * SECURITY NOTE: In production, secret keys should NEVER be stored in .env.
- * They should only exist on hardware wallets (Ledger Nano S/X).
+ * SECURITY NOTE: In production, only the Operations ("hot wallet") secret key
+ * should be stored on the server. It funds automated sponsorships and trustlines
+ * with minimal XLM. All other keys (Issuer, Treasury, Distributor) must stay on
+ * hardware wallets / Freighter and go through MultiSig approval.
  */
 class KeyManager {
     constructor() {
@@ -47,16 +49,18 @@ class KeyManager {
      * @private
      */
     #initializeChannels() {
-        if (this.isMultisigMode()) return;
+        // In multisig mode, skip loading numbered channels but still use Operations as fallback
 
-        // Load specific channels if defined
-        for (let i = 1; i <= 10; i++) {
-            const secret = process.env[`CHANNEL_${i}_SECRET_KEY`];
-            if (secret) {
-                try {
-                    this.channels.push(Keypair.fromSecret(secret));
-                } catch (e) {
-                    log.error(`Invalid secret for CHANNEL_${i}`);
+        // Load specific channels if defined (ENV mode only)
+        if (!this.isMultisigMode()) {
+            for (let i = 1; i <= 10; i++) {
+                const secret = process.env[`CHANNEL_${i}_SECRET_KEY`];
+                if (secret) {
+                    try {
+                        this.channels.push(Keypair.fromSecret(secret));
+                    } catch (e) {
+                        log.error(`Invalid secret for CHANNEL_${i}`);
+                    }
                 }
             }
         }
@@ -90,8 +94,17 @@ class KeyManager {
      */
     getSecretKey(role) {
         if (this.isMultisigMode()) {
+            // Operations is the "hot wallet" — allowed in multisig mode
+            // for automated sponsorships, trustlines, and channel operations
+            if (role.toUpperCase() === 'OPERATIONS') {
+                const secret = process.env.OPERATIONS_SECRET_KEY;
+                if (!secret) {
+                    throw new Error('[KeyManager] Missing OPERATIONS_SECRET_KEY — required as hot wallet in multisig mode');
+                }
+                return secret;
+            }
             throw new Error(
-                `[KeyManager] Cannot access secret keys in multisig mode. ` +
+                `[KeyManager] Cannot access ${role} secret key in multisig mode. ` +
                 `Use getPublicKey('${role}') and route through MultiSigTransactionService.`
             );
         }
@@ -129,7 +142,21 @@ class KeyManager {
     }
 
     // ============================================
-    // Keypair Getters (ENV mode only)
+    // Role-based Keypair Resolution
+    // ============================================
+
+    /**
+     * Get a keypair by role name. Used by TransactionManager for auto-signing in ENV mode.
+     * @param {string} role - The wallet role ('ISSUER', 'DISTRIBUTOR', 'TREASURY', 'OPERATIONS')
+     * @returns {Keypair} The resolved keypair
+     * @throws {Error} In multisig mode for non-Operations roles
+     */
+    getKeypairForRole(role) {
+        return Keypair.fromSecret(this.getSecretKey(role));
+    }
+
+    // ============================================
+    // Keypair Getters (ENV mode only, or Operations in multisig)
     // ============================================
 
     getIssuerKeypair() {

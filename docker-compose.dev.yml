@@ -2,26 +2,22 @@
 # This file overrides settings from docker-compose.yml for local development
 #
 # Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.development up
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.development up -d
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 #
 # To stop:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 #
 # Features enabled in dev mode:
+#   - Reads .env automatically (Docker Compose default)
 #   - NODE_ENV=development
-#   - Hot-reload via volume mounts (optional, commented out)
+#   - Hot-reload via volume mounts
 #   - More verbose logging
 
 services:
   backend:
     environment:
-      # Development environment
       NODE_ENV: development
-      # Enable more verbose logging
       LOG_LEVEL: debug
-      # PINATA_JWT comes from .env.development (real JWT for staging tests)
-      # Enable hot-reload by mounting source code
     volumes:
       - ./backend/src:/app/backend/src
       - ./backend/prisma:/app/backend/prisma

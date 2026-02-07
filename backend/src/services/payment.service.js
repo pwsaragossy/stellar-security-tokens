@@ -7,13 +7,11 @@ import { EmailService } from './email.service.js';
 import { ConfigService } from './config.service.js';
 import {
   stellarServer,
-  getDistributorKeypair,
-  buildTransaction,
   buildTransactionWithAccount,
   getSorobanRpcUrl,
-  getIssuerKeypair,
   getUsdcIssuer,
 } from '../config/stellar.js';
+import { keyManager } from './KeyManager.js';
 import { TransactionManager } from './transactionManager.service.js';
 import { Operation, Asset, rpc, scValToNative, Address } from '@stellar/stellar-sdk';
 import cron from 'node-cron';
@@ -127,7 +125,7 @@ export class PaymentService {
       const sorobanServer = new rpc.Server(sorobanUrl);
 
       // Get the SAC contract ID for this asset
-      const issuerPublicKey = getIssuerKeypair().publicKey();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
       const asset = new Asset(assetCode, issuerPublicKey);
       const sacContractId = StellarService.getSACContractId(asset);
 
@@ -304,8 +302,8 @@ export class PaymentService {
         paymentCount: payments.length
       });
 
-      const distributorKeypair = getDistributorKeypair();
-      const distributorAccount = await stellarServer.loadAccount(distributorKeypair.publicKey());
+      const distributorPublicKey = keyManager.getDistributorPublicKey();
+      const distributorAccount = await stellarServer.loadAccount(distributorPublicKey);
 
       const { issuer: usdcIssuer, code: usdcAssetCode } = await getUSDCConfig();
 
@@ -376,17 +374,17 @@ export class PaymentService {
             destination: investor.stellarPublicKey,
             asset: usdcAsset,
             amount: payment.usdcAmount.toString(),
-            source: distributorKeypair.publicKey(),
+            source: distributorPublicKey,
           })
         );
 
         // Use RPC for sequence number safety
-        const distributorAccountForTx = await StellarService.getAccountRPC(distributorKeypair.publicKey());
+        const distributorAccountForTx = await StellarService.getAccountRPC(distributorPublicKey);
         const transaction = await buildTransactionWithAccount(distributorAccountForTx, operations);
 
         const result = await TransactionManager.submit({
           transaction,
-          signingKeypair: distributorKeypair,
+          signingRole: 'DISTRIBUTOR',
           operationType: 'dividend_distribution',
           description: `Interest Distribution: ${operations.length} payments`,
           metadata: {

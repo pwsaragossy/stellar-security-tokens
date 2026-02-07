@@ -1,18 +1,14 @@
 import {
   stellarServer,
   createFreshServer,
-  getIssuerKeypair,
-  getDistributorKeypair,
   createAsset,
-  buildTransaction,
   buildTransactionWithAccount,
-  signAndSubmitTransaction,
   getNetworkPassphrase,
-  getTreasuryKeypair,
   getOperationsKeypair,
   getSorobanRpcUrl,
   getUsdcIssuer,
 } from '../config/stellar.js';
+import { keyManager } from './KeyManager.js';
 import { TransactionManager } from './transactionManager.service.js';
 import {
   Operation,
@@ -85,11 +81,11 @@ export class StellarService {
    */
   static async createIssuerAccount() {
     try {
-      const issuerKeypair = getIssuerKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
 
       try {
-        const account = await stellarServer.loadAccount(issuerKeypair.publicKey());
-        console.log('Issuer account already exists:', issuerKeypair.publicKey());
+        const account = await stellarServer.loadAccount(issuerPublicKey);
+        console.log('Issuer account already exists:', issuerPublicKey);
 
         // Check if flags are set correctly
         const flags = account.flags;
@@ -105,15 +101,20 @@ export class StellarService {
           console.log('[StellarService] Current flags:', flags);
           const operations = [
             Operation.setOptions({
-              source: issuerKeypair.publicKey(),
+              source: issuerPublicKey,
               setFlags: expectedFlags,
             }),
           ];
 
           // Hybrid Pattern: Use RPC for accurate sequence number when building transaction
-          const accountForTx = await this.getAccountRPC(issuerKeypair.publicKey());
+          const accountForTx = await this.getAccountRPC(issuerPublicKey);
           const transaction = await buildTransactionWithAccount(accountForTx, operations);
-          const result = await signAndSubmitTransaction(transaction, issuerKeypair);
+          const result = await TransactionManager.submit({
+            transaction,
+            signingRole: 'ISSUER',
+            operationType: 'account_setup',
+            description: 'Set issuer account flags',
+          });
 
           if (!result.success) {
             console.error('[StellarService] Failed to set issuer flags:', result);
@@ -130,14 +131,19 @@ export class StellarService {
           console.log(`[StellarService] Setting home_domain to ${expectedHomeDomain}...`);
           const homeDomainOps = [
             Operation.setOptions({
-              source: issuerKeypair.publicKey(),
+              source: issuerPublicKey,
               homeDomain: expectedHomeDomain,
             }),
           ];
 
-          const accountForDomainTx = await this.getAccountRPC(issuerKeypair.publicKey());
+          const accountForDomainTx = await this.getAccountRPC(issuerPublicKey);
           const domainTx = await buildTransactionWithAccount(accountForDomainTx, homeDomainOps);
-          const domainResult = await signAndSubmitTransaction(domainTx, issuerKeypair);
+          const domainResult = await TransactionManager.submit({
+            transaction: domainTx,
+            signingRole: 'ISSUER',
+            operationType: 'account_setup',
+            description: `Set home_domain to ${expectedHomeDomain}`,
+          });
 
           if (!domainResult.success) {
             console.error('[StellarService] Failed to set home_domain:', domainResult);
@@ -151,11 +157,10 @@ export class StellarService {
 
         return {
           success: true,
-          publicKey: issuerKeypair.publicKey(),
-          secretKey: issuerKeypair.secret(),
+          publicKey: issuerPublicKey,
           alreadyExists: true,
           flags: {
-            authRequired: true, // We just ensured they are set
+            authRequired: true,
             authRevocable: true,
             authClawbackEnabled: true,
           }
@@ -167,7 +172,7 @@ export class StellarService {
       }
 
       if (process.env.STELLAR_NETWORK === 'testnet') {
-        const friendbotUrl = `https://friendbot.stellar.org?addr=${encodeURIComponent(issuerKeypair.publicKey())}`;
+        const friendbotUrl = `https://friendbot.stellar.org?addr=${encodeURIComponent(issuerPublicKey)}`;
 
         try {
           const response = await fetch(friendbotUrl);
@@ -181,7 +186,7 @@ export class StellarService {
       } else {
         // Mainnet: Verify account exists and has funds
         try {
-          await stellarServer.loadAccount(issuerKeypair.publicKey());
+          await stellarServer.loadAccount(issuerPublicKey);
         } catch (error) {
           throw new Error(`Issuer account not found on ${process.env.STELLAR_NETWORK || 'mainnet'}. Please fund it manually.`);
         }
@@ -189,21 +194,26 @@ export class StellarService {
 
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      const account = await stellarServer.loadAccount(issuerKeypair.publicKey());
+      const account = await stellarServer.loadAccount(issuerPublicKey);
 
       const homeDomain = process.env.STELLAR_HOME_DOMAIN;
       const operations = [
         Operation.setOptions({
-          source: issuerKeypair.publicKey(),
+          source: issuerPublicKey,
           setFlags: AuthRequiredFlag | AuthRevocableFlag | AuthClawbackEnabledFlag,
           ...(homeDomain && { homeDomain }),
         }),
       ];
 
       // Hybrid Pattern: Use RPC for accurate sequence number when building transaction
-      const accountForTx = await this.getAccountRPC(issuerKeypair.publicKey());
+      const accountForTx = await this.getAccountRPC(issuerPublicKey);
       const transaction = await buildTransactionWithAccount(accountForTx, operations);
-      const result = await signAndSubmitTransaction(transaction, issuerKeypair);
+      const result = await TransactionManager.submit({
+        transaction,
+        signingRole: 'ISSUER',
+        operationType: 'account_setup',
+        description: 'Create issuer account with compliance flags',
+      });
 
       if (!result.success) {
         throw new Error(`Failed to set issuer account flags: ${result.error}`);
@@ -211,8 +221,7 @@ export class StellarService {
 
       return {
         success: true,
-        publicKey: issuerKeypair.publicKey(),
-        secretKey: issuerKeypair.secret(),
+        publicKey: issuerPublicKey,
         transactionHash: result.hash,
         ledger: result.ledger,
         flags: {
@@ -239,15 +248,14 @@ export class StellarService {
    */
   static async createDistributionAccount() {
     try {
-      const distributorKeypair = getDistributorKeypair();
+      const distributorPublicKey = keyManager.getDistributorPublicKey();
 
       try {
-        const account = await stellarServer.loadAccount(distributorKeypair.publicKey());
-        console.log('Distribution account already exists:', distributorKeypair.publicKey());
+        const account = await stellarServer.loadAccount(distributorPublicKey);
+        console.log('Distribution account already exists:', distributorPublicKey);
         return {
           success: true,
-          publicKey: distributorKeypair.publicKey(),
-          secretKey: distributorKeypair.secret(),
+          publicKey: distributorPublicKey,
           alreadyExists: true,
         };
       } catch (error) {
@@ -257,7 +265,7 @@ export class StellarService {
       }
 
       if (process.env.STELLAR_NETWORK === 'testnet') {
-        const friendbotUrl = `https://friendbot.stellar.org?addr=${encodeURIComponent(distributorKeypair.publicKey())}`;
+        const friendbotUrl = `https://friendbot.stellar.org?addr=${encodeURIComponent(distributorPublicKey)}`;
 
         try {
           const response = await fetch(friendbotUrl);
@@ -270,7 +278,7 @@ export class StellarService {
         }
       } else {
         try {
-          await stellarServer.loadAccount(distributorKeypair.publicKey());
+          await stellarServer.loadAccount(distributorPublicKey);
         } catch (error) {
           throw new Error(`Distribution account not found on ${process.env.STELLAR_NETWORK || 'mainnet'}. Please fund it manually.`);
         }
@@ -280,8 +288,7 @@ export class StellarService {
 
       return {
         success: true,
-        publicKey: distributorKeypair.publicKey(),
-        secretKey: distributorKeypair.secret(),
+        publicKey: distributorPublicKey,
       };
     } catch (error) {
       console.error('Error creating distribution account:', error);
@@ -310,10 +317,10 @@ export class StellarService {
     try {
       console.log(`[StellarService] Unlocking token ${assetCode} for DEX trading...`);
 
-      const issuerKeypair = getIssuerKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
 
       // Verify the account currently has AUTH_REQUIRED set
-      const account = await stellarServer.loadAccount(issuerKeypair.publicKey());
+      const account = await stellarServer.loadAccount(issuerPublicKey);
       if (!account.flags.auth_required) {
         console.log(`[StellarService] Token ${assetCode} is already unlocked (AUTH_REQUIRED not set)`);
         return {
@@ -327,18 +334,18 @@ export class StellarService {
       // We use clearFlags (not setFlags) to remove the flag
       const operations = [
         Operation.setOptions({
-          source: issuerKeypair.publicKey(),
+          source: issuerPublicKey,
           clearFlags: AuthRequiredFlag, // 0x1 - only clear AUTH_REQUIRED
         }),
       ];
 
       // Build and submit transaction (handles multisig routing automatically)
-      const accountForTx = await this.getAccountRPC(issuerKeypair.publicKey());
+      const accountForTx = await this.getAccountRPC(issuerPublicKey);
       const transaction = await buildTransactionWithAccount(accountForTx, operations);
 
       const result = await TransactionManager.submit({
         transaction,
-        signingKeypair: issuerKeypair,
+        signingRole: 'ISSUER',
         operationType: 'unlock_token',
         description: `Unlock ${assetCode} for DEX trading`,
         metadata: { assetCode },
@@ -446,34 +453,39 @@ export class StellarService {
       throw new Error('Asset code is required');
     }
     try {
-      const issuerKeypair = getIssuerKeypair();
-      const distributorKeypair = getDistributorKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
+      const distributorPublicKey = keyManager.getDistributorPublicKey();
 
       if (!amount || parseFloat(amount) <= 0) {
         throw new Error('Amount must be a positive number');
       }
 
-      const issuerAccount = await stellarServer.loadAccount(issuerKeypair.publicKey());
-      const distributorAccount = await stellarServer.loadAccount(distributorKeypair.publicKey());
+      const issuerAccount = await stellarServer.loadAccount(issuerPublicKey);
+      const distributorAccount = await stellarServer.loadAccount(distributorPublicKey);
 
-      const asset = createAsset(code, issuerKeypair.publicKey());
+      const asset = createAsset(code, issuerPublicKey);
 
       // 1. Check if distributor has trustline
       const trustline = distributorAccount.balances.find(
-        (b) => b.asset_code === code && b.asset_issuer === issuerKeypair.publicKey()
+        (b) => b.asset_code === code && b.asset_issuer === issuerPublicKey
       );
 
       // 2. If no trustline, create it using already-loaded account
       if (!trustline) {
-        console.log(`[StellarService] Creating trustline for distributor (${distributorKeypair.publicKey()}) for asset ${code}`);
+        console.log(`[StellarService] Creating trustline for distributor (${distributorPublicKey}) for asset ${code}`);
         try {
           const trustOp = Operation.changeTrust({
             asset: asset,
-            source: distributorKeypair.publicKey(),
+            source: distributorPublicKey,
           });
           // Use buildTransactionWithAccount to avoid re-loading the account
           const trustTx = buildTransactionWithAccount(distributorAccount, [trustOp]);
-          const trustResult = await signAndSubmitTransaction(trustTx, distributorKeypair);
+          const trustResult = await TransactionManager.submit({
+            transaction: trustTx,
+            signingRole: 'DISTRIBUTOR',
+            operationType: 'trustline_setup',
+            description: `Create distributor trustline for ${code}`,
+          });
           if (!trustResult.success) {
             console.error(`[StellarService] Trustline creation failed:`, trustResult);
             throw new Error(`Failed to create distributor trustline: ${trustResult.userFriendlyError || trustResult.error}`);
@@ -494,10 +506,10 @@ export class StellarService {
       const freshServer = createFreshServer();
 
       // Re-load distributor account to check current trustline status
-      const updatedDistributorAccount = await freshServer.loadAccount(distributorKeypair.publicKey());
+      const updatedDistributorAccount = await freshServer.loadAccount(distributorPublicKey);
 
       const currentTrust = updatedDistributorAccount.balances.find(
-        (b) => b.asset_code === code && b.asset_issuer === issuerKeypair.publicKey()
+        (b) => b.asset_code === code && b.asset_issuer === issuerPublicKey
       );
 
       // --- TRANSACTION 1: CLASSIC ISSUANCE ---
@@ -508,10 +520,10 @@ export class StellarService {
         console.log(`[StellarService] Authorizing distributor trustline for asset ${code}`);
         classicOperations.push(
           Operation.setTrustLineFlags({
-            trustor: distributorKeypair.publicKey(),
+            trustor: distributorPublicKey,
             asset: asset,
             flags: { authorized: true },
-            source: issuerKeypair.publicKey(),
+            source: issuerPublicKey,
           })
         );
       }
@@ -519,10 +531,10 @@ export class StellarService {
       // Perform payment (issuance)
       classicOperations.push(
         Operation.payment({
-          destination: distributorKeypair.publicKey(),
+          destination: distributorPublicKey,
           asset: asset,
           amount: amount.toString(),
-          source: issuerKeypair.publicKey(),
+          source: issuerPublicKey,
         })
       );
 
@@ -530,26 +542,26 @@ export class StellarService {
       if (options.homeDomain) {
         classicOperations.unshift(
           Operation.setOptions({
-            source: issuerKeypair.publicKey(),
+            source: issuerPublicKey,
             homeDomain: options.homeDomain,
           })
         );
       }
 
       console.log(`[StellarService] Submitting classic issuance for asset ${code}`);
-      const issuerAccountClassic = await this.getAccountRPC(issuerKeypair.publicKey());
+      const issuerAccountClassic = await this.getAccountRPC(issuerPublicKey);
       const classicTx = buildTransactionWithAccount(issuerAccountClassic, classicOperations);
 
       const classicResult = await TransactionManager.submit({
         transaction: classicTx,
-        signingKeypair: issuerKeypair,
+        signingRole: 'ISSUER',
         operationType: 'token_issue',
         description: `Issue ${amount} ${code} (Classic)`,
         metadata: {
           assetCode: code,
           amount,
           type: 'classic_issuance',
-          issuerPublicKey: issuerKeypair.publicKey(),
+          issuerPublicKey: issuerPublicKey,
         }
       });
 
@@ -564,11 +576,11 @@ export class StellarService {
 
       const sacOp = Operation.createStellarAssetContract({
         asset: asset,
-        source: issuerKeypair.publicKey(),
+        source: issuerPublicKey,
       });
 
       // Reload issuer account (sequence number increased)
-      const issuerAccountSoroban = await this.getAccountRPC(issuerKeypair.publicKey());
+      const issuerAccountSoroban = await this.getAccountRPC(issuerPublicKey);
       let sacTx = buildTransactionWithAccount(issuerAccountSoroban, [sacOp]);
 
       console.log(`[StellarService] Preparing Soroban SAC deployment for asset ${code}...`);
@@ -576,7 +588,7 @@ export class StellarService {
 
       const sacResult = await TransactionManager.submit({
         transaction: sacTx,
-        signingKeypair: issuerKeypair,
+        signingRole: 'ISSUER',
         operationType: 'token_issue',
         description: `Deploy SAC for asset ${code}`,
         metadata: {
@@ -595,8 +607,8 @@ export class StellarService {
       const returnData = {
         success: true,
         assetCode: code,
-        issuerPublicKey: issuerKeypair.publicKey(),
-        distributorPublicKey: distributorKeypair.publicKey(),
+        issuerPublicKey: issuerPublicKey,
+        distributorPublicKey: distributorPublicKey,
         amount: amount.toString(),
         transactionHash: classicResult.hash || (classicResult.status === 'pending_multisig' ? 'pending' : null),
         ledger: classicResult.ledger,
@@ -623,10 +635,10 @@ export class StellarService {
    */
   static async deploySACForAsset(code, issuer = null) {
     try {
-      const issuerKeypair = getIssuerKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
 
       // Use provided issuer or default to platform issuer
-      const assetIssuer = issuer || issuerKeypair.publicKey();
+      const assetIssuer = issuer || issuerPublicKey;
       const asset = new Asset(code, assetIssuer);
       const sacContractId = this.getSACContractId(asset);
 
@@ -634,16 +646,21 @@ export class StellarService {
 
       const op = Operation.createStellarAssetContract({
         asset: asset,
-        source: issuerKeypair.publicKey(),
+        source: issuerPublicKey,
       });
 
-      const issuerAccount = await this.getAccountRPC(issuerKeypair.publicKey());
+      const issuerAccount = await this.getAccountRPC(issuerPublicKey);
       let transaction = buildTransactionWithAccount(issuerAccount, [op]);
 
       // SAC deployment is a Soroban operation, requires preparation
       transaction = await this.prepareSorobanTransaction(transaction);
 
-      const result = await signAndSubmitTransaction(transaction, issuerKeypair);
+      const result = await TransactionManager.submit({
+        transaction,
+        signingRole: 'ISSUER',
+        operationType: 'sac_deploy',
+        description: `Deploy SAC for asset ${code}`,
+      });
 
       return {
         success: result.success,
@@ -673,15 +690,15 @@ export class StellarService {
       throw new Error('assetCode is required');
     }
     try {
-      const issuerKeypair = getIssuerKeypair();
-      const distributorKeypair = getDistributorKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
+      const distributorPublicKey = keyManager.getDistributorPublicKey();
 
       if (!investorPublicKey || investorPublicKey.length !== 56) {
         throw new Error('Invalid investor public key');
       }
 
       const isContract = investorPublicKey.startsWith('C');
-      const asset = createAsset(assetCode, issuerKeypair.publicKey());
+      const asset = createAsset(assetCode, issuerPublicKey);
       const amountStr = amount.toString();
 
       let result;
@@ -695,12 +712,12 @@ export class StellarService {
         // Build 'transfer' call: transfer(from, to, amount)
         const transferOp = contract.call(
           'transfer',
-          new Address(distributorKeypair.publicKey()).toScVal(),
+          new Address(distributorPublicKey).toScVal(),
           new Address(investorPublicKey).toScVal(),
           nativeToScVal(BigInt(Math.floor(parseFloat(amountStr) * 10000000)), { type: 'i128' })
         );
 
-        const distributorAccount = await this.getAccountRPC(distributorKeypair.publicKey());
+        const distributorAccount = await this.getAccountRPC(distributorPublicKey);
         let transaction = buildTransactionWithAccount(distributorAccount, [transferOp]);
 
         // Soroban Simulation & Preparation
@@ -710,7 +727,7 @@ export class StellarService {
 
         result = await TransactionManager.submit({
           transaction,
-          signingKeypair: distributorKeypair,
+          signingRole: 'DISTRIBUTOR',
           operationType: 'token_distribute',
           description: `Distribute ${amountStr} ${assetCode} to ${investorPublicKey}`,
           metadata: {
@@ -745,19 +762,19 @@ export class StellarService {
             destination: investorPublicKey,
             asset: asset,
             amount: amountStr,
-            source: distributorKeypair.publicKey(),
+            source: distributorPublicKey,
           }),
         ];
 
         // Use RPC for sequence
-        const distributorAccount = await this.getAccountRPC(distributorKeypair.publicKey());
+        const distributorAccount = await this.getAccountRPC(distributorPublicKey);
         const transaction = await buildTransactionWithAccount(distributorAccount, operations, {
           memo: options.memo || null,
         });
 
         result = await TransactionManager.submit({
           transaction,
-          signingKeypair: distributorKeypair,
+          signingRole: 'DISTRIBUTOR',
           operationType: 'token_distribute',
           description: `Distribute ${amountStr} ${assetCode} to ${investorPublicKey}`,
           metadata: {
@@ -808,8 +825,8 @@ export class StellarService {
    */
   static async withdrawFromTreasury(destination, amount, assetCode, description) {
     try {
-      const treasuryKeypair = getTreasuryKeypair();
-      const issuerKeypair = getIssuerKeypair();
+      const treasuryPublicKey = keyManager.getTreasuryPublicKey();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
 
       const isContract = destination.startsWith('C');
       const isNative = assetCode === 'XLM';
@@ -823,7 +840,7 @@ export class StellarService {
       } else if (isUSDC) {
         asset = new Asset('USDC', getUsdcIssuer());
       } else {
-        asset = new Asset(assetCode, issuerKeypair.publicKey());
+        asset = new Asset(assetCode, issuerPublicKey);
       }
 
       const amountStr = amount.toString();
@@ -845,12 +862,12 @@ export class StellarService {
         // Build 'transfer' call: transfer(from, to, amount)
         const transferOp = contract.call(
           'transfer',
-          new Address(treasuryKeypair.publicKey()).toScVal(),
+          new Address(treasuryPublicKey).toScVal(),
           new Address(destination).toScVal(),
           nativeToScVal(BigInt(Math.floor(parseFloat(amountStr) * 10000000)), { type: 'i128' })
         );
 
-        const treasuryAccount = await this.getAccountRPC(treasuryKeypair.publicKey());
+        const treasuryAccount = await this.getAccountRPC(treasuryPublicKey);
         let transaction = buildTransactionWithAccount(treasuryAccount, [transferOp]);
 
         // Soroban Simulation & Preparation
@@ -859,7 +876,7 @@ export class StellarService {
 
         result = await TransactionManager.submit({
           transaction,
-          signingKeypair: treasuryKeypair,
+          signingRole: 'TREASURY',
           operationType: 'treasury_payment',
           description: `OpEx: ${description}`,
           metadata: {
@@ -876,19 +893,19 @@ export class StellarService {
             destination,
             asset,
             amount: amountStr,
-            source: treasuryKeypair.publicKey(),
+            source: treasuryPublicKey,
           }),
         ];
 
         // Use RPC for sequence
-        const treasuryAccount = await this.getAccountRPC(treasuryKeypair.publicKey());
+        const treasuryAccount = await this.getAccountRPC(treasuryPublicKey);
         const transaction = await buildTransactionWithAccount(treasuryAccount, operations, {
           memo: description.substring(0, 28) // Text memo limit
         });
 
         result = await TransactionManager.submit({
           transaction,
-          signingKeypair: treasuryKeypair,
+          signingRole: 'TREASURY',
           operationType: 'treasury_payment',
           description: `OpEx: ${description}`,
           metadata: {
@@ -958,7 +975,7 @@ export class StellarService {
       throw new Error('assetCode is required');
     }
     try {
-      const issuerKeypair = getIssuerKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
 
       if (!investorPublicKey || investorPublicKey.length !== 56) {
         throw new Error('Invalid investor public key');
@@ -973,7 +990,7 @@ export class StellarService {
         throw error;
       }
 
-      const asset = createAsset(assetCode, issuerKeypair.publicKey());
+      const asset = createAsset(assetCode, issuerPublicKey);
 
       const operations = [
         Operation.setTrustLineFlags({
@@ -982,16 +999,16 @@ export class StellarService {
           flags: {
             authorized: false
           },
-          source: issuerKeypair.publicKey()
+          source: issuerPublicKey
         }),
       ];
 
       // Use RPC for sequence
-      const issuerAccountForFreeze = await this.getAccountRPC(issuerKeypair.publicKey());
+      const issuerAccountForFreeze = await this.getAccountRPC(issuerPublicKey);
       const transaction = await buildTransactionWithAccount(issuerAccountForFreeze, operations);
       const result = await TransactionManager.submit({
         transaction,
-        signingKeypair: issuerKeypair,
+        signingRole: 'ISSUER',
         operationType: 'freeze_account',
         description: `Freeze account ${investorPublicKey} for asset ${assetCode}`,
         metadata: { investorPublicKey, assetCode }
@@ -1041,16 +1058,16 @@ export class StellarService {
     console.log(`[StellarService] Authorizing investor ${investorPublicKey} for asset ${assetCode}`);
 
     try {
-      const issuerKeypair = getIssuerKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
       const server = stellarServer;
-      const asset = createAsset(assetCode, issuerKeypair.publicKey());
+      const asset = createAsset(assetCode, issuerPublicKey);
 
       // Check if trustline exists first
       try {
         const account = await server.loadAccount(investorPublicKey);
         // Check for trustline (classic or contract wallet)
         const hasTrustline = account.balances.some(b =>
-          (b.asset_code === assetCode && b.asset_issuer === issuerKeypair.publicKey()) ||
+          (b.asset_code === assetCode && b.asset_issuer === issuerPublicKey) ||
           (b.asset_type === 'native' && assetCode === 'XLM') // Should not happen for security tokens but good safety
         );
 
@@ -1071,18 +1088,18 @@ export class StellarService {
           authorized: true,
           authorizedToMaintainLiabilities: false
         },
-        source: issuerKeypair.publicKey()
+        source: issuerPublicKey
       });
 
       // Use custom build/submit to reuse loaded issuer account if possible, or force load new
       // For simplicity reusing standard internal flow
       // Use RPC for sequence
-      const issuerAccount = await this.getAccountRPC(issuerKeypair.publicKey());
+      const issuerAccount = await this.getAccountRPC(issuerPublicKey);
       const tx = buildTransactionWithAccount(issuerAccount, [op]);
 
       const result = await TransactionManager.submit({
         transaction: tx,
-        signingKeypair: issuerKeypair,
+        signingRole: 'ISSUER',
         operationType: 'trustline_auth',
         description: `Authorize investor ${investorPublicKey} for asset ${assetCode}`,
         metadata: { investorPublicKey, assetCode }
@@ -1116,9 +1133,9 @@ export class StellarService {
    */
   static async setupSponsoredTrustline(investorPublicKey, assetCode, investorSecret = null) {
     try {
-      const issuerKeypair = getIssuerKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
       const operationsKeypair = getOperationsKeypair();
-      const asset = createAsset(assetCode, issuerKeypair.publicKey());
+      const asset = createAsset(assetCode, issuerPublicKey);
 
       console.log(`[StellarService] Setting up sponsored trustline for ${investorPublicKey} (${assetCode})`);
 
@@ -1258,13 +1275,13 @@ export class StellarService {
       throw new Error('assetCode is required');
     }
     try {
-      const issuerKeypair = getIssuerKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
 
       if (!investorPublicKey || investorPublicKey.length !== 56) {
         throw new Error('Invalid investor public key');
       }
 
-      const asset = createAsset(assetCode, issuerKeypair.publicKey());
+      const asset = createAsset(assetCode, issuerPublicKey);
 
       const operations = [
         Operation.setTrustLineFlags({
@@ -1274,10 +1291,10 @@ export class StellarService {
         }),
       ];
 
-      const transaction = await buildTransaction(issuerKeypair, operations);
+      const transaction = await this.buildUnsignedTransaction(issuerPublicKey, operations);
       const result = await TransactionManager.submit({
         transaction,
-        signingKeypair: issuerKeypair,
+        signingRole: 'ISSUER',
         operationType: 'freeze_account',
         description: `Unfreeze account ${investorPublicKey} for asset ${assetCode}`,
         metadata: { investorPublicKey, assetCode }
@@ -1322,13 +1339,13 @@ export class StellarService {
       throw new Error('assetCode is required');
     }
     try {
-      const issuerKeypair = getIssuerKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
 
       if (!investorPublicKey || investorPublicKey.length !== 56) {
         throw new Error('Invalid investor public key');
       }
 
-      const asset = createAsset(assetCode, issuerKeypair.publicKey());
+      const asset = createAsset(assetCode, issuerPublicKey);
 
       const operations = [
         Operation.setTrustLineFlags({
@@ -1339,10 +1356,10 @@ export class StellarService {
         }),
       ];
 
-      const transaction = await buildTransaction(issuerKeypair, operations);
+      const transaction = await this.buildUnsignedTransaction(issuerPublicKey, operations);
       const result = await TransactionManager.submit({
         transaction,
-        signingKeypair: issuerKeypair,
+        signingRole: 'ISSUER',
         operationType: 'disable_clawback',
         description: `Disable clawback for ${investorPublicKey} for asset ${assetCode}`,
         metadata: { investorPublicKey, assetCode }
@@ -1378,8 +1395,8 @@ export class StellarService {
    * Builds the operation to disable clawback for a trustline (Internal helper)
    */
   static buildDisableClawbackOp(investorPublicKey, assetCode) {
-    const issuerKeypair = getIssuerKeypair();
-    const asset = createAsset(assetCode, issuerKeypair.publicKey());
+    const issuerPublicKey = keyManager.getIssuerPublicKey();
+    const asset = createAsset(assetCode, issuerPublicKey);
     return Operation.setTrustLineFlags({
       trustor: investorPublicKey,
       asset: asset,
@@ -1409,7 +1426,7 @@ export class StellarService {
       throw new Error('assetCode is required');
     }
     try {
-      const issuerKeypair = getIssuerKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
 
       if (!investorPublicKey || investorPublicKey.length !== 56) {
         throw new Error('Invalid investor public key');
@@ -1422,7 +1439,7 @@ export class StellarService {
       try {
         const account = await stellarServer.loadAccount(investorPublicKey);
         const balance = account.balances.find(
-          (bal) => bal.asset_code === assetCode && bal.asset_issuer === issuerKeypair.publicKey()
+          (bal) => bal.asset_code === assetCode && bal.asset_issuer === issuerPublicKey
         );
 
         if (!balance || parseFloat(balance.balance) < parseFloat(amount)) {
@@ -1435,7 +1452,7 @@ export class StellarService {
         throw error;
       }
 
-      const asset = createAsset(assetCode, issuerKeypair.publicKey());
+      const asset = createAsset(assetCode, issuerPublicKey);
 
       const operations = [
         Operation.clawback({
@@ -1445,10 +1462,10 @@ export class StellarService {
         }),
       ];
 
-      const transaction = await buildTransaction(issuerKeypair, operations);
+      const transaction = await this.buildUnsignedTransaction(issuerPublicKey, operations);
       const result = await TransactionManager.submit({
         transaction,
-        signingKeypair: issuerKeypair,
+        signingRole: 'ISSUER',
         operationType: 'clawback',
         description: `Clawback ${amount} ${assetCode} from ${investorPublicKey}`,
         metadata: { assetCode, amount, investorPublicKey }
@@ -1507,12 +1524,12 @@ export class StellarService {
    */
   static async getTokenBalance(assetCode, publicKey) {
     try {
-      const issuerKeypair = getIssuerKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
 
       const account = await stellarServer.loadAccount(publicKey);
 
       const balance = account.balances.find(
-        (bal) => bal.asset_code === assetCode && bal.asset_issuer === issuerKeypair.publicKey()
+        (bal) => bal.asset_code === assetCode && bal.asset_issuer === issuerPublicKey
       );
 
       return {
@@ -1700,15 +1717,15 @@ export class StellarService {
    */
   static async listAssetHolders(assetCode) {
     try {
-      const issuerKeypair = getIssuerKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
       const accounts = await stellarServer
         .accounts()
-        .forAsset(`${assetCode}:${issuerKeypair.publicKey()}`)
+        .forAsset(`${assetCode}:${issuerPublicKey}`)
         .call();
 
       return accounts.records.map(account => {
         const balance = account.balances.find(
-          b => b.asset_code === assetCode && b.asset_issuer === issuerKeypair.publicKey()
+          b => b.asset_code === assetCode && b.asset_issuer === issuerPublicKey
         );
 
         return {
@@ -1735,13 +1752,13 @@ export class StellarService {
     if (!investorPublicKey) throw new Error('investorPublicKey is required');
 
     try {
-      const issuerKeypair = getIssuerKeypair();
+      const issuerPublicKey = keyManager.getIssuerPublicKey();
       const account = await stellarServer.loadAccount(investorPublicKey);
 
       // Find all trustlines that are NOT authorized
       const unauthorizedTrustlines = account.balances.filter(b =>
         b.asset_type !== 'native' &&
-        b.asset_issuer === issuerKeypair.publicKey() &&
+        b.asset_issuer === issuerPublicKey &&
         !b.is_authorized
       );
 
@@ -1759,10 +1776,10 @@ export class StellarService {
         })
       );
 
-      const transaction = await buildTransaction(issuerKeypair, operations);
+      const transaction = await this.buildUnsignedTransaction(issuerPublicKey, operations);
       const result = await TransactionManager.submit({
         transaction,
-        signingKeypair: issuerKeypair,
+        signingRole: 'ISSUER',
         operationType: 'trustline_auth',
         description: `Bulk authorization for investor ${investorPublicKey}`,
         metadata: { investorPublicKey, assets: unauthorizedTrustlines.map(tl => tl.asset_code) }
@@ -1933,7 +1950,7 @@ export class StellarService {
       // 5. Submit
       const result = await TransactionManager.submit({
         transaction,
-        signingKeypair: operationsKeypair,
+        signingRole: 'OPERATIONS',
         operationType: 'extend_ttl',
         description: `Extend TTL for contract ${contractId}`,
         metadata: { contractId, ledgersToExtend }

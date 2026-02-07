@@ -124,7 +124,7 @@ Steps:
 |------|---------|
 | `.env` | Active environment |
 | `.env.example` | Template with all vars |
-| `.env.development` | Development values |
+| `.env` | Base dev config (multisig mode, auto-read by Compose) |
 | `.env.production` | Production values |
 | `.env.production.template` | Production template |
 

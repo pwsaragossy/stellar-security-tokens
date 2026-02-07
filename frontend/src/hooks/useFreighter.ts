@@ -53,9 +53,13 @@ export function useFreighter(): UseFreighterReturn {
 
     // Check if Freighter is installed on mount
     useEffect(() => {
+        const checkInstalled = async () => {
+            const installed = await isFreighterInstalled();
+            setIsInstalled(installed);
+        };
         // Small delay to ensure extension has injected
         const timer = setTimeout(() => {
-            setIsInstalled(isFreighterInstalled());
+            checkInstalled();
         }, 100);
         return () => clearTimeout(timer);
     }, []);
