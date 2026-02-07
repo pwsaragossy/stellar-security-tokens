@@ -124,6 +124,30 @@ export class StellarService {
           console.log('[StellarService] Issuer flags already correct:', flags);
         }
 
+        // Check and set home_domain if configured
+        const expectedHomeDomain = process.env.STELLAR_HOME_DOMAIN;
+        if (expectedHomeDomain && account.home_domain !== expectedHomeDomain) {
+          console.log(`[StellarService] Setting home_domain to ${expectedHomeDomain}...`);
+          const homeDomainOps = [
+            Operation.setOptions({
+              source: issuerKeypair.publicKey(),
+              homeDomain: expectedHomeDomain,
+            }),
+          ];
+
+          const accountForDomainTx = await this.getAccountRPC(issuerKeypair.publicKey());
+          const domainTx = await buildTransactionWithAccount(accountForDomainTx, homeDomainOps);
+          const domainResult = await signAndSubmitTransaction(domainTx, issuerKeypair);
+
+          if (!domainResult.success) {
+            console.error('[StellarService] Failed to set home_domain:', domainResult);
+            // Non-fatal: log but continue
+          } else {
+            console.log('[StellarService] home_domain set successfully. TxHash:', domainResult.hash);
+          }
+        } else if (expectedHomeDomain) {
+          console.log('[StellarService] home_domain already correct:', account.home_domain);
+        }
 
         return {
           success: true,
@@ -167,10 +191,12 @@ export class StellarService {
 
       const account = await stellarServer.loadAccount(issuerKeypair.publicKey());
 
+      const homeDomain = process.env.STELLAR_HOME_DOMAIN;
       const operations = [
         Operation.setOptions({
           source: issuerKeypair.publicKey(),
           setFlags: AuthRequiredFlag | AuthRevocableFlag | AuthClawbackEnabledFlag,
+          ...(homeDomain && { homeDomain }),
         }),
       ];
 

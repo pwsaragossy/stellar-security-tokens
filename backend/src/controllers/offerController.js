@@ -898,9 +898,12 @@ export class OfferController {
         tokenResult.transactionHash
       );
 
-      // Se home domain configurado e documentos IPFS existem, gerar stellar.toml
+      // Generate stellar.toml content for this asset (served dynamically via TomlService)
       if (homeDomain && Object.keys(legalDocuments).length > 0) {
         try {
+          // This generates the TOML content for logging/debugging purposes.
+          // The actual stellar.toml is served dynamically at /.well-known/stellar.toml
+          // by TomlService.generateToml() which reads all tokens from the database.
           const tomlContent = StellarTomlService.generateToml({
             code: offer.assetCode,
             issuer: issuerPublicKey,
@@ -912,12 +915,9 @@ export class OfferController {
               ...offer.offerRules,
             },
           });
-
-          // TODO: Salvar stellar.toml no servidor web configurado no home_domain
-          // Por enquanto, apenas logamos
-          console.log(`Stellar.toml content for ${offer.assetCode}:`, tomlContent);
+          log.debug(`Generated stellar.toml content for ${offer.assetCode}`, { tomlLength: tomlContent.length });
         } catch (error) {
-          console.warn('Failed to generate stellar.toml:', error.message);
+          log.warn('Failed to generate stellar.toml preview:', error.message);
         }
       }
 
