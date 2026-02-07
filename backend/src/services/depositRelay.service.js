@@ -33,17 +33,47 @@ export class DepositRelayService {
         const memoSuffix = hash.substring(0, 8).toUpperCase();
         const memo = `${this.MEMO_PREFIX}${memoSuffix}`;
 
-        // Check if there's already an active (pending) deposit for this investor
+        // Check if there's already a deposit with this memo (unique constraint on memo)
         const existingDeposit = await prisma.deposit.findFirst({
             where: {
                 investorId: investor.id,
                 memo,
-                status: 'pending'
             }
         });
 
         if (existingDeposit) {
-            // Return the existing pending deposit
+            if (existingDeposit.status === 'pending') {
+                // Return the existing pending deposit
+                return {
+                    ...existingDeposit,
+                    treasuryAddress: process.env.TREASURY_PUBLIC_KEY
+                };
+            }
+
+            // If failed/expired, reset it to pending for reuse
+            if (existingDeposit.status === 'failed' || existingDeposit.status === 'expired') {
+                const expiresAt = new Date();
+                expiresAt.setMinutes(expiresAt.getMinutes() + this.EXPIRE_MINUTES);
+
+                const updatedDeposit = await prisma.deposit.update({
+                    where: { id: existingDeposit.id },
+                    data: {
+                        status: 'pending',
+                        expectedAmount,
+                        expiresAt,
+                        errorMessage: null,
+                        actualAmount: null,
+                        incomingTxHash: null,
+                    }
+                });
+
+                return {
+                    ...updatedDeposit,
+                    treasuryAddress: process.env.TREASURY_PUBLIC_KEY
+                };
+            }
+
+            // If completed, return it as-is
             return {
                 ...existingDeposit,
                 treasuryAddress: process.env.TREASURY_PUBLIC_KEY
