@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { platformAdminsApi } from '@/api/platformAdmins';
 import { offersApi } from '@/api/offers';
 import { api } from '@/lib/api';
-import type { Investor, Offer } from '@/types';
+import type { Investor } from '@/api/platformAdmins';
+import type { Offer } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -57,16 +58,16 @@ function normalizeStatus(type: ApprovalType, status: string): ApprovalItem['norm
 
 function normalizeInvestors(investors: Investor[]): ApprovalItem[] {
     return investors
-        .filter((i) => i.kyc_status === 'pending')
+        .filter((i) => i.status === 'pending')
         .map((inv) => ({
             id: `investor-${inv.id}`,
             originalId: inv.id,
             type: 'investor' as ApprovalType,
             label: inv.name,
             subtitle: inv.email,
-            status: inv.kyc_status,
-            normalizedStatus: normalizeStatus('investor', inv.kyc_status),
-            createdAt: inv.created_at,
+            status: inv.status,
+            normalizedStatus: normalizeStatus('investor', inv.status),
+            createdAt: inv.createdAt,
             raw: inv,
         }));
 }
@@ -82,7 +83,7 @@ function normalizeCompanies(companies: any[]): ApprovalItem[] {
             subtitle: co.cnpj || co.email || '',
             status: co.status,
             normalizedStatus: normalizeStatus('company', co.status),
-            createdAt: co.createdAt || co.created_at,
+            createdAt: co.createdAt || co.created_at || '',
             raw: co,
         }));
 }
@@ -147,7 +148,7 @@ export function useApprovalQueue() {
         try {
             const [investorsRes, companiesRes, offersRes, allOffersRes, txRes] = await Promise.allSettled([
                 platformAdminsApi.getInvestors(),
-                api.get('/platform-admins/companies', { params: { status: 'pending' } }),
+                api.get('/platform-admins/companies?status=pending'),
                 offersApi.getAllAdmin(),
                 offersApi.getAllAdmin(),   // second call for token-locked items (same endpoint, client-side filter)
                 api.get('/admin/transactions/pending'),
