@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, DollarSign, Shield, Wallet, AlertTriangle, Settings, Building2, FileText, FileSignature, Siren, Coins, Info, CheckCircle2 } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, DollarSign, Shield, Wallet, AlertTriangle, Building2, FileText, FileSignature, Siren, Coins, Info, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -86,16 +86,7 @@ const PAGE_DESCRIPTIONS: Record<string, { title: string, description: string, ke
             'Audit internal fund movements'
         ]
     },
-    '/admin/treasury': {
-        title: 'Treasury (OpEx)',
-        description: 'Manage operational expenses and platform revenue accounts.',
-        keyFeatures: [
-            'Monitor platform revenue from fees',
-            'Manage operating capital and liquidity',
-            'Track fund transfers to operational wallets',
-            'Audit platform financial health'
-        ]
-    },
+
     '/admin/fees': {
         title: 'Fee Configuration',
         description: 'Manage global fee structures for platform services.',
@@ -136,16 +127,7 @@ const PAGE_DESCRIPTIONS: Record<string, { title: string, description: string, ke
             'Revoke authorization for compromised accounts'
         ]
     },
-    '/admin/settings': {
-        title: 'Admin Settings',
-        description: 'Manage admin profile and system-wide preferences.',
-        keyFeatures: [
-            'Update admin contact and security information',
-            'Configure platform notification settings',
-            'Manage system-wide UI preferences',
-            'Change platform-level operational parameters'
-        ]
-    }
+
 }
 
 function PageInfo({ path }: { path: string }) {
@@ -214,12 +196,12 @@ export function AdminLayout() {
         { id: 'offers', label: 'Offers', icon: FileText, path: '/admin/offers' },
         { id: 'transactions', label: 'Transactions', icon: FileSignature, path: '/admin/transactions' },
         { id: 'wallets', label: 'Wallets', icon: Wallet, path: '/admin/wallets' },
-        { id: 'treasury', label: 'Treasury (OpEx)', icon: Building2, path: '/admin/treasury' },
+
         { id: 'fees', label: 'Fee Configuration', icon: DollarSign, path: '/admin/fees' },
         { id: 'defaults', label: 'Default Cases', icon: AlertTriangle, path: '/admin/defaults' },
         { id: 'compliance', label: 'Token Compliance', icon: Shield, path: '/admin/compliance' },
         { id: 'emergency', label: 'Emergency Controls', icon: Siren, path: '/admin/emergency' },
-        { id: 'settings', label: 'Settings', icon: Settings, path: '/admin/settings' },
+
     ];
 
     const isActive = (path: string) => location.pathname === path;

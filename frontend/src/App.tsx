@@ -37,13 +37,13 @@ import { SelectOfferType } from './pages/company/SelectOfferType';
 import { Documents } from './pages/company/Documents';
 import { IPFSInfo } from './pages/company/IPFSInfo';
 import { DefaultCases } from './pages/admin/DefaultCases';
-import { AdminSettings } from './pages/admin/Settings';
+
 import { Companies } from './pages/admin/Companies';
 import { AdminOffers } from './pages/admin/AdminOffers';
 import { PendingTransactions } from './pages/admin/PendingTransactions';
 import { AssetCompliance } from './pages/admin/AssetCompliance';
 import { EmergencyControls } from './pages/admin/EmergencyControls';
-import { Treasury } from './pages/admin/Treasury';
+
 import { TokensPage } from './pages/admin/TokensPage';
 
 function App() {
@@ -97,12 +97,12 @@ function App() {
           <Route path="transactions" element={<PendingTransactions />} />
           <Route path="compliance" element={<AssetCompliance />} />
           <Route path="emergency" element={<EmergencyControls />} />
-          <Route path="treasury" element={<Treasury />} />
+
           <Route path="wallets" element={<Wallets />} />
           <Route path="tokens" element={<TokensPage />} />
           <Route path="fees" element={<FeeConfig />} />
           <Route path="defaults" element={<DefaultCases />} />
-          <Route path="settings" element={<AdminSettings />} />
+
         </Route>
       </Routes>
     </BrowserRouter>
