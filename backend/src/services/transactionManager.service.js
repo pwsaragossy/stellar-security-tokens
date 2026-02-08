@@ -45,13 +45,14 @@ export class TransactionManager {
         const xdr = transaction.toXDR();
         const requiredSigners = keyManager.getRequiredSigners(operationType);
         const threshold = keyManager.getSignatureThreshold(operationType);
+        const signerRoles = keyManager.getSignerRoles(operationType);
 
         const pendingTx = await MultiSigTransactionService.create({
             operationType,
             xdr,
             requiredSigners,
             thresholdRequired: threshold,
-            metadata,
+            metadata: { ...metadata, signerRoles },
             description: description || `Automated ${operationType} request`,
             initiatorId,
         });

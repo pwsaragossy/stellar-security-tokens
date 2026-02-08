@@ -333,6 +333,27 @@ export function Approvals() {
             toast.error('Connect Freighter wallet first');
             return;
         }
+
+        const tx = item.raw;
+        const signerRoles: Record<string, string> = tx.metadata?.signerRoles || {};
+        const getRoleName = (pk: string) => signerRoles[pk] || pk.slice(0, 4) + '…' + pk.slice(-4);
+        const collected = tx.collectedSignatures || {};
+        const remaining: string[] = (tx.requiredSigners || []).filter((s: string) => !collected[s]);
+
+        // Pre-sign validation
+        if (!remaining.includes(freighterDevice.publicKey)) {
+            const alreadySigned = tx.requiredSigners?.includes(freighterDevice.publicKey);
+            if (alreadySigned) {
+                toast.error(`Already signed as ${getRoleName(freighterDevice.publicKey)}. Switch Freighter to another required signer.`);
+            } else {
+                const neededRoles = remaining.map((k: string) => `${getRoleName(k)} (${k.slice(0, 4)}…${k.slice(-4)})`).join(', ');
+                toast.error(`Current Freighter key is not a required signer. Switch to: ${neededRoles}`);
+            }
+            return;
+        }
+
+        const signingRole = getRoleName(freighterDevice.publicKey);
+
         setActionLoading(true);
         try {
             const xdrRes = await api.get(`/admin/transactions/${item.originalId}/xdr`);
@@ -342,11 +363,23 @@ export function Approvals() {
             const signResult = await freighterSign(xdr, networkPassphrase);
             if (!signResult) throw new Error('Signing cancelled');
 
-            await api.post(`/admin/transactions/${item.originalId}/sign`, {
+            const submitRes = await api.post(`/admin/transactions/${item.originalId}/sign`, {
                 publicKey: signResult.publicKey,
                 signature: signResult.signature,
             });
-            toast.success('Signature submitted');
+
+            if (submitRes.success) {
+                const data = submitRes.data;
+                const remainingAfter = data?.remainingSignatures || (tx.thresholdRequired - (data?.signatureCount || 1));
+
+                if (remainingAfter <= 0) {
+                    toast.success(`Signed as ${signingRole} — all signatures collected! Ready to submit.`);
+                } else {
+                    const nextSigners = remaining.filter((k: string) => k !== signResult.publicKey);
+                    const nextRoles = nextSigners.map((k: string) => getRoleName(k)).join(', ');
+                    toast.success(`Signed as ${signingRole} (${data?.signatureCount || 1}/${tx.thresholdRequired}). Switch Freighter to ${nextRoles} to continue.`);
+                }
+            }
             await refresh();
         } catch (err: any) {
             toast.error(err.message || 'Failed to sign');
@@ -530,6 +563,7 @@ export function Approvals() {
                             actionLoading={actionLoading}
                             isSigning={isSigning}
                             freighterConnected={!!freighterDevice}
+                            freighterPublicKey={freighterDevice?.publicKey || ''}
                             onApproveInvestor={() => handleApproveInvestor(selected)}
                             onRejectInvestor={() => setRejectDialog({ open: true, item: selected })}
                             onSponsorInvestor={() => setSponsorDialog({ open: true, item: selected })}
@@ -683,6 +717,7 @@ function DetailPanel({
     actionLoading,
     isSigning,
     freighterConnected,
+    freighterPublicKey,
     onApproveInvestor,
     onRejectInvestor,
     onSponsorInvestor,
@@ -703,6 +738,7 @@ function DetailPanel({
     actionLoading: boolean;
     isSigning: boolean;
     freighterConnected: boolean;
+    freighterPublicKey: string;
     onApproveInvestor: () => void;
     onRejectInvestor: () => void;
     onSponsorInvestor: () => void;
@@ -896,7 +932,16 @@ function DetailPanel({
                                 ) : (
                                     <Fingerprint className="w-4 h-4 mr-2" />
                                 )}
-                                {freighterConnected ? 'Sign with Freighter' : 'Connect Freighter First'}
+                                {freighterConnected
+                                    ? (() => {
+                                        const collected = item.raw.collectedSignatures || {};
+                                        const remaining = (item.raw.requiredSigners || []).filter((s: string) => !collected[s]);
+                                        const roles: Record<string, string> = item.raw.metadata?.signerRoles || {};
+                                        if (remaining.length === 0) return 'All Signed — Submit';
+                                        if (remaining.includes(freighterPublicKey)) return `Sign as ${roles[freighterPublicKey] || 'Signer'}`;
+                                        return `Sign as ${roles[remaining[0]] || 'Signer'}`;
+                                    })()
+                                    : 'Connect Freighter First'}
                             </Button>
                         )}
                         <Button
@@ -1189,9 +1234,13 @@ function MultisigDetail({ raw }: { raw: any }) {
         opex_withdrawal: 'OpEx Withdrawal',
         trustline_auth: 'Trustline Authorization',
         account_setup: 'Account Setup',
+        sac_deploy: 'SAC Deployment',
+        unlock_token: 'Unlock Token',
     };
 
-    const sigStatus = raw.signatureStatus;
+    const signerRoles: Record<string, string> = raw.metadata?.signerRoles || {};
+    const collected: Record<string, string> = raw.collectedSignatures || {};
+    const requiredSigners: string[] = raw.requiredSigners || [];
 
     return (
         <>
@@ -1211,32 +1260,50 @@ function MultisigDetail({ raw }: { raw: any }) {
                 </div>
             </DetailSection>
 
-            <DetailSection title="Signature Progress">
+            <DetailSection title={`Required Signatures (${Object.keys(collected).length}/${raw.thresholdRequired})`}>
                 <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="text-zinc-400">Collected</span>
-                        <span className="text-white font-mono">
-                            {sigStatus?.collected || 0} / {raw.thresholdRequired}
-                        </span>
-                    </div>
+                    {/* Progress bar */}
                     <div className="w-full bg-zinc-800 rounded-full h-2">
                         <div
                             className="h-2 rounded-full bg-purple-500 transition-all"
                             style={{
-                                width: `${Math.min(((sigStatus?.collected || 0) / raw.thresholdRequired) * 100, 100)}%`,
+                                width: `${Math.min((Object.keys(collected).length / raw.thresholdRequired) * 100, 100)}%`,
                             }}
                         />
                     </div>
-                    {sigStatus?.remainingSigners?.length > 0 && (
-                        <div className="pt-2">
-                            <p className="text-xs text-zinc-500 mb-1">Remaining signers:</p>
-                            {sigStatus.remainingSigners.map((s: string) => (
-                                <code key={s} className="block text-xs text-zinc-400 bg-black/30 px-2 py-1 rounded mt-1 break-all">
-                                    {s}
-                                </code>
-                            ))}
-                        </div>
-                    )}
+
+                    {/* Per-signer checklist */}
+                    <div className="space-y-1.5 pt-1">
+                        {requiredSigners.map((signer: string) => {
+                            const isSigned = !!collected[signer];
+                            const role = signerRoles[signer] || 'Unknown';
+                            const shortKey = `${signer.slice(0, 4)}…${signer.slice(-4)}`;
+
+                            return (
+                                <div
+                                    key={signer}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isSigned
+                                        ? 'bg-emerald-500/10 border border-emerald-500/20'
+                                        : 'bg-zinc-900/50 border border-zinc-700/30'
+                                        }`}
+                                >
+                                    {isSigned ? (
+                                        <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                    ) : (
+                                        <Clock className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                                    )}
+                                    <span className={`font-medium ${isSigned ? 'text-emerald-300' : 'text-zinc-400'
+                                        }`}>{role}</span>
+                                    <code className="text-zinc-600 text-xs ml-auto">{shortKey}</code>
+                                    {isSigned ? (
+                                        <span className="text-emerald-500 text-xs">Signed</span>
+                                    ) : (
+                                        <span className="text-yellow-500 text-xs">Awaiting</span>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             </DetailSection>
 
@@ -1249,30 +1316,44 @@ function MultisigDetail({ raw }: { raw: any }) {
                 </DetailSection>
             )}
 
-            {raw.metadata && Object.keys(raw.metadata).length > 0 && (
-                <DetailSection title="Operation Context">
-                    {raw.operationType === 'treasury_payment' && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <DetailRow label="Destination" value={raw.metadata.destination?.slice(0, 12) + '...'} />
-                            <DetailRow
-                                label="Amount"
-                                value={`${raw.metadata.amount} ${raw.metadata.assetCode || ''}`}
-                            />
-                        </div>
-                    )}
-                    {raw.operationType === 'dividend_distribution' && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <DetailRow label="Batch Size" value={`${raw.metadata.operationCount} payments`} />
-                            <DetailRow label="Asset" value={raw.metadata.assetCode} />
-                        </div>
-                    )}
-                    {!['treasury_payment', 'dividend_distribution'].includes(raw.operationType) && (
-                        <pre className="text-xs text-blue-300 bg-black/30 p-2 rounded overflow-x-auto">
-                            {JSON.stringify(raw.metadata, null, 2)}
-                        </pre>
-                    )}
-                </DetailSection>
-            )}
+            {raw.metadata && (() => {
+                const displayKeys = Object.keys(raw.metadata).filter(k => k !== 'signerRoles');
+                if (displayKeys.length === 0) return null;
+                return (
+                    <DetailSection title="Operation Context">
+                        {raw.operationType === 'token_issue' && (
+                            <div className="grid grid-cols-2 gap-4">
+                                <DetailRow label="Asset" value={raw.metadata.assetCode} />
+                                <DetailRow label="Supply" value={raw.metadata.totalSupply} />
+                                {raw.metadata.offerId && <DetailRow label="Offer ID" value={raw.metadata.offerId} />}
+                            </div>
+                        )}
+                        {raw.operationType === 'treasury_payment' && (
+                            <div className="grid grid-cols-2 gap-4">
+                                <DetailRow label="Destination" value={raw.metadata.destination?.slice(0, 12) + '...'} />
+                                <DetailRow
+                                    label="Amount"
+                                    value={`${raw.metadata.amount} ${raw.metadata.assetCode || ''}`}
+                                />
+                            </div>
+                        )}
+                        {raw.operationType === 'dividend_distribution' && (
+                            <div className="grid grid-cols-2 gap-4">
+                                <DetailRow label="Batch Size" value={`${raw.metadata.operationCount} payments`} />
+                                <DetailRow label="Asset" value={raw.metadata.assetCode} />
+                            </div>
+                        )}
+                        {!['treasury_payment', 'dividend_distribution', 'token_issue'].includes(raw.operationType) && displayKeys.length > 0 && (
+                            <pre className="text-xs text-blue-300 bg-black/30 p-2 rounded overflow-x-auto">
+                                {JSON.stringify(
+                                    Object.fromEntries(displayKeys.map(k => [k, raw.metadata[k]])),
+                                    null, 2
+                                )}
+                            </pre>
+                        )}
+                    </DetailSection>
+                );
+            })()}
         </>
     );
 }

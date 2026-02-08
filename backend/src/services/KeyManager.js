@@ -256,6 +256,33 @@ class KeyManager {
     }
 
     /**
+     * Get a mapping of public key → role name for the required signers of an operation.
+     * Used by the frontend to display human-readable labels (e.g. "Issuer", "Distributor").
+     * @param {string} operationType - Type of operation
+     * @returns {Object} Map of { publicKey: roleName }
+     */
+    getSignerRoles(operationType) {
+        const issuer = this.getIssuerPublicKey();
+        const distributor = this.getDistributorPublicKey();
+        const treasury = this.getTreasuryPublicKey();
+        const operations = this.getOperationsPublicKey();
+
+        const keyToRole = {
+            [issuer]: 'Issuer',
+            [distributor]: 'Distributor',
+            [treasury]: 'Treasury',
+            [operations]: 'Operations',
+        };
+
+        const signers = this.getRequiredSigners(operationType);
+        const roles = {};
+        for (const signer of signers) {
+            roles[signer] = keyToRole[signer] || 'Unknown';
+        }
+        return roles;
+    }
+
+    /**
      * Get threshold for an operation type
      * @param {string} operationType - Type of operation
      * @returns {number} Number of signatures required
