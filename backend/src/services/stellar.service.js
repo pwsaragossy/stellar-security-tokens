@@ -465,59 +465,34 @@ export class StellarService {
 
       const asset = createAsset(code, issuerPublicKey);
 
-      // 1. Check if distributor has trustline
+      // ─── Build ALL classic operations in a single atomic transaction ───
+      // This ensures the entire issuance (trustline + auth + payment) goes
+      // through multisig as one unit instead of crashing mid-flow.
+      const classicOperations = [];
+
+      // 1. Trustline: Check if distributor needs one
       const trustline = distributorAccount.balances.find(
         (b) => b.asset_code === code && b.asset_issuer === issuerPublicKey
       );
 
-      // 2. If no trustline, create it using already-loaded account
       if (!trustline) {
-        console.log(`[StellarService] Creating trustline for distributor (${distributorPublicKey}) for asset ${code}`);
-        try {
-          const trustOp = Operation.changeTrust({
+        console.log(`[StellarService] Including trustline creation for distributor (${distributorPublicKey}) for asset ${code}`);
+        classicOperations.push(
+          Operation.changeTrust({
             asset: asset,
             source: distributorPublicKey,
-          });
-          // Use buildTransactionWithAccount to avoid re-loading the account
-          const trustTx = buildTransactionWithAccount(distributorAccount, [trustOp]);
-          const trustResult = await TransactionManager.submit({
-            transaction: trustTx,
-            signingRole: 'DISTRIBUTOR',
-            operationType: 'trustline_setup',
-            description: `Create distributor trustline for ${code}`,
-          });
-          if (!trustResult.success) {
-            console.error(`[StellarService] Trustline creation failed:`, trustResult);
-            throw new Error(`Failed to create distributor trustline: ${trustResult.userFriendlyError || trustResult.error}`);
-          }
-          console.log(`[StellarService] Trustline created successfully: ${trustResult.hash}`);
-          // Wait for ledger close
-          await new Promise(resolve => setTimeout(resolve, 5000));
-        } catch (trustError) {
-          console.error(`[StellarService] Error during trustline creation:`, trustError);
-          throw new Error(`Trustline creation error: ${trustError.message}`);
-        }
+          })
+        );
       }
 
-      // 3. Check if trustline needs authorization (if issuer has AuthRequiredFlag)
+      // 2. Authorization: If issuer requires auth, authorize the distributor trustline
       const needsAuth = issuerAccount.flags.auth_required;
-
-      // Use fresh server instances after transaction submission to avoid connection state issues
-      const freshServer = createFreshServer();
-
-      // Re-load distributor account to check current trustline status
-      const updatedDistributorAccount = await freshServer.loadAccount(distributorPublicKey);
-
-      const currentTrust = updatedDistributorAccount.balances.find(
+      const currentTrust = distributorAccount.balances.find(
         (b) => b.asset_code === code && b.asset_issuer === issuerPublicKey
       );
 
-      // --- TRANSACTION 1: CLASSIC ISSUANCE ---
-      const classicOperations = [];
-
-      // if authorized flag is not set and issuer requires it, authorize now
       if (needsAuth && (!currentTrust || !currentTrust.is_authorized)) {
-        console.log(`[StellarService] Authorizing distributor trustline for asset ${code}`);
+        console.log(`[StellarService] Including trustline authorization for asset ${code}`);
         classicOperations.push(
           Operation.setTrustLineFlags({
             trustor: distributorPublicKey,
@@ -528,17 +503,7 @@ export class StellarService {
         );
       }
 
-      // Perform payment (issuance)
-      classicOperations.push(
-        Operation.payment({
-          destination: distributorPublicKey,
-          asset: asset,
-          amount: amount.toString(),
-          source: issuerPublicKey,
-        })
-      );
-
-      // Configurar home domain se fornecido
+      // 3. Home domain if provided
       if (options.homeDomain) {
         classicOperations.unshift(
           Operation.setOptions({
@@ -548,26 +513,55 @@ export class StellarService {
         );
       }
 
-      console.log(`[StellarService] Submitting classic issuance for asset ${code}`);
-      const issuerAccountClassic = await this.getAccountRPC(issuerPublicKey);
-      const classicTx = buildTransactionWithAccount(issuerAccountClassic, classicOperations);
+      // 4. Payment (the actual token issuance)
+      classicOperations.push(
+        Operation.payment({
+          destination: distributorPublicKey,
+          asset: asset,
+          amount: amount.toString(),
+          source: issuerPublicKey,
+        })
+      );
+
+      // ─── Submit the single atomic transaction ───
+      console.log(`[StellarService] Submitting atomic issuance for asset ${code} (${classicOperations.length} ops)`);
+      const issuerAccountForTx = await this.getAccountRPC(issuerPublicKey);
+      const classicTx = buildTransactionWithAccount(issuerAccountForTx, classicOperations);
 
       const classicResult = await TransactionManager.submit({
         transaction: classicTx,
         signingRole: 'ISSUER',
         operationType: 'token_issue',
-        description: `Issue ${amount} ${code} (Classic)`,
+        description: `Issue ${amount} ${code} (trustline + auth + payment)`,
         metadata: {
           assetCode: code,
           amount,
           type: 'classic_issuance',
           issuerPublicKey: issuerPublicKey,
+          offerId: options.offerId,
         }
       });
 
-      if (!classicResult.success && classicResult.status !== 'pending_multisig') {
+      // If multisig is pending, return early — can't proceed to SAC until issuance is confirmed
+      if (classicResult.status === 'pending_multisig') {
+        console.log(`[StellarService] Token issuance queued for MultiSig. ID: ${classicResult.multiSigTransactionId}`);
+        return {
+          success: true,
+          status: 'pending_multisig',
+          multiSigTransactionId: classicResult.multiSigTransactionId,
+          assetCode: code,
+          issuerPublicKey,
+          distributorPublicKey,
+          amount: amount.toString(),
+        };
+      }
+
+      if (!classicResult.success) {
         throw new Error(`Classic issuance failed: ${classicResult.userFriendlyError || classicResult.error}`);
       }
+
+      // Wait for ledger close before SAC deployment
+      await new Promise(resolve => setTimeout(resolve, 5000));
 
       // --- TRANSACTION 2: SOROBAN SAC DEPLOYMENT ---
       // This is a separate transaction to avoid simulation errors with multiple ops
@@ -589,19 +583,18 @@ export class StellarService {
       const sacResult = await TransactionManager.submit({
         transaction: sacTx,
         signingRole: 'ISSUER',
-        operationType: 'token_issue',
+        operationType: 'sac_deploy',
         description: `Deploy SAC for asset ${code}`,
         metadata: {
           assetCode: code,
           type: 'sac_deployment',
-          sacContractId
+          sacContractId,
+          offerId: options.offerId,
         }
       });
 
       if (!sacResult.success && sacResult.status !== 'pending_multisig') {
         console.warn(`[StellarService] SAC deployment failed (classic succeeded): ${sacResult.error}`);
-        // We don't necessarily want to fail the whole thing since issuance happened
-        // but for now, we'll keep error reporting strict.
       }
 
       const returnData = {
@@ -610,7 +603,7 @@ export class StellarService {
         issuerPublicKey: issuerPublicKey,
         distributorPublicKey: distributorPublicKey,
         amount: amount.toString(),
-        transactionHash: classicResult.hash || (classicResult.status === 'pending_multisig' ? 'pending' : null),
+        transactionHash: classicResult.hash,
         ledger: classicResult.ledger,
         sacContractId,
         sacTransactionHash: sacResult.hash,

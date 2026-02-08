@@ -241,13 +241,15 @@ class KeyManager {
 
         // Default: use appropriate role's public key
         const defaultMap = {
-            'token_issue': [this.getIssuerPublicKey()],
+            'token_issue': [this.getIssuerPublicKey(), this.getDistributorPublicKey()],
             'token_distribute': [this.getDistributorPublicKey()],
             'freeze_account': [this.getIssuerPublicKey()],
             'clawback': [this.getIssuerPublicKey()],
             'treasury_payment': this.getTreasurySigners(),
             'trustline_auth': [this.getIssuerPublicKey()],
             'account_setup': [this.getOperationsPublicKey()],
+            'sac_deploy': [this.getIssuerPublicKey()],
+            'unlock_token': [this.getIssuerPublicKey()],
         };
 
         return defaultMap[operationType] || [this.getOperationsPublicKey()];
@@ -272,7 +274,7 @@ class KeyManager {
 
         // Default thresholds for production
         const defaultThresholds = {
-            'token_issue': 1,           // Single issuer signature
+            'token_issue': 2,           // ISSUER + DISTRIBUTOR (bundled trustline + payment)
             'token_distribute': 1,      // Single distributor signature
             'freeze_account': 1,        // Single issuer (compliance action)
             'clawback': 2,              // 2-of-N (requires approval)
@@ -281,6 +283,8 @@ class KeyManager {
             'trustline_auth': 1,        // Single issuer
             'account_setup': 1,         // Single operations
             'disable_clawback': 2,      // 2-of-3 consensus (Institutional Requirement)
+            'sac_deploy': 1,            // Single issuer
+            'unlock_token': 1,          // Single issuer
         };
 
         return defaultThresholds[operationType] || 1;
@@ -308,9 +312,16 @@ class KeyManager {
             return false;
         }
 
-        // Operations that ALWAYS require multisig in production
-        const criticalOps = ['clawback', 'treasury_payment', 'dividend_distribution', 'disable_clawback'];
-        return criticalOps.includes(operationType) || this.getSignatureThreshold(operationType) > 1;
+        // In multisig mode, ONLY operations that exclusively use the OPERATIONS
+        // hot wallet can bypass multisig. All other roles (ISSUER, DISTRIBUTOR,
+        // TREASURY) have their secret keys on hardware wallets / Freighter.
+        const opsOnlyOperations = ['account_setup', 'channel_op', 'sponsorship'];
+        if (opsOnlyOperations.includes(operationType)) {
+            return false;
+        }
+
+        // Everything else MUST go through multisig in production
+        return true;
     }
 }
 
