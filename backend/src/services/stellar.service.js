@@ -460,8 +460,11 @@ export class StellarService {
         throw new Error('Amount must be a positive number');
       }
 
-      const issuerAccount = await stellarServer.loadAccount(issuerPublicKey);
-      const distributorAccount = await stellarServer.loadAccount(distributorPublicKey);
+      // CRITICAL: Use fresh server instances for account loading to avoid the
+      // stale URL bug where the SDK mutates the singleton's serverURL after prior ops
+      const freshHorizon = createFreshServer();
+      const issuerAccount = await freshHorizon.loadAccount(issuerPublicKey);
+      const distributorAccount = await freshHorizon.loadAccount(distributorPublicKey);
 
       const asset = createAsset(code, issuerPublicKey);
 
