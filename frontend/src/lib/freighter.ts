@@ -23,7 +23,6 @@ import {
     getAddress,
     getNetwork,
     signTransaction,
-    signMessage,
 } from '@stellar/freighter-api';
 
 export interface FreighterDevice {
@@ -157,12 +156,12 @@ export async function signTransactionWithFreighter(
         }
         const publicKey = addrResult.address;
 
-        console.log('[Freighter] Please approve the transaction in the Freighter popup...');
+
 
         // Sign via official API — returns { signedTxXdr, signerAddress }
         const signResult = await signTransaction(xdr, { networkPassphrase });
         if (signResult.error) {
-            console.error('[Freighter] signTransaction error:', JSON.stringify(signResult.error));
+
             const msg = typeof signResult.error === 'string'
                 ? signResult.error
                 : (signResult.error as any)?.message || JSON.stringify(signResult.error);
@@ -185,7 +184,7 @@ export async function signTransactionWithFreighter(
             String.fromCharCode(...new Uint8Array(lastSig.signature()))
         );
 
-        console.log('[Freighter] Transaction signed successfully');
+
 
         return {
             publicKey: signResult.signerAddress || publicKey,
@@ -199,78 +198,6 @@ export async function signTransactionWithFreighter(
     }
 }
 
-/**
- * Sign an arbitrary message with Freighter (for challenge-response auth).
- * Uses signMessage from Freighter API v6+ — signs plain text, not XDR.
- * The account does NOT need to be funded on-chain.
- */
-export async function signMessageWithFreighter(
-    message: string
-): Promise<{ signature: string; publicKey: string }> {
-    // Verify connected
-    const connResult = await freighterIsConnected();
-    if (connResult.error || !connResult.isConnected) {
-        throw new Error('Freighter extension is not installed');
-    }
-
-    try {
-        const addrResult = await getAddress();
-        if (addrResult.error) {
-            throw new Error('Failed to get Freighter address. Is the wallet unlocked?');
-        }
-        const publicKey = addrResult.address;
-
-        console.log('[Freighter] Please approve the message signing in the Freighter popup...');
-
-        const result = await signMessage(message, {
-            address: publicKey,
-        });
-
-        if (result.error) {
-            const msg = String(result.error);
-            if (msg.includes('User declined') || msg.includes('cancel')) {
-                throw new Error('Message signing was declined in Freighter.');
-            }
-            throw new Error(`Message signing failed: ${msg}`);
-        }
-
-        // signMessage returns { signedMessage: Buffer|string, signerAddress }
-        const signedMessage = result.signedMessage;
-        let signatureBase64: string;
-
-        console.log('[Freighter] signMessage result type:', typeof signedMessage, 'length:', signedMessage?.length ?? 0);
-
-        if (Buffer.isBuffer(signedMessage)) {
-            signatureBase64 = signedMessage.toString('base64');
-        } else if (typeof signedMessage === 'string') {
-            // Freighter v4+ returns a string — check if it's hex-encoded (128 chars = 64 bytes in hex)
-            if (/^[0-9a-fA-F]+$/.test(signedMessage) && signedMessage.length === 128) {
-                // Convert hex to base64
-                const bytes = new Uint8Array(signedMessage.match(/.{2}/g)!.map(b => parseInt(b, 16)));
-                signatureBase64 = btoa(String.fromCharCode(...bytes));
-                console.log('[Freighter] Converted hex signature to base64');
-            } else {
-                // Might already be base64
-                signatureBase64 = signedMessage;
-                console.log('[Freighter] Using signature string as-is (assumed base64)');
-            }
-        } else {
-            throw new Error('Unexpected signature format from Freighter');
-        }
-
-        console.log('[Freighter] Message signed successfully, signature length:', signatureBase64.length);
-
-        return {
-            signature: signatureBase64,
-            publicKey: result.signerAddress || publicKey,
-        };
-    } catch (error: unknown) {
-        if (error instanceof Error) throw error;
-        const err = error as { message?: string };
-        throw new Error(`Failed to sign message: ${err.message}`);
-    }
-}
-
 export default {
     isFreighterInstalled,
     isFreighterConnected,
@@ -278,5 +205,4 @@ export default {
     getFreighterNetwork,
     connectFreighter,
     signTransactionWithFreighter,
-    signMessageWithFreighter,
 };

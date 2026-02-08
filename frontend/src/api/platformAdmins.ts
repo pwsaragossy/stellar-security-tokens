@@ -30,17 +30,6 @@ export interface FeeLog {
 }
 
 export const platformAdminsApi = {
-  // Auth
-  login: async (email: string, password: string): Promise<ApiResponse<{ token: string; admin: PlatformAdmin; mfaToken?: string }>> => {
-    const response = await api.post('/platform-admins/login', { email, password });
-    return response.data;
-  },
-
-  verifyMfa: async (otp: string, mfaToken: string): Promise<ApiResponse<{ token: string; admin: PlatformAdmin }>> => {
-    const response = await api.post('/platform-admins/verify-mfa', { otp, mfaToken });
-    return response.data;
-  },
-
   // Freighter Challenge-Response Login (signTransaction-based)
   freighterChallenge: async (publicKey: string): Promise<ApiResponse<{ challengeXdr: string; networkPassphrase: string }>> => {
     const response = await api.post('/platform-admins/freighter/challenge', { publicKey });
