@@ -9,7 +9,9 @@ import {
     FileSignature,
     Send,
     ChevronRight,
-    Wallet
+    Wallet,
+    ShieldCheck,
+    CircleDashed
 } from 'lucide-react';
 import { FreighterConnect } from '../../components/admin/FreighterConnect';
 import { useFreighter } from '../../hooks/useFreighter';
@@ -75,6 +77,8 @@ const OP_TYPE_LABELS: Record<string, string> = {
     opex_withdrawal: 'OpEx Withdrawal',
     trustline_auth: 'Trustline Authorization',
     account_setup: 'Account Setup',
+    sac_deploy: 'SAC Deployment',
+    unlock_token: 'Unlock Token',
     other: 'Other',
 };
 
@@ -124,11 +128,42 @@ export function PendingTransactions() {
         fetchTransactions();
     });
 
+    // Helper: get role labels from transaction metadata
+    const getSignerRoles = (tx: PendingTransaction): Record<string, string> => {
+        return tx.metadata?.signerRoles || {};
+    };
+
+    const getRoleName = (tx: PendingTransaction, publicKey: string): string => {
+        const roles = getSignerRoles(tx);
+        return roles[publicKey] || publicKey.slice(0, 4) + '…' + publicKey.slice(-4);
+    };
+
+    // Helper: get remaining signers (not yet signed)
+    const getRemaining = (tx: PendingTransaction): string[] => {
+        const collected = tx.collectedSignatures || {};
+        return tx.requiredSigners.filter(s => !collected[s]);
+    };
+
     const handleSign = async (tx: PendingTransaction) => {
         if (!activeDevice) {
             setError('Please connect your Freighter wallet first');
             return;
         }
+
+        // Pre-sign validation: is the active Freighter key a remaining signer?
+        const remaining = getRemaining(tx);
+        if (!remaining.includes(activeDevice.publicKey)) {
+            const alreadySigned = tx.requiredSigners.includes(activeDevice.publicKey);
+            if (alreadySigned) {
+                toast.error(`You already signed as ${getRoleName(tx, activeDevice.publicKey)}. Switch Freighter to another required signer.`);
+            } else {
+                const neededRoles = remaining.map(k => `${getRoleName(tx, k)} (${k.slice(0, 4)}…${k.slice(-4)})`).join(', ');
+                toast.error(`Current Freighter key is not a required signer. Switch to: ${neededRoles}`);
+            }
+            return;
+        }
+
+        const signingRole = getRoleName(tx, activeDevice.publicKey);
 
         setActionLoading(tx.id);
         try {
@@ -139,32 +174,40 @@ export function PendingTransactions() {
             }
 
             const { xdr, networkPassphrase } = xdrResponse.data;
-            let signedPublicKey = '';
-            let signature = '';
 
             // Sign with Freighter
-            const signFn = freighterSign;
-            const signResult = await signFn(xdr, networkPassphrase);
+            const signResult = await freighterSign(xdr, networkPassphrase);
             if (!signResult) {
                 throw new Error('Signing was cancelled or failed');
             }
 
-            signedPublicKey = signResult.publicKey;
-            signature = signResult.signature;
-
             // Submit signature to backend
             const submitResponse = await api.post(`/admin/transactions/${tx.id}/sign`, {
-                publicKey: signedPublicKey,
-                signature: signature,
+                publicKey: signResult.publicKey,
+                signature: signResult.signature,
             });
 
             if (submitResponse.success) {
+                const data = submitResponse.data;
+                const remainingAfter = data?.remainingSignatures || (tx.thresholdRequired - (data?.signatureCount || 1));
+
+                if (remainingAfter <= 0) {
+                    toast.success(`Signed as ${signingRole} — all signatures collected! Ready to submit.`);
+                } else {
+                    const nextSigners = getRemaining({ ...tx, collectedSignatures: { ...(tx.collectedSignatures || {}), [signResult.publicKey]: signResult.signature } });
+                    const nextRoles = nextSigners.map(k => getRoleName(tx, k)).join(', ');
+                    toast.success(`Signed as ${signingRole} (${data?.signatureCount || 1}/${tx.thresholdRequired}). Switch Freighter to ${nextRoles} to continue.`);
+                }
+
                 await fetchTransactions();
-                setSelectedTx(null);
-                toast.success('Signature submitted');
+                // Re-select the updated TX to reflect new state
+                const updated = (await api.get(`/admin/transactions/${tx.id}/xdr`));
+                if (updated.success) {
+                    await fetchTransactions();
+                }
             }
         } catch (err: any) {
-            setError(err.message || 'Failed to sign transaction');
+            toast.error(err.message || 'Failed to sign transaction');
         } finally {
             setActionLoading(null);
         }
@@ -347,7 +390,7 @@ export function PendingTransactions() {
                             <div className="space-y-3 text-sm">
                                 <div>
                                     <p className="text-zinc-400">Operation</p>
-                                    <p className="text-white">{OP_TYPE_LABELS[selectedTx.operationType]}</p>
+                                    <p className="text-white">{OP_TYPE_LABELS[selectedTx.operationType] || selectedTx.operationType}</p>
                                 </div>
 
                                 <div>
@@ -357,11 +400,44 @@ export function PendingTransactions() {
                                     </span>
                                 </div>
 
-                                <div>
-                                    <p className="text-zinc-400">Signatures</p>
-                                    <p className="text-white">
-                                        {selectedTx.signatureStatus?.collected || 0} of {selectedTx.thresholdRequired} required
+                                {/* ── Per-Signer Checklist ── */}
+                                <div className="pt-2 border-t border-zinc-700/50 mt-2">
+                                    <p className="text-zinc-400 mb-2 font-medium flex items-center gap-1.5">
+                                        <FileSignature className="w-3.5 h-3.5" />
+                                        Required Signatures ({selectedTx.signatureStatus?.collected || 0}/{selectedTx.thresholdRequired})
                                     </p>
+                                    <div className="space-y-1.5">
+                                        {selectedTx.requiredSigners.map((signer) => {
+                                            const collected = selectedTx.collectedSignatures || {};
+                                            const isSigned = !!collected[signer];
+                                            const role = getRoleName(selectedTx, signer);
+                                            const isActive = activeDevice?.publicKey === signer;
+                                            const shortKey = `${signer.slice(0, 4)}…${signer.slice(-4)}`;
+
+                                            return (
+                                                <div
+                                                    key={signer}
+                                                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-mono ${isSigned
+                                                        ? 'bg-emerald-500/10 border border-emerald-500/20'
+                                                        : isActive
+                                                            ? 'bg-purple-500/10 border border-purple-500/30'
+                                                            : 'bg-zinc-900/50 border border-zinc-700/30'
+                                                        }`}
+                                                >
+                                                    {isSigned ? (
+                                                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                                                    ) : (
+                                                        <CircleDashed className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+                                                    )}
+                                                    <span className={`font-sans font-medium ${isSigned ? 'text-emerald-300' : isActive ? 'text-purple-300' : 'text-zinc-400'
+                                                        }`}>{role}</span>
+                                                    <span className="text-zinc-600 ml-auto">{shortKey}</span>
+                                                    {isSigned && <span className="text-emerald-500 text-[10px] font-sans">Signed</span>}
+                                                    {!isSigned && isActive && <span className="text-purple-400 text-[10px] font-sans">Active</span>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
 
                                 <div>
@@ -381,10 +457,17 @@ export function PendingTransactions() {
                                     </div>
                                 )}
 
-                                {selectedTx.metadata && Object.keys(selectedTx.metadata).length > 0 && (
+                                {selectedTx.metadata && Object.keys(selectedTx.metadata).filter(k => k !== 'signerRoles').length > 0 && (
                                     <div className="pt-2 border-t border-zinc-700/50 mt-2">
                                         <p className="text-zinc-400 mb-1 font-medium">Operation Context</p>
                                         <div className="bg-black/20 rounded p-2 text-[11px] font-mono text-blue-300">
+                                            {selectedTx.operationType === 'token_issue' && (
+                                                <div className="space-y-1">
+                                                    <div>Asset: {selectedTx.metadata.assetCode}</div>
+                                                    <div>Supply: {selectedTx.metadata.totalSupply}</div>
+                                                    {selectedTx.metadata.offerId && <div>Offer ID: {selectedTx.metadata.offerId}</div>}
+                                                </div>
+                                            )}
                                             {selectedTx.operationType === 'dividend_distribution' && (
                                                 <div className="space-y-1">
                                                     <div>Batch Size: {selectedTx.metadata.operationCount} payments</div>
@@ -403,6 +486,32 @@ export function PendingTransactions() {
                                     </div>
                                 )}
                             </div>
+
+                            {/* ── Pre-Sign Guidance ── */}
+                            {selectedTx.status !== 'ready' && activeDevice && (() => {
+                                const remaining = getRemaining(selectedTx);
+                                const isRequired = remaining.includes(activeDevice.publicKey);
+                                if (isRequired) {
+                                    return (
+                                        <div className="mt-3 p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                                            <p className="text-xs text-purple-300">
+                                                <Wallet className="w-3 h-3 inline mr-1" />
+                                                Ready to sign as <strong>{getRoleName(selectedTx, activeDevice.publicKey)}</strong>
+                                            </p>
+                                        </div>
+                                    );
+                                } else {
+                                    const nextRoles = remaining.map(k => `${getRoleName(selectedTx, k)} (${k.slice(0, 4)}…${k.slice(-4)})`).join(', ');
+                                    return (
+                                        <div className="mt-3 p-2.5 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                            <p className="text-xs text-yellow-300">
+                                                <AlertTriangle className="w-3 h-3 inline mr-1" />
+                                                Switch Freighter to: <strong>{nextRoles}</strong>
+                                            </p>
+                                        </div>
+                                    );
+                                }
+                            })()}
 
                             {/* Actions */}
                             <div className="mt-4 pt-4 border-t border-zinc-700 space-y-2">
@@ -430,7 +539,9 @@ export function PendingTransactions() {
                                         ) : (
                                             <Wallet className="w-4 h-4" />
                                         )}
-                                        {activeDevice ? 'Sign with Freighter' : 'Connect Freighter First'}
+                                        {activeDevice
+                                            ? `Sign as ${getRoleName(selectedTx, activeDevice.publicKey)}`
+                                            : 'Connect Freighter First'}
                                     </button>
                                 )}
 
