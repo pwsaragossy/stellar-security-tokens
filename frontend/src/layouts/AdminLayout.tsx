@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, DollarSign, Shield, Wallet, AlertTriangle, Building2, FileText, FileSignature, Siren, Coins, Info, CheckCircle2 } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, DollarSign, Shield, Wallet, AlertTriangle, Building2, FileText, FileSignature, Siren, Coins, Info, CheckCircle2, ClipboardCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -16,6 +16,16 @@ import {
 } from "@/components/ui/dialog"
 
 const PAGE_DESCRIPTIONS: Record<string, { title: string, description: string, keyFeatures: string[] }> = {
+    '/admin/approvals': {
+        title: 'Approvals Hub',
+        description: 'Unified queue for all pending approvals across the platform.',
+        keyFeatures: [
+            'Review investor KYC, company onboarding, and offer submissions',
+            'Unlock tokens and sign multi-signature transactions',
+            'Split-pane detail view with type-specific context',
+            'Real-time counts across all 5 approval domains'
+        ]
+    },
     '/admin/dashboard': {
         title: 'Admin Dashboard',
         description: 'Real-time overview of platform activity and key performance indicators.',
@@ -190,6 +200,7 @@ export function AdminLayout() {
 
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
+        { id: 'approvals', label: 'Approvals', icon: ClipboardCheck, path: '/admin/approvals' },
         { id: 'users', label: 'Investors', icon: Users, path: '/admin/users' },
         { id: 'companies', label: 'Companies', icon: Building2, path: '/admin/companies' },
         { id: 'tokens', label: 'Tokens', icon: Coins, path: '/admin/tokens' },

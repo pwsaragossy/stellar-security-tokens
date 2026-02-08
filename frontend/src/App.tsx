@@ -45,6 +45,7 @@ import { AssetCompliance } from './pages/admin/AssetCompliance';
 import { EmergencyControls } from './pages/admin/EmergencyControls';
 
 import { TokensPage } from './pages/admin/TokensPage';
+import { Approvals } from './pages/admin/Approvals';
 
 function App() {
   return (
@@ -91,6 +92,7 @@ function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="approvals" element={<Approvals />} />
           <Route path="users" element={<UserManagement />} />
           <Route path="companies" element={<Companies />} />
           <Route path="offers" element={<AdminOffers />} />
