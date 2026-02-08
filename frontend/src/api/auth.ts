@@ -13,11 +13,5 @@ export const authApi = {
     const response = await api.post('/company-users/login', { email, password });
     return response.data;
   },
-
-  // Platform admin login
-  adminLogin: async (email: string, password: string): Promise<ApiResponse<LoginResponse>> => {
-    const response = await api.post('/platform-admins/login', { email, password });
-    return response.data;
-  },
 };
 

@@ -21,43 +21,6 @@ const createValidation = [
   validate,
 ];
 
-const loginValidation = [
-  body('email').isEmail().withMessage('Valid email is required'),
-  body('password').notEmpty().withMessage('Password is required'),
-  validate,
-];
-
-/**
- * @swagger
- * /api/platform-admins/login:
- *   post:
- *     summary: Login de administrador
- *     tags: [Platform Admin]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               password:
- *                 type: string
- *     responses:
- *       200:
- *         description: Login realizado, retorna JWT
- *       401:
- *         description: Credenciais inválidas
- */
-// Rotas públicas
-router.post('/login', loginValidation, PlatformAdminController.loginPlatformAdmin);
-router.post('/verify-mfa', authenticateToken, PlatformAdminController.verifyAdminMfa);
-
 // Rota de debug para criar admin sem autenticação (apenas em desenvolvimento)
 if (process.env.NODE_ENV !== 'production') {
   router.post('/debug/create', createValidation, PlatformAdminController.createPlatformAdmin);

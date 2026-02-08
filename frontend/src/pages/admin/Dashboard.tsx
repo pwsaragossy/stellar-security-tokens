@@ -69,7 +69,6 @@ export function AdminDashboard() {
                 activeUsers: investors.filter((i: Investor) => i.status === 'approved').length,
             });
         } catch (err: any) {
-            console.error(err);
             setError('Failed to load dashboard data. Ensure backend services are running.');
         } finally {
             setLoading(false);
