@@ -108,7 +108,7 @@ export class MultiSigTransactionService {
      * @returns {Promise<Object[]>} Array of pending transactions
      */
     static async listPending(options = {}) {
-        const { statuses = ['pending', 'partially_signed'], limit = 50 } = options;
+        const { statuses = ['pending', 'partially_signed', 'ready'], limit = 50 } = options;
 
         return prisma.multiSigTransaction.findMany({
             where: {
@@ -203,6 +203,25 @@ export class MultiSigTransactionService {
             thresholdRequired: tx.thresholdRequired,
             status: newStatus
         });
+
+        // Auto-submit when all signatures are collected
+        if (thresholdMet) {
+            log.info(`TX #${txId}: All signatures collected — auto-submitting to Stellar...`);
+            try {
+                const submitResult = await this.submit(txId);
+                return {
+                    ...updated,
+                    signatureCount,
+                    thresholdMet,
+                    remainingSignatures: 0,
+                    autoSubmitted: true,
+                    submitResult,
+                };
+            } catch (submitError) {
+                log.error(`TX #${txId}: Auto-submit failed: ${submitError.message}`);
+                // Fall through to return the normal result — the admin can retry from UI
+            }
+        }
 
         return {
             ...updated,

@@ -189,10 +189,12 @@ export function PendingTransactions() {
 
             if (submitResponse.success) {
                 const data = submitResponse.data;
-                const remainingAfter = data?.remainingSignatures || (tx.thresholdRequired - (data?.signatureCount || 1));
+                const remainingAfter = data?.remainingSignatures ?? (tx.thresholdRequired - (data?.signatureCount || 1));
 
-                if (remainingAfter <= 0) {
-                    toast.success(`Signed as ${signingRole} — all signatures collected! Ready to submit.`);
+                if (data?.autoSubmitted && data?.submitResult?.success) {
+                    toast.success(`Signed as ${signingRole} — transaction submitted to Stellar! Hash: ${data.submitResult.hash?.slice(0, 12)}…`);
+                } else if (remainingAfter <= 0) {
+                    toast.success(`Signed as ${signingRole} — all signatures collected! Submitting…`);
                 } else {
                     const nextSigners = getRemaining({ ...tx, collectedSignatures: { ...(tx.collectedSignatures || {}), [signResult.publicKey]: signResult.signature } });
                     const nextRoles = nextSigners.map(k => getRoleName(tx, k)).join(', ');

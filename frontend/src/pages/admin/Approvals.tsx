@@ -33,7 +33,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { platformAdminsApi } from '@/api/platformAdmins';
 import { offersApi } from '@/api/offers';
-import { FreighterConnect } from '@/components/admin/FreighterConnect';
+
 import { useFreighter } from '@/hooks/useFreighter';
 import {
     useApprovalQueue,
@@ -370,10 +370,12 @@ export function Approvals() {
 
             if (submitRes.success) {
                 const data = submitRes.data;
-                const remainingAfter = data?.remainingSignatures || (tx.thresholdRequired - (data?.signatureCount || 1));
+                const remainingAfter = data?.remainingSignatures ?? (tx.thresholdRequired - (data?.signatureCount || 1));
 
-                if (remainingAfter <= 0) {
-                    toast.success(`Signed as ${signingRole} — all signatures collected! Ready to submit.`);
+                if (data?.autoSubmitted && data?.submitResult?.success) {
+                    toast.success(`Signed as ${signingRole} — transaction submitted to Stellar! Hash: ${data.submitResult.hash?.slice(0, 12)}…`);
+                } else if (remainingAfter <= 0) {
+                    toast.success(`Signed as ${signingRole} — all signatures collected! Submitting…`);
                 } else {
                     const nextSigners = remaining.filter((k: string) => k !== signResult.publicKey);
                     const nextRoles = nextSigners.map((k: string) => getRoleName(k)).join(', ');
@@ -578,7 +580,7 @@ export function Approvals() {
                             onSignMultisig={() => handleSignMultisig(selected)}
                             onSubmitMultisig={() => handleSubmitMultisig(selected)}
                             onRejectMultisig={() => handleRejectMultisig(selected)}
-                            onRefreshFreighter={refresh}
+
                         />
                     )}
                 </div>
@@ -732,7 +734,7 @@ function DetailPanel({
     onSignMultisig,
     onSubmitMultisig,
     onRejectMultisig,
-    onRefreshFreighter,
+
 }: {
     item: ApprovalItem;
     actionLoading: boolean;
@@ -753,7 +755,7 @@ function DetailPanel({
     onSignMultisig: () => void;
     onSubmitMultisig: () => void;
     onRejectMultisig: () => void;
-    onRefreshFreighter: () => void;
+
 }) {
     const cfg = TYPE_CONFIG[item.type];
     const Icon = cfg.icon;
@@ -911,7 +913,18 @@ function DetailPanel({
 
                 {item.type === 'multisig' && (
                     <div className="space-y-2">
-                        <FreighterConnect onConnected={onRefreshFreighter} />
+                        {/* Compact wallet status — no disconnect button to avoid mid-sign glitches */}
+                        <div className="flex items-center justify-between text-xs px-3 py-2 bg-zinc-900/50 rounded-lg border border-zinc-700/30">
+                            <span className="text-zinc-500">Freighter</span>
+                            {freighterConnected ? (
+                                <span className="text-emerald-400 flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                    {freighterPublicKey ? `${freighterPublicKey.slice(0, 4)}…${freighterPublicKey.slice(-4)}` : 'Connected'}
+                                </span>
+                            ) : (
+                                <span className="text-yellow-400">Not connected — open Freighter extension</span>
+                            )}
+                        </div>
                         {item.raw.status === 'ready' ? (
                             <Button
                                 className="w-full bg-emerald-600 hover:bg-emerald-500"
