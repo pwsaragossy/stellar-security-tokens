@@ -129,7 +129,7 @@ export function AssetCompliance() {
                 setSuccess(
                     <div className="flex flex-col gap-1">
                         <span>Freeze request queued for MultiSig approval</span>
-                        <Link to="/admin/transactions" className="text-emerald-400 underline font-bold hover:text-emerald-300">
+                        <Link to="/admin/approvals" className="text-emerald-400 underline font-bold hover:text-emerald-300">
                             Go to Transaction Queue →
                         </Link>
                     </div>
@@ -160,7 +160,7 @@ export function AssetCompliance() {
                 setSuccess(
                     <div className="flex flex-col gap-1">
                         <span>Unfreeze request queued for MultiSig approval</span>
-                        <Link to="/admin/transactions" className="text-emerald-400 underline font-bold hover:text-emerald-300">
+                        <Link to="/admin/approvals" className="text-emerald-400 underline font-bold hover:text-emerald-300">
                             Go to Transaction Queue →
                         </Link>
                     </div>
@@ -194,7 +194,7 @@ export function AssetCompliance() {
                 setSuccess(
                     <div className="flex flex-col gap-1">
                         <span>Clawback request queued for MultiSig approval</span>
-                        <Link to="/admin/transactions" className="text-emerald-400 underline font-bold hover:text-emerald-300">
+                        <Link to="/admin/approvals" className="text-emerald-400 underline font-bold hover:text-emerald-300">
                             Go to Transaction Queue →
                         </Link>
                     </div>
@@ -231,7 +231,7 @@ export function AssetCompliance() {
                 setSuccess(
                     <div className="flex flex-col gap-1">
                         <span>Finality request queued for MultiSig approval</span>
-                        <Link to="/admin/transactions" className="text-emerald-400 underline font-bold hover:text-emerald-300">
+                        <Link to="/admin/approvals" className="text-emerald-400 underline font-bold hover:text-emerald-300">
                             Go to Transaction Queue →
                         </Link>
                     </div>

@@ -40,7 +40,7 @@ import { DefaultCases } from './pages/admin/DefaultCases';
 
 import { Companies } from './pages/admin/Companies';
 import { AdminOffers } from './pages/admin/AdminOffers';
-import { PendingTransactions } from './pages/admin/PendingTransactions';
+
 import { AssetCompliance } from './pages/admin/AssetCompliance';
 import { EmergencyControls } from './pages/admin/EmergencyControls';
 
@@ -96,7 +96,7 @@ function App() {
           <Route path="users" element={<UserManagement />} />
           <Route path="companies" element={<Companies />} />
           <Route path="offers" element={<AdminOffers />} />
-          <Route path="transactions" element={<PendingTransactions />} />
+          <Route path="transactions" element={<Navigate to="/admin/approvals" replace />} />
           <Route path="compliance" element={<AssetCompliance />} />
           <Route path="emergency" element={<EmergencyControls />} />
 

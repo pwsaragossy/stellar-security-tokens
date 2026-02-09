@@ -102,7 +102,7 @@ export function AdminOffers() {
                     setSuccess(
                         <div className="flex flex-col gap-1 text-left">
                             <span>Token issuance request queued for MultiSig approval</span>
-                            <Link to="/admin/transactions" className="text-emerald-400 underline font-bold hover:text-emerald-300">
+                            <Link to="/admin/approvals" className="text-emerald-400 underline font-bold hover:text-emerald-300">
                                 Go to Transaction Queue →
                             </Link>
                         </div>

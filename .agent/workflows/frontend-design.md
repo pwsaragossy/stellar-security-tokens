@@ -120,6 +120,16 @@ Create atmosphere, never default to solid colors:
 
 ---
 
+## Proven Templates
+
+When building admin or queue-based UIs, check these tested templates first:
+
+| Template | Workflow | Use When |
+|----------|----------|----------|
+| Approval Hub | `/approval-hub-template` | Master-detail split pane, filter chips, queue list, action footer, dialogs |
+
+---
+
 ## Example Prompt
 
 > "Create a dashboard for viewing security token investments"

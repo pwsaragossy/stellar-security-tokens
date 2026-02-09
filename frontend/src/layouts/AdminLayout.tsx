@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, DollarSign, Shield, Wallet, AlertTriangle, Building2, FileText, FileSignature, Siren, Coins, Info, CheckCircle2, ClipboardCheck } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, DollarSign, Shield, Wallet, AlertTriangle, Building2, FileText, Siren, Coins, Info, CheckCircle2, ClipboardCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -76,16 +76,7 @@ const PAGE_DESCRIPTIONS: Record<string, { title: string, description: string, ke
             'Finalize or cancel completed campaigns'
         ]
     },
-    '/admin/transactions': {
-        title: 'Transaction Monitor',
-        description: 'Track and audit all on-chain activity within the platform.',
-        keyFeatures: [
-            'Monitor pending and completed Stellar transactions',
-            'Direct links to Stellar Expert for verification',
-            'Audit Trail of all financial flows',
-            'Debug failed or stuck transactions'
-        ]
-    },
+
     '/admin/wallets': {
         title: 'Platform Wallets',
         description: 'Monitor balances and status of platform-controlled Stellar accounts.',
@@ -205,7 +196,7 @@ export function AdminLayout() {
         { id: 'companies', label: 'Companies', icon: Building2, path: '/admin/companies' },
         { id: 'tokens', label: 'Tokens', icon: Coins, path: '/admin/tokens' },
         { id: 'offers', label: 'Offers', icon: FileText, path: '/admin/offers' },
-        { id: 'transactions', label: 'Transactions', icon: FileSignature, path: '/admin/transactions' },
+
         { id: 'wallets', label: 'Wallets', icon: Wallet, path: '/admin/wallets' },
 
         { id: 'fees', label: 'Fee Configuration', icon: DollarSign, path: '/admin/fees' },
