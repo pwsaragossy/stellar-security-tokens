@@ -80,8 +80,6 @@ export class MultiSigTransactionService {
         });
 
         return tx;
-
-        return tx;
     }
 
     /**
@@ -440,13 +438,25 @@ export class MultiSigTransactionService {
                         }
                     });
 
-                    // 2. Update the Offer status to active
+                    // 2. Auto-verify the offer (keeps status as 'approved', company launches when ready)
                     if (metadata.offerId) {
+                        const offer = await prisma.offer.findUnique({
+                            where: { id: parseInt(metadata.offerId) }
+                        });
+                        const currentRules = typeof offer?.offerRules === 'string'
+                            ? JSON.parse(offer.offerRules)
+                            : offer?.offerRules || {};
                         await prisma.offer.update({
                             where: { id: parseInt(metadata.offerId) },
-                            data: { status: 'active' }
+                            data: {
+                                offerRules: {
+                                    ...currentRules,
+                                    admin_verified: true,
+                                    verified_at: new Date().toISOString(),
+                                }
+                            }
                         });
-                        log.info(`Offer #${metadata.offerId} set to ACTIVE`);
+                        log.info(`Offer #${metadata.offerId} auto-verified after token issuance`);
                     }
                     break;
 

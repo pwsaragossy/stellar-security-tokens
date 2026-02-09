@@ -336,9 +336,14 @@ export class OfferController {
       });
     } catch (error) {
       console.error('Error creating offer:', error);
-      res.status(500).json({
+
+      // Return 400 for known validation errors from OfferService
+      const validationPrefixes = ['Invalid payment fields', 'Invalid offer rules', 'Invalid asset_code', 'Total supply', 'Unit price', 'Asset code already'];
+      const isValidationError = validationPrefixes.some(p => error.message.startsWith(p));
+
+      res.status(isValidationError ? 400 : 500).json({
         success: false,
-        error: 'Failed to create offer',
+        error: isValidationError ? error.message : 'Failed to create offer',
         details: error.message,
       });
     }

@@ -539,6 +539,8 @@ export class StellarService {
         metadata: {
           assetCode: code,
           amount,
+          totalSupply: amount,
+          description: options.description || null,
           type: 'classic_issuance',
           issuerPublicKey: issuerPublicKey,
           offerId: options.offerId,

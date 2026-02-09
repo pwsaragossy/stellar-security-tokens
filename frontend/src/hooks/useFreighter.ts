@@ -64,17 +64,26 @@ export function useFreighter(): UseFreighterReturn {
         return () => clearTimeout(timer);
     }, []);
 
-    // Check for existing connection on mount
+    // Check for existing connection on mount + poll for account changes
     useEffect(() => {
-        const checkConnection = async () => {
-            if (!isInstalled) return;
+        if (!isInstalled) return;
 
+        const checkConnection = async () => {
             try {
                 const publicKey = await getFreighterPublicKey();
                 if (publicKey) {
-                    setDevice({
-                        publicKey,
-                        connected: true,
+                    setDevice(prev => {
+                        if (prev?.publicKey === publicKey) return prev; // No change
+                        if (prev?.publicKey && prev.publicKey !== publicKey) {
+                            console.log('[Freighter] Account changed:', publicKey.slice(0, 8) + '...');
+                        }
+                        return { publicKey, connected: true };
+                    });
+                } else {
+                    setDevice(prev => {
+                        if (!prev) return prev; // Already disconnected
+                        console.log('[Freighter] Disconnected (no key returned)');
+                        return null;
                     });
                 }
             } catch {
@@ -83,6 +92,10 @@ export function useFreighter(): UseFreighterReturn {
         };
 
         checkConnection();
+
+        // Poll every 2s for account changes (Freighter has no change event API)
+        const interval = setInterval(checkConnection, 2000);
+        return () => clearInterval(interval);
     }, [isInstalled]);
 
     const connect = useCallback(async (): Promise<FreighterDevice | null> => {

@@ -1,186 +1,48 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import {
+    Wallet,
+    PenTool,
+    Loader2,
+    Copy,
+    Clock,
+    AlertCircle,
+    ExternalLink,
+    Info,
+    Settings,
+    Inbox,
+    RefreshCw,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Wallet, ArrowRightLeft, PenTool, CheckCircle, Loader2, Copy, Clock, AlertCircle, ExternalLink, Info, Settings } from 'lucide-react';
 import { walletsApi } from '@/api/wallets';
-import { InfoTooltip } from '@/components/ui/InfoTooltip';
-import { HELP_CONTENT } from '@/constants/help-content';
 import type { WalletStatus, MultiSigTransaction } from '@/api/wallets';
 import { TokenManagementModal } from '@/components/admin/TokenManagementModal';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-} from "@/components/ui/dialog";
+import { toast } from 'sonner';
 
-// Use a more generic interface that matches what TokenManagementModal expects
+// ─── Types ────────────────────────────────────────────────────────────────
+
 interface TokenBalance {
     asset_type: string;
     asset_code?: string;
     asset_issuer?: string;
     balance: string;
-    // Compatibility fields for the new ManagedToken interface
     id?: number;
     assetCode?: string;
     issuerPublicKey?: string;
     totalSupply?: string;
 }
 
-// Wallet Detail Modal Component
-function WalletDetailModal({ wallet, onClose }: { wallet: WalletStatus; onClose: () => void }) {
-    const [selectedToken, setSelectedToken] = useState<TokenBalance | null>(null);
-    const explorerUrl = `https://stellar.expert/explorer/testnet/account/${wallet.publicKey}`;
-
-    // Filter out zero balance tokens to hide test artifacts
-    const activeBalances = wallet.balances.filter(b => parseFloat(b.balance) > 0);
-
-    return (
-        <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-2xl bg-slate-900 border-white/10 text-white p-0 overflow-hidden flex flex-col max-h-[85vh]">
-                <DialogHeader className="p-4 border-b border-white/10 bg-slate-900 flex flex-row items-center gap-3 space-y-0">
-                    <div className="p-2 bg-emerald-500/10 rounded-lg">
-                        <Wallet className="w-5 h-5 text-emerald-400" />
-                    </div>
-                    <div>
-                        <DialogTitle className="text-xl font-bold text-white">{wallet.name} Wallet Detail</DialogTitle>
-                        <DialogDescription className="text-slate-400">System account identifier and balances</DialogDescription>
-                    </div>
-                </DialogHeader>
-
-                <div className="flex-1 overflow-auto p-6 space-y-6">
-                    {/* Status */}
-                    <div className="flex items-center gap-2">
-                        <Badge variant={wallet.exists ? 'default' : 'destructive'} className={wallet.exists ? 'bg-emerald-600' : ''}>
-                            {wallet.exists ? 'Active on Network' : 'Not Created'}
-                        </Badge>
-                    </div>
-
-                    {/* Full Address */}
-                    <div className="space-y-2">
-                        <Label className="text-slate-400 text-xs font-bold uppercase tracking-wider">Wallet Address</Label>
-                        <div className="flex items-center gap-2 bg-black/40 p-3 rounded-lg border border-white/5">
-                            <code className="text-sm text-emerald-400/80 break-all flex-1 font-mono">{wallet.publicKey}</code>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigator.clipboard.writeText(wallet.publicKey)}>
-                                <Copy className="w-4 h-4" />
-                            </Button>
-                        </div>
-                    </div>
-
-                    {/* Explorer Link */}
-                    <Button variant="outline" className="w-full border-white/10 hover:bg-white/5 text-white" onClick={() => window.open(explorerUrl, '_blank')}>
-                        <ExternalLink className="w-4 h-4 mr-2" />
-                        View on Stellar Expert
-                    </Button>
-
-                    {/* Balances Table - Clickable rows */}
-                    <div className="space-y-3">
-                        <Label className="text-slate-400 text-xs font-bold uppercase tracking-wider">Asset Distribution</Label>
-                        {wallet.exists && activeBalances.length > 0 ? (
-                            <div className="border border-white/10 rounded-xl overflow-hidden bg-black/20">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-white/5">
-                                        <tr>
-                                            <th className="text-left p-3 text-slate-500 font-medium tracking-tight">Asset</th>
-                                            <th className="text-right p-3 text-slate-500 font-medium tracking-tight">Balance</th>
-                                            <th className="text-right p-3 text-slate-500 font-medium tracking-tight">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/5">
-                                        {activeBalances.map((b, i) => (
-                                            <tr
-                                                key={i}
-                                                className="cursor-pointer hover:bg-white/5 transition-colors group"
-                                                onClick={() => setSelectedToken(b)}
-                                            >
-                                                <td className="p-3">
-                                                    <span className="text-emerald-400 font-bold tracking-tight">{b.asset_code || 'XLM'}</span>
-                                                    {b.asset_issuer && (
-                                                        <span className="text-[10px] text-slate-500 ml-2 font-mono">
-                                                            {b.asset_issuer.substring(0, 8)}...
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="p-3 text-right text-white font-mono">
-                                                    {parseFloat(b.balance).toLocaleString(undefined, { maximumFractionDigits: 4 })}
-                                                </td>
-                                                <td className="p-3 text-right">
-                                                    <Button variant="ghost" size="sm" className="h-7 text-slate-500 group-hover:text-emerald-400 group-hover:bg-emerald-400/10">
-                                                        <Settings className="w-3.5 h-3.5 mr-1.5" />
-                                                        Manage
-                                                    </Button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        ) : (
-                            <div className="bg-black/40 p-10 rounded-xl text-center border border-dashed border-white/10">
-                                <p className="text-sm text-slate-500 italic">
-                                    {wallet.exists ? 'No tokens found in this vault' : 'Wallet not yet registered on the Stellar ledger'}
-                                </p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Wallet Role Description */}
-                    <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-4">
-                        <div className="flex gap-3">
-                            <Info className="w-5 h-5 text-blue-400/60 shrink-0 mt-0.5" />
-                            <div className="text-xs text-blue-300/80 leading-relaxed italic">
-                                {wallet.name === 'Treasury' && 'Strategic vault for platform revenue and interest reserves. Primary source for automated distribution events.'}
-                                {wallet.name === 'Issuer' && 'Master account for security token minting. Operates as the legal root of trust for all smart assets. Restricted bypass recommended.'}
-                                {wallet.name === 'Distributor' && 'Intermediate staging vault for secondary market liquidity and investor onboarding batches.'}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Sub-modal: Token Management */}
-                {selectedToken && (
-                    <TokenManagementModal
-                        token={selectedToken}
-                        walletName={wallet.name}
-                        distributorPublicKey={null} // Will be enhanced later if needed
-                        onClose={() => setSelectedToken(null)}
-                    />
-                )}
-            </DialogContent>
-        </Dialog>
-    );
-}
+// ─── Component ────────────────────────────────────────────────────────────
 
 export function Wallets() {
     const [loading, setLoading] = useState(true);
     const [wallets, setWallets] = useState<WalletStatus[]>([]);
     const [proposals, setProposals] = useState<MultiSigTransaction[]>([]);
     const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
-    const [selectedWallet, setSelectedWallet] = useState<WalletStatus | null>(null);
+    const [selected, setSelected] = useState<WalletStatus | null>(null);
+    const [managingToken, setManagingToken] = useState<TokenBalance | null>(null);
 
-    // Form State
-    const [sourceWallet, setSourceWallet] = useState('treasury');
-    const [destination, setDestination] = useState('');
-    const [amount, setAmount] = useState('');
-    const [assetCode, setAssetCode] = useState('XLM');
-    const [memo, setMemo] = useState('');
-    const [description, setDescription] = useState('');
-    const [submitting, setSubmitting] = useState(false);
-
-    useEffect(() => {
-        if (error || success) {
-            const timer = setTimeout(() => {
-                setError('');
-                setSuccess('');
-            }, 5000);
-            return () => clearTimeout(timer);
-        }
-    }, [error, success]);
+    // ─── Data loading ─────────────────────────────────────────────────────
 
     useEffect(() => {
         loadData();
@@ -191,310 +53,280 @@ export function Wallets() {
         try {
             const [walletRes, proposalsRes] = await Promise.all([
                 walletsApi.getWalletStatuses(),
-                walletsApi.getTransactionProposals('pending')
+                walletsApi.getTransactionProposals('pending'),
             ]);
             setWallets(walletRes.data);
             setProposals(proposalsRes.data);
-        } catch (error) {
-            console.error('Failed to load wallet data', error);
+        } catch (err) {
+            console.error('Failed to load wallet data', err);
             setError('Failed to load wallet data');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleCreateProposal = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setSubmitting(true);
-        setError('');
-        setSuccess('');
-        try {
-            await walletsApi.createTransactionProposal({
-                sourceWallet,
-                destination,
-                amount,
-                assetCode,
-                memo,
-                description
-            });
-            setSuccess('Transaction proposed successfully');
-            setDestination('');
-            setAmount('');
-            setMemo('');
-            setDescription('');
-            loadData(); // Reload data
-        } catch (error: any) {
-            console.error('Failed to create proposal', error);
-            setError(error.response?.data?.error || 'Failed to create proposal');
-        } finally {
-            setSubmitting(false);
+    // Keep selected in sync
+    useEffect(() => {
+        if (selected) {
+            const updated = wallets.find((w) => w.name === selected.name);
+            if (updated) setSelected(updated);
         }
-    };
+    }, [wallets]);
+
+    // ─── Actions ──────────────────────────────────────────────────────────
 
     const handleSign = async (id: number) => {
-        // Mock signing for now as per plan
         if (!confirm('This will simulate signing the transaction with your admin key. Proceed?')) return;
-
         setError('');
-        setSuccess('');
         try {
-            // In production, this would use passkey signing or admin key from secure storage
-            // For now, we simulate signing by sending the XDR back
-            const proposal = proposals.find(p => p.id === id);
+            const proposal = proposals.find((p) => p.id === id);
             if (!proposal) return;
-
             await walletsApi.submitTransaction(id, proposal.xdr);
-            setSuccess('Transaction signed and submitted');
+            toast.success('Transaction signed and submitted');
             loadData();
-        } catch (error: any) {
-            console.error('Failed to sign/submit', error);
-            setError(error.response?.data?.error || 'Failed to sign/submit transaction');
+        } catch (err: any) {
+            console.error('Failed to sign/submit', err);
+            toast.error(err.response?.data?.error || 'Failed to sign/submit transaction');
         }
     };
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-[50vh]">
-                <Loader2 className="w-8 h-8 animate-spin text-red-500" />
-            </div>
-        );
-    }
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        toast.success('Copied to clipboard');
+    };
+
+    const WALLET_DESCRIPTIONS: Record<string, string> = {
+        Treasury: 'Strategic vault for platform revenue and interest reserves. Primary source for automated distribution events.',
+        Issuer: 'Master account for security token minting. Operates as the legal root of trust for all smart assets.',
+        Distributor: 'Intermediate staging vault for secondary market liquidity and investor onboarding batches.',
+        Operations: 'Operational account for gas fees, channel management, and automated transaction sponsoring.',
+    };
+
+    // ─── Render ───────────────────────────────────────────────────────────
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-white">System Wallet Management</h2>
-                    <p className="text-muted-foreground">Monitor and control Treasury, Issuer, and Distributor wallets.</p>
+        <div className="space-y-4">
+            {/* Top bar */}
+            <div className="flex items-center gap-2">
+                <div className="ml-auto">
+                    <Button variant="outline" size="sm" onClick={loadData} disabled={loading} className="gap-1.5">
+                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                        Refresh
+                    </Button>
                 </div>
             </div>
 
+            {/* Error */}
             {error && (
                 <div className="p-3 bg-red-500/10 text-red-400 rounded-lg border border-red-500/20 text-sm flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4" />
+                    <AlertCircle className="w-4 h-4 shrink-0" />
                     {error}
                 </div>
             )}
 
-            {success && (
-                <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 text-sm flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" />
-                    {success}
-                </div>
-            )}
+            {/* Split pane */}
+            <div className="grid grid-cols-[minmax(320px,1fr)_2fr] gap-4 min-h-[calc(100vh-220px)]">
+                {/* ── Left: Wallet list ── */}
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl overflow-hidden flex flex-col">
+                    <div className="px-3 py-2 border-b border-white/[0.06] text-[11px] text-zinc-500 uppercase tracking-wider font-medium">
+                        System Wallets
+                    </div>
 
-            {/* Wallet Overview */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {wallets.map((wallet) => {
-                    const activeBalances = wallet.balances.filter(b => parseFloat(b.balance) > 0);
-                    return (
-                        <Card
-                            key={wallet.name}
-                            className="glass-panel border-white/5 bg-white/5 cursor-pointer hover:border-emerald-500/30 transition-colors"
-                            onClick={() => setSelectedWallet(wallet)}
-                        >
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-white flex items-center gap-1.5">
-                                    {wallet.name}
-                                    <InfoTooltip
-                                        content={
-                                            wallet.name === 'Treasury' ? HELP_CONTENT.wallets.treasuryWallet.content :
-                                                wallet.name === 'Issuer' ? HELP_CONTENT.wallets.distributorWallet.content :
-                                                    HELP_CONTENT.wallets.distributorWallet.content
-                                        }
-                                        side="top"
-                                    />
-                                </CardTitle>
-                                <Wallet className="h-4 w-4 text-emerald-400" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-white mb-2">
-                                    {wallet.exists ? (
-                                        activeBalances.length > 0 ? (
-                                            <div className="space-y-1">
-                                                {activeBalances.slice(0, 2).map((b, i) => (
-                                                    <div key={i} className="text-sm">
-                                                        {parseFloat(b.balance).toLocaleString()} <span className="text-emerald-400">{b.asset_code || 'XLM'}</span>
-                                                    </div>
-                                                ))}
-                                                {activeBalances.length > 2 && (
-                                                    <div className="text-xs text-muted-foreground">+{activeBalances.length - 2} more...</div>
-                                                )}
-                                            </div>
-                                        ) : '0.00 XLM'
-                                    ) : (
-                                        <span className="text-red-400 text-sm">Not Created</span>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground break-all">
-                                    <span className="font-mono">{wallet.publicKey?.substring(0, 8)}...{wallet.publicKey?.substring(48)}</span>
-                                    <Button variant="ghost" size="icon" className="h-4 w-4" onClick={(e) => {
-                                        e.stopPropagation();
-                                        navigator.clipboard.writeText(wallet.publicKey);
-                                        setSuccess('Copied to clipboard');
-                                    }}>
-                                        <Copy className="h-3 w-3" />
-                                    </Button>
-                                </div>
-                                <div className="text-xs text-emerald-400 mt-2">Click for details →</div>
-                            </CardContent>
-                        </Card>
-                    )
-                })}
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2">
-                {/* Create Transaction */}
-                <Card className="glass-panel border-white/5 bg-white/5">
-                    <CardHeader>
-                        <CardTitle className="text-white flex items-center gap-2">
-                            <ArrowRightLeft className="w-5 h-5" />
-                            New Transfer
-                            <InfoTooltip content={HELP_CONTENT.walletsAdditions.systemWalletsOverview.content} side="right" />
-                        </CardTitle>
-                        <CardDescription>Propose a new transaction from a system wallet</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <form onSubmit={handleCreateProposal} className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="source">Source Wallet</Label>
-                                <select
-                                    id="source"
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                                    value={sourceWallet}
-                                    onChange={(e) => setSourceWallet(e.target.value)}
-                                >
-                                    <option value="treasury">Treasury</option>
-                                    <option value="issuer">Issuer</option>
-                                    <option value="distributor">Distributor</option>
-                                    {/* Operations wallet intentionally excluded from manual transfers */}
-                                </select>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="amount">Amount</Label>
-                                    <Input
-                                        id="amount"
-                                        placeholder="0.00"
-                                        value={amount}
-                                        onChange={(e) => setAmount(e.target.value)}
-                                        required
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="asset" className="flex items-center gap-1.5">
-                                        Asset
-                                        <InfoTooltip
-                                            content={HELP_CONTENT.walletsAdditions.assetField.content}
-                                            side="right"
-                                        />
-                                    </Label>
-                                    <select
-                                        id="asset"
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                                        value={assetCode}
-                                        onChange={(e) => setAssetCode(e.target.value)}
-                                    >
-                                        <option value="XLM">XLM</option>
-                                        <option value="USDC">USDC</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="destination">Destination Address</Label>
-                                <Input
-                                    id="destination"
-                                    placeholder="G..."
-                                    value={destination}
-                                    onChange={(e) => setDestination(e.target.value)}
-                                    required
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="memo">Memo (optional)</Label>
-                                <Input
-                                    id="memo"
-                                    placeholder="Payment reference..."
-                                    value={memo}
-                                    onChange={(e) => setMemo(e.target.value)}
-                                    maxLength={28}
-                                />
-                                <p className="text-xs text-muted-foreground">Max 28 characters. Visible on-chain.</p>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="desc">Internal Description</Label>
-                                <Input
-                                    id="desc"
-                                    placeholder="Reason for transfer (internal only)..."
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                />
-                            </div>
-
-                            <Button type="submit" className="w-full bg-red-600 hover:bg-red-700" disabled={submitting}>
-                                {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <PenTool className="w-4 h-4 mr-2" />}
-                                Propose Transaction
-                            </Button>
-                        </form>
-                    </CardContent>
-                </Card>
-
-                {/* Pending Transactions */}
-                <Card className="glass-panel border-white/5 bg-white/5">
-                    <CardHeader>
-                        <CardTitle className="text-white flex items-center gap-2">
-                            <Clock className="w-5 h-5" />
-                            Pending Proposals
-                        </CardTitle>
-                        <CardDescription>Transactions waiting for signature</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {proposals.length > 0 ? (
-                            <div className="space-y-4">
-                                {proposals.map((prop) => (
-                                    <div key={prop.id} className="p-4 rounded-lg bg-black/20 border border-white/5 space-y-3">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <p className="font-medium text-white">{prop.description || 'No description'}</p>
-                                                <p className="text-xs text-muted-foreground">ID: #{prop.id} • {new Date(prop.createdAt).toLocaleDateString()}</p>
-                                            </div>
-                                            <Badge variant={prop.status === 'pending' ? 'outline' : 'secondary'}>
-                                                {prop.status}
-                                            </Badge>
-                                        </div>
-
-                                        <div className="text-xs font-mono bg-black/40 p-2 rounded truncate text-muted-foreground">
-                                            {prop.xdr.substring(0, 20)}...{prop.xdr.substring(prop.xdr.length - 20)}
-                                        </div>
-
-                                        <div className="flex justify-end gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => handleSign(prop.id)}>
-                                                <PenTool className="w-3 h-3 mr-2" />
-                                                Sign & Submit
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ))}
+                    <div className="flex-1 overflow-y-auto">
+                        {loading ? (
+                            <div className="flex items-center justify-center py-16">
+                                <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
                             </div>
                         ) : (
-                            <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
-                                <CheckCircle className="w-10 h-10 mb-2 opacity-20" />
-                                <p>No pending transactions</p>
+                            <div className="divide-y divide-white/[0.04]">
+                                {wallets.map((wallet) => {
+                                    const isSelected = selected?.name === wallet.name;
+                                    const activeBalances = wallet.balances.filter((b) => parseFloat(b.balance) > 0);
+                                    return (
+                                        <button
+                                            key={wallet.name}
+                                            onClick={() => setSelected(wallet)}
+                                            className={`w-full text-left px-3 py-3 transition-colors hover:bg-white/[0.04] ${isSelected
+                                                ? 'bg-white/[0.06] border-l-2 border-l-blue-500'
+                                                : 'border-l-2 border-l-transparent'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-white/[0.08] flex items-center justify-center">
+                                                    <Wallet className="w-4 h-4 text-emerald-400" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <p className="text-[13px] font-medium text-white">{wallet.name}</p>
+                                                        <div className={`w-2 h-2 rounded-full shrink-0 ${wallet.exists ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                                                    </div>
+                                                    <p className="text-[11px] text-zinc-500 font-mono truncate">
+                                                        {wallet.publicKey?.substring(0, 8)}…{wallet.publicKey?.substring(48)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {/* Balance summary */}
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {wallet.exists && activeBalances.length > 0 ? (
+                                                    activeBalances.slice(0, 3).map((b, i) => (
+                                                        <span key={i} className="text-[11px] bg-white/[0.04] px-1.5 py-0.5 rounded text-zinc-400">
+                                                            {parseFloat(b.balance).toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-emerald-400">{b.asset_code || 'XLM'}</span>
+                                                        </span>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-[11px] text-zinc-600">
+                                                        {wallet.exists ? '0.00 XLM' : 'Not created'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         )}
-                    </CardContent>
-                </Card>
+
+                        {/* Pending proposals section */}
+                        {proposals.length > 0 && (
+                            <>
+                                <div className="px-3 py-2 border-t border-b border-white/[0.06] text-[11px] text-zinc-500 uppercase tracking-wider font-medium flex items-center gap-1.5">
+                                    <Clock className="w-3 h-3" />
+                                    Pending Proposals ({proposals.length})
+                                </div>
+                                <div className="divide-y divide-white/[0.04]">
+                                    {proposals.map((prop) => (
+                                        <div key={prop.id} className="px-3 py-3 space-y-2">
+                                            <div className="flex items-start justify-between">
+                                                <div>
+                                                    <p className="text-[13px] text-white font-medium">{prop.description || 'No description'}</p>
+                                                    <p className="text-[11px] text-zinc-500">#{prop.id} · {new Date(prop.createdAt).toLocaleDateString()}</p>
+                                                </div>
+                                                <Badge variant="outline" className="text-[10px] h-5">{prop.status}</Badge>
+                                            </div>
+                                            <div className="flex justify-end">
+                                                <Button variant="outline" size="sm" onClick={() => handleSign(prop.id)} className="gap-1 text-xs h-7">
+                                                    <PenTool className="w-3 h-3" /> Sign & Submit
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {/* ── Right: Detail panel ── */}
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl overflow-hidden flex flex-col">
+                    {!selected ? (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+                            <Inbox className="w-10 h-10 text-zinc-700 mb-3" />
+                            <p className="text-sm text-zinc-500">Select a wallet to view details</p>
+                        </div>
+                    ) : (
+                        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                            {/* Header */}
+                            <div className="flex items-start gap-4">
+                                <div className="w-12 h-12 rounded-xl bg-white/[0.06] flex items-center justify-center">
+                                    <Wallet className="w-6 h-6 text-emerald-400" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-lg font-semibold text-white">{selected.name} Wallet</h3>
+                                    <p className="text-sm text-zinc-400">System account</p>
+                                </div>
+                                <Badge variant={selected.exists ? 'default' : 'destructive'} className={selected.exists ? 'bg-emerald-600' : ''}>
+                                    {selected.exists ? 'Active on Network' : 'Not Created'}
+                                </Badge>
+                            </div>
+
+                            {/* Public key */}
+                            <div className="space-y-2">
+                                <h4 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Wallet Address</h4>
+                                <div className="flex items-center gap-2 bg-white/[0.03] rounded-lg p-3">
+                                    <code className="text-xs text-emerald-400/80 font-mono break-all flex-1">{selected.publicKey}</code>
+                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => copyToClipboard(selected.publicKey)}>
+                                        <Copy className="w-3.5 h-3.5" />
+                                    </Button>
+                                    <a href={`https://stellar.expert/explorer/testnet/account/${selected.publicKey}`} target="_blank" rel="noopener noreferrer">
+                                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0">
+                                            <ExternalLink className="w-3.5 h-3.5" />
+                                        </Button>
+                                    </a>
+                                </div>
+                            </div>
+
+                            {/* Balances */}
+                            <div className="space-y-2">
+                                <h4 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Asset Distribution</h4>
+                                {selected.exists && selected.balances.filter((b) => parseFloat(b.balance) > 0).length > 0 ? (
+                                    <div className="bg-white/[0.03] rounded-lg overflow-hidden border border-white/[0.06]">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="border-b border-white/[0.06]">
+                                                    <th className="text-left p-3 text-[11px] text-zinc-500 font-medium uppercase tracking-wider">Asset</th>
+                                                    <th className="text-right p-3 text-[11px] text-zinc-500 font-medium uppercase tracking-wider">Balance</th>
+                                                    <th className="text-right p-3 text-[11px] text-zinc-500 font-medium uppercase tracking-wider">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/[0.04]">
+                                                {selected.balances
+                                                    .filter((b) => parseFloat(b.balance) > 0)
+                                                    .map((b, i) => (
+                                                        <tr
+                                                            key={i}
+                                                            className="cursor-pointer hover:bg-white/[0.04] transition-colors group"
+                                                            onClick={() => setManagingToken(b)}
+                                                        >
+                                                            <td className="p-3">
+                                                                <span className="text-emerald-400 font-bold">{b.asset_code || 'XLM'}</span>
+                                                                {b.asset_issuer && (
+                                                                    <span className="text-[10px] text-zinc-500 ml-2 font-mono">
+                                                                        {b.asset_issuer.substring(0, 8)}...
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                            <td className="p-3 text-right text-white font-mono">
+                                                                {parseFloat(b.balance).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                                                            </td>
+                                                            <td className="p-3 text-right">
+                                                                <Button variant="ghost" size="sm" className="h-7 text-zinc-500 group-hover:text-emerald-400 group-hover:bg-emerald-400/10">
+                                                                    <Settings className="w-3.5 h-3.5 mr-1.5" /> Manage
+                                                                </Button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white/[0.03] rounded-lg p-8 text-center border border-dashed border-white/[0.06]">
+                                        <p className="text-sm text-zinc-500 italic">
+                                            {selected.exists ? 'No tokens in this wallet' : 'Wallet not yet registered on the Stellar ledger'}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Role description */}
+                            <div className="bg-blue-500/5 border border-blue-500/10 rounded-lg p-3">
+                                <div className="flex gap-3">
+                                    <Info className="w-4 h-4 text-blue-400/60 shrink-0 mt-0.5" />
+                                    <p className="text-xs text-blue-300/80 leading-relaxed italic">
+                                        {WALLET_DESCRIPTIONS[selected.name] || 'System wallet account.'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {/* Wallet Detail Modal */}
-            {selectedWallet && (
-                <WalletDetailModal
-                    wallet={selectedWallet}
-                    onClose={() => setSelectedWallet(null)}
+            {/* Token Management Modal (kept as overlay) */}
+            {managingToken && (
+                <TokenManagementModal
+                    token={managingToken}
+                    walletName={selected?.name || ''}
+                    distributorPublicKey={null}
+                    onClose={() => setManagingToken(null)}
                 />
             )}
         </div>

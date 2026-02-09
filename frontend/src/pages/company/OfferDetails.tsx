@@ -290,14 +290,14 @@ export function OfferDetails() {
                                         status="completed"
                                     />
                                     <TimelineConnector
-                                        isActive={['under_review', 'approved', 'active', 'closed'].includes(offer.status)}
+                                        isActive={['pending_review', 'under_review', 'approved', 'active', 'closed'].includes(offer.status)}
                                     />
                                     <TimelineSpot
                                         label="Review"
-                                        date={offer.status === 'under_review' || offer.status === 'approved' || offer.status === 'active' || offer.status === 'closed' ? offer.updated_at : undefined}
+                                        date={offer.status === 'pending_review' || offer.status === 'under_review' || offer.status === 'approved' || offer.status === 'active' || offer.status === 'closed' ? offer.updated_at : undefined}
                                         status={
                                             ['approved', 'active', 'closed'].includes(offer.status) ? 'completed' :
-                                                offer.status === 'under_review' ? 'current' : 'pending'
+                                                ['pending_review', 'under_review'].includes(offer.status) ? 'current' : 'pending'
                                         }
                                     />
                                     <TimelineConnector

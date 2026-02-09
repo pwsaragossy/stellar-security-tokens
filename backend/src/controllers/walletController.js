@@ -27,6 +27,7 @@ export const WalletController = {
                 { name: 'Treasury', role: 'TREASURY' },
                 { name: 'Issuer', role: 'ISSUER' },
                 { name: 'Distributor', role: 'DISTRIBUTOR' },
+                { name: 'Operations', role: 'OPERATIONS' },
             ];
 
             const statuses = await Promise.all(walletRoles.map(async (w) => {

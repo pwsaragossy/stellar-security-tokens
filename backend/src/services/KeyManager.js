@@ -301,7 +301,7 @@ class KeyManager {
 
         // Default thresholds for production
         const defaultThresholds = {
-            'token_issue': 2,           // ISSUER + DISTRIBUTOR (bundled trustline + payment)
+            'token_issue': 2,           // Issuer + Distributor (atomic bundled tx needs both)
             'token_distribute': 1,      // Single distributor signature
             'freeze_account': 1,        // Single issuer (compliance action)
             'clawback': 2,              // 2-of-N (requires approval)

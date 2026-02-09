@@ -201,23 +201,40 @@ export function CreateOffer() {
                 setError(response.error || 'Failed to create offer');
             }
         } catch (err: any) {
-            // ... error handling
             console.error('Failed to create offer:', err);
-            setError(err.message || 'Failed to create offer');
+            // Extract the real validation error from the API response
+            let apiError = 'Failed to create offer';
+            if (err.response?.data) {
+                const d = typeof err.response.data === 'string'
+                    ? (() => { try { return JSON.parse(err.response.data); } catch { return null; } })()
+                    : err.response.data;
+                apiError = d?.error || d?.details || d?.message || apiError;
+            }
+            setError(apiError);
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const isStepValid = () => {
-        // ... existing validation
         switch (step) {
             case 1:
                 return formData.offer_name && formData.asset_code && formData.description;
-            case 2:
-                // Require supply and price
-                return !!formData.total_supply && !!formData.unit_price &&
-                    (formData.offer_type === 'sale' || !!formData.annual_interest_rate);
+            case 2: {
+                // Base: supply + price required
+                if (!formData.total_supply || !formData.unit_price) return false;
+                // Collateral needs interest rate
+                if (formData.offer_type === 'collateral' && !formData.annual_interest_rate) return false;
+                // Bullet payments need a future maturity date
+                if (formData.offer_type === 'collateral' && formData.payment_type === 'bullet') {
+                    if (!formData.maturity_date) return false;
+                    if (new Date(formData.maturity_date) <= new Date()) return false;
+                }
+                // max_investment must be >= min_investment when both set
+                if (formData.max_investment && formData.min_investment &&
+                    parseFloat(formData.max_investment) < parseFloat(formData.min_investment)) return false;
+                return true;
+            }
             case 3:
                 return true; // Documents are optional for now
             case 4:
@@ -491,6 +508,11 @@ export function CreateOffer() {
                                     <p className="text-xs text-muted-foreground">
                                         Date when principal and interest are paid in one lump sum
                                     </p>
+                                    {formData.maturity_date && new Date(formData.maturity_date) <= new Date() && (
+                                        <p className="text-xs text-red-400 mt-1">
+                                            Maturity date must be in the future
+                                        </p>
+                                    )}
                                 </div>
                             )}
 
