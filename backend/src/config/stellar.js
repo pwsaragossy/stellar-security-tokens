@@ -173,7 +173,10 @@ export const buildTransactionWithAccount = (sourceAccount, operations, options =
     }
   }
 
-  transaction.setTimeout(30);
+  // Default 300s (5 min) — generous enough for multisig Freighter signing,
+  // safe enough for direct signing (completes in <1s). Callers can override.
+  // Per Stellar docs: timebounds should always be finite.
+  transaction.setTimeout(options.timeout || 300);
 
   return transaction.build();
 };

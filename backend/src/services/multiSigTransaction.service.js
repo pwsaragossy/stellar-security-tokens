@@ -1,6 +1,6 @@
 import prisma from '../config/prisma.js';
 import { TransactionBuilder, Keypair } from '@stellar/stellar-sdk';
-import { getNetworkPassphrase, stellarServer } from '../config/stellar.js';
+import { getNetworkPassphrase, stellarServer, createFreshServer } from '../config/stellar.js';
 import logger from '../utils/logger.js';
 
 // Scoped logger for this service
@@ -267,7 +267,7 @@ export class MultiSigTransactionService {
         });
 
         try {
-            const result = await stellarServer.submitTransaction(transaction);
+            const result = await createFreshServer().submitTransaction(transaction);
 
             // PHASE 2.2: Execute Side Effects (Post-Execution Hooks)
             // This ensures DB state updates only happen after on-chain success

@@ -1,5 +1,6 @@
 import {
     stellarServer,
+    createFreshServer,
     buildTransaction,
     createAsset,
     getUsdcIssuer,
@@ -34,7 +35,7 @@ export const WalletController = {
                 const publicKey = keyManager.getPublicKey(w.role);
                 try {
                     console.log(`[WalletController] Loading ${w.name} account: ${publicKey}`);
-                    const account = await stellarServer.loadAccount(publicKey);
+                    const account = await createFreshServer().loadAccount(publicKey);
                     console.log(`[WalletController] ${w.name} account loaded successfully`);
                     return {
                         name: w.name,
