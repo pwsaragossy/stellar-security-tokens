@@ -26,7 +26,7 @@ export function useOffer(id: string | undefined) {
                 setError(null);
                 const res = await api.get(`/offers/${id}`);
                 if (!cancelled) {
-                    setOffer(res.data.data);
+                    setOffer(res.data);
                 }
             } catch (err: any) {
                 if (!cancelled) {
