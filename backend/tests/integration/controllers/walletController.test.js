@@ -74,7 +74,7 @@ describe('Wallet Controller Integration', () => {
 
             assert.strictEqual(res.status, 200);
             assert.ok(Array.isArray(res.body));
-            assert.strictEqual(res.body.length, 3); // Treasury, Issuer, Distributor
+            assert.strictEqual(res.body.length, 4); // Treasury, Issuer, Distributor, Operations
             assert.ok(res.body[0].name);
             assert.ok(res.body[0].publicKey);
         });

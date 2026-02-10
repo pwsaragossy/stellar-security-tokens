@@ -90,6 +90,9 @@ export const cleanDatabase = async () => {
     if (isTestEnv) {
       console.log('[testDatabase] Database cleanup completed');
     }
+
+    // Disconnect Prisma to release the connection pool — prevents Node from hanging
+    await prisma.$disconnect();
   } catch (error) {
     console.error('[testDatabase] Error cleaning database:', error);
     throw error;
