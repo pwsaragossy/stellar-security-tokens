@@ -1,4 +1,5 @@
-import { getIssuerKeypair, getNetworkPassphrase } from '../config/stellar.js';
+import { getNetworkPassphrase } from '../config/stellar.js';
+import { keyManager } from './KeyManager.js';
 import prisma from '../config/prisma.js';
 import { ipfsService } from './ipfs.service.js';
 
@@ -8,7 +9,7 @@ export class TomlService {
      * @returns {Promise<string>} TOML formatted string
      */
     static async generateToml() {
-        const issuerKey = getIssuerKeypair().publicKey();
+        const issuerKey = keyManager.getIssuerPublicKey();
         const networkPassphrase = getNetworkPassphrase();
 
         // Fetch all tokens from DB with their related offers to get legal documents
