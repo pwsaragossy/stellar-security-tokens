@@ -8,7 +8,6 @@ import { initDistributionQueue } from './services/distributionQueue.service.js';
 import { MaintenanceService } from './services/maintenance.service.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
-dotenv.config({ path: path.resolve(process.cwd(), '../.env.tests') });
 
 const PORT = process.env.PORT || 3000;
 

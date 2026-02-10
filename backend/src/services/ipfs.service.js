@@ -3,10 +3,9 @@ import dotenv from 'dotenv';
 import { Blob } from 'buffer';
 import path from 'path';
 
-// Load env vars from various locations (.env or .env.tests)
+// Load env vars if not already loaded
 if (!process.env.PINATA_JWT) {
   dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
-  dotenv.config({ path: path.resolve(process.cwd(), '../.env.tests') });
   dotenv.config();
 }
 
