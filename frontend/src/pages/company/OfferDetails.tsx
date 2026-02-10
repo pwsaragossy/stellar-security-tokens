@@ -319,8 +319,8 @@ export function OfferDetails() {
                                         label="Issued"
                                         date={offer.token?.createdAt}
                                         status={
-                                            ['active', 'closed'].includes(offer.status) ? 'completed' :
-                                                (offer.status === 'approved' && !!offer.token) ? 'current' : 'pending'
+                                            ['active', 'closed'].includes(offer.status) || (offer.status === 'approved' && !!offer.token) ? 'completed' :
+                                                offer.status === 'approved' ? 'current' : 'pending'
                                         }
                                     />
                                     <TimelineConnector
@@ -333,12 +333,33 @@ export function OfferDetails() {
                                                 : "Live"
                                         }
                                         status={
-                                            offer.status === 'active' ? 'current' :
-                                                ['active', 'closed'].includes(offer.status) ? 'completed' : 'pending'
+                                            ['active', 'closed'].includes(offer.status) ? 'completed' :
+                                                (offer.status === 'approved' && !!offer.token) ? 'current' : 'pending'
                                         }
                                     />
                                 </div>
                             </div>
+
+                            {canLaunch && (
+                                <div className="mt-6 p-4 bg-primary/10 border border-primary/30 rounded-xl animate-fade-in flex items-center justify-between gap-4">
+                                    <div className="space-y-0.5">
+                                        <h4 className="font-semibold text-primary flex items-center gap-2">
+                                            <Rocket className="w-4 h-4" />
+                                            Your token is ready!
+                                        </h4>
+                                        <p className="text-sm text-muted-foreground">
+                                            Launch it to the marketplace so investors can start purchasing.
+                                        </p>
+                                    </div>
+                                    <Button
+                                        onClick={handleLaunch}
+                                        className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 btn-glow rounded-full px-6 whitespace-nowrap"
+                                    >
+                                        <Rocket className="w-4 h-4 mr-2" />
+                                        Launch to Market
+                                    </Button>
+                                </div>
+                            )}
 
                             {offer.status === 'rejected' && offer.rejection_reason && (
                                 <div className="mt-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg animate-fade-in">
