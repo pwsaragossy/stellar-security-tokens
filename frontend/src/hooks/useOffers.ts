@@ -7,6 +7,7 @@ export interface Offer {
     offer_name: string;
     description: string;
     total_supply: number;
+    unit_price?: number;
     annual_interest_rate?: number;
     offer_type: 'collateral' | 'sale';
     status: string;
@@ -21,6 +22,14 @@ export interface Offer {
     payment_type?: string;
     maturity_date?: string;
     payment_frequency?: number;
+
+    // Legal & Rules
+    legal_documents?: Record<string, { hash?: string; url?: string; fileName?: string }>;
+    offer_rules?: Record<string, any>;
+
+    // Timestamps
+    created_at?: string;
+
     company?: {
         name: string;
         email?: string;

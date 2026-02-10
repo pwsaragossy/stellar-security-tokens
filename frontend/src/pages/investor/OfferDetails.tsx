@@ -1,18 +1,24 @@
 
 import { useParams, useNavigate } from 'react-router-dom';
-import { useOffers } from '@/hooks/useOffers';
+import { useOffer } from '@/hooks/useOffer';
 import { InvestmentDialog } from '@/components/invest/InvestmentDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ArrowLeft, Calendar, FileText, TrendingUp, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Calendar, FileText, TrendingUp, Loader2, AlertCircle, DollarSign, ExternalLink, ShieldCheck, Clock, Building2, Scale } from 'lucide-react';
+
+const PAYMENT_LABELS: Record<string, string> = {
+    monthly: 'Monthly',
+    quarterly: 'Quarterly',
+    semi_annual: 'Semi-Annual',
+    annual: 'Annual',
+    bullet: 'Bullet',
+};
 
 export function OfferDetails() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { offers, loading, error } = useOffers();
-
-    const offer = offers.find(o => o.id === Number(id));
+    const { offer, loading, error } = useOffer(id);
 
     if (loading) {
         return (
@@ -41,6 +47,14 @@ export function OfferDetails() {
         );
     }
 
+    const unitPrice = offer.unit_price || 1;
+    const totalRaise = (offer.total_supply || 0) * unitPrice;
+    const paymentLabel = PAYMENT_LABELS[offer.payment_type || ''] || offer.payment_type || '—';
+    const legalDocs = offer.legal_documents
+        ? Object.entries(offer.legal_documents).filter(([, v]) => v && (typeof v === 'object'))
+        : [];
+    const offerRules = offer.offer_rules || {};
+
     return (
         <div className="space-y-8 animate-fade-in">
             <Button
@@ -54,6 +68,13 @@ export function OfferDetails() {
             <div className="flex flex-col sm:flex-row justify-between items-start gap-6 animate-fade-in-up">
                 <div className="space-y-3">
                     <h1 className="text-4xl font-bold">{offer.offer_name}</h1>
+                    {/* Company name */}
+                    {offer.company?.name && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Building2 className="h-4 w-4 text-[hsl(43_45%_55%)]" />
+                            <span>{offer.company.name}</span>
+                        </div>
+                    )}
                     <div className="flex gap-2">
                         <Badge className="bg-[hsl(43_45%_55%/0.15)] text-[hsl(43_45%_55%)] border border-[hsl(43_45%_55%/0.3)] hover:bg-[hsl(43_45%_55%/0.2)]">
                             {offer.offer_type === 'sale' ? 'Equity Sale' : 'Debt / Collateral'}
@@ -74,14 +95,24 @@ export function OfferDetails() {
                     <CardContent className="space-y-6 text-muted-foreground">
                         <p className="text-lg leading-relaxed">{offer.description}</p>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        {/* Stats grid — 4 metrics */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             <div className="stat-card p-5 rounded-xl">
                                 <div className="flex items-center gap-2 text-muted-foreground mb-3">
                                     <TrendingUp className="h-4 w-4 text-[hsl(160_60%_40%)]" />
-                                    <span className="text-sm">Annual Return</span>
+                                    <span className="text-sm">APY</span>
                                 </div>
-                                <div className="text-3xl font-bold value-success">
+                                <div className="text-2xl font-bold value-success">
                                     {offer.annual_interest_rate ? `${parseFloat(offer.annual_interest_rate.toString())}%` : 'N/A'}
+                                </div>
+                            </div>
+                            <div className="stat-card p-5 rounded-xl">
+                                <div className="flex items-center gap-2 text-muted-foreground mb-3">
+                                    <DollarSign className="h-4 w-4 text-[hsl(43_45%_55%)]" />
+                                    <span className="text-sm">Unit Price</span>
+                                </div>
+                                <div className="text-2xl font-bold">
+                                    ${unitPrice}
                                 </div>
                             </div>
                             <div className="stat-card p-5 rounded-xl">
@@ -89,21 +120,82 @@ export function OfferDetails() {
                                     <Calendar className="h-4 w-4 text-[hsl(43_45%_55%)]" />
                                     <span className="text-sm">Maturity</span>
                                 </div>
-                                <div className="text-3xl font-bold">
+                                <div className="text-2xl font-bold">
                                     {offer.maturity_date ? new Date(offer.maturity_date).toLocaleDateString() : 'Perpetual'}
+                                </div>
+                            </div>
+                            <div className="stat-card p-5 rounded-xl">
+                                <div className="flex items-center gap-2 text-muted-foreground mb-3">
+                                    <Clock className="h-4 w-4 text-[hsl(43_45%_55%)]" />
+                                    <span className="text-sm">Payout</span>
+                                </div>
+                                <div className="text-2xl font-bold capitalize">
+                                    {paymentLabel}
                                 </div>
                             </div>
                         </div>
 
+                        {/* Collateral */}
                         <div className="bg-[hsl(43_45%_55%/0.08)] border border-[hsl(43_45%_55%/0.2)] p-5 rounded-xl">
                             <h3 className="font-semibold text-[hsl(43_45%_55%)] mb-2 flex items-center gap-2">
-                                <FileText className="h-4 w-4" /> Collateral & Security
+                                <ShieldCheck className="h-4 w-4" /> Collateral & Security
                             </h3>
                             <p className="text-sm">
                                 {offer.collateral_description || "This offer is secured by the issuer's general obligation."}
                                 {offer.collateral_value && ` Valued at $${parseFloat(offer.collateral_value.toString()).toLocaleString()}.`}
                             </p>
                         </div>
+
+                        {/* Offer Rules */}
+                        {Object.keys(offerRules).length > 0 && (
+                            <div className="bg-white/[0.03] border border-white/10 p-5 rounded-xl">
+                                <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
+                                    <Scale className="h-4 w-4 text-[hsl(43_45%_55%)]" /> Investment Rules
+                                </h3>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {offerRules.min_investment && (
+                                        <div className="text-sm">
+                                            <span className="text-muted-foreground">Minimum</span>
+                                            <p className="font-medium text-white">${Number(offerRules.min_investment).toLocaleString()} USDC</p>
+                                        </div>
+                                    )}
+                                    {offerRules.max_investment && (
+                                        <div className="text-sm">
+                                            <span className="text-muted-foreground">Maximum</span>
+                                            <p className="font-medium text-white">${Number(offerRules.max_investment).toLocaleString()} USDC</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Legal Documents */}
+                        {legalDocs.length > 0 && (
+                            <div className="bg-white/[0.03] border border-white/10 p-5 rounded-xl">
+                                <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
+                                    <FileText className="h-4 w-4 text-[hsl(43_45%_55%)]" /> Legal Documents
+                                </h3>
+                                <div className="space-y-2">
+                                    {legalDocs.map(([key, doc]) => {
+                                        const docObj = doc as { hash?: string; url?: string; fileName?: string };
+                                        const docUrl = docObj.url || (docObj.hash ? `https://ipfs.io/ipfs/${docObj.hash}` : null);
+                                        const docName = docObj.fileName || key.replace(/_/g, ' ');
+                                        return (
+                                            <a
+                                                key={key}
+                                                href={docUrl || '#'}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center justify-between p-3 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] transition-colors group/doc"
+                                            >
+                                                <span className="text-sm font-medium capitalize">{docName}</span>
+                                                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover/doc:text-[hsl(43_45%_55%)] transition-colors" />
+                                            </a>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -118,12 +210,20 @@ export function OfferDetails() {
                             <span className="font-mono value-accent">{offer.asset_code}</span>
                         </div>
                         <div className="flex justify-between py-3 border-b border-white/10">
+                            <span className="text-muted-foreground">Unit Price</span>
+                            <span className="font-semibold">${unitPrice} USDC</span>
+                        </div>
+                        <div className="flex justify-between py-3 border-b border-white/10">
                             <span className="text-muted-foreground">Total Supply</span>
                             <span>{parseFloat(offer.total_supply.toString()).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between py-3 border-b border-white/10">
-                            <span className="text-muted-foreground">Payment Freq.</span>
-                            <span className="capitalize">{offer.payment_type}</span>
+                            <span className="text-muted-foreground">Total Raise</span>
+                            <span className="font-semibold">${totalRaise.toLocaleString()} USDC</span>
+                        </div>
+                        <div className="flex justify-between py-3 border-b border-white/10">
+                            <span className="text-muted-foreground">Payment</span>
+                            <span className="capitalize">{paymentLabel}</span>
                         </div>
                         <div className="pt-4">
                             <InvestmentDialog

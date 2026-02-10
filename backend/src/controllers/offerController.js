@@ -80,6 +80,8 @@ export class OfferController {
       annual_interest_rate: offer.annualInterestRate,
       offerType: offer.offerType,
       offer_type: offer.offerType,
+      unitPrice: offer.unitPrice,
+      unit_price: offer.unitPrice,
       status: offer.status,
       rejectionReason: offer.rejectionReason,
       rejection_reason: offer.rejectionReason,

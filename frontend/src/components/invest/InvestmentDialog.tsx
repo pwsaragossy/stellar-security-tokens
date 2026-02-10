@@ -13,16 +13,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { QRCode } from "@/components/ui/qrcode";
 import { useInvestment } from '@/hooks/useInvestment';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, AlertTriangle, Settings } from 'lucide-react';
+import { authStorage } from '@/utils/authStorage';
 
 interface InvestmentDialogProps {
     offer: {
         id: number;
         offer_name: string;
         asset_code: string;
+        unit_price?: number;
+        offer_rules?: Record<string, any>;
     };
     trigger?: React.ReactNode;
 }
+
+const QUICK_AMOUNTS = [100, 500, 1000, 5000];
 
 function CopyButton({ text, className = '' }: { text: string; className?: string }) {
     const [copied, setCopied] = useState(false);
@@ -49,8 +54,24 @@ function CopyButton({ text, className = '' }: { text: string; className?: string
 export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
     const [amount, setAmount] = useState('');
     const [open, setOpen] = useState(false);
-    const [instructions, setInstructions] = useState<any>(null); // State for payment instructions
+    const [instructions, setInstructions] = useState<any>(null);
     const { purchase, loading, error } = useInvestment();
+
+    // KYC gate — check before showing the investment form
+    const user = authStorage.getUser<{ kycStatus?: string }>('investor') || {};
+    const kycApproved = user.kycStatus === 'approved';
+
+    // Offer rules — min/max investment amounts
+    const rules = offer.offer_rules || {};
+    const minInvestment = rules.min_investment ? Number(rules.min_investment) : undefined;
+    const maxInvestment = rules.max_investment ? Number(rules.max_investment) : undefined;
+
+    // HIG Entering Data: dynamic validation
+    const parsedAmount = parseFloat(amount);
+    const isValidAmount = !isNaN(parsedAmount) && parsedAmount > 0;
+    const isBelowMin = minInvestment !== undefined && isValidAmount && parsedAmount < minInvestment;
+    const isAboveMax = maxInvestment !== undefined && isValidAmount && parsedAmount > maxInvestment;
+    const canSubmit = isValidAmount && !isBelowMin && !isAboveMax && !loading;
 
     const handleInvest = async () => {
         try {
@@ -59,7 +80,6 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
 
             const result = await purchase(offer.id, usdcAmount, offer.asset_code);
 
-            // If we receive payment instructions (202 Accepted), show them
             if (result && result.paymentInstructions) {
                 setInstructions(result.paymentInstructions);
             } else {
@@ -90,7 +110,31 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
                     </DialogDescription>
                 </DialogHeader>
 
-                {!instructions ? (
+                {/* KYC Gate — HIG Modality: prevent lost work by gating early */}
+                {!kycApproved ? (
+                    <div className="py-6">
+                        <div className="p-4 bg-yellow-900/20 border border-yellow-700/30 rounded-xl text-center space-y-3">
+                            <AlertTriangle className="h-8 w-8 text-yellow-500 mx-auto" />
+                            <div className="space-y-1">
+                                <p className="font-semibold text-yellow-400">KYC Verification Required</p>
+                                <p className="text-sm text-slate-400">
+                                    Your identity verification must be approved before you can invest.
+                                </p>
+                            </div>
+                            <Button
+                                variant="outline"
+                                className="border-yellow-700/50 text-yellow-400 hover:bg-yellow-900/30"
+                                onClick={() => {
+                                    handleClose();
+                                    window.location.href = '/settings';
+                                }}
+                            >
+                                <Settings className="h-4 w-4 mr-2" />
+                                Go to Settings
+                            </Button>
+                        </div>
+                    </div>
+                ) : !instructions ? (
                     // STEP 1: AMOUNT INPUT
                     <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
@@ -98,16 +142,58 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
                             <Input
                                 id="amount"
                                 type="number"
-                                placeholder="1000.00"
+                                placeholder={minInvestment ? `Min: ${minInvestment} USDC` : '1000.00'}
                                 className="bg-slate-950 border-slate-800 text-white"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
                             />
-                            <p className="text-xs text-slate-500">Exchange Rate: 1 USDC = 1 {offer.asset_code}</p>
+
+                            {/* HIG Entering Data: quick-pick amounts */}
+                            <div className="flex gap-2">
+                                {QUICK_AMOUNTS.map(qa => (
+                                    <button
+                                        key={qa}
+                                        onClick={() => setAmount(qa.toString())}
+                                        className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all ${amount === qa.toString()
+                                                ? 'bg-[hsl(43_45%_55%/0.2)] text-[hsl(43_45%_55%)] border-[hsl(43_45%_55%/0.4)]'
+                                                : 'bg-white/[0.03] text-muted-foreground border-white/10 hover:bg-white/[0.06]'
+                                            }`}
+                                    >
+                                        ${qa >= 1000 ? `${qa / 1000}K` : qa}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Dynamic validation feedback */}
+                            <div className="space-y-1">
+                                <p className="text-xs text-slate-500">
+                                    Exchange Rate: {offer.unit_price || 1} USDC = 1 {offer.asset_code}
+                                </p>
+                                {isValidAmount && !isBelowMin && !isAboveMax && (
+                                    <p className="text-xs text-emerald-400 font-medium">
+                                        You'll receive ~{(parsedAmount / (offer.unit_price || 1)).toFixed(2)} {offer.asset_code} tokens
+                                    </p>
+                                )}
+                                {isBelowMin && (
+                                    <p className="text-xs text-yellow-400">
+                                        Minimum investment: ${minInvestment!.toLocaleString()} USDC
+                                    </p>
+                                )}
+                                {isAboveMax && (
+                                    <p className="text-xs text-yellow-400">
+                                        Maximum investment: ${maxInvestment!.toLocaleString()} USDC
+                                    </p>
+                                )}
+                            </div>
                         </div>
                         {error && <p className="text-red-400 text-sm text-center">{error}</p>}
                         <DialogFooter>
-                            <Button type="submit" disabled={loading || !amount} onClick={handleInvest} className="w-full bg-blue-600 hover:bg-blue-500 text-white">
+                            <Button
+                                type="submit"
+                                disabled={!canSubmit}
+                                onClick={handleInvest}
+                                className="w-full bg-[hsl(160_60%_40%)] hover:bg-[hsl(160_60%_35%)] text-white disabled:opacity-40"
+                            >
                                 {loading ? 'Processing...' : 'Confirm Investment'}
                             </Button>
                         </DialogFooter>
