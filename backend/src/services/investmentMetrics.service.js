@@ -57,7 +57,7 @@ export class InvestmentMetricsService {
       }),
     ]);
 
-    const totalUsdcInvested = distributedInvestments.reduce((sum, inv) => sum + Number(inv.usdcAmount), 0);
+    const totalUsdcInvested = distributedInvestments.reduce((sum, inv) => sum + Number(inv.tokenAmount), 0);
     const totalTokensDistributed = distributedInvestments.reduce((sum, inv) => sum + Number(inv.tokenAmount), 0);
 
     const avgProcessingTime = distributedInvestments.length > 0
@@ -139,7 +139,7 @@ export class InvestmentMetricsService {
       byDate[dateKey].totalInvestments++;
       if (inv.status === 'distributed') {
         byDate[dateKey].successful++;
-        byDate[dateKey].totalUSDC += Number(inv.usdcAmount);
+        byDate[dateKey].totalUSDC += Number(inv.tokenAmount);
         byDate[dateKey].totalTokens += Number(inv.tokenAmount);
         byDate[dateKey].uniqueInvestors.add(inv.investorId);
       } else if (inv.status === 'failed') {
@@ -213,7 +213,7 @@ export class InvestmentMetricsService {
 
     return activeOffers.map(offer => {
       const soldTokens = offer.investments.reduce((sum, inv) => sum + Number(inv.tokenAmount), 0);
-      const raisedUSDC = offer.investments.reduce((sum, inv) => sum + Number(inv.usdcAmount), 0);
+      const raisedUSDC = offer.investments.reduce((sum, inv) => sum + Number(inv.tokenAmount), 0);
       const percentage = (soldTokens / Number(offer.totalSupply)) * 100;
 
       return {

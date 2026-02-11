@@ -219,10 +219,24 @@ export const purchaseInvestment = async (req, res, next) => {
           throw new Error('Company wallet not found for this offer');
         }
 
-        // Build SAC transfer: investor → company (total deduction)
+        // Route to treasury muxed address (per-company fund segregation)
+        // Funds pool in treasury G-address; muxed ID (company.id) is recorded on-chain
+        // Company claims funds later via admin-approved settlement
+        const { getTreasuryPublicKey } = await import('../config/stellar.js');
+        const { MuxedAccount, Account: StellarAccount } = await import('@stellar/stellar-sdk');
+        const treasuryPubKey = getTreasuryPublicKey();
+        const companyId = offer?.company?.id || 0;
+        const muxedAcct = new MuxedAccount(
+          new StellarAccount(treasuryPubKey, '0'),
+          companyId.toString()
+        );
+        const treasuryMuxed = muxedAcct.accountId(); // M... address
+
+        console.log(`[Investment] Routing ${totalDeduction} USDC to treasury muxed address (company #${companyId}): ${treasuryMuxed}`);
+
         const txData = await PasskeyWalletService.buildInvestmentTx(
           investorWallet,
-          companyWallet,
+          treasuryMuxed,
           totalDeduction
         );
 
@@ -786,6 +800,9 @@ export const submitInvestmentTx = async (req, res, next) => {
     });
 
     console.log(`[Investment] Smart wallet payment submitted for investment #${investmentId}: ${result.hash}`);
+
+    // Funds are now in the treasury muxed address (per-company segregation).
+    // Company claims funds via admin-approved settlement (Phase 2).
 
     // Trigger token distribution
     if (isQueueAvailable()) {

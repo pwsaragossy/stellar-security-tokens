@@ -13,7 +13,8 @@ import {
   Networks,
   Transaction,
   FeeBumpTransaction,
-  nativeToScVal
+  nativeToScVal,
+  StrKey as StellarStrKey,
 } from '@stellar/stellar-sdk';
 import { StellarService } from './stellar.service.js';
 import logger from '../utils/logger.js';
@@ -909,8 +910,13 @@ export class PasskeyWalletService {
     if (!investorContractId || !investorContractId.match(/^C[A-Z0-9]{55}$/)) {
       throw new Error('Invalid investor wallet address');
     }
-    if (!companyWallet || !companyWallet.match(/^[GC][A-Z0-9]{55}$/)) {
-      throw new Error('Invalid company wallet address');
+    // Accept G-addresses, C-addresses, and M-addresses (muxed treasury)
+    const isValidDest = companyWallet && (
+      companyWallet.match(/^[GC][A-Z0-9]{55}$/) ||
+      StellarStrKey.isValidMed25519PublicKey(companyWallet)
+    );
+    if (!isValidDest) {
+      throw new Error('Invalid destination wallet address');
     }
 
     const parsedAmount = parseFloat(amount);
@@ -1133,6 +1139,9 @@ export class PasskeyWalletService {
       walletId: investorContractId
     };
   }
+
+  // forwardInvestmentToCompany removed — funds now go directly to treasury muxed address.
+  // Company claims funds via admin-approved settlement (Phase 2).
 
   /**
    * Submit a signed withdrawal transaction
