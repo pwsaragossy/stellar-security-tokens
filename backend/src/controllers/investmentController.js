@@ -54,10 +54,12 @@ export const purchaseInvestment = async (req, res, next) => {
       });
     }
 
-    if (!investor.stellarPublicKey) {
+    // Resolve wallet address: Soroban contract (C...) or classic account (G...)
+    const investorWallet = investor.stellarContractId || investor.stellarPublicKey;
+    if (!investorWallet) {
       return res.status(400).json({
         success: false,
-        error: 'Investor does not have a Stellar public key configured',
+        error: 'Investor does not have a Stellar wallet configured',
       });
     }
 
@@ -70,11 +72,12 @@ export const purchaseInvestment = async (req, res, next) => {
 
     // --- PHASE 2.1: AUTONOMOUS JIT ONBOARDING ---
     // Ensure investor has the trustline for the asset they are buying.
-    // This happens in the background to avoid blocking the initial payment instructions response.
-    // We don't await this as it can take a few seconds and the user needs payment instructions immediately.
-    StellarService.setupSponsoredTrustline(investor.stellarPublicKey || investor.stellarContractId, assetCode)
-      .then(() => console.log(`[JIT Onboarding] Successfully ensured trustline for ${investor.id} / ${assetCode}`))
-      .catch(err => console.warn(`[JIT Onboarding] Non-critical failure during early trustline setup for ${investor.id}:`, err.message));
+    // Skip for Soroban contracts (C...) — they use SAC, no classic trustlines.
+    if (!investorWallet.startsWith('C')) {
+      StellarService.setupSponsoredTrustline(investorWallet, assetCode)
+        .then(() => console.log(`[JIT Onboarding] Successfully ensured trustline for ${investor.id} / ${assetCode}`))
+        .catch(err => console.warn(`[JIT Onboarding] Non-critical failure during early trustline setup for ${investor.id}:`, err.message));
+    }
 
     // Issue 7 Fix: Check for existing pending investment from same investor/offer
     const existingPending = await Investment.findPendingByInvestorAndOffer(parseInt(investorId, 10), offerId);
@@ -226,7 +229,7 @@ export const purchaseInvestment = async (req, res, next) => {
 
     // Verificar se pagamento USDC já foi recebido (Passando o Memo)
     const usdcPayment = await StellarService.verifyUSDCPayment(
-      investor.stellarPublicKey,
+      investor.stellarContractId || investor.stellarPublicKey,
       usdcAmount,
       treasuryKeypair.publicKey(),
       USDC_PAYMENT_WINDOW_MINUTES,
@@ -311,8 +314,9 @@ async function processInvestmentPaymentWithQueue(investment, usdcPayment, req, r
 
     // Buscar investidor para obter chave pública
     const investor = await Investor.findById(investment.investorId);
-    if (!investor || !investor.stellarPublicKey) {
-      throw new Error(`Investor ${investment.investorId} not found or missing Stellar key`);
+    const walletAddress = investor?.stellarContractId || investor?.stellarPublicKey;
+    if (!investor || !walletAddress) {
+      throw new Error(`Investor ${investment.investorId} not found or missing Stellar wallet`);
     }
 
     // Gerar memo único
@@ -327,7 +331,7 @@ async function processInvestmentPaymentWithQueue(investment, usdcPayment, req, r
     // Adicionar job à fila para processamento assíncrono com retry
     const job = await addDistributionJob({
       investmentId: investment.id,
-      investorPublicKey: investor.stellarPublicKey,
+      investorPublicKey: walletAddress,
       assetCode: investment.assetCode,
       amount: investment.tokenAmount.toString(),
       memo,
@@ -424,8 +428,7 @@ async function processInvestmentPayment(investment, usdcPayment, req, res, next)
     const investor = await Investor.findById(investment.investorId);
 
     // JIT AUTHORIZATION
-    let targetWallet = investor.stellarPublicKey;
-    if (!targetWallet && investor.stellarContractId) targetWallet = investor.stellarContractId;
+    const targetWallet = investor.stellarContractId || investor.stellarPublicKey;
 
     if (targetWallet) {
       console.log(`[InvestmentController] JIT Authorizing ${targetWallet} for ${investment.assetCode}...`);
