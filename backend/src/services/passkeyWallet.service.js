@@ -562,14 +562,13 @@ export class PasskeyWalletService {
         sponsored: true
       };
     } catch (error) {
-      log.error('Self-sponsorship failed:', error);
+      log.error('Self-sponsorship failed:');
+      // Dump the full error response to find the actual structure
+      if (error.response?.data) {
+        log.error('[Sponsorship] Full response data:', JSON.stringify(error.response.data, null, 2));
+      }
       if (error.response && error.response.data) {
         const resultCodes = error.response.data.extras?.result_codes;
-        const resultXdr = error.response.data.extras?.result_xdr;
-        const envelopeXdr = error.response.data.extras?.envelope_xdr;
-        log.error('[Sponsorship] Result codes:', JSON.stringify(resultCodes));
-        if (resultXdr) log.error('[Sponsorship] Result XDR:', resultXdr);
-        if (envelopeXdr) log.error('[Sponsorship] Envelope XDR (first 200 chars):', envelopeXdr.substring(0, 200));
         const detail = error.response.data.detail || JSON.stringify(resultCodes);
         throw new Error(`Sponsorship failed: ${detail} Codes: ${JSON.stringify(resultCodes)}`);
       }
@@ -954,7 +953,7 @@ export class PasskeyWalletService {
 
     // Boost Soroban resource budget for smart wallet passkey auth.
     // Simulation doesn't account for WebAuthn secp256r1 signature verification
-    // (auth entries don't exist yet), so we need a significant CPU buffer.
+    // (auth entries don't exist yet), so we need a significant buffer for ALL resources.
     try {
       const envelope = xdr.TransactionEnvelope.fromXDR(tx.toXDR('base64'), 'base64');
       const txBody = envelope.value().tx();
@@ -963,15 +962,29 @@ export class PasskeyWalletService {
       if (sorobanExt && sorobanExt.switch() === 1) {
         const sorobanData = sorobanExt.sorobanData();
         const resources = sorobanData.resources();
-        const simInstructions = resources.instructions();
-        const boostedInstructions = Math.ceil(simInstructions * 3); // 3x buffer for passkey auth
-        log.info(`Boosting instructions: ${simInstructions} → ${boostedInstructions}`);
 
-        // Mutate the instructions directly on the XDR object
+        // Boost instructions (CPU)
+        const simInstructions = resources.instructions();
+        const boostedInstructions = Math.ceil(simInstructions * 5); // 5x for secp256r1 verify
         resources.instructions(boostedInstructions);
 
+        // Boost readBytes — needed for extra footprint entries (wallet instance, signer, WASM)
+        const simReadBytes = resources.diskReadBytes();
+        const boostedReadBytes = Math.ceil(simReadBytes * 5) + 40000; // extra margin for WASM code
+        resources.diskReadBytes(boostedReadBytes);
+
+        // Boost writeBytes
+        const simWriteBytes = resources.writeBytes();
+        const boostedWriteBytes = Math.max(simWriteBytes * 3, simWriteBytes + 1000);
+        resources.writeBytes(boostedWriteBytes);
+
+        // Boost extendedMetaDataSizeBytes
+        const simMetaSize = sorobanData.resourceFee();
+
+        log.info(`Boosting resources: instructions ${simInstructions}→${boostedInstructions}, readBytes ${simReadBytes}→${boostedReadBytes}, writeBytes ${simWriteBytes}→${boostedWriteBytes}`);
+
         // Rebuild transaction with boosted resources and higher fee
-        const boostedFee = Math.ceil(parseInt(tx.fee) * 3).toString();
+        const boostedFee = Math.ceil(parseInt(tx.fee) * 5).toString();
         tx = TransactionBuilder.cloneFrom(tx, {
           fee: boostedFee,
           sorobanData: sorobanData,
@@ -980,6 +993,134 @@ export class PasskeyWalletService {
       }
     } catch (boostErr) {
       log.warn(`Could not boost resources (non-fatal): ${boostErr.message}`);
+    }
+
+    // Add smart wallet contract footprint entries needed by __check_auth.
+    // Simulation doesn't verify auth, so it doesn't discover the storage
+    // keys that __check_auth reads (signer key, contract instance, WASM code).
+    // Without these, on-chain execution traps with "trying to access contract
+    // data key outside of the footprint".
+    try {
+      // Look up investor's credential ID from database
+      const investor = await prisma.investor.findFirst({
+        where: { stellarContractId: investorContractId },
+        select: { passkeyCredentialId: true },
+      });
+
+      if (!investor?.passkeyCredentialId) {
+        log.warn('No credential ID found for investor — footprint may be incomplete');
+      } else {
+        const credentialIdBuffer = Buffer.from(investor.passkeyCredentialId, 'base64');
+        log.info(`Adding smart wallet footprint entries for credential: ${investor.passkeyCredentialId.substring(0, 20)}...`);
+
+        // Build the SignerKey::Secp256r1(credentialId) ScVal
+        // This matches the contract spec: enum SignerKey { Secp256r1(BytesN<N>) }
+        const signerKeyScVal = xdr.ScVal.scvVec([
+          xdr.ScVal.scvSymbol('Secp256r1'),
+          xdr.ScVal.scvBytes(credentialIdBuffer),
+        ]);
+
+        const walletContractHash = StrKey.decodeContract(investorContractId);
+
+        // LedgerKey entries needed by __check_auth:
+        // 1. Signer storage (Persistent) — env.storage().persistent().get(&credential_id)
+        const signerPersistentKey = xdr.LedgerKey.contractData(
+          new xdr.LedgerKeyContractData({
+            contract: new xdr.ScAddress.scAddressTypeContract(walletContractHash),
+            key: signerKeyScVal,
+            durability: xdr.ContractDataDurability.persistent(),
+          })
+        );
+
+        // 2. Signer storage (Temporary) — fallback: env.storage().temporary().get(&credential_id)
+        const signerTemporaryKey = xdr.LedgerKey.contractData(
+          new xdr.LedgerKeyContractData({
+            contract: new xdr.ScAddress.scAddressTypeContract(walletContractHash),
+            key: signerKeyScVal,
+            durability: xdr.ContractDataDurability.temporary(),
+          })
+        );
+
+        // 3. Contract instance — needed to execute the contract
+        const contractInstanceKey = xdr.LedgerKey.contractData(
+          new xdr.LedgerKeyContractData({
+            contract: new xdr.ScAddress.scAddressTypeContract(walletContractHash),
+            key: xdr.ScVal.scvLedgerKeyContractInstance(),
+            durability: xdr.ContractDataDurability.persistent(),
+          })
+        );
+
+        // 4. WASM code — needed to execute __check_auth
+        const wasmHash = process.env.WALLET_WASM_HASH || 'ecd990f0b45ca6817149b6175f79b32efb442f35731985a084131e8265c4cd90';
+        const wasmKey = xdr.LedgerKey.contractCode(
+          new xdr.LedgerKeyContractCode({
+            hash: Buffer.from(wasmHash, 'hex'),
+          })
+        );
+
+        // Merge into the existing footprint
+        const envelope = xdr.TransactionEnvelope.fromXDR(tx.toXDR('base64'), 'base64');
+        const sorobanData = envelope.value().tx().ext().sorobanData();
+        const footprint = sorobanData.resources().footprint();
+
+        const existingReadOnly = footprint.readOnly();
+        const existingReadWrite = footprint.readWrite();
+
+        // Helper: check if a key already exists in a list (by XDR comparison)
+        const keyExists = (list, key) => {
+          const keyXdr = key.toXDR('base64');
+          return list.some(existing => existing.toXDR('base64') === keyXdr);
+        };
+
+        // Add missing read-only keys
+        const keysToAdd = [signerPersistentKey, signerTemporaryKey, contractInstanceKey, wasmKey];
+        let added = 0;
+        for (const key of keysToAdd) {
+          if (!keyExists(existingReadOnly, key) && !keyExists(existingReadWrite, key)) {
+            existingReadOnly.push(key);
+            added++;
+          }
+        }
+
+        footprint.readOnly(existingReadOnly);
+
+        log.info(`Added ${added} footprint entries for smart wallet auth`);
+
+        // Rebuild from modified envelope
+        tx = TransactionBuilder.fromXDR(envelope.toXDR('base64'), networkPassphrase);
+      }
+    } catch (footprintErr) {
+      log.warn(`Could not add smart wallet footprint (non-fatal): ${footprintErr.message}`);
+      log.warn(footprintErr.stack);
+    }
+
+    // Extend auth entry expiration to allow time for passkey signing flow.
+    // The simulation sets a very short signatureExpirationLedger (~30 sec).
+    // The full flow (user passkey prompt + network round-trips + fee-bump)
+    // can easily take 2+ minutes, causing __check_auth to panic with
+    // function_trapped if the auth entry expires before submission.
+    try {
+      const { sequence } = await server.rpc.getLatestLedger();
+      const authExpirationLedger = sequence + 120; // ~10 minutes at 5 sec/ledger
+      const envelope = xdr.TransactionEnvelope.fromXDR(tx.toXDR('base64'), 'base64');
+      const ops = envelope.value().tx().operations();
+
+      for (const op of ops) {
+        if (op.body().switch().name === 'invokeHostFunction') {
+          const authEntries = op.body().invokeHostFunctionOp().auth();
+          for (const entry of authEntries) {
+            if (entry.credentials().switch().name === 'sorobanCredentialsAddress') {
+              entry.credentials().address().signatureExpirationLedger(authExpirationLedger);
+              log.info(`Extended auth entry expiration to ledger ${authExpirationLedger} (current: ${sequence}, buffer: ${authExpirationLedger - sequence} ledgers)`);
+            }
+          }
+        }
+      }
+
+      // Rebuild from the modified envelope
+      tx = TransactionBuilder.fromXDR(envelope.toXDR('base64'), networkPassphrase);
+    } catch (expirationErr) {
+      log.warn(`Could not extend auth expiration (non-fatal): ${expirationErr.message}`);
     }
 
     // NOTE: Do NOT sign here. The frontend's PasskeyKit.sign() uses

@@ -674,10 +674,110 @@ export const submitInvestmentTx = async (req, res, next) => {
     // Add the source account signature
     tx.sign(opsKeypair);
 
+    // === DIAGNOSTIC: Pre-submission simulation to get contract error details ===
+    try {
+      const { rpc } = await import('@stellar/stellar-sdk');
+      const sorobanServer = new rpc.Server(process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org');
+      const simResult = await sorobanServer.simulateTransaction(tx);
+      if ('error' in simResult || simResult.error) {
+        console.log('[Investment] PRE-SUBMIT SIMULATION FAILED:');
+        console.log('[Investment] Sim error:', JSON.stringify(simResult.error));
+        if (simResult.events) {
+          console.log('[Investment] Sim diagnostic events:', JSON.stringify(simResult.events, null, 2));
+        }
+        if (simResult.results) {
+          console.log('[Investment] Sim results:', JSON.stringify(simResult.results));
+        }
+      } else {
+        console.log('[Investment] Pre-submit simulation OK, minResourceFee:', simResult.minResourceFee);
+      }
+    } catch (simErr) {
+      console.log('[Investment] Pre-submit sim error:', simErr.message);
+    }
+    // === END DIAGNOSTIC ===
+
     console.log(`[Investment] Submitting passkey-signed TX for investment #${investmentId}...`);
 
-    // Submit via fee-bump sponsorship (wraps in fee-bump + submits to Horizon)
-    const result = await PasskeyWalletService.submitWithSponsorship(tx);
+    // === DEBUG: Submit via Soroban RPC directly (bypasses fee-bump) ===
+    // This gives us diagnostic events on failure, unlike Horizon's empty result_xdr.
+    // TODO: Revert to fee-bump after fixing the auth issue.
+    const { rpc: rpcLib } = await import('@stellar/stellar-sdk');
+    const sorobanRpc = new rpcLib.Server(process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org');
+
+    const sendResult = await sorobanRpc.sendTransaction(tx);
+    console.log(`[Investment] sendTransaction status: ${sendResult.status}`);
+    console.log(`[Investment] sendTransaction hash: ${sendResult.hash}`);
+
+    if (sendResult.status === 'ERROR') {
+      console.error('[Investment] sendTransaction immediate ERROR:', JSON.stringify(sendResult, null, 2));
+      throw new Error(`Soroban sendTransaction rejected: ${sendResult.errorResult?.toXDR('base64') || 'unknown'}`);
+    }
+
+    // Poll getTransaction until resolved or timeout (60s max)
+    let txResult;
+    const maxWait = 60_000;
+    const pollInterval = 3_000;
+    let waited = 0;
+
+    while (waited < maxWait) {
+      await new Promise(r => setTimeout(r, pollInterval));
+      waited += pollInterval;
+
+      txResult = await sorobanRpc.getTransaction(sendResult.hash);
+      console.log(`[Investment] getTransaction status: ${txResult.status} (${waited / 1000}s elapsed)`);
+
+      if (txResult.status !== 'NOT_FOUND') break;
+    }
+
+    if (!txResult || txResult.status === 'NOT_FOUND') {
+      throw new Error('Transaction not found after 60s polling');
+    }
+
+    if (txResult.status === 'FAILED') {
+      console.error('[Investment] === TRANSACTION FAILED ===');
+      console.error('[Investment] Result XDR:', txResult.resultXdr?.toXDR?.('base64') || 'N/A');
+      console.error('[Investment] Result meta XDR:', txResult.resultMetaXdr?.toXDR?.('base64') || 'N/A');
+
+      // Extract diagnostic events from result meta
+      try {
+        const meta = txResult.resultMetaXdr;
+        if (meta) {
+          const v3 = meta.value?.()?.sorobanMeta?.();
+          if (v3) {
+            const diagEvents = v3.diagnosticEvents?.() || [];
+            console.error(`[Investment] Diagnostic events (${diagEvents.length}):`);
+            diagEvents.forEach((evt, i) => {
+              try {
+                console.error(`[Investment]   Event[${i}]:`, JSON.stringify(evt.toXDR('base64')));
+                // Try to decode the event body
+                const body = evt.event?.()?.body?.();
+                if (body) {
+                  const data = body.value?.()?.data?.();
+                  if (data) {
+                    console.error(`[Investment]   Event[${i}] data type:`, data.switch?.()?.name);
+                    if (data.switch?.()?.name === 'scvError') {
+                      console.error(`[Investment]   Event[${i}] ERROR:`, data.error?.()?.switch?.()?.name, data.error?.()?.value?.());
+                    }
+                    if (data.switch?.()?.name === 'scvU32') {
+                      console.error(`[Investment]   Event[${i}] U32 value:`, data.u32?.());
+                    }
+                  }
+                }
+              } catch (evtErr) {
+                console.error(`[Investment]   Event[${i}] decode error:`, evtErr.message);
+              }
+            });
+          }
+        }
+      } catch (metaErr) {
+        console.error('[Investment] Meta decode error:', metaErr.message);
+      }
+
+      throw new Error(`Transaction FAILED on-chain. Hash: ${sendResult.hash}. Check logs for diagnostic events.`);
+    }
+
+    console.log(`[Investment] Transaction SUCCEEDED: ${sendResult.hash}`);
+    const result = { hash: sendResult.hash, ledger: txResult.ledger };
 
     // Update investment status
     await Investment.updateStatus(parseInt(investmentId), {

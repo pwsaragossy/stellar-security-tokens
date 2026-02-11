@@ -39,6 +39,10 @@ export class PasskeyClient {
                 rpcUrl: config.rpcUrl,
                 networkPassphrase: config.networkPassphrase,
                 walletWasmHash: config.walletWasmHash,
+                // Give 5 minutes for the passkey signing flow.
+                // Default is 30 seconds which is too short when the flow includes
+                // user passkey prompt + network round-trips + fee-bump wrapping.
+                timeoutInSeconds: 300,
             });
         } catch (error) {
             console.error('Failed to initialize PasskeyKit:', error);
