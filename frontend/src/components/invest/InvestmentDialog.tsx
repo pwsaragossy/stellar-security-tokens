@@ -222,9 +222,15 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
                                 </code>
                             </div>
                         )}
+                        <p className="text-xs text-slate-500">
+                            You can track your investment status on your Portfolio page.
+                        </p>
                         <DialogFooter>
-                            <Button onClick={handleClose} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
-                                Done
+                            <Button
+                                onClick={() => { handleClose(); window.location.href = '/portfolio'; }}
+                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                            >
+                                View Portfolio
                             </Button>
                         </DialogFooter>
                     </div>

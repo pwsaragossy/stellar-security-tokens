@@ -389,13 +389,12 @@ export const getInvestorInvestments = async (req, res, next) => {
     ]);
 
     // For pending investments, include payment instructions
-    const { getTreasuryKeypair } = await import('../config/stellar.js');
+    const { getTreasuryPublicKey } = await import('../config/stellar.js');
     let treasuryAddress = null;
     try {
-      const treasuryKeypair = getTreasuryKeypair();
-      treasuryAddress = treasuryKeypair.publicKey();
+      treasuryAddress = getTreasuryPublicKey();
     } catch {
-      console.warn('[getInvestorInvestments] Treasury keypair not configured');
+      console.warn('[getInvestorInvestments] Treasury public key not configured');
     }
 
     // Enhance investments with payment info for pending status
@@ -420,6 +419,9 @@ export const getInvestorInvestments = async (req, res, next) => {
         },
       } : {}),
       // Status-specific info
+      ...(inv.status === 'payment_received' ? {
+        usdcPaymentHash: inv.usdcPaymentHash,
+      } : {}),
       ...(inv.status === 'distributed' ? {
         distributionTxHash: inv.distributionTxHash,
       } : {}),

@@ -25,6 +25,7 @@ export const investmentsApi = {
         amount: number;
         asset: string;
       };
+      usdcPaymentHash?: string;
       distributionTxHash?: string;
       errorMessage?: string;
     }>;

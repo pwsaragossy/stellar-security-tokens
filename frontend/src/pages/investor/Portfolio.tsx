@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Wallet, TrendingUp, PieChart, Briefcase, Clock, Copy, Check, RefreshCw, AlertCircle, Hourglass } from 'lucide-react';
+import { Loader2, Wallet, TrendingUp, PieChart, Briefcase, Clock, Copy, Check, RefreshCw, AlertCircle, Hourglass, ExternalLink } from 'lucide-react';
 import { api } from '@/lib/api';
 import { authStorage } from '@/utils/authStorage';
 import { usePendingInvestments, type PendingInvestment } from '@/hooks/usePendingInvestments';
@@ -120,10 +120,21 @@ function PendingInvestmentCard({ investment, isProcessing }: { investment: Pendi
                 </div>
             )}
 
-            {/* Processing message */}
+            {/* Processing message + Stellar Expert link */}
             {isProcessing && (
-                <div className="pt-2 border-t border-white/10">
+                <div className="pt-2 border-t border-white/10 space-y-2">
                     <p className={`text-xs ${statusConfig.textClass}`}>{statusConfig.sublabel}</p>
+                    {investment.usdcPaymentHash && (
+                        <a
+                            href={`https://stellar.expert/explorer/testnet/tx/${investment.usdcPaymentHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                            <ExternalLink className="h-3 w-3" />
+                            View USDC payment on Stellar Expert
+                        </a>
+                    )}
                 </div>
             )}
 
