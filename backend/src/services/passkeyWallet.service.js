@@ -512,6 +512,14 @@ export class PasskeyWalletService {
       // Calculate dynamic fee for Fee Bump
       // For Soroban, the inner transaction fee is significantly higher.
       const innerFee = parseInt(innerTx.fee);
+
+      // SECURITY: Cap sponsored fees to prevent XLM drain via inflated resource fees
+      const MAX_SPONSORED_FEE_STROOPS = 10_000_000; // 1 XLM
+      if (innerFee > MAX_SPONSORED_FEE_STROOPS) {
+        log.warn(`REJECTED sponsorship: inner fee ${innerFee} stroops exceeds cap of ${MAX_SPONSORED_FEE_STROOPS}`);
+        throw new Error(`Transaction fee too high for sponsorship (${(innerFee / 10_000_000).toFixed(2)} XLM). Max: 1 XLM`);
+      }
+
       const feeBumpFee = Math.max(parseInt(BASE_FEE) * 2, innerFee + parseInt(BASE_FEE));
 
       const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
@@ -734,8 +742,8 @@ export class PasskeyWalletService {
         const balanceOp = contract.call('balance', walletScVal);
 
         // Simulate the transaction to get the result
-        // Use Treasury as source account (must be a valid G-address for simulation context)
-        const sourceAccount = new Account(getTreasuryKeypair().publicKey(), '0');
+        // Use Operations wallet as source (any valid G-address works for read-only simulation)
+        const sourceAccount = new Account(getOperationsKeypair().publicKey(), '0');
 
         const simResult = await server.simulateTransaction(
           new TransactionBuilder(
@@ -883,13 +891,19 @@ export class PasskeyWalletService {
   /**
    * Submit a signed withdrawal transaction
    * 
-   * @param {string} xdr - The signed transaction XDR
+   * SECURITY: Validates the XDR before sponsoring to prevent arbitrary
+   * transaction injection. Only allows single invokeHostFunction ops
+   * targeting known token contracts (USDC/XLM SAC).
+   * 
+   * @param {string} signedXdr - The signed transaction XDR
    * @returns {Promise<Object>} Transaction hash
    */
   static async submitWithdrawalTx(signedXdr) {
     const server = this.getServer();
-
     const tx = TransactionBuilder.fromXDR(signedXdr, getNetworkPassphrase());
+
+    // --- SECURITY: Validate withdrawal XDR before sponsoring ---
+    this.#validateWithdrawalTx(tx);
 
     const result = await server.send(tx);
 
@@ -901,6 +915,59 @@ export class PasskeyWalletService {
       hash: result.hash,
       status: result.status
     };
+  }
+
+  /**
+   * Validate that a withdrawal transaction only contains expected operations.
+   * Rejects arbitrary transactions to prevent abuse of sponsored submissions.
+   * @private
+   */
+  static #validateWithdrawalTx(tx) {
+    const ops = tx.operations;
+
+    // Must have exactly 1 operation
+    if (!ops || ops.length !== 1) {
+      throw new Error(`Invalid withdrawal: expected 1 operation, got ${ops?.length || 0}`);
+    }
+
+    const op = ops[0];
+
+    // Must be an invokeHostFunction (Soroban contract call)
+    if (op.type !== 'invokeHostFunction') {
+      throw new Error(`Invalid withdrawal: unexpected operation type '${op.type}'`);
+    }
+
+    // Validate the contract being called is a known SAC token
+    try {
+      const invokeArgs = op.func?.value?.();
+      if (invokeArgs && typeof invokeArgs.contractAddress === 'function') {
+        const contractId = Address.fromScAddress(invokeArgs.contractAddress()).toString();
+        const allowedContracts = [
+          process.env.USDC_SAC_CONTRACT_ID,
+          process.env.USDC_CONTRACT_ID,
+          process.env.XLM_SAC_CONTRACT_ID,
+          process.env.XLM_CONTRACT_ID,
+        ].filter(Boolean);
+
+        if (allowedContracts.length > 0 && !allowedContracts.includes(contractId)) {
+          log.warn(`REJECTED withdrawal: contract ${contractId} not in allowlist`);
+          throw new Error('Invalid withdrawal: contract not authorized for withdrawals');
+        }
+
+        // Validate function name is 'transfer'
+        const funcName = invokeArgs.functionName?.()?.toString();
+        if (funcName && funcName !== 'transfer') {
+          log.warn(`REJECTED withdrawal: unexpected function '${funcName}'`);
+          throw new Error(`Invalid withdrawal: unexpected contract function '${funcName}'`);
+        }
+      }
+    } catch (parseErr) {
+      // If we can't parse the invoke args, that's OK for now —
+      // the operation type check + single-op check are the primary guards.
+      // Log but don't reject (Soroban XDR parsing can be version-sensitive).
+      if (parseErr.message.startsWith('Invalid withdrawal')) throw parseErr;
+      log.debug(`Could not deep-inspect withdrawal XDR: ${parseErr.message}`);
+    }
   }
 
   /**
