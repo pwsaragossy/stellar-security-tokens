@@ -7,6 +7,7 @@ import { getTreasuryPublicKey } from '../config/stellar.js';
 import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
 import { addDistributionJob, isQueueAvailable } from '../services/distributionQueue.service.js';
 import { ConfigService } from '../services/config.service.js';
+import prisma from '../config/prisma.js';
 import crypto from 'crypto';
 
 
@@ -487,12 +488,56 @@ async function processInvestmentPayment(investment, usdcPayment, req, res, next)
       await StellarService.authorizeInvestor(targetWallet, investment.assetCode);
     }
 
+    // Fetch offer name for metadata
+    const offer = investment.offerId ? await prisma.offer.findUnique({ where: { id: investment.offerId }, select: { offerName: true } }) : null;
+
     const stellarResult = await StellarService.distributeTokens(
       targetWallet,
       investment.tokenAmount.toString(),
       investment.assetCode,
-      { memo }
+      {
+        memo,
+        investorId: investment.investorId,
+        investorName: investor.name,
+        investorEmail: investor.email,
+        investmentId: investment.id,
+        offerId: investment.offerId,
+        offerName: offer?.offerName || investment.assetCode,
+        usdcAmount: investment.usdcAmount?.toString(),
+        usdcPaymentHash: usdcPayment.transactionHash,
+      }
     );
+
+    // Handle pending multisig (distribution queued for admin signing)
+    if (stellarResult.status === 'pending_multisig') {
+      await Investment.updateStatus(investment.id, {
+        status: 'pending_distribution',
+        error_message: JSON.stringify({
+          multiSigTransactionId: stellarResult.multiSigTransactionId,
+          step: stellarResult.step,
+          message: stellarResult.message,
+        }),
+      });
+
+      return res.status(202).json({
+        success: true,
+        message: 'Distribution queued for multisig approval',
+        data: {
+          investment: {
+            id: investment.id,
+            status: 'pending_distribution',
+            usdcAmount: parseFloat(investment.usdcAmount.toString()),
+            tokenAmount: parseFloat(investment.tokenAmount.toString()),
+            assetCode: investment.assetCode,
+          },
+          multisig: {
+            transactionId: stellarResult.multiSigTransactionId,
+            step: stellarResult.step,
+            message: stellarResult.message,
+          },
+        },
+      });
+    }
 
     // Criar distribuição (com verificação de idempotência interna)
     const distribution = await Token.createDistribution({

@@ -1454,6 +1454,82 @@ function MultisigDetail({ raw }: { raw: any }) {
                                 {raw.metadata.offerId && <DetailRow label="Offer ID" value={raw.metadata.offerId} />}
                             </div>
                         )}
+                        {raw.operationType === 'token_distribute' && (
+                            <>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <DetailRow label="Investor" value={raw.metadata.investorName || '—'} />
+                                    <DetailRow label="Email" value={raw.metadata.investorEmail || '—'} />
+                                    <DetailRow label="Tokens" value={
+                                        <span className="text-emerald-400 font-semibold">
+                                            {raw.metadata.amount} {raw.metadata.assetCode}
+                                        </span>
+                                    } />
+                                    <DetailRow label="USDC Paid" value={
+                                        raw.metadata.usdcAmount
+                                            ? <span className="text-blue-400 font-semibold">{raw.metadata.usdcAmount} USDC</span>
+                                            : '—'
+                                    } />
+                                    {raw.metadata.offerName && (
+                                        <DetailRow label="Offer" value={raw.metadata.offerName} />
+                                    )}
+                                    {raw.metadata.investmentId && (
+                                        <DetailRow label="Investment ID" value={`#${raw.metadata.investmentId}`} />
+                                    )}
+                                </div>
+                                <DetailRow
+                                    label="Wallet"
+                                    value={
+                                        raw.metadata.investorPublicKey ? (
+                                            <code className="text-xs text-emerald-400 bg-black/30 px-2 py-1 rounded break-all">
+                                                {raw.metadata.investorPublicKey}
+                                            </code>
+                                        ) : '—'
+                                    }
+                                />
+                                {raw.metadata.usdcPaymentHash && (
+                                    <DetailRow
+                                        label="USDC TX"
+                                        value={
+                                            <a
+                                                href={`https://stellar.expert/explorer/testnet/tx/${raw.metadata.usdcPaymentHash}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-xs text-blue-400 hover:text-blue-300 underline font-mono break-all"
+                                            >
+                                                {raw.metadata.usdcPaymentHash}
+                                            </a>
+                                        }
+                                    />
+                                )}
+                            </>
+                        )}
+                        {raw.operationType === 'sac_deploy' && (
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <DetailRow label="Asset" value={raw.metadata.assetCode} />
+                                    {raw.metadata.sacContractId && (
+                                        <DetailRow
+                                            label="Contract ID"
+                                            value={
+                                                <code className="text-xs text-emerald-400 bg-black/30 px-2 py-1 rounded break-all">
+                                                    {raw.metadata.sacContractId}
+                                                </code>
+                                            }
+                                        />
+                                    )}
+                                </div>
+                                {raw.metadata.chainAction === 'token_distribute' && (
+                                    <div className="p-3 bg-blue-500/10 border border-blue-500/25 rounded-lg">
+                                        <p className="text-xs text-blue-300">
+                                            <strong>Chained:</strong> After signing, a distribution of{' '}
+                                            <span className="font-semibold">{raw.metadata.amount} {raw.metadata.assetCode}</span>{' '}
+                                            to <span className="font-semibold">{raw.metadata.investorName || raw.metadata.investorPublicKey?.slice(0, 8) + '…'}</span>{' '}
+                                            will be automatically queued.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         {raw.operationType === 'treasury_payment' && (
                             <div className="grid grid-cols-2 gap-4">
                                 <DetailRow label="Destination" value={raw.metadata.destination?.slice(0, 12) + '...'} />
@@ -1469,7 +1545,7 @@ function MultisigDetail({ raw }: { raw: any }) {
                                 <DetailRow label="Asset" value={raw.metadata.assetCode} />
                             </div>
                         )}
-                        {!['treasury_payment', 'dividend_distribution', 'token_issue'].includes(raw.operationType) && displayKeys.length > 0 && (
+                        {!['treasury_payment', 'dividend_distribution', 'token_issue', 'token_distribute', 'sac_deploy'].includes(raw.operationType) && displayKeys.length > 0 && (
                             <pre className="text-xs text-blue-300 bg-black/30 p-2 rounded overflow-x-auto">
                                 {JSON.stringify(
                                     Object.fromEntries(displayKeys.map(k => [k, raw.metadata[k]])),

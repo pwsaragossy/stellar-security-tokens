@@ -412,8 +412,33 @@ export class PaymentMonitor {
         targetWallet,
         investment.tokenAmount.toString(),
         investment.assetCode,
-        { memo }
+        {
+          memo,
+          investorId: investment.investorId,
+          investorName: investor.name,
+          investorEmail: investor.email,
+          investmentId: investment.id,
+          offerId: investment.offerId,
+          offerName: investment.offer?.name || investment.assetCode,
+          usdcAmount: investment.usdcAmount?.toString(),
+          usdcPaymentHash: payment.transaction_hash,
+        }
       );
+
+      // Handle pending multisig (distribution queued for admin signing)
+      if (stellarResult.status === 'pending_multisig') {
+        log.info(`Distribution for investment ${investment.id} queued for multisig (TX #${stellarResult.multiSigTransactionId}, step: ${stellarResult.step})`);
+        await Investment.updateStatus(investment.id, {
+          status: 'pending_distribution',
+          // Store the multisig TX ID for linking when the TX is signed
+          error_message: JSON.stringify({
+            multiSigTransactionId: stellarResult.multiSigTransactionId,
+            step: stellarResult.step,
+            message: stellarResult.message,
+          }),
+        });
+        return; // Email and distribution record created in post-sign hook
+      }
 
       // Criar distribuição (com verificação de idempotência interna)
       const distribution = await Token.createDistribution({
@@ -433,7 +458,6 @@ export class PaymentMonitor {
       });
 
       log.info(`Successfully processed investment ${investment.id}: distributed ${investment.tokenAmount} tokens`);
-
 
       // Enviar email de confirmação para investidor
       await EmailService.sendInvestmentConfirmation(investor.email, investment, distribution);

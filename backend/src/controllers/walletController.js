@@ -18,6 +18,98 @@ function getWalletPublicKey(walletName) {
     return keyManager.getPublicKey(role);
 }
 
+/**
+ * Post-execution hook: runs after a multisig TX is submitted to Stellar.
+ * Handles SAC→Distribution chaining and investment completion.
+ */
+async function runPostExecutionHook(proposal, stellarResult) {
+    const { operationType, metadata, txHash } = proposal;
+    const meta = metadata || {};
+
+    // ── SAC Deploy completed → auto-queue distribution ──
+    if (operationType === 'sac_deploy' && meta.chainAction === 'token_distribute') {
+        console.log(`[PostHook] SAC deploy TX #${proposal.id} executed. Chaining distribution for investor ${meta.investorPublicKey}...`);
+        const { StellarService } = await import('../services/stellar.service.js');
+        try {
+            const distResult = await StellarService.distributeTokens(
+                meta.investorPublicKey,
+                meta.amount,
+                meta.assetCode,
+                {
+                    investorId: meta.investorId,
+                    investorName: meta.investorName,
+                    investorEmail: meta.investorEmail,
+                    investmentId: meta.investmentId,
+                    offerId: meta.offerId,
+                    offerName: meta.offerName,
+                    usdcAmount: meta.usdcAmount,
+                    usdcPaymentHash: meta.usdcPaymentHash,
+                }
+            );
+            console.log(`[PostHook] Distribution chained:`, distResult.status || 'submitted', distResult.multiSigTransactionId || distResult.transactionHash);
+
+            // If distribution also went to multisig, update investment with the new TX ID
+            if (distResult.status === 'pending_multisig' && meta.investmentId) {
+                const { Investment } = await import('../models/Investment.js');
+                await Investment.updateStatus(meta.investmentId, {
+                    error_message: JSON.stringify({
+                        multiSigTransactionId: distResult.multiSigTransactionId,
+                        step: 'token_distribute',
+                        message: distResult.message,
+                    }),
+                });
+            }
+        } catch (distErr) {
+            console.error(`[PostHook] Chained distribution failed for investment ${meta.investmentId}:`, distErr);
+        }
+        return;
+    }
+
+    // ── Distribution completed → finalize investment ──
+    if (operationType === 'token_distribute' && meta.investmentId) {
+        console.log(`[PostHook] Distribution TX #${proposal.id} executed. Completing investment ${meta.investmentId}...`);
+        try {
+            const { Investment } = await import('../models/Investment.js');
+            const { Token } = await import('../models/Token.js');
+
+            // Create distribution record
+            await Token.createDistribution({
+                investorId: meta.investorId,
+                assetCode: meta.assetCode,
+                amount: parseFloat(meta.amount),
+                transactionHash: txHash,
+                usdcPaymentHash: meta.usdcPaymentHash,
+                offerId: meta.offerId ? parseInt(meta.offerId) : null,
+            });
+
+            // Update investment to distributed
+            await Investment.updateStatus(meta.investmentId, {
+                status: 'distributed',
+                distribution_tx_hash: txHash,
+                error_message: null, // Clear the multisig tracking data
+            });
+
+            // Send confirmation email
+            if (meta.investorEmail) {
+                const { EmailService } = await import('../services/email.service.js');
+                const investment = await Investment.findById(meta.investmentId);
+                if (investment) {
+                    await EmailService.sendInvestmentConfirmation(meta.investorEmail, investment, {
+                        transactionHash: txHash,
+                        assetCode: meta.assetCode,
+                        amount: meta.amount,
+                    });
+                }
+            }
+
+            console.log(`[PostHook] Investment ${meta.investmentId} completed. Distribution hash: ${txHash}`);
+        } catch (err) {
+            console.error(`[PostHook] Failed to complete investment ${meta.investmentId}:`, err);
+        }
+        return;
+    }
+}
+
 export const WalletController = {
     /**
      * Get the status and balances of system wallets
@@ -320,7 +412,13 @@ export const WalletController = {
                         ledger: result.ledger,
                         xdr: signedXDR,
                         submittedAt: new Date()
-                    }
+                    },
+                    select: { id: true, operationType: true, metadata: true, txHash: true }
+                });
+
+                // Post-execution hook — runs async, doesn't block the response
+                runPostExecutionHook(updatedProposal, result).catch(err => {
+                    console.error(`[WalletController] Post-execution hook failed for TX #${updatedProposal.id}:`, err);
                 });
 
                 res.status(200).json({ success: true, result });

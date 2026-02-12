@@ -109,6 +109,11 @@ export class Investment {
             stellarContractId: true,
           },
         },
+        offer: {
+          select: {
+            offerName: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 10,
@@ -232,7 +237,7 @@ export class Investment {
       where: {
         offerId,
         status: {
-          in: ['pending_payment', 'payment_received', 'distributed'],
+          in: ['pending_payment', 'payment_received', 'pending_distribution', 'distributed'],
         },
       },
       _sum: {

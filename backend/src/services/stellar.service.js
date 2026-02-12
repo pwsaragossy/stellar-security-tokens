@@ -631,7 +631,7 @@ export class StellarService {
    * @param {string} [issuer] - Optional issuer public key (defaults to platform issuer)
    * @returns {Promise<Object>} Deployment result
    */
-  static async deploySACForAsset(code, issuer = null) {
+  static async deploySACForAsset(code, issuer = null, chainMetadata = {}) {
     try {
       const issuerPublicKey = keyManager.getIssuerPublicKey();
 
@@ -658,6 +658,11 @@ export class StellarService {
         signingRole: 'ISSUER',
         operationType: 'sac_deploy',
         description: `Deploy SAC for asset ${code}`,
+        metadata: {
+          assetCode: code,
+          sacContractId,
+          ...chainMetadata,
+        },
       });
 
       return {
@@ -681,9 +686,10 @@ export class StellarService {
    * If not deployed, deploys it and updates the token DB record.
    * @param {string} assetCode - Asset code
    * @param {string} [issuer] - Optional issuer (defaults to platform issuer)
+   * @param {Object} [chainMetadata={}] - Metadata for chaining (passed to SAC deploy for post-sign hooks)
    * @returns {Promise<string>} SAC contract ID
    */
-  static async ensureSACDeployed(assetCode, issuer = null) {
+  static async ensureSACDeployed(assetCode, issuer = null, chainMetadata = {}) {
     const issuerPublicKey = issuer || keyManager.getIssuerPublicKey();
     const asset = new Asset(assetCode, issuerPublicKey);
     const sacContractId = this.getSACContractId(asset);
@@ -707,7 +713,7 @@ export class StellarService {
 
     // SAC not found — deploy it through multisig
     console.log(`[StellarService] SAC not deployed for ${assetCode}. Deploying via multisig...`);
-    const result = await this.deploySACForAsset(assetCode, issuerPublicKey);
+    const result = await this.deploySACForAsset(assetCode, issuerPublicKey, chainMetadata);
 
     if (result.status === 'pending_multisig') {
       // SAC deploy queued — throw a typed error so distribution can be chained after signing
@@ -768,7 +774,40 @@ export class StellarService {
       if (isContract) {
         // --- SOROBAN SAC DISTRIBUTION ---
         console.log(`[StellarService] Distributing via SAC to contract ${investorPublicKey}`);
-        const sacContractId = await this.ensureSACDeployed(assetCode);
+
+        // Chain metadata: if SAC deploy needs multisig, these fields let the post-sign
+        // hook auto-queue the distribution after SAC is deployed
+        const chainMeta = {
+          chainAction: 'token_distribute',
+          investorPublicKey,
+          amount: amountStr,
+          investorName: options.investorName,
+          investorEmail: options.investorEmail,
+          investorId: options.investorId,
+          offerId: options.offerId,
+          offerName: options.offerName,
+          usdcAmount: options.usdcAmount,
+          usdcPaymentHash: options.usdcPaymentHash,
+          investmentId: options.investmentId,
+        };
+
+        let sacContractId;
+        try {
+          sacContractId = await this.ensureSACDeployed(assetCode, null, chainMeta);
+        } catch (sacError) {
+          if (sacError.code === 'SAC_PENDING_MULTISIG') {
+            // SAC deploy queued for multisig — distribution will be chained after signing
+            return {
+              success: true,
+              status: 'pending_multisig',
+              step: 'sac_deploy',
+              multiSigTransactionId: sacError.multiSigTransactionId,
+              message: `SAC deploy queued (TX #${sacError.multiSigTransactionId}). Distribution will auto-queue after signing.`,
+            };
+          }
+          throw sacError;
+        }
+
         const contract = new Contract(sacContractId);
 
         // Build 'transfer' call: transfer(from, to, amount)
@@ -783,7 +822,6 @@ export class StellarService {
         let transaction = buildTransactionWithAccount(distributorAccount, [transferOp]);
 
         // Soroban Simulation & Preparation
-        // This estimates footprint, resource limits and sets proper fees
         console.log(`[StellarService] Simulating Soroban SAC transfer...`);
         transaction = await this.prepareSorobanTransaction(transaction);
 
@@ -797,8 +835,14 @@ export class StellarService {
             amount: amountStr,
             investorPublicKey,
             type: 'soroban_transfer',
+            investorName: options.investorName,
+            investorEmail: options.investorEmail,
             investorId: options.investorId,
-            offerId: options.offerId
+            offerId: options.offerId,
+            offerName: options.offerName,
+            usdcAmount: options.usdcAmount,
+            usdcPaymentHash: options.usdcPaymentHash,
+            investmentId: options.investmentId,
           }
         });
       } else {
@@ -844,11 +888,31 @@ export class StellarService {
             amount: amountStr,
             investorPublicKey,
             type: 'classic_payment',
+            investorName: options.investorName,
+            investorEmail: options.investorEmail,
             investorId: options.investorId,
             offerId: options.offerId,
+            offerName: options.offerName,
+            usdcAmount: options.usdcAmount,
+            usdcPaymentHash: options.usdcPaymentHash,
+            investmentId: options.investmentId,
             memo: options.memo
           }
         });
+      }
+
+      // Handle pending multisig (distribution queued for admin signing)
+      if (result.status === 'pending_multisig') {
+        return {
+          success: true,
+          status: 'pending_multisig',
+          step: 'token_distribute',
+          multiSigTransactionId: result.multiSigTransactionId,
+          assetCode,
+          investorPublicKey,
+          amount: amountStr,
+          message: `Distribution queued for multisig (TX #${result.multiSigTransactionId})`,
+        };
       }
 
       if (!result.success) {
