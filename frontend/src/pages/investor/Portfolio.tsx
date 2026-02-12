@@ -169,13 +169,15 @@ export function Portfolio() {
                 const response = await api.get(`/investors/${user.id}/portfolio`);
 
                 const data = response.data || response;
-                const investmentsList = Array.isArray(data) ? data : (data.investments || []);
+                const investmentsList = Array.isArray(data)
+                    ? data
+                    : (data.portfolio || data.investments || []);
 
                 setInvestments(investmentsList.map((inv: any) => ({
                     assetCode: inv.assetCode || inv.asset_code || 'N/A',
-                    tokenName: inv.tokenName || inv.token_name || inv.assetCode || 'Security Token',
-                    amount: Number(inv.amount) || 0,
-                    currentValue: Number(inv.currentValue || inv.amount) || 0,
+                    tokenName: inv.offerName || inv.tokenName || inv.token_name || inv.assetCode || 'Security Token',
+                    amount: Number(inv.totalDistributed || inv.amount) || 0,
+                    currentValue: Number(inv.currentValue || inv.totalDistributed || inv.amount) || 0,
                     interestEarned: Number(inv.interestEarned || inv.interest_earned) || 0,
                     maturityDate: inv.maturityDate || inv.maturity_date || 'N/A',
                 })));
@@ -188,7 +190,7 @@ export function Portfolio() {
         }
 
         fetchPortfolio();
-    }, []);
+    }, [processingInvestments.length]);
 
     if (loading) {
         return (

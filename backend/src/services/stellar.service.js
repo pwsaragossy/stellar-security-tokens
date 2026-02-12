@@ -711,7 +711,32 @@ export class StellarService {
       console.warn(`[StellarService] SAC existence check failed for ${assetCode}, attempting deploy: ${checkError.message}`);
     }
 
-    // SAC not found — deploy it through multisig
+    // SAC not found — check if a deploy is already pending in multisig queue
+    try {
+      const { default: prisma } = await import('../config/prisma.js');
+      const pendingSACDeploy = await prisma.multiSigTransaction.findFirst({
+        where: {
+          operationType: 'sac_deploy',
+          status: 'pending',
+          metadata: { path: ['assetCode'], equals: assetCode },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (pendingSACDeploy) {
+        console.log(`[StellarService] SAC deploy already pending for ${assetCode} (TX #${pendingSACDeploy.id}). Reusing.`);
+        const err = new Error(`SAC deploy pending multisig for ${assetCode}`);
+        err.code = 'SAC_PENDING_MULTISIG';
+        err.multiSigTransactionId = pendingSACDeploy.id;
+        err.sacContractId = sacContractId;
+        throw err;
+      }
+    } catch (dbCheckError) {
+      if (dbCheckError.code === 'SAC_PENDING_MULTISIG') throw dbCheckError;
+      console.warn(`[StellarService] DB check for pending SAC deploy failed: ${dbCheckError.message}`);
+    }
+
+    // No existing pending deploy — create one through multisig
     console.log(`[StellarService] SAC not deployed for ${assetCode}. Deploying via multisig...`);
     const result = await this.deploySACForAsset(assetCode, issuerPublicKey, chainMetadata);
 

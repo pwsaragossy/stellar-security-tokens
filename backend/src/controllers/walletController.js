@@ -428,10 +428,8 @@ export const WalletController = {
                 await prisma.multiSigTransaction.update({
                     where: { id: parseInt(id) },
                     data: {
+                        status: 'failed',
                         errorMessage: submitError.message
-                        // Don't mark as failed immediately if it's just a bad signature?
-                        // But for simulation, let's keep it pending or mark as failed?
-                        // Let's keep pending but log error
                     }
                 });
 

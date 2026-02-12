@@ -1519,14 +1519,65 @@ function MultisigDetail({ raw }: { raw: any }) {
                                     )}
                                 </div>
                                 {raw.metadata.chainAction === 'token_distribute' && (
-                                    <div className="p-3 bg-blue-500/10 border border-blue-500/25 rounded-lg">
-                                        <p className="text-xs text-blue-300">
-                                            <strong>Chained:</strong> After signing, a distribution of{' '}
-                                            <span className="font-semibold">{raw.metadata.amount} {raw.metadata.assetCode}</span>{' '}
-                                            to <span className="font-semibold">{raw.metadata.investorName || raw.metadata.investorPublicKey?.slice(0, 8) + '…'}</span>{' '}
-                                            will be automatically queued.
-                                        </p>
-                                    </div>
+                                    <>
+                                        <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-lg space-y-1">
+                                            <p className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                                                ⛓️ Chained Distribution — will auto-queue after signing
+                                            </p>
+                                            <p className="text-[11px] text-amber-200/70">
+                                                This SAC contract must be deployed before the tokens can be distributed via Soroban.
+                                            </p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {raw.metadata.investorName && (
+                                                <DetailRow label="Investor" value={raw.metadata.investorName} />
+                                            )}
+                                            {raw.metadata.investorEmail && (
+                                                <DetailRow label="Email" value={raw.metadata.investorEmail} />
+                                            )}
+                                            <DetailRow label="Tokens" value={
+                                                <span className="text-emerald-400 font-semibold">
+                                                    {raw.metadata.amount} {raw.metadata.assetCode}
+                                                </span>
+                                            } />
+                                            {raw.metadata.usdcAmount && (
+                                                <DetailRow label="USDC Paid" value={
+                                                    <span className="text-blue-400 font-semibold">{raw.metadata.usdcAmount} USDC</span>
+                                                } />
+                                            )}
+                                            {raw.metadata.offerName && (
+                                                <DetailRow label="Offer" value={raw.metadata.offerName} />
+                                            )}
+                                            {raw.metadata.investmentId && (
+                                                <DetailRow label="Investment" value={`#${raw.metadata.investmentId}`} />
+                                            )}
+                                        </div>
+                                        <DetailRow
+                                            label="Destination Wallet"
+                                            value={
+                                                raw.metadata.investorPublicKey ? (
+                                                    <code className="text-xs text-emerald-400 bg-black/30 px-2 py-1 rounded break-all">
+                                                        {raw.metadata.investorPublicKey}
+                                                    </code>
+                                                ) : '—'
+                                            }
+                                        />
+                                        {raw.metadata.usdcPaymentHash && (
+                                            <DetailRow
+                                                label="USDC TX"
+                                                value={
+                                                    <a
+                                                        href={`https://stellar.expert/explorer/testnet/tx/${raw.metadata.usdcPaymentHash}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-xs text-blue-400 hover:text-blue-300 underline font-mono break-all"
+                                                    >
+                                                        {raw.metadata.usdcPaymentHash}
+                                                    </a>
+                                                }
+                                            />
+                                        )}
+                                    </>
                                 )}
                             </div>
                         )}

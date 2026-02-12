@@ -282,8 +282,37 @@ export function initDistributionQueue() {
         targetWallet,
         amount,
         assetCode,
-        { memo: distributionMemo }
+        {
+          memo: distributionMemo,
+          investmentId: investment.id,
+          investorName: investor.name,
+          investorEmail: investor.email,
+          investorPublicKey: targetWallet,
+          usdcAmount: parseFloat(investment.usdcAmount),
+          usdcPaymentHash: investment.usdcPaymentHash,
+          offerName: investment.offer?.offerName || investment.assetCode,
+          offerId: investment.offerId,
+        }
       );
+
+      // Handle pending multisig — the post-execution hook will complete this
+      if (stellarResult.status === 'pending_multisig') {
+        console.log(`[DistributionQueue] Distribution for investment ${investmentId} queued for multisig (TX #${stellarResult.multiSigTransactionId}, step: ${stellarResult.step})`);
+        await Investment.updateStatus(investmentId, {
+          status: 'pending_distribution',
+          error_message: JSON.stringify({
+            multiSigTransactionId: stellarResult.multiSigTransactionId,
+            step: stellarResult.step,
+          }),
+        });
+        return {
+          success: true,
+          status: 'pending_multisig',
+          investmentId,
+          multiSigTransactionId: stellarResult.multiSigTransactionId,
+          message: `Distribution queued for multisig approval (TX #${stellarResult.multiSigTransactionId})`,
+        };
+      }
 
       // Criar distribuição (com verificação de idempotência interna)
       const distribution = await Token.createDistribution({

@@ -271,7 +271,7 @@ export class MultiSigTransactionService {
 
             // PHASE 2.2: Execute Side Effects (Post-Execution Hooks)
             // This ensures DB state updates only happen after on-chain success
-            await this.processEffects(tx);
+            await this.processEffects(tx, result.hash);
 
             // Update with success
             const updated = await prisma.multiSigTransaction.update({
@@ -417,9 +417,11 @@ export class MultiSigTransactionService {
     /**
      * Executes post-transaction side effects (database updates)
      * @param {Object} tx - The executed transaction record
+     * @param {string} [txHashOverride] - Hash from submit result (tx.txHash may not be set yet)
      */
-    static async processEffects(tx) {
-        const { operationType, metadata, txHash } = tx;
+    static async processEffects(tx, txHashOverride = null) {
+        const { operationType, metadata } = tx;
+        const txHash = txHashOverride || tx.txHash;
         log.debug(`Processing effects for TX #${tx.id} (${operationType})`);
 
         try {
@@ -485,18 +487,113 @@ export class MultiSigTransactionService {
                     }
                     break;
 
-                case 'token_distribute':
+                case 'sac_deploy':
+                    // If this SAC deploy is chained to a distribution, queue it now
+                    if (metadata.chainAction === 'token_distribute' && metadata.investorPublicKey) {
+                        try {
+                            const { StellarService } = await import('./stellar.service.js');
+                            log.info(`Chaining token_distribute for ${metadata.assetCode} after SAC deploy (TX #${tx.id})`);
+                            const distResult = await StellarService.distributeTokens(
+                                metadata.investorPublicKey,
+                                metadata.amount,
+                                metadata.assetCode,
+                                {
+                                    memo: metadata.memo || null,
+                                    investmentId: metadata.investmentId,
+                                    investorName: metadata.investorName,
+                                    investorEmail: metadata.investorEmail,
+                                    investorPublicKey: metadata.investorPublicKey,
+                                    usdcAmount: metadata.usdcAmount,
+                                    usdcPaymentHash: metadata.usdcPaymentHash,
+                                    offerName: metadata.offerName,
+                                    offerId: metadata.offerId,
+                                }
+                            );
+
+                            if (distResult.status === 'pending_multisig') {
+                                log.info(`Chained distribution queued for multisig (TX #${distResult.multiSigTransactionId})`);
+                                // Update investment to pending_distribution
+                                if (metadata.investmentId) {
+                                    const { Investment } = await import('../models/Investment.js');
+                                    await Investment.updateStatus(parseInt(metadata.investmentId), {
+                                        status: 'pending_distribution',
+                                        error_message: JSON.stringify({
+                                            multiSigTransactionId: distResult.multiSigTransactionId,
+                                            step: 'token_distribute',
+                                        }),
+                                    });
+                                }
+                            } else if (distResult.success) {
+                                log.info(`Chained distribution completed directly: ${distResult.transactionHash}`);
+                                // Direct sign mode — complete the investment
+                                if (metadata.investmentId) {
+                                    const { Investment } = await import('../models/Investment.js');
+                                    await prisma.tokenDistribution.create({
+                                        data: {
+                                            investorId: parseInt(metadata.investorId || metadata.investmentId),
+                                            assetCode: metadata.assetCode,
+                                            amount: metadata.amount,
+                                            transactionHash: distResult.transactionHash,
+                                            usdcPaymentHash: metadata.usdcPaymentHash || null,
+                                            offerId: metadata.offerId ? parseInt(metadata.offerId) : null,
+                                            memo: metadata.memo || null,
+                                        }
+                                    });
+                                    await Investment.updateStatus(parseInt(metadata.investmentId), {
+                                        status: 'distributed',
+                                        distribution_tx_hash: distResult.transactionHash,
+                                    });
+                                }
+                            }
+                        } catch (chainError) {
+                            log.error(`Failed to chain distribution after SAC deploy TX #${tx.id}: ${chainError.message}`);
+                        }
+                    }
+                    break;
+
+                case 'token_distribute': {
+                    // Resolve investorId — may come from metadata or from investment lookup
+                    let resolvedInvestorId = metadata.investorId ? parseInt(metadata.investorId) : null;
+                    if (!resolvedInvestorId && metadata.investmentId) {
+                        const inv = await prisma.investment.findUnique({
+                            where: { id: parseInt(metadata.investmentId) },
+                            select: { investorId: true },
+                        });
+                        resolvedInvestorId = inv?.investorId || null;
+                    }
+                    if (!resolvedInvestorId) {
+                        log.error(`token_distribute hook: cannot resolve investorId for TX #${tx.id}`);
+                        break;
+                    }
+
+                    // Create distribution record
                     await prisma.tokenDistribution.create({
                         data: {
-                            investorId: parseInt(metadata.investorId),
+                            investorId: resolvedInvestorId,
                             assetCode: metadata.assetCode,
                             amount: metadata.amount,
                             transactionHash: txHash,
+                            usdcPaymentHash: metadata.usdcPaymentHash || null,
                             offerId: metadata.offerId ? parseInt(metadata.offerId) : null,
                             memo: metadata.memo || null,
                         }
                     });
+
+                    // Update related investment if we have enough info
+                    if (metadata.investmentId) {
+                        try {
+                            const { Investment } = await import('../models/Investment.js');
+                            await Investment.updateStatus(parseInt(metadata.investmentId), {
+                                status: 'distributed',
+                                distribution_tx_hash: txHash,
+                            });
+                            log.info(`Investment #${metadata.investmentId} marked as distributed`);
+                        } catch (investError) {
+                            log.error(`Failed to update investment #${metadata.investmentId}: ${investError.message}`);
+                        }
+                    }
                     break;
+                }
 
                 case 'treasury_payment':
                     // Record the fee in the log

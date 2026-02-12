@@ -182,10 +182,10 @@ export const buildTransactionWithAccount = (sourceAccount, operations, options =
     }
   }
 
-  // Default 300s (5 min) — generous enough for multisig Freighter signing,
-  // safe enough for direct signing (completes in <1s). Callers can override.
+  // Default 8h (28800s) — direct-signing completes in <1s so long window is harmless.
+  // Multisig TXs need a wide window since admins may take time to review and sign.
   // Per Stellar docs: timebounds should always be finite.
-  transaction.setTimeout(options.timeout || 300);
+  transaction.setTimeout(options.timeout || 28800);
 
   return transaction.build();
 };
@@ -219,8 +219,8 @@ export const buildUnsignedTransaction = async (sourcePublicKey, operations, opti
     }
   }
 
-  // Longer timeout for multisig (collecting signatures takes time)
-  transaction.setTimeout(options.timeout || 300);
+  // 8h default — matches buildTransactionWithAccount for multisig compatibility
+  transaction.setTimeout(options.timeout || 28800);
 
   return transaction.build().toXDR();
 };

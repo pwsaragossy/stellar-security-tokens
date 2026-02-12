@@ -428,6 +428,10 @@ export const getInvestorInvestments = async (req, res, next) => {
       ...(inv.status === 'failed' ? {
         errorMessage: inv.errorMessage,
       } : {}),
+      ...(inv.status === 'pending_distribution' ? {
+        usdcPaymentHash: inv.usdcPaymentHash,
+        multisigInfo: inv.errorMessage ? JSON.parse(inv.errorMessage) : null,
+      } : {}),
     }));
 
     res.json({
@@ -442,7 +446,7 @@ export const getInvestorInvestments = async (req, res, next) => {
         },
         summary: {
           pending: investments.filter(i => i.status === 'pending_payment').length,
-          processing: investments.filter(i => i.status === 'payment_received').length,
+          processing: investments.filter(i => ['payment_received', 'pending_distribution'].includes(i.status)).length,
           distributed: investments.filter(i => i.status === 'distributed').length,
           failed: investments.filter(i => i.status === 'failed').length,
         },

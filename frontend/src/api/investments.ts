@@ -15,7 +15,7 @@ export const investmentsApi = {
       assetCode: string;
       usdcAmount: number;
       tokenAmount: number;
-      status: 'pending_payment' | 'payment_received' | 'distributed' | 'failed';
+      status: 'pending_payment' | 'payment_received' | 'pending_distribution' | 'distributed' | 'failed';
       memo: string | null;
       createdAt: string;
       updatedAt: string;

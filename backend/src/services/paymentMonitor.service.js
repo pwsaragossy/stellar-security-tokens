@@ -419,7 +419,7 @@ export class PaymentMonitor {
           investorEmail: investor.email,
           investmentId: investment.id,
           offerId: investment.offerId,
-          offerName: investment.offer?.name || investment.assetCode,
+          offerName: investment.offer?.offerName || investment.assetCode,
           usdcAmount: investment.usdcAmount?.toString(),
           usdcPaymentHash: payment.transaction_hash,
         }

@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
 import { CompanyRegister } from './pages/auth/CompanyRegister';
@@ -49,65 +50,81 @@ import { Approvals } from './pages/admin/Approvals';
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/company/register" element={<CompanyRegister />} />
-        <Route path="/company/pending-approval" element={<CompanyPendingApproval />} />
-        <Route path="/registration-success" element={<RegistrationSuccess />} />
-        <Route path="/investor/verify-email" element={<VerifyEmail />} />
+    <>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/company/register" element={<CompanyRegister />} />
+          <Route path="/company/pending-approval" element={<CompanyPendingApproval />} />
+          <Route path="/registration-success" element={<RegistrationSuccess />} />
+          <Route path="/investor/verify-email" element={<VerifyEmail />} />
 
-        {/* Investor Dashboard Routes */}
-        <Route path="/" element={<DashboardLayout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<InvestorDashboard />} />
-          <Route path="portfolio" element={<Portfolio />} />
-          <Route path="market" element={<Marketplace />} />
-          <Route path="market/:id" element={<OfferDetails />} />
-          <Route path="transactions" element={<Transactions />} />
-          <Route path="wallet" element={<Wallet />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
+          {/* Investor Dashboard Routes */}
+          <Route path="/" element={<DashboardLayout />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<InvestorDashboard />} />
+            <Route path="portfolio" element={<Portfolio />} />
+            <Route path="market" element={<Marketplace />} />
+            <Route path="market/:id" element={<OfferDetails />} />
+            <Route path="transactions" element={<Transactions />} />
+            <Route path="wallet" element={<Wallet />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
 
-        {/* Company Routes */}
-        <Route path="/company" element={<CompanyLayout />}>
-          <Route index element={<Navigate to="/company/dashboard" replace />} />
-          <Route path="dashboard" element={<CompanyDashboard />} />
-          <Route path="offers" element={<Offers />} />
-          <Route path="offers/new" element={<SelectOfferType />} />
-          <Route path="offers/create" element={<CreateOffer />} />
-          <Route path="offers/:id" element={<CompanyOfferDetails />} />
-          <Route path="tokens" element={<CompanyTokens />} />
-          <Route path="payments/:offerId" element={<PayInvestors />} />
-          <Route path="wallet" element={<CompanyWallet />} />
-          <Route path="documents" element={<Documents />} />
-          <Route path="reports" element={<Reports />} />
-          <Route path="settings" element={<CompanySettings />} />
-          <Route path="ipfs-info" element={<IPFSInfo />} />
-        </Route>
+          {/* Company Routes */}
+          <Route path="/company" element={<CompanyLayout />}>
+            <Route index element={<Navigate to="/company/dashboard" replace />} />
+            <Route path="dashboard" element={<CompanyDashboard />} />
+            <Route path="offers" element={<Offers />} />
+            <Route path="offers/new" element={<SelectOfferType />} />
+            <Route path="offers/create" element={<CreateOffer />} />
+            <Route path="offers/:id" element={<CompanyOfferDetails />} />
+            <Route path="tokens" element={<CompanyTokens />} />
+            <Route path="payments/:offerId" element={<PayInvestors />} />
+            <Route path="wallet" element={<CompanyWallet />} />
+            <Route path="documents" element={<Documents />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="settings" element={<CompanySettings />} />
+            <Route path="ipfs-info" element={<IPFSInfo />} />
+          </Route>
 
-        {/* Admin Routes */}
-        <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Navigate to="/admin/dashboard" replace />} />
-          <Route path="dashboard" element={<AdminDashboard />} />
-          <Route path="approvals" element={<Approvals />} />
-          <Route path="users" element={<UserManagement />} />
-          <Route path="companies" element={<Companies />} />
-          <Route path="offers" element={<AdminOffers />} />
-          <Route path="transactions" element={<Navigate to="/admin/approvals" replace />} />
-          <Route path="compliance" element={<AssetCompliance />} />
-          <Route path="emergency" element={<EmergencyControls />} />
+          {/* Admin Routes */}
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="approvals" element={<Approvals />} />
+            <Route path="users" element={<UserManagement />} />
+            <Route path="companies" element={<Companies />} />
+            <Route path="offers" element={<AdminOffers />} />
+            <Route path="transactions" element={<Navigate to="/admin/approvals" replace />} />
+            <Route path="compliance" element={<AssetCompliance />} />
+            <Route path="emergency" element={<EmergencyControls />} />
 
-          <Route path="wallets" element={<Wallets />} />
-          <Route path="tokens" element={<TokensPage />} />
-          <Route path="fees" element={<FeeConfig />} />
-          <Route path="defaults" element={<DefaultCases />} />
+            <Route path="wallets" element={<Wallets />} />
+            <Route path="tokens" element={<TokensPage />} />
+            <Route path="fees" element={<FeeConfig />} />
+            <Route path="defaults" element={<DefaultCases />} />
 
-        </Route>
-      </Routes>
-    </BrowserRouter>
+          </Route>
+        </Routes>
+      </BrowserRouter>
+      <Toaster
+        theme="dark"
+        position="top-right"
+        richColors
+        closeButton
+        duration={6000}
+        toastOptions={{
+          style: {
+            background: 'hsl(220 25% 12%)',
+            border: '1px solid hsl(220 15% 22%)',
+            color: 'hsl(220 15% 85%)',
+          },
+        }}
+      />
+    </>
   );
 }
 
