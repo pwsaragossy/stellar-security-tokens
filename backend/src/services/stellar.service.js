@@ -662,8 +662,10 @@ export class StellarService {
 
       return {
         success: result.success,
+        status: result.status,
         sacContractId,
         transactionHash: result.hash,
+        multiSigTransactionId: result.multiSigTransactionId,
         error: result.error,
         userFriendlyError: result.userFriendlyError
       };
@@ -671,6 +673,68 @@ export class StellarService {
       console.error(`[StellarService] SAC deployment failed for ${code}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Ensures the SAC is deployed for an asset before attempting transfers.
+   * If already deployed, returns the contract ID immediately.
+   * If not deployed, deploys it and updates the token DB record.
+   * @param {string} assetCode - Asset code
+   * @param {string} [issuer] - Optional issuer (defaults to platform issuer)
+   * @returns {Promise<string>} SAC contract ID
+   */
+  static async ensureSACDeployed(assetCode, issuer = null) {
+    const issuerPublicKey = issuer || keyManager.getIssuerPublicKey();
+    const asset = new Asset(assetCode, issuerPublicKey);
+    const sacContractId = this.getSACContractId(asset);
+
+    // Check if SAC exists on-chain via RPC
+    try {
+      const rpcServer = new rpc.Server(getSorobanRpcUrl());
+      const instanceKey = xdr.LedgerKey.contractData(new xdr.LedgerKeyContractData({
+        contract: Address.fromString(sacContractId).toScAddress(),
+        key: xdr.ScVal.scvLedgerKeyContractInstance(),
+        durability: xdr.ContractDataDurability.persistent(),
+      }));
+      const ledgerEntries = await rpcServer.getLedgerEntries(instanceKey);
+      if (ledgerEntries.entries && ledgerEntries.entries.length > 0) {
+        console.log(`[StellarService] SAC already deployed for ${assetCode}: ${sacContractId}`);
+        return sacContractId;
+      }
+    } catch (checkError) {
+      console.warn(`[StellarService] SAC existence check failed for ${assetCode}, attempting deploy: ${checkError.message}`);
+    }
+
+    // SAC not found — deploy it through multisig
+    console.log(`[StellarService] SAC not deployed for ${assetCode}. Deploying via multisig...`);
+    const result = await this.deploySACForAsset(assetCode, issuerPublicKey);
+
+    if (result.status === 'pending_multisig') {
+      // SAC deploy queued — throw a typed error so distribution can be chained after signing
+      const err = new Error(`SAC deploy pending multisig for ${assetCode}`);
+      err.code = 'SAC_PENDING_MULTISIG';
+      err.multiSigTransactionId = result.multiSigTransactionId;
+      err.sacContractId = sacContractId;
+      throw err;
+    }
+
+    if (!result.success) {
+      throw new Error(`Failed to deploy SAC for ${assetCode}: ${result.error || result.userFriendlyError}`);
+    }
+
+    // Update token DB record with sacContractId
+    try {
+      const { default: prisma } = await import('../config/prisma.js');
+      await prisma.token.updateMany({
+        where: { assetCode },
+        data: { sacContractId },
+      });
+      console.log(`[StellarService] SAC deployed and DB updated for ${assetCode}: ${sacContractId}`);
+    } catch (dbError) {
+      console.warn(`[StellarService] SAC deployed but DB update failed for ${assetCode}: ${dbError.message}`);
+    }
+
+    return sacContractId;
   }
 
 
@@ -704,7 +768,7 @@ export class StellarService {
       if (isContract) {
         // --- SOROBAN SAC DISTRIBUTION ---
         console.log(`[StellarService] Distributing via SAC to contract ${investorPublicKey}`);
-        const sacContractId = this.getSACContractId(asset);
+        const sacContractId = await this.ensureSACDeployed(assetCode);
         const contract = new Contract(sacContractId);
 
         // Build 'transfer' call: transfer(from, to, amount)
