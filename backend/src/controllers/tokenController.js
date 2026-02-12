@@ -411,3 +411,65 @@ export const listAssetHolders = async (req, res, next) => {
     next(error);
   }
 };
+
+export const deploySAC = async (req, res, next) => {
+  try {
+    const { assetCode } = req.body;
+
+    if (!assetCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'assetCode is required',
+      });
+    }
+
+    const token = await Token.findByAssetCode(assetCode);
+    if (!token) {
+      return res.status(404).json({
+        success: false,
+        error: `Token ${assetCode} not found`,
+      });
+    }
+
+    if (token.sacContractId) {
+      return res.status(409).json({
+        success: false,
+        error: `SAC already deployed for ${assetCode}: ${token.sacContractId}`,
+      });
+    }
+
+    const result = await StellarService.deploySACForAsset(
+      assetCode,
+      token.issuerPublicKey
+    );
+
+    // Handle multisig deferral
+    if (result.status === 'pending_multisig') {
+      return res.status(202).json({
+        success: true,
+        status: 'pending_multisig',
+        message: `SAC deployment for ${assetCode} queued for MultiSig approval`,
+        data: result,
+      });
+    }
+
+    if (result.success) {
+      const prisma = (await import('../config/prisma.js')).default;
+      await prisma.token.update({
+        where: { id: token.id },
+        data: { sacContractId: result.sacContractId }
+      });
+    }
+
+    res.json({
+      success: result.success,
+      data: {
+        assetCode,
+        sacContractId: result.sacContractId,
+        transactionHash: result.transactionHash,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

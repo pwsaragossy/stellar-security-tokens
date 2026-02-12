@@ -43,8 +43,6 @@ const redisConfig = {
     return delay;
   },
   maxRetriesPerRequest: 3,
-  enableOfflineQueue: true, // Enfileirar comandos quando offline até conexão ser estabelecida
-  lazyConnect: true, // Conectar sob demanda para permitir degradação graciosa
 };
 
 /**
@@ -205,7 +203,7 @@ export function initDistributionQueue() {
     });
 
     // Processador de jobs
-    distributionQueue.process(async (job) => {
+    distributionQueue.process('distribute-tokens', async (job) => {
       const { investmentId, investorPublicKey, assetCode, amount, memo } = job.data;
 
       console.log(`[DistributionQueue] Processing job for investment ${investmentId}`);
@@ -245,8 +243,8 @@ export function initDistributionQueue() {
 
       // Buscar investidor
       const investor = await Investor.findById(investment.investorId);
-      if (!investor || !investor.stellarPublicKey) {
-        throw new Error(`Investor ${investment.investorId} not found or missing Stellar key`);
+      if (!investor || (!investor.stellarPublicKey && !investor.stellarContractId)) {
+        throw new Error(`Investor ${investment.investorId} not found or missing Stellar key/contract`);
       }
 
       // Verificar KYC

@@ -806,7 +806,13 @@ export const submitInvestmentTx = async (req, res, next) => {
 
     // Trigger token distribution
     if (isQueueAvailable()) {
-      await addDistributionJob(parseInt(investmentId));
+      await addDistributionJob({
+        investmentId: parseInt(investmentId),
+        investorPublicKey: investment.investorId?.toString(),
+        assetCode: investment.assetCode,
+        amount: investment.tokenAmount?.toString(),
+        memo: investment.memo,
+      });
     }
 
     return res.json({

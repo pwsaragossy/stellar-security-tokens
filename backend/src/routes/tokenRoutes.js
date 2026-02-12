@@ -15,6 +15,7 @@ import {
   disableClawback,
   listAssetHolders,
   syncTokens,
+  deploySAC,
 } from '../controllers/tokenController.js';
 
 const router = express.Router();
@@ -258,6 +259,30 @@ router.post('/disable-clawback', requirePlatformAdmin, disableClawback);
  *       - bearerAuth: []
  */
 router.get('/:assetCode/holders', requirePlatformAdmin, listAssetHolders);
+
+/**
+ * @swagger
+ * /api/tokens/deploy-sac:
+ *   post:
+ *     summary: Deploy SAC for an existing token
+ *     description: Deploys the Stellar Asset Contract (Soroban) for a token that is missing its SAC. In multisig mode, creates a pending transaction for Freighter signing.
+ *     tags: [Tokens]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - assetCode
+ *             properties:
+ *               assetCode:
+ *                 type: string
+ *                 example: QWE
+ */
+router.post('/deploy-sac', requirePlatformAdmin, deploySAC);
 
 export default router;
 

@@ -438,7 +438,32 @@ export class MultiSigTransactionService {
                         }
                     });
 
-                    // 2. Auto-verify the offer (keeps status as 'approved', company launches when ready)
+                    // 2. Deploy SAC (Stellar Asset Contract) for the newly issued asset
+                    // issueSecurityToken returns early for multisig, skipping SAC deploy.
+                    // We deploy it here after the classic issuance is confirmed on-chain.
+                    try {
+                        const StellarService = (await import('./stellar.service.js')).default;
+                        log.info(`Deploying SAC for ${metadata.assetCode} after multisig confirmation...`);
+                        const sacResult = await StellarService.deploySACForAsset(
+                            metadata.assetCode,
+                            metadata.issuerPublicKey
+                        );
+                        if (sacResult.success) {
+                            await prisma.token.updateMany({
+                                where: { assetCode: metadata.assetCode },
+                                data: { sacContractId: sacResult.sacContractId }
+                            });
+                            log.info(`SAC deployed for ${metadata.assetCode}: ${sacResult.sacContractId}`);
+                        } else {
+                            log.warn(`SAC deployment failed for ${metadata.assetCode}: ${sacResult.error}. Can be retried via deploySACForAsset.`);
+                        }
+                    } catch (sacError) {
+                        // Non-fatal: Token record exists, SAC can be deployed later
+                        // AlreadyInitializedError (code 3) means SAC already exists — also fine
+                        log.error(`SAC deployment error for ${metadata.assetCode}: ${sacError.message}. Can be retried via deploySACForAsset.`);
+                    }
+
+                    // 3. Auto-verify the offer (keeps status as 'approved', company launches when ready)
                     if (metadata.offerId) {
                         const offer = await prisma.offer.findUnique({
                             where: { id: parseInt(metadata.offerId) }
