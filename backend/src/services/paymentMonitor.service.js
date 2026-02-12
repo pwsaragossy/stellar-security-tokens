@@ -381,10 +381,21 @@ export class PaymentMonitor {
         throw new Error(`Investor ${investment.investorId} not found or missing smart wallet address`);
       }
 
-      log.info(`Distributing ${investment.tokenAmount} tokens to ${investor.stellarContractId}`);
+      log.info(`Distributing ${investment.tokenAmount} tokens to ${investor.stellarContractId || investor.stellarPublicKey}`);
       // Verificar KYC
       if (investor.kycStatus !== 'approved') {
         throw new Error(`Investor ${investment.investorId} KYC not approved`);
+      }
+
+      // JIT AUTHORIZATION (match controller & queue behavior)
+      const targetWallet = investor.stellarContractId || investor.stellarPublicKey;
+      if (targetWallet) {
+        log.info(`JIT Authorizing ${targetWallet} for ${investment.assetCode}...`);
+        try {
+          await StellarService.authorizeInvestor(targetWallet, investment.assetCode);
+        } catch (authError) {
+          log.warn(`JIT Authorization failed for ${targetWallet}: ${authError.message}. Proceeding anyway...`);
+        }
       }
 
       // Gerar memo único
@@ -398,7 +409,7 @@ export class PaymentMonitor {
 
       // Distribuir tokens to smart wallet
       const stellarResult = await StellarService.distributeTokens(
-        investor.stellarContractId,  // Smart wallet address
+        targetWallet,
         investment.tokenAmount.toString(),
         investment.assetCode,
         { memo }
@@ -430,7 +441,29 @@ export class PaymentMonitor {
     } catch (error) {
       log.error(`Error processing investment ${investment.id}:`, error);
 
-      // Marcar investment como failed
+      // Try distribution queue as fallback (has 3x retry with backoff)
+      try {
+        const { addDistributionJob, isQueueAvailable } = await import('./distributionQueue.service.js');
+        if (isQueueAvailable()) {
+          const investor = await Investor.findById(investment.investorId);
+          const targetWallet = investor?.stellarContractId || investor?.stellarPublicKey;
+          if (targetWallet) {
+            log.info(`Queueing investment ${investment.id} for retry via distribution queue...`);
+            await addDistributionJob({
+              investmentId: investment.id,
+              investorPublicKey: targetWallet,
+              assetCode: investment.assetCode,
+              amount: investment.tokenAmount.toString(),
+            });
+            // Don't mark as failed — queue will handle it
+            return;
+          }
+        }
+      } catch (queueError) {
+        log.warn(`Distribution queue fallback failed for investment ${investment.id}: ${queueError.message}`);
+      }
+
+      // If queue is not available, mark as failed
       await Investment.updateStatus(investment.id, {
         status: 'failed',
         error_message: error.message,

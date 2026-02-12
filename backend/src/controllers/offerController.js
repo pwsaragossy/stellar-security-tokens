@@ -4,6 +4,7 @@ import { Token } from '../models/Token.js';
 import { Investment } from '../models/Investment.js';
 import { StellarService } from '../services/stellar.service.js';
 import { OfferService } from '../services/offer.service.js';
+import { ConfigService } from '../services/config.service.js';
 import { ipfsService } from '../services/ipfs.service.js';
 import { StellarTomlService } from '../services/stellarToml.service.js';
 import { CompanyUser } from '../models/CompanyUser.js';
@@ -49,7 +50,7 @@ export class OfferController {
    * @param {Object} offer - Oferta do banco
    * @returns {Object} Oferta formatada
    */
-  static formatOfferForResponse(offer) {
+  static formatOfferForResponse(offer, cutoffDays = 90) {
     if (!offer) {
       return null;
     }
@@ -121,12 +122,12 @@ export class OfferController {
       // Supply tracking (computed, attached by controller)
       tokensSold: offer._tokensSold ?? null,
       tokens_sold: offer._tokensSold ?? null,
-      // Maturity cutoff (computed from maturityDate - default 90 days)
+      // Maturity cutoff (computed from maturityDate - cutoffDays)
       investmentCutoffDate: offer.maturityDate
-        ? new Date(new Date(offer.maturityDate).getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
+        ? new Date(new Date(offer.maturityDate).getTime() - cutoffDays * 24 * 60 * 60 * 1000).toISOString()
         : null,
       investment_cutoff_date: offer.maturityDate
-        ? new Date(new Date(offer.maturityDate).getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
+        ? new Date(new Date(offer.maturityDate).getTime() - cutoffDays * 24 * 60 * 60 * 1000).toISOString()
         : null,
       // Relations
       company: offer.company || null,
@@ -619,10 +620,13 @@ export class OfferController {
       );
       const soldLookup = Object.fromEntries(tokensSoldMap.map(e => [e.id, e.sold]));
 
+      // Fetch cutoff from config
+      const cutoffDays = await ConfigService.getFloat('MATURITY_CUTOFF_DAYS', 90);
+
       // Formatar ofertas com documentos IPFS + supply data
       const formattedOffers = offers.map(offer => {
         offer._tokensSold = soldLookup[offer.id] || 0;
-        return OfferController.formatOfferForResponse(offer);
+        return OfferController.formatOfferForResponse(offer, cutoffDays);
       });
 
       res.json({
@@ -672,10 +676,11 @@ export class OfferController {
 
       // Compute tokens_sold for this offer
       offer._tokensSold = await Investment.getTokensSoldByOffer(offer.id);
+      const cutoffDays = await ConfigService.getFloat('MATURITY_CUTOFF_DAYS', 90);
 
       res.json({
         success: true,
-        data: OfferController.formatOfferForResponse(offer),
+        data: OfferController.formatOfferForResponse(offer, cutoffDays),
       });
     } catch (error) {
       console.error('Error fetching public offer details:', error);

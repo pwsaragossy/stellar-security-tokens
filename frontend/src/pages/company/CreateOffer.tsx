@@ -181,7 +181,7 @@ export function CreateOffer() {
                 annual_interest_rate: formData.offer_type === 'collateral' ? parseFloat(formData.annual_interest_rate) : undefined,
                 payment_type: formData.offer_type === 'collateral' ? formData.payment_type : undefined,
                 payment_day: formData.offer_type === 'collateral' && formData.payment_type !== 'bullet' ? parseInt(formData.payment_day) : undefined,
-                maturity_date: formData.offer_type === 'collateral' && formData.payment_type === 'bullet' && formData.maturity_date ? formData.maturity_date : undefined,
+                maturity_date: formData.maturity_date || undefined,
                 offer_rules: {
                     min_investment: formData.min_investment ? Number(formData.min_investment) : undefined,
                     max_investment: formData.max_investment ? Number(formData.max_investment) : undefined,
@@ -497,7 +497,7 @@ export function CreateOffer() {
 
                             {formData.offer_type === 'collateral' && formData.payment_type === 'bullet' && (
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-white">Maturity Date *</label>
+                                    <label className="text-sm font-medium text-white">Bullet Payment Date *</label>
                                     <Input
                                         type="date"
                                         value={formData.maturity_date}
@@ -507,6 +507,28 @@ export function CreateOffer() {
                                     />
                                     <p className="text-xs text-muted-foreground">
                                         Date when principal and interest are paid in one lump sum
+                                    </p>
+                                    {formData.maturity_date && new Date(formData.maturity_date) <= new Date() && (
+                                        <p className="text-xs text-red-400 mt-1">
+                                            Maturity date must be in the future
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Maturity Date — available for all offer types */}
+                            {!(formData.offer_type === 'collateral' && formData.payment_type === 'bullet') && (
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-white">Maturity Date</label>
+                                    <Input
+                                        type="date"
+                                        value={formData.maturity_date}
+                                        onChange={(e) => updateFormData({ maturity_date: e.target.value })}
+                                        className="glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-foreground"
+                                        min={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Optional — when the offer matures. Investments are blocked near this date.
                                     </p>
                                     {formData.maturity_date && new Date(formData.maturity_date) <= new Date() && (
                                         <p className="text-xs text-red-400 mt-1">
@@ -818,9 +840,17 @@ export function CreateOffer() {
                                             </>
                                         )}
                                         {formData.offer_type === 'sale' && (
-                                            <div className="flex justify-between items-start">
+                                            <div className="flex justify-between items-start border-b border-white/5 pb-3">
                                                 <span className="text-sm text-muted-foreground">Payment Cycle</span>
                                                 <span className="text-sm text-white font-medium">Variable Dividends</span>
+                                            </div>
+                                        )}
+                                        {formData.maturity_date && (
+                                            <div className="flex justify-between items-start">
+                                                <span className="text-sm text-muted-foreground">Maturity Date</span>
+                                                <span className="text-sm text-white font-medium">
+                                                    {new Date(formData.maturity_date).toLocaleDateString()}
+                                                </span>
                                             </div>
                                         )}
                                     </div>

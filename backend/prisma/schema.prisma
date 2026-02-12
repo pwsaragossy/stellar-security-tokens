@@ -64,6 +64,7 @@ enum PaymentDueStatus {
 enum InvestmentStatus {
   pending_payment
   payment_received
+  pending_distribution
   distributed
   failed
   cancelled
@@ -563,6 +564,9 @@ enum MultiSigOperationType {
   treasury_payment
   trustline_auth
   account_setup
+  sac_deploy
+  dividend_distribution
+  disable_clawback
   other
 }
 
