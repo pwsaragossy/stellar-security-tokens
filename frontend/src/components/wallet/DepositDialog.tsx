@@ -6,8 +6,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Copy, Check, Shield, ExternalLink, Wallet, CreditCard, ArrowLeftRight, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Copy, Check, Shield, ExternalLink, Loader2, AlertCircle, RefreshCw, ChevronDown } from 'lucide-react';
 import { QRCode } from '@/components/ui/qrcode';
 import { investorsApi } from '@/api/investors';
 
@@ -20,9 +19,81 @@ interface DepositDialogProps {
 interface RelayDeposit {
     memo: string;
     treasuryAddress: string;
-    status: 'pending' | 'received' | 'forwarding' | 'completed' | 'expired' | 'failed';
+    status: 'pending' | 'received' | 'forwarding' | 'pending_approval' | 'completed' | 'expired' | 'failed';
     actualAmount?: number;
     outgoingTxHash?: string;
+}
+
+// -- Status stepper config --
+const STEPPER_STEPS = [
+    { key: 'pending', label: 'Waiting for payment', description: 'Send USDC to the address below' },
+    { key: 'received', label: 'Payment detected', description: 'USDC received at treasury' },
+    { key: 'forwarding', label: 'Forwarding to wallet', description: 'Transferring to your smart wallet' },
+    { key: 'completed', label: 'Deposit complete', description: 'Funds available in your wallet' },
+] as const;
+
+function getStepIndex(status: RelayDeposit['status']): number {
+    switch (status) {
+        case 'pending': return 0;
+        case 'received': return 1;
+        case 'forwarding':
+        case 'pending_approval': return 2;
+        case 'completed': return 3;
+        default: return -1; // failed/expired
+    }
+}
+
+// -- Visual Stepper Component --
+function DepositStepper({ status }: { status: RelayDeposit['status'] }) {
+    const currentIndex = getStepIndex(status);
+    const isFailed = status === 'failed' || status === 'expired';
+
+    if (isFailed) {
+        return (
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 rounded-xl border border-red-500/20">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span className="text-xs font-medium text-red-400">
+                    {status === 'expired' ? 'Deposit expired — please start a new one' : 'Deposit failed — please try again'}
+                </span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex items-center gap-1 w-full">
+            {STEPPER_STEPS.map((step, i) => {
+                const isActive = i === currentIndex;
+                const isDone = i < currentIndex;
+
+                return (
+                    <div key={step.key} className="flex-1 flex flex-col items-center gap-1.5">
+                        {/* Dot + connector */}
+                        <div className="flex items-center w-full">
+                            {i > 0 && (
+                                <div className={`flex-1 h-0.5 transition-colors duration-500 ${isDone ? 'bg-emerald-500' : 'bg-white/10'
+                                    }`} />
+                            )}
+                            <div className={`w-3 h-3 rounded-full border-2 transition-all duration-500 shrink-0 ${isDone
+                                ? 'bg-emerald-500 border-emerald-500'
+                                : isActive
+                                    ? 'bg-blue-500 border-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                                    : 'bg-transparent border-white/20'
+                                }`} />
+                            {i < STEPPER_STEPS.length - 1 && (
+                                <div className={`flex-1 h-0.5 transition-colors duration-500 ${isDone ? 'bg-emerald-500' : 'bg-white/10'
+                                    }`} />
+                            )}
+                        </div>
+                        {/* Label */}
+                        <span className={`text-[9px] font-medium text-center leading-tight transition-colors ${isDone ? 'text-emerald-400' : isActive ? 'text-blue-400' : 'text-gray-600'
+                            }`}>
+                            {step.label}
+                        </span>
+                    </div>
+                );
+            })}
+        </div>
+    );
 }
 
 export function DepositDialog({ investorId, walletAddress }: DepositDialogProps) {
@@ -30,6 +101,7 @@ export function DepositDialog({ investorId, walletAddress }: DepositDialogProps)
     const [loading, setLoading] = useState(false);
     const [deposit, setDeposit] = useState<RelayDeposit | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [advancedOpen, setAdvancedOpen] = useState(false);
 
     const handleCopy = async (text: string, id: string) => {
         await navigator.clipboard.writeText(text);
@@ -79,181 +151,166 @@ export function DepositDialog({ investorId, walletAddress }: DepositDialogProps)
         return () => clearInterval(pollInterval);
     }, [deposit, investorId]);
 
-    const onRamps = [
-        { name: 'Coinbase', url: 'https://www.coinbase.com', description: 'Buy USDC, then withdraw to Stellar' },
-        { name: 'Kraken', url: 'https://www.kraken.com', description: 'Supports direct Stellar USDC withdrawals' },
-        { name: 'Binance', url: 'https://www.binance.com', description: 'Convert and withdraw to Stellar network' },
-    ];
-
     return (
         <DialogContent className="sm:max-w-lg bg-slate-900 border-white/10 text-white overflow-hidden">
             <DialogHeader>
                 <DialogTitle>Deposit USDC</DialogTitle>
                 <DialogDescription className="text-gray-400">
-                    Send USDC from any exchange or wallet.
+                    Follow these steps to deposit USDC into your wallet.
                 </DialogDescription>
             </DialogHeader>
 
-            <Tabs defaultValue="relay" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 bg-white/5 p-1 rounded-xl">
-                    <TabsTrigger value="relay" className="data-[state=active]:bg-blue-600 rounded-lg text-xs py-2">
-                        <ArrowLeftRight className="w-3.5 h-3.5 mr-1.5" />
-                        Relay (Recommended)
-                    </TabsTrigger>
-                    <TabsTrigger value="buy" className="data-[state=active]:bg-blue-600 rounded-lg text-xs py-2">
-                        <CreditCard className="w-3.5 h-3.5 mr-1.5" />
-                        Buy
-                    </TabsTrigger>
-                    <TabsTrigger value="direct" className="data-[state=active]:bg-blue-600 rounded-lg text-xs py-2">
-                        <Wallet className="w-3.5 h-3.5 mr-1.5" />
-                        Direct (Advanced)
-                    </TabsTrigger>
-                </TabsList>
+            {/* Loading State */}
+            {loading && !deposit ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                    <p className="text-sm text-gray-400">Preparing deposit instructions…</p>
+                </div>
 
-                {/* Relay Deposit Tab */}
-                <TabsContent value="relay" className="space-y-4 mt-6">
-                    {loading && !deposit ? (
-                        <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                            <p className="text-sm text-gray-400">Generating unique deposit memo...</p>
-                        </div>
-                    ) : error ? (
-                        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl space-y-3">
-                            <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
-                                <AlertCircle className="w-4 h-4" />
-                                <span>Failed to initialize</span>
+                /* Error State */
+            ) : error ? (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl space-y-3">
+                    <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>Failed to initialize</span>
+                    </div>
+                    <p className="text-xs text-red-300/80">{error}</p>
+                    <Button variant="outline" size="sm" onClick={initiateDeposit} className="w-full border-red-500/20 hover:bg-red-500/10 text-red-400">
+                        <RefreshCw className="w-3 h-3 mr-2" />
+                        Retry
+                    </Button>
+                </div>
+
+                /* Ready — Deposit Instructions */
+            ) : deposit ? (
+                <div className="space-y-5">
+
+                    {/* ── Visual Stepper ── */}
+                    <DepositStepper status={deposit.status} />
+
+                    {/* ── Numbered Step Flow ── */}
+                    <div className="space-y-4">
+
+                        {/* Step 1: Relay Address + QR */}
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 px-1">
+                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold shrink-0">1</span>
+                                <p className="text-xs font-semibold text-gray-300">Copy the Relay Address</p>
+                                <span className="text-[10px] text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded ml-auto">Safe for Exchanges</span>
                             </div>
-                            <p className="text-xs text-red-300/80">{error}</p>
-                            <Button variant="outline" size="sm" onClick={initiateDeposit} className="w-full border-red-500/20 hover:bg-red-500/10 text-red-400">
-                                <RefreshCw className="w-3 h-3 mr-2" />
-                                Retry
-                            </Button>
+                            <div className="flex items-start gap-3 p-3 bg-black/30 rounded-xl border border-white/10">
+                                <div className="bg-white rounded-lg p-1.5 shrink-0">
+                                    <QRCode value={deposit.treasuryAddress} size={80} />
+                                </div>
+                                <div className="flex-1 min-w-0 space-y-2">
+                                    <p className="text-[11px] font-mono text-gray-300 break-all leading-relaxed">
+                                        {deposit.treasuryAddress}
+                                    </p>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 text-xs border-white/10 hover:bg-white/10 text-gray-300 w-full"
+                                        onClick={() => handleCopy(deposit.treasuryAddress, 'addr')}
+                                    >
+                                        {copied === 'addr' ? <><Check className="w-3 h-3 mr-1.5 text-emerald-400" /> Copied!</> : <><Copy className="w-3 h-3 mr-1.5" /> Copy Address</>}
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
-                    ) : deposit ? (
-                        <div className="space-y-6">
-                            {/* Status Indicator */}
-                            <div className="flex items-center justify-between px-4 py-2 bg-white/5 rounded-full border border-white/5">
+
+                        {/* Step 2: Memo */}
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 px-1">
+                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold shrink-0">2</span>
+                                <p className="text-xs font-semibold text-gray-300">Include this exact Memo</p>
+                            </div>
+                            <div className="p-3 bg-red-500/5 rounded-xl border-2 border-red-500/30 space-y-2">
                                 <div className="flex items-center gap-2">
-                                    <div className={`w-2 h-2 rounded-full ${deposit.status === 'completed' ? 'bg-emerald-500 animate-pulse' :
-                                        deposit.status === 'failed' ? 'bg-red-500' :
-                                            'bg-blue-500 animate-pulse'
-                                        }`} />
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                                        Status: {deposit.status}
-                                    </span>
+                                    <p className="text-sm font-bold font-mono text-red-400 flex-1">
+                                        {deposit.memo}
+                                    </p>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 px-2 hover:bg-red-500/10 shrink-0"
+                                        onClick={() => handleCopy(deposit.memo, 'memo')}
+                                    >
+                                        {copied === 'memo' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-red-400" />}
+                                    </Button>
                                 </div>
-                                {deposit.status === 'completed' && (
-                                    <span className="text-[10px] text-emerald-400 font-medium">Payment Received & Forwarded</span>
-                                )}
+                                <p className="text-[10px] text-red-300/70 leading-relaxed">
+                                    ⚠ Without this memo, your deposit cannot be identified and funds may be lost.
+                                </p>
                             </div>
+                        </div>
 
-                            <div className="flex flex-col items-center space-y-4">
-                                <div className="p-4 bg-white rounded-2xl">
-                                    <QRCode value={deposit.treasuryAddress} size={160} />
-                                </div>
+                        {/* Step 3: Send */}
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 px-1">
+                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold shrink-0">3</span>
+                                <p className="text-xs font-semibold text-gray-300">Send Stellar USDC</p>
+                            </div>
+                            <div className="p-3 bg-white/5 rounded-xl border border-white/5 space-y-1.5">
+                                <p className="text-[11px] text-gray-400 leading-relaxed">
+                                    From your exchange or wallet, send <strong className="text-white">USDC on the Stellar network</strong> to the relay address above with the memo.
+                                    Funds are auto-detected and forwarded to your wallet within seconds.
+                                </p>
+                                <p className="text-[10px] text-gray-500">
+                                    Need USDC?{' '}
+                                    <a href="https://www.coinbase.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-0.5">Coinbase<ExternalLink className="w-2.5 h-2.5" /></a>,{' '}
+                                    <a href="https://www.kraken.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-0.5">Kraken<ExternalLink className="w-2.5 h-2.5" /></a>, or{' '}
+                                    <a href="https://www.binance.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-0.5">Binance<ExternalLink className="w-2.5 h-2.5" /></a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
 
-                                <div className="w-full space-y-4">
-                                    <div className="space-y-1.5">
-                                        <div className="flex justify-between items-center px-1">
-                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Relay Address</p>
-                                            <span className="text-[10px] text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded">Safe for Exchanges</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 p-3 bg-black/40 rounded-xl border border-white/10 group">
-                                            <p className="text-xs font-mono text-gray-300 break-all flex-1">
-                                                {deposit.treasuryAddress}
-                                            </p>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 w-8 p-0 hover:bg-white/10 shrink-0"
-                                                onClick={() => handleCopy(deposit.treasuryAddress, 'addr')}
-                                            >
-                                                {copied === 'addr' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-gray-400" />}
-                                            </Button>
-                                        </div>
+                    {/* ── Advanced: Direct Deposit (Collapsible) ── */}
+                    <div className="border-t border-white/5 pt-3">
+                        <button
+                            onClick={() => setAdvancedOpen(!advancedOpen)}
+                            className="flex items-center gap-2 w-full text-left group"
+                        >
+                            <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform duration-200 ${advancedOpen ? 'rotate-0' : '-rotate-90'}`} />
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 group-hover:text-gray-400 transition-colors">
+                                Advanced: Direct to Smart Wallet
+                            </span>
+                        </button>
+
+                        {advancedOpen && (
+                            <div className="mt-3 space-y-3 animate-in slide-in-from-top-2 duration-200">
+                                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1.5">
+                                    <div className="flex items-center gap-2 text-amber-500 text-xs font-bold">
+                                        <Shield className="w-3.5 h-3.5" />
+                                        <span>Advanced Users Only</span>
                                     </div>
+                                    <p className="text-[10px] text-amber-300/80 leading-relaxed">
+                                        Most exchanges (Binance, Coinbase) <strong>do not</strong> support direct deposits to contract addresses yet. Use the relay method above instead.
+                                    </p>
+                                </div>
 
-                                    <div className="space-y-1.5">
-                                        <div className="flex justify-between items-center px-1">
-                                            <p className="text-[10px] font-bold uppercase tracking-widest text-red-500">Required Memo</p>
-                                            <span className="text-[10px] text-red-400/60">Must include this</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 p-3 bg-red-500/5 rounded-xl border border-red-500/20 group animate-pulse">
-                                            <p className="text-sm font-bold font-mono text-red-400 flex-1">
-                                                {deposit.memo}
-                                            </p>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 w-8 p-0 hover:bg-red-500/10 shrink-0"
-                                                onClick={() => handleCopy(deposit.memo, 'memo')}
-                                            >
-                                                {copied === 'memo' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-red-400" />}
-                                            </Button>
-                                        </div>
+                                <div className="flex items-start gap-3 p-3 bg-black/30 rounded-xl border border-white/5">
+                                    <div className="bg-white rounded-lg p-1.5 shrink-0">
+                                        <QRCode value={walletAddress} size={64} />
+                                    </div>
+                                    <div className="flex-1 min-w-0 space-y-2">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Contract Address</p>
+                                        <p className="text-[11px] font-mono text-gray-400 break-all">{walletAddress}</p>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 text-xs border-white/10 hover:bg-white/10 text-gray-400 w-full"
+                                            onClick={() => handleCopy(walletAddress, 'direct')}
+                                        >
+                                            {copied === 'direct' ? <><Check className="w-3 h-3 mr-1.5 text-emerald-400" /> Copied!</> : <><Copy className="w-3 h-3 mr-1.5" /> Copy Contract Address</>}
+                                        </Button>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    ) : null}
-                </TabsContent>
-
-                {/* Buy crypto/Exchanges context */}
-                <TabsContent value="buy" className="space-y-4 mt-6">
-                    <p className="text-sm text-gray-400">
-                        Purchase USDC and send to the <strong>Relay Address</strong> using the <strong>Memo</strong> above.
-                    </p>
-                    <div className="space-y-2">
-                        {onRamps.map((ramp) => (
-                            <a key={ramp.name} href={ramp.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
-                                <div>
-                                    <p className="font-semibold text-sm">{ramp.name}</p>
-                                    <p className="text-xs text-gray-400">{ramp.description}</p>
-                                </div>
-                                <ExternalLink className="w-4 h-4 text-gray-500" />
-                            </a>
-                        ))}
-                    </div>
-                </TabsContent>
-
-                {/* Advanced: Direct Deposit */}
-                <TabsContent value="direct" className="space-y-4 mt-6">
-                    <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2">
-                        <div className="flex items-center gap-2 text-amber-500 text-sm font-bold">
-                            <Shield className="w-4 h-4" />
-                            <span>Advanced Users Only</span>
-                        </div>
-                        <p className="text-xs text-amber-300/80 leading-relaxed">
-                            This is your Smart Wallet contract address. Most exchanges (Binance, Coinbase) <strong>DO NOT</strong> support direct deposits to contract addresses yet.
-                        </p>
-                    </div>
-
-                    <div className="flex flex-col items-center space-y-4">
-                        <QRCode value={walletAddress} size={140} />
-                        <div className="w-full space-y-1.5">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 px-1">Contract Address</p>
-                            <div className="flex items-center gap-2 p-3 bg-black/40 rounded-xl border border-white/5">
-                                <p className="text-xs font-mono text-gray-400 break-all flex-1">{walletAddress}</p>
-                                <Button variant="ghost" size="sm" onClick={() => handleCopy(walletAddress, 'direct')}>
-                                    {copied === 'direct' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-gray-500" />}
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                </TabsContent>
-            </Tabs>
-
-            <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/10 rounded-2xl">
-                <div className="flex items-start gap-3">
-                    <Shield className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-                    <div>
-                        <p className="font-bold text-blue-400 text-xs">How it works</p>
-                        <p className="text-[10px] text-blue-300/80 mt-1 leading-relaxed">
-                            Funds sent to the relay address with your memo are automatically detected and forwarded to your smart wallet within seconds.
-                        </p>
+                        )}
                     </div>
                 </div>
-            </div>
+            ) : null}
         </DialogContent>
     );
 }
