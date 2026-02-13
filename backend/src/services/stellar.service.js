@@ -975,7 +975,7 @@ export class StellarService {
    * @param {Object} [extraMetadata={}] - Additional metadata to store with the multisig transaction
    * @returns {Promise<Object>} Resultado da retirada
    */
-  static async withdrawFromTreasury(destination, amount, assetCode, description, extraMetadata = {}) {
+  static async withdrawFromTreasury(destination, amount, assetCode, description, extraMetadata = {}, operationType = 'treasury_payment') {
     try {
       const treasuryPublicKey = keyManager.getTreasuryPublicKey();
       const issuerPublicKey = keyManager.getIssuerPublicKey();
@@ -1029,7 +1029,7 @@ export class StellarService {
         result = await TransactionManager.submit({
           transaction,
           signingRole: 'TREASURY',
-          operationType: 'treasury_payment',
+          operationType,
           description: `OpEx: ${description}`,
           metadata: {
             destination,
@@ -1059,7 +1059,7 @@ export class StellarService {
         result = await TransactionManager.submit({
           transaction,
           signingRole: 'TREASURY',
-          operationType: 'treasury_payment',
+          operationType,
           description: `OpEx: ${description}`,
           metadata: {
             destination,

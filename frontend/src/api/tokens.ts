@@ -14,21 +14,9 @@ export const tokensApi = {
     return response.data;
   },
 
-  getBalance: async (assetCode: string, publicKey: string): Promise<ApiResponse> => {
-    const response = await api.get(`/tokens/${assetCode}/balance`, {
-      params: { publicKey },
-    });
-    return response.data;
-  },
 
-  distribute: async (data: {
-    investor_id: number;
-    asset_code: string;
-    amount: string;
-  }): Promise<ApiResponse> => {
-    const response = await api.post('/tokens/distribute', data);
-    return response.data;
-  },
+
+
 
   freeze: async (data: {
     investorPublicKey: string;

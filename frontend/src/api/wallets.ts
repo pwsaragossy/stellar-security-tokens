@@ -40,17 +40,7 @@ export const walletsApi = {
         return response;
     },
 
-    createTransactionProposal: async (data: {
-        sourceWallet: string;
-        destination: string;
-        amount: string;
-        assetCode?: string;
-        memo?: string;
-        description: string;
-    }) => {
-        const response = await api.post('/wallets/transactions', data);
-        return response;
-    },
+
 
     submitTransaction: async (id: number, signedXDR: string) => {
         const response = await api.post(`/wallets/transactions/${id}/submit`, { signedXDR });

@@ -7,8 +7,7 @@ import {
   issueToken,
   getTokens,
   getTokenByAssetCode,
-  distributeTokens,
-  getTokenBalance,
+
   freezeAccount,
   unfreezeAccount,
   clawbackTokens,
@@ -27,12 +26,7 @@ const issueTokenValidation = [
   validate,
 ];
 
-const distributeTokenValidation = [
-  body('investorId').isInt({ min: 1 }).withMessage('Valid investor ID is required'),
-  body('assetCode').trim().notEmpty().withMessage('Asset code is required'),
-  body('amount').isFloat({ min: 0.0000001 }).withMessage('Amount must be a positive number'),
-  validate,
-];
+
 
 /**
  * @swagger
@@ -144,61 +138,9 @@ router.get('/:assetCode', getTokenByAssetCode);
  */
 router.post('/sync', requirePlatformAdmin, syncTokens);
 
-/**
- * @swagger
- * /api/tokens/distribute:
- *   post:
- *     summary: Distribuir tokens
- *     description: Distribui tokens para um investidor
- *     tags: [Tokens]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - investorId
- *               - assetCode
- *               - amount
- *             properties:
- *               investorId:
- *                 type: integer
- *                 example: 1
- *               assetCode:
- *                 type: string
- *                 example: REIT01
- *               amount:
- *                 type: number
- *                 example: 1000
- *     responses:
- *       200:
- *         description: Tokens distribuídos com sucesso
- *       400:
- *         description: Dados inválidos
- */
-router.post('/distribute', requirePlatformAdmin, distributeTokenValidation, distributeTokens);
 
-/**
- * @swagger
- * /api/tokens/{assetCode}/balance:
- *   get:
- *     summary: Consultar balanço do token
- *     description: Retorna o balanço total de um token específico
- *     tags: [Tokens]
- *     parameters:
- *       - in: path
- *         name: assetCode
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Balanço do token
- */
-router.get('/:assetCode/balance', getTokenBalance);
+
+
 
 /**
  * @swagger

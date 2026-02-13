@@ -68,99 +68,7 @@ export const getInvestorById = async (req, res, next) => {
   }
 };
 
-export const getInvestorBalance = async (req, res, next) => {
-  try {
-    const { investorId } = req.params;
-    const { assetCode } = req.query;
 
-    if (!assetCode) {
-      return res.status(400).json({
-        success: false,
-        error: 'assetCode query parameter is required',
-      });
-    }
-
-    const investor = await Investor.findById(parseInt(investorId, 10));
-    if (!investor) {
-      return res.status(404).json({
-        success: false,
-        error: 'Investor not found',
-      });
-    }
-
-    if (!investor.stellarPublicKey) {
-      return res.status(400).json({
-        success: false,
-        error: 'Investor does not have a Stellar public key',
-      });
-    }
-
-    const balance = await StellarService.getTokenBalance(
-      assetCode,
-      investor.stellarPublicKey
-    );
-
-    const distributions = await prisma.tokenDistribution.findMany({
-      where: {
-        investorId: parseInt(investorId, 10),
-        assetCode,
-      },
-      include: {
-        token: {
-          select: {
-            description: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const interestPayments = await prisma.interestPayment.findMany({
-      where: {
-        investorId: parseInt(investorId, 10),
-        assetCode,
-      },
-      orderBy: [
-        { paymentDate: 'desc' },
-        { createdAt: 'desc' },
-      ],
-    });
-
-    res.json({
-      success: true,
-      data: {
-        investor: {
-          id: investor.id,
-          name: investor.name,
-          email: investor.email,
-          stellarPublicKey: investor.stellarPublicKey,
-          kycStatus: investor.kycStatus,
-        },
-        balance: {
-          assetCode: balance.assetCode,
-          balance: balance.balance,
-          isAuthorized: balance.isAuthorized,
-        },
-        tokenDistributions: distributions,
-        interestPayments,
-        summary: {
-          totalTokensReceived: distributions.reduce(
-            (sum, d) => sum + parseFloat(d.amount),
-            0
-          ),
-          totalInterestReceived: interestPayments.reduce(
-            (sum, p) => sum + parseFloat(p.usdcAmount),
-            0
-          ),
-          distributionCount: distributions.length,
-          interestPaymentCount: interestPayments.length,
-        },
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 
 export const getInvestorPayments = async (req, res, next) => {
   try {
@@ -274,64 +182,7 @@ export const getInvestorPayments = async (req, res, next) => {
   }
 };
 
-export const updateInvestor = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
 
-    const investor = await Investor.findById(parseInt(id, 10));
-    if (!investor) {
-      return res.status(404).json({
-        success: false,
-        error: 'Investor not found',
-      });
-    }
-
-    // Whitelist allowed fields for self-update (security: block sensitive fields)
-    const ALLOWED_FIELDS = ['name', 'document'];
-    const BLOCKED_FIELDS = ['status', 'walletAddress', 'emailVerified', 'kycStatus', 'role', 'credentialId', 'publicKey'];
-
-    // Filter to only allowed fields
-    const safeUpdateData = {};
-    for (const key of Object.keys(updateData)) {
-      if (BLOCKED_FIELDS.includes(key)) {
-        return res.status(403).json({
-          success: false,
-          error: `Field '${key}' cannot be updated by the user`,
-        });
-      }
-      if (ALLOWED_FIELDS.includes(key)) {
-        safeUpdateData[key] = updateData[key];
-      }
-    }
-
-    if (Object.keys(safeUpdateData).length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'No valid fields to update',
-      });
-    }
-
-    if (safeUpdateData.email) {
-      const existingEmail = await Investor.findByEmail(safeUpdateData.email);
-      if (existingEmail && existingEmail.id !== parseInt(id, 10)) {
-        return res.status(409).json({
-          success: false,
-          error: 'Investor with this email already exists',
-        });
-      }
-    }
-
-    const updatedInvestor = await Investor.update(id, safeUpdateData);
-
-    res.json({
-      success: true,
-      data: updatedInvestor,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 
 export const getInvestorPortfolio = async (req, res, next) => {
   try {
@@ -364,36 +215,7 @@ export const getInvestorPortfolio = async (req, res, next) => {
   }
 };
 
-export const getInvestorMetrics = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const investorId = parseInt(id, 10);
 
-    const investor = await Investor.findById(investorId);
-    if (!investor) {
-      return res.status(404).json({
-        success: false,
-        error: 'Investor not found',
-      });
-    }
-
-    const metrics = await Investor.getConsolidatedMetrics(investorId);
-
-    res.json({
-      success: true,
-      data: {
-        investor: {
-          id: investor.id,
-          name: investor.name,
-          email: investor.email,
-        },
-        metrics,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 
 /**
  * Get investor investments with optional status filter

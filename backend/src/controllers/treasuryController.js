@@ -3,53 +3,10 @@ import prisma from '../config/prisma.js';
 
 /**
  * Controller para operações de Tesouraria (OpEx)
+ * Note: Treasury withdrawals are managed directly via Freighter.
+ * This controller only provides read-only balance information.
  */
 export class TreasuryController {
-    /**
-     * Solicita uma retirada do tesouro para despesas operacionais
-     * POST /api/admin/treasury/withdraw
-     */
-    static async withdraw(req, res) {
-        try {
-            const { destination, amount, assetCode, description } = req.body;
-
-            if (!destination || !amount || !assetCode || !description) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Missing required fields: destination, amount, assetCode, description',
-                });
-            }
-
-            const result = await StellarService.withdrawFromTreasury(
-                destination,
-                amount,
-                assetCode,
-                description
-            );
-
-            if (result.status === 'pending_multisig') {
-                return res.status(202).json({
-                    success: true,
-                    status: 'pending_multisig',
-                    message: 'Withdrawal request queued for MultiSig approval',
-                    data: result
-                });
-            }
-
-            res.json({
-                success: true,
-                message: 'Withdrawal processed successfully',
-                data: result
-            });
-        } catch (error) {
-            console.error('[TreasuryController] Withdrawal error:', error);
-            res.status(500).json({
-                success: false,
-                error: 'Failed to process treasury withdrawal',
-                details: error.message
-            });
-        }
-    }
 
     /**
      * Obtém o saldo atual das contas de tesouraria

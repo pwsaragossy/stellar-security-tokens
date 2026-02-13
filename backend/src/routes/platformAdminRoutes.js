@@ -694,32 +694,7 @@ router.get('/investors', authenticateToken, requirePlatformAdmin, PlatformAdminC
 router.get('/treasury/balances', authenticateToken, requirePlatformAdmin, TreasuryController.getBalances);
 router.get('/maintenance/ttl-stats', authenticateToken, requirePlatformAdmin, PlatformAdminController.getTTLStats);
 
-/**
- * @swagger
- * /api/platform-admins/treasury/withdraw:
- *   post:
- *     summary: "[Admin] Request OpEx withdrawal"
- *     description: Queues a withdrawal for multisig approval
- *     tags: [Platform Admin]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [destination, amount, assetCode, description]
- *             properties:
- *               destination: { type: string }
- *               amount: { type: string }
- *               assetCode: { type: string }
- *               description: { type: string }
- *     responses:
- *       202:
- *         description: Request queued (Pending Multisig)
- */
-router.post('/treasury/withdraw', authenticateToken, requirePlatformAdmin, TreasuryController.withdraw);
+
 
 // ============ Company Management Routes ============
 

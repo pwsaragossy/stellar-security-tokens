@@ -226,6 +226,7 @@ class KeyManager {
                 'freeze_account': [this.getIssuerPublicKey()],
                 'clawback': [this.getIssuerPublicKey()],
                 'treasury_payment': [this.getTreasuryPublicKey()],
+                'deposit_relay': [this.getTreasuryPublicKey()],
                 'trustline_auth': [this.getIssuerPublicKey()],
                 'account_setup': [this.getOperationsPublicKey()],
                 'channel_op': this.channels.map(c => c.publicKey()),
@@ -246,6 +247,7 @@ class KeyManager {
             'freeze_account': [this.getIssuerPublicKey()],
             'clawback': [this.getIssuerPublicKey()],
             'treasury_payment': this.getTreasurySigners(),
+            'deposit_relay': [this.getTreasuryPublicKey()],
             'trustline_auth': [this.getIssuerPublicKey()],
             'account_setup': [this.getOperationsPublicKey()],
             'sac_deploy': [this.getIssuerPublicKey()],
@@ -306,6 +308,7 @@ class KeyManager {
             'freeze_account': 1,        // Single issuer (compliance action)
             'clawback': 2,              // 2-of-N (requires approval)
             'treasury_payment': 2,      // 2-of-3 for treasury (high value)
+            'deposit_relay': 1,         // Auto-forwarding, single Treasury signature
             'dividend_distribution': 2, // 2-of-3 for dividend payments
             'trustline_auth': 1,        // Single issuer
             'account_setup': 1,         // Single operations
@@ -342,7 +345,7 @@ class KeyManager {
         // In multisig mode, ONLY operations that exclusively use the OPERATIONS
         // hot wallet can bypass multisig. All other roles (ISSUER, DISTRIBUTOR,
         // TREASURY) have their secret keys on hardware wallets / Freighter.
-        const opsOnlyOperations = ['account_setup', 'channel_op', 'sponsorship'];
+        const opsOnlyOperations = ['account_setup', 'channel_op', 'sponsorship', 'deposit_relay'];
         if (opsOnlyOperations.includes(operationType)) {
             return false;
         }

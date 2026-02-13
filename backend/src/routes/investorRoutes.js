@@ -5,9 +5,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import {
   getInvestors,
   getInvestorById,
-  getInvestorBalance,
   getInvestorPayments,
-  updateInvestor,
   // Email-first registration flow (NEW)
   initiateRegistration,
   verifyEmailCode,
@@ -18,7 +16,7 @@ import {
   resendVerificationEmail,
   getPasskeyConfig,
   getInvestorPortfolio,
-  getInvestorMetrics,
+
   getInvestorInvestments,
   getWalletStatus,
   proposeWithdrawal,
@@ -317,20 +315,6 @@ router.get('/', authenticateToken, getInvestors);
  *               $ref: '#/components/schemas/Investor'
  *       404:
  *         description: Investidor não encontrado
- *   put:
- *     summary: Atualizar investidor
- *     tags: [Investors]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Investidor atualizado
  */
 router.get('/:id', authenticateToken, getInvestorById);
 
@@ -389,45 +373,7 @@ router.get('/:id/portfolio', requireInvestor, requireOwnData, getInvestorPortfol
  */
 router.get('/:id/investments', requireInvestor, requireOwnData, getInvestorInvestments);
 
-/**
- * @swagger
- * /api/investors/{id}/metrics:
- *   get:
- *     summary: Obter métricas do investidor
- *     tags: [Investors]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Métricas do investidor
- */
-router.get('/:id/metrics', requireInvestor, requireOwnData, getInvestorMetrics);
 
-/**
- * @swagger
- * /api/investors/{investorId}/balance:
- *   get:
- *     summary: Obter saldo do investidor
- *     tags: [Investors]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: investorId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Saldo do investidor
- */
-router.get('/:investorId/balance', authenticateToken, getInvestorBalance);
 
 /**
  * @swagger
@@ -455,6 +401,8 @@ router.get('/:investorId/payments', authenticateToken, getInvestorPayments);
  *   get:
  *     summary: Status da wallet do investidor
  *     tags: [Investors]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: investorId
@@ -466,7 +414,6 @@ router.get('/:investorId/payments', authenticateToken, getInvestorPayments);
  *         description: Status da wallet
  */
 router.get('/:investorId/wallet-status', getWalletStatus);
-router.put('/:id', requireInvestor, requireOwnData, updateInvestor);
 
 /**
  * @swagger

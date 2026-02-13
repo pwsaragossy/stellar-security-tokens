@@ -177,7 +177,8 @@ export class DepositRelayService {
                     investorName: investor?.name,
                     investorEmail: investor?.email,
                     investorId: investor?.id,
-                }
+                },
+                'deposit_relay' // Bypass multisig — auto-forward with single Treasury signature
             );
 
             // Handle multisig pending case

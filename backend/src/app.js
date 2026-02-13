@@ -9,7 +9,7 @@ import investorRoutes from './routes/investorRoutes.js';
 import tokenRoutes from './routes/tokenRoutes.js';
 import investmentRoutes from './routes/investmentRoutes.js';
 import authRoutes from './routes/authRoutes.js';
-import paymentRoutes from './routes/paymentRoutes.js';
+
 import companyRoutes from './routes/companyRoutes.js';
 import companyUserRoutes from './routes/companyUserRoutes.js';
 import platformAdminRoutes from './routes/platformAdminRoutes.js';
@@ -168,7 +168,7 @@ app.use('/api/company-users', apiLimiter, companyUserRoutes);
 app.use('/api/platform-admins', apiLimiter, platformAdminRoutes);
 
 // Payment routes with strict rate limiting (10 req/min - expensive operations)
-app.use('/api/payments', strictLimiter, paymentRoutes);
+
 app.use('/api/company/payments', strictLimiter, companyPaymentRoutes);
 app.use('/api/wallets', apiLimiter, walletRoutes);
 app.use('/api/security', apiLimiter, securityRoutes);
