@@ -78,6 +78,7 @@ enum DepositStatus {
   completed         // USDC in user's wallet
   expired           // Memo expired (24h timeout)
   failed            // SAC transfer failed
+  rejected          // Multisig relay rejected by admin
 }
 
 // ============================================

@@ -306,7 +306,7 @@ export class MultiSigTransactionService {
                 ? JSON.stringify(error.response.data.extras.result_codes)
                 : error.message;
 
-            await prisma.multiSigTransaction.update({
+            const failedTx = await prisma.multiSigTransaction.update({
                 where: { id: txId },
                 data: {
                     status: 'failed',
@@ -316,6 +316,9 @@ export class MultiSigTransactionService {
             });
 
             log.error(`TX #${txId} failed: ${errorMessage}`);
+
+            // Propagate failure to linked records
+            await this.processRejectionEffects(failedTx);
 
             return {
                 success: false,
@@ -351,6 +354,9 @@ export class MultiSigTransactionService {
 
         log.info(`TX #${txId} rejected: ${reason || 'No reason provided'}`);
 
+        // Propagate rejection to linked records (deposits, investments, etc.)
+        await this.processRejectionEffects(updated);
+
         return updated;
     }
 
@@ -360,13 +366,19 @@ export class MultiSigTransactionService {
      * @returns {Promise<Object>} Updated transaction
      */
     static async markExpired(txId) {
-        return prisma.multiSigTransaction.update({
+        const updated = await prisma.multiSigTransaction.update({
             where: { id: txId },
             data: {
                 status: 'expired',
                 errorMessage: 'Transaction expired before reaching signature threshold',
             },
         });
+
+        // Propagate expiration to linked records
+        const tx = await this.getById(txId);
+        if (tx) await this.processRejectionEffects(tx);
+
+        return updated;
     }
 
     /**
@@ -375,10 +387,19 @@ export class MultiSigTransactionService {
      * @returns {Promise<number>} Number of expired transactions
      */
     static async expireOldTransactions() {
-        const result = await prisma.multiSigTransaction.updateMany({
+        // Fetch candidates BEFORE batch update so we can process their side effects
+        const expiring = await prisma.multiSigTransaction.findMany({
             where: {
                 status: { in: ['pending', 'partially_signed'] },
                 expiresAt: { lt: new Date() },
+            },
+        });
+
+        if (expiring.length === 0) return 0;
+
+        const result = await prisma.multiSigTransaction.updateMany({
+            where: {
+                id: { in: expiring.map(tx => tx.id) },
             },
             data: {
                 status: 'expired',
@@ -386,8 +407,15 @@ export class MultiSigTransactionService {
             },
         });
 
-        if (result.count > 0) {
-            log.info(`Expired ${result.count} pending transactions`);
+        log.info(`Expired ${result.count} pending transactions`);
+
+        // Propagate expiration to linked records
+        for (const tx of expiring) {
+            try {
+                await this.processRejectionEffects({ ...tx, errorMessage: 'Transaction expired' });
+            } catch (effectError) {
+                log.error(`Failed to process expiration effects for TX #${tx.id}: ${effectError.message}`);
+            }
         }
 
         return result.count;
@@ -645,6 +673,64 @@ export class MultiSigTransactionService {
         } catch (error) {
             log.error(`Hook Error for TX #${tx.id}: ${error.message}`);
             // We catch but don't rethrow to avoid breaking the transaction submission record update
+        }
+    }
+
+    /**
+     * Propagate rejection/expiration/failure to linked domain records.
+     * Mirror of processEffects() for the unhappy path.
+     * @param {Object} tx - The rejected/expired/failed transaction record
+     */
+    static async processRejectionEffects(tx) {
+        const { operationType, metadata } = tx;
+        const reason = tx.errorMessage || 'Transaction rejected/cancelled';
+        log.debug(`Processing rejection effects for TX #${tx.id} (${operationType})`);
+
+        try {
+            switch (operationType) {
+                case 'treasury_payment':
+                    // Deposit relay: mark the Deposit as rejected so the investor sees the real status
+                    if (metadata?.subtype === 'deposit_relay' && metadata?.depositId) {
+                        await prisma.deposit.update({
+                            where: { id: metadata.depositId },
+                            data: {
+                                status: 'rejected',
+                                errorMessage: reason,
+                                updatedAt: new Date(),
+                            }
+                        });
+                        log.info(`Deposit #${metadata.depositId} → rejected (TX #${tx.id})`);
+                    }
+                    break;
+
+                case 'token_distribute':
+                    if (metadata?.investmentId) {
+                        const { Investment } = await import('../models/Investment.js');
+                        await Investment.updateStatus(parseInt(metadata.investmentId), {
+                            status: 'failed',
+                            error_message: reason,
+                        });
+                        log.info(`Investment #${metadata.investmentId} → failed (TX #${tx.id})`);
+                    }
+                    break;
+
+                case 'sac_deploy':
+                    // If this SAC deploy was chained to a distribution, fail the linked investment
+                    if (metadata?.investmentId) {
+                        const { Investment } = await import('../models/Investment.js');
+                        await Investment.updateStatus(parseInt(metadata.investmentId), {
+                            status: 'failed',
+                            error_message: reason,
+                        });
+                        log.info(`Investment #${metadata.investmentId} (SAC chain) → failed (TX #${tx.id})`);
+                    }
+                    break;
+
+                default:
+                    log.debug(`No rejection hooks for ${operationType}`);
+            }
+        } catch (error) {
+            log.error(`Rejection effect error for TX #${tx.id}: ${error.message}`);
         }
     }
 }

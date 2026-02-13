@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Key, Shield, Check, ArrowUpRight, ArrowDownLeft, Copy, ExternalLink, Wallet as WalletIcon, Coins, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Loader2, Key, Shield, Check, ArrowUpRight, ArrowDownLeft, Copy, ExternalLink, Wallet as WalletIcon, Coins, ArrowRight, AlertTriangle, DollarSign } from 'lucide-react';
 import { api } from '@/lib/api';
 import { passkeyClient } from '@/lib/passkey';
 import {
@@ -28,6 +28,7 @@ interface WalletStatus {
         usdc: string;
     };
     explorer?: string;
+    depositMemo?: string;
 }
 
 interface TokenizedAsset {
@@ -112,6 +113,7 @@ export function Wallet() {
                             passkeyRegistered: data.passkeyRegistered !== false,
                             balances: data.balances,
                             explorer: data.explorer,
+                            depositMemo: data.depositMemo,
                         });
                         setBalanceLoading(false);
                     } catch {
@@ -577,6 +579,31 @@ export function Wallet() {
                                 </Button>
                             </div>
                         </div>
+
+                        {/* Deposit memo — persistent row */}
+                        {walletStatus.depositMemo && (
+                            <div className="px-4 py-3">
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <div className="flex items-center gap-2">
+                                        <DollarSign className="w-3.5 h-3.5 text-muted-foreground" />
+                                        <span className="text-[11px] text-muted-foreground uppercase tracking-wider">Deposit Memo</span>
+                                    </div>
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-500/15 text-amber-400">Required</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-sm font-mono text-white flex-1">{walletStatus.depositMemo}</p>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-7 p-0 hover:bg-white/10 shrink-0"
+                                        onClick={() => navigator.clipboard.writeText(walletStatus.depositMemo!)}
+                                    >
+                                        <Copy className="w-3.5 h-3.5" />
+                                    </Button>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-1">Include this memo when sending USDC to the deposit address above</p>
+                            </div>
+                        )}
 
                         {/* Chain warning — slim bar */}
                         <div className="flex items-center gap-2.5 px-4 py-2.5 bg-red-500/5">

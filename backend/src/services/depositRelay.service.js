@@ -8,7 +8,7 @@ import crypto from 'crypto';
 const log = logger.scope('DepositRelay');
 export class DepositRelayService {
     static MEMO_PREFIX = 'DEP-';
-    static EXPIRE_MINUTES = 60 * 24; // 24 hours
+
 
     /**
      * Initiate a new deposit request
@@ -50,17 +50,13 @@ export class DepositRelayService {
                 };
             }
 
-            // If failed/expired, reset it to pending for reuse
-            if (existingDeposit.status === 'failed' || existingDeposit.status === 'expired') {
-                const expiresAt = new Date();
-                expiresAt.setMinutes(expiresAt.getMinutes() + this.EXPIRE_MINUTES);
-
+            // If failed/expired/rejected, reset it to pending for reuse
+            if (['failed', 'expired', 'rejected'].includes(existingDeposit.status)) {
                 const updatedDeposit = await prisma.deposit.update({
                     where: { id: existingDeposit.id },
                     data: {
                         status: 'pending',
                         expectedAmount,
-                        expiresAt,
                         errorMessage: null,
                         actualAmount: null,
                         incomingTxHash: null,
@@ -80,16 +76,12 @@ export class DepositRelayService {
             };
         }
 
-        const expiresAt = new Date();
-        expiresAt.setMinutes(expiresAt.getMinutes() + this.EXPIRE_MINUTES);
-
         const deposit = await prisma.deposit.create({
             data: {
                 investorId: investor.id,
                 memo,
                 expectedAmount,
                 status: 'pending',
-                expiresAt
             }
         });
 
@@ -119,9 +111,16 @@ export class DepositRelayService {
             return;
         }
 
-        if (deposit.status !== 'pending' && deposit.status !== 'received') {
-            log.warn(`Deposit ${deposit.id} is in status ${deposit.status}, skipping.`);
+        // Only skip if the deposit already completed successfully
+        if (deposit.status === 'completed') {
+            log.warn(`Deposit ${deposit.id} is already completed, skipping duplicate payment.`);
             return;
+        }
+
+        // For retryable statuses (pending_approval, rejected, failed, forwarding, expired),
+        // a new incoming payment resets the deposit and re-triggers the relay.
+        if (deposit.status !== 'pending' && deposit.status !== 'received') {
+            log.info(`Deposit ${deposit.id} was in '${deposit.status}' — new payment received, resetting to 'received'.`);
         }
 
         // Update status to received

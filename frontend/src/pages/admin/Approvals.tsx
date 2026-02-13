@@ -649,7 +649,20 @@ export function Approvals() {
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={refresh}
+                        onClick={async () => {
+                            // Heal all stuck items before refreshing the queue
+                            try {
+                                const res = await api.post('/admin/transactions/deposits/retry-all', {});
+                                const d = res?.data || res;
+                                const msg = d?.message;
+                                if (msg && (d?.expiredMultisig || d?.retriedDeposits?.length)) {
+                                    toast.info(msg);
+                                }
+                            } catch {
+                                // Silent — heal is best-effort
+                            }
+                            refresh();
+                        }}
                         disabled={loading}
                         className="gap-2"
                     >

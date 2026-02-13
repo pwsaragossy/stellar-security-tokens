@@ -501,5 +501,59 @@ router.post('/deposits/:depositId/retry', authenticatePlatformAdmin, async (req,
     }
 });
 
+/**
+ * @swagger
+ * /api/admin/transactions/deposits/retry-all:
+ *   post:
+ *     summary: Heal all stuck approval items — expire stale multisig, retry stuck deposits
+ *     tags: [Admin Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Heal results summary
+ */
+router.post('/deposits/retry-all', authenticatePlatformAdmin, async (req, res) => {
+    try {
+        const prisma = (await import('../config/prisma.js')).default;
+        const { DepositRelayService } = await import('../services/depositRelay.service.js');
+        const summary = { expiredMultisig: 0, retriedDeposits: [] };
+
+        // 1. Expire stale multisig transactions (and propagate side effects)
+        try {
+            summary.expiredMultisig = await MultiSigTransactionService.expireOldTransactions();
+        } catch (err) {
+            console.error('[RetryAll] Error expiring multisig:', err.message);
+        }
+
+        // 2. Retry stuck deposits (received / failed / rejected)
+        try {
+            const stuckDeposits = await prisma.deposit.findMany({
+                where: { status: { in: ['received', 'failed', 'rejected'] } },
+            });
+
+            for (const dep of stuckDeposits) {
+                try {
+                    await DepositRelayService.forwardAsset(dep.id, 'USDC');
+                    summary.retriedDeposits.push({ id: dep.id, memo: dep.memo, success: true });
+                } catch (err) {
+                    summary.retriedDeposits.push({ id: dep.id, memo: dep.memo, success: false, error: err.message });
+                }
+            }
+        } catch (err) {
+            console.error('[RetryAll] Error retrying deposits:', err.message);
+        }
+
+        res.json({
+            success: true,
+            data: summary,
+            message: `Healed: ${summary.expiredMultisig} expired tx, ${summary.retriedDeposits.length} retried deposits`,
+        });
+    } catch (error) {
+        console.error('Error in retry-all:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 export default router;
 

@@ -781,15 +781,21 @@ export const resendVerificationEmail = async (req, res, next) => {
 export const getWalletStatus = async (req, res, next) => {
   try {
     const { investorId } = req.params;
+    const id = parseInt(investorId, 10);
 
     const status = await PasskeyWalletService.getWalletStatus(
       UserType.INVESTOR,
-      parseInt(investorId, 10)
+      id
     );
+
+    // Compute deterministic deposit memo for this investor
+    const crypto = await import('crypto');
+    const hash = crypto.createHash('sha256').update(`investor-${id}`).digest('hex');
+    const depositMemo = `DEP-${hash.substring(0, 8).toUpperCase()}`;
 
     res.json({
       success: true,
-      data: status,
+      data: { ...status, depositMemo },
     });
   } catch (error) {
     next(error);

@@ -19,7 +19,7 @@ interface DepositDialogProps {
 interface RelayDeposit {
     memo: string;
     treasuryAddress: string;
-    status: 'pending' | 'received' | 'forwarding' | 'pending_approval' | 'completed' | 'expired' | 'failed';
+    status: 'pending' | 'received' | 'forwarding' | 'pending_approval' | 'completed' | 'expired' | 'failed' | 'rejected';
     actualAmount?: number;
     outgoingTxHash?: string;
 }
@@ -47,6 +47,23 @@ function getStepIndex(status: RelayDeposit['status']): number {
 function DepositStepper({ status }: { status: RelayDeposit['status'] }) {
     const currentIndex = getStepIndex(status);
     const isFailed = status === 'failed' || status === 'expired';
+    const isRejected = status === 'rejected';
+
+    if (isRejected) {
+        return (
+            <div className="flex flex-col gap-2 px-4 py-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span className="text-xs font-medium text-amber-400">
+                        Deposit relay declined by administrator
+                    </span>
+                </div>
+                <p className="text-[10px] text-amber-300/70 leading-relaxed">
+                    Your funds are safe in the platform treasury. Tap "Retry" below to re-initiate the relay.
+                </p>
+            </div>
+        );
+    }
 
     if (isFailed) {
         return (
@@ -132,7 +149,7 @@ export function DepositDialog({ investorId, walletAddress }: DepositDialogProps)
 
     // Status Polling
     useEffect(() => {
-        if (!investorId || !deposit || deposit.status === 'completed' || deposit.status === 'failed' || deposit.status === 'expired') {
+        if (!investorId || !deposit || deposit.status === 'completed' || deposit.status === 'failed' || deposit.status === 'expired' || deposit.status === 'rejected') {
             return;
         }
 
