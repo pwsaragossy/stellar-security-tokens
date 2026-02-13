@@ -7,7 +7,7 @@ import { CompanyPendingApproval } from './pages/auth/CompanyPendingApproval';
 import { RegistrationSuccess } from './pages/auth/RegistrationSuccess';
 import { VerifyEmail } from './pages/auth/VerifyEmail';
 import { DashboardLayout } from './layouts/DashboardLayout';
-import { InvestorDashboard } from './pages/investor/Dashboard';
+
 import { Marketplace } from './pages/investor/Marketplace';
 import { OfferDetails } from './pages/investor/OfferDetails';
 import { Portfolio } from './pages/investor/Portfolio';
@@ -62,8 +62,8 @@ function App() {
 
           {/* Investor Dashboard Routes */}
           <Route path="/" element={<DashboardLayout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<InvestorDashboard />} />
+            <Route index element={<Navigate to="/market" replace />} />
+            <Route path="dashboard" element={<Navigate to="/market" replace />} />
             <Route path="portfolio" element={<Portfolio />} />
             <Route path="market" element={<Marketplace />} />
             <Route path="market/:id" element={<OfferDetails />} />

@@ -3,8 +3,9 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useOffers } from "@/hooks/useOffers";
 import { OfferCard } from "@/components/ui/offer-card";
-import { Search, Loader2, TrendingUp, X, ArrowUpDown } from "lucide-react";
+import { Search, Loader2, TrendingUp, X, ArrowUpDown, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { authStorage } from "@/utils/authStorage";
 
 export function Marketplace() {
     const { offers, loading, error } = useOffers();
@@ -12,6 +13,8 @@ export function Marketplace() {
     const [search, setSearch] = useState('');
     const [typeFilter, setTypeFilter] = useState<'all' | 'sale' | 'collateral'>('all');
     const [sortBy, setSortBy] = useState<'newest' | 'apy' | 'maturity'>('newest');
+
+    const user = authStorage.getUser<{ kycStatus?: string }>('investor') || {};
 
     const SORT_OPTIONS = [
         { key: 'newest' as const, label: 'Newest' },
@@ -81,6 +84,21 @@ export function Marketplace() {
 
     return (
         <div className="space-y-6">
+            {/* KYC Pending Alert */}
+            {user.kycStatus === 'pending' && (
+                <div className="p-4 bg-[hsl(35_90%_50%/0.1)] border border-[hsl(35_90%_50%/0.2)] rounded-xl flex items-center gap-4 animate-fade-in">
+                    <div className="p-2 rounded-lg bg-[hsl(35_90%_50%/0.15)]">
+                        <Clock className="w-5 h-5 text-[hsl(35_90%_50%)]" />
+                    </div>
+                    <div>
+                        <h4 className="font-semibold text-[hsl(35_90%_50%)]">Account Under Review</h4>
+                        <p className="text-sm text-[hsl(35_90%_50%/0.8)]">
+                            Your account is pending approval. You can browse offers but cannot invest until an admin approves your KYC.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in">
                 <div className="space-y-1">
