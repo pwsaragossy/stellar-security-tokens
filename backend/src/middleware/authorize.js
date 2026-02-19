@@ -43,7 +43,7 @@ export const requirePlatformAdmin = (req, res, next) => {
     // Check for platform admin via userType OR valid admin role
     const isAdmin = req.user.userType === 'platform_admin' ||
       req.user.role === 'platform_admin' ||
-      ['admin', 'manager', 'super_admin'].includes(req.user.role);
+      req.user.role === 'super_admin';
 
     if (!isAdmin) {
       return res.status(403).json({
@@ -66,7 +66,7 @@ export const requireAdminRole = (allowedRoles) => {
     authenticateToken(req, res, () => {
       const isAdmin = req.user.userType === 'platform_admin' ||
         req.user.role === 'platform_admin' ||
-        ['admin', 'manager', 'super_admin'].includes(req.user.role);
+        req.user.role === 'super_admin';
 
       if (!isAdmin) {
         return res.status(403).json({
@@ -75,7 +75,7 @@ export const requireAdminRole = (allowedRoles) => {
         });
       }
 
-      if (!roles.includes(req.user.adminRole)) {
+      if (!roles.includes(req.user.role)) {
         return res.status(403).json({
           success: false,
           error: `Access denied. Required role: ${roles.join(' or ')}`,

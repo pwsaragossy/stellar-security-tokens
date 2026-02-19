@@ -1,28 +1,32 @@
+import crypto from 'crypto';
+
 /**
  * Middleware de tratamento de erros global
- * Captura todos os erros não tratados e retorna respostas apropriadas
- * @param {Error} err - Objeto de erro
- * @param {Object} req - Objeto de requisição Express
- * @param {Object} res - Objeto de resposta Express
- * @param {Function} next - Função next do Express
- * @returns {Object} Resposta JSON com detalhes do erro
+ * In production: suppresses error.message, returns only a tracking error ID
+ * In development: returns full error details for debugging
  */
 export const errorHandler = (err, req, res, next) => {
-  console.error('Error:', err);
+  const isDev = process.env.NODE_ENV !== 'production';
+  const errorId = crypto.randomUUID();
+
+  // Always log full error server-side
+  console.error(`[Error ${errorId}]`, err);
 
   if (err.name === 'ValidationError') {
     return res.status(400).json({
       success: false,
       error: 'Validation Error',
-      details: err.message,
+      details: isDev ? err.message : undefined,
+      errorId,
     });
   }
 
   if (err.name === 'DatabaseError') {
     return res.status(500).json({
       success: false,
-      error: 'Database Error',
-      details: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+      error: isDev ? 'Database Error' : 'Internal server error',
+      details: isDev ? err.message : undefined,
+      errorId,
     });
   }
 
@@ -30,14 +34,16 @@ export const errorHandler = (err, req, res, next) => {
     return res.status(400).json({
       success: false,
       error: 'Stellar Operation Error',
-      details: err.message,
+      details: isDev ? err.message : undefined,
+      errorId,
     });
   }
 
   res.status(err.status || 500).json({
     success: false,
-    error: err.message || 'Internal Server Error',
-    details: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    error: isDev ? (err.message || 'Internal Server Error') : 'Internal server error',
+    details: isDev ? err.stack : undefined,
+    errorId,
   });
 };
 

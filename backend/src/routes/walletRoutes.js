@@ -4,7 +4,8 @@ import { WalletController } from '../controllers/walletController.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requirePlatformAdmin } from '../middleware/authorize.js';
 import { validate } from '../middleware/validator.js';
-import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
+
+import { strictLimiter } from '../middleware/rateLimit.js';
 
 const router = express.Router();
 
@@ -30,10 +31,13 @@ const router = express.Router();
  *         description: Transaction submitted successfully
  *       400:
  *         description: Invalid transaction
+ *       429:
+ *         description: Rate limit exceeded
  *       500:
  *         description: Submission failed
  */
 router.post('/submit-tx',
+    strictLimiter,
     body('xdr').isString().notEmpty().withMessage('xdr is required'),
     validate,
     async (req, res, next) => {
@@ -188,87 +192,5 @@ router.post('/transactions/:id/submit',
     WalletController.signAndSubmitProposal
 );
 
-/**
- * @swagger
- * /api/wallets/test-sign:
- *   post:
- *     summary: Sign a transaction using a pre-seeded test account's secret key (Development Only)
- *     tags: [Wallets]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [xdr, publicKey]
- *             properties:
- *               xdr:
- *                 type: string
- *               publicKey:
- *                 type: string
- *     responses:
- *       200:
- *         description: Transaction signed successfully
- */
-router.post('/test-sign',
-    authenticateToken,
-    body('xdr').isString().notEmpty().withMessage('xdr is required'),
-    body('publicKey').isString().notEmpty().withMessage('publicKey is required'),
-    validate,
-    async (req, res, next) => {
-        try {
-            // Check if the user is a test user or has permissions
-            const { xdr, publicKey } = req.body;
-
-            // Critical check: Ensure the requester is allowed to sign with this public key
-            // For now, we allow if the authenticated user's stellarContractId matches the publicKey
-            if (req.user.stellarPublicKey !== publicKey && req.user.stellarContractId !== publicKey) {
-                return res.status(403).json({ success: false, error: 'Unauthorized: You can only sign on behalf of your own wallet' });
-            }
-
-            const signedXdr = await PasskeyWalletService.signWithTestKey(xdr, publicKey);
-
-            res.json({
-                success: true,
-                signedXdr
-            });
-        } catch (error) {
-            console.error('[WalletRoutes] Test signing error:', error);
-            res.status(500).json({
-                success: false,
-                error: error.message || 'Failed to sign transaction'
-            });
-        }
-    }
-);
-
-/**
- * @swagger
- * /api/wallets/admin-sign:
- *   post:
- *     summary: Sign a transaction using a system wallet secret key from .env (Development Only)
- *     tags: [Wallets]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [xdr, publicKey]
- *             properties:
- *               xdr:
- *                 type: string
- *               publicKey:
- *                 type: string
- *     responses:
- *       200:
- *         description: Transaction signed successfully
- */
-router.post('/admin-sign',
-    body('xdr').isString().notEmpty().withMessage('xdr is required'),
-    body('publicKey').isString().notEmpty().withMessage('publicKey is required'),
-    validate,
-    WalletController.adminSignTransaction
-);
-
 export default router;
+

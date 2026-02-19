@@ -702,58 +702,9 @@ export const submitInvestmentTx = async (req, res, next) => {
     const opsKeypair = getOperationsKeypair();
     const tx = TransactionBuilder.fromXDR(signedXdr, networkPassphrase);
 
-    // === DIAGNOSTIC: Log inner TX details ===
-    console.log(`[Investment] Inner TX source: ${tx.source}`);
-    console.log(`[Investment] Inner TX fee: ${tx.fee}`);
-    console.log(`[Investment] Ops keypair: ${opsKeypair.publicKey()}`);
-    console.log(`[Investment] Source matches opsKeypair? ${tx.source === opsKeypair.publicKey()}`);
-    const innerOp = tx.operations?.[0];
-    if (innerOp?.type === 'invokeHostFunction') {
-      const authEntries = innerOp.auth || [];
-      console.log(`[Investment] Auth entries count: ${authEntries.length}`);
-      authEntries.forEach((entry, i) => {
-        try {
-          const creds = entry.credentials();
-          const credType = creds.switch().name;
-          console.log(`[Investment] Auth[${i}] cred type: ${credType}`);
-          if (credType === 'sorobanCredentialsAddress') {
-            const addr = creds.address();
-            console.log(`[Investment] Auth[${i}] address: ${addr.address().toString()}`);
-            console.log(`[Investment] Auth[${i}] nonce: ${addr.nonce().toString()}`);
-            console.log(`[Investment] Auth[${i}] expiration: ${addr.signatureExpirationLedger()}`);
-            console.log(`[Investment] Auth[${i}] sig type: ${addr.signature().switch().name}`);
-          }
-        } catch (e) {
-          console.log(`[Investment] Auth[${i}] parse error: ${e.message}`);
-        }
-      });
-    }
-    // === END DIAGNOSTIC ===
 
     // Add the source account signature
     tx.sign(opsKeypair);
-
-    // === DIAGNOSTIC: Pre-submission simulation to get contract error details ===
-    try {
-      const { rpc } = await import('@stellar/stellar-sdk');
-      const sorobanServer = new rpc.Server(process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org');
-      const simResult = await sorobanServer.simulateTransaction(tx);
-      if ('error' in simResult || simResult.error) {
-        console.log('[Investment] PRE-SUBMIT SIMULATION FAILED:');
-        console.log('[Investment] Sim error:', JSON.stringify(simResult.error));
-        if (simResult.events) {
-          console.log('[Investment] Sim diagnostic events:', JSON.stringify(simResult.events, null, 2));
-        }
-        if (simResult.results) {
-          console.log('[Investment] Sim results:', JSON.stringify(simResult.results));
-        }
-      } else {
-        console.log('[Investment] Pre-submit simulation OK, minResourceFee:', simResult.minResourceFee);
-      }
-    } catch (simErr) {
-      console.log('[Investment] Pre-submit sim error:', simErr.message);
-    }
-    // === END DIAGNOSTIC ===
 
     console.log(`[Investment] Submitting passkey-signed TX for investment #${investmentId}...`);
 

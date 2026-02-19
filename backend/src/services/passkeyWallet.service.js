@@ -417,43 +417,7 @@ export class PasskeyWalletService {
     }
   }
 
-  /**
-   * Internal method to sign a transaction with a test secret key (Development Only)
-   * This allows classic Stellar accounts to function without PasskeyKit on the client
-   * 
-   * @param {string} xdr - The transaction XDR to sign
-   * @param {string} publicKey - The public key of the test account
-   * @returns {Promise<string>} Signed transaction XDR
-   */
-  static async signWithTestKey(xdr, publicKey) {
-    // SECURITY GUARD: Only allow signature if in development mode and it's a known test account
-    if (process.env.NODE_ENV !== 'development' && process.env.ENABLE_DEV_LOGIN !== 'true') {
-      throw new Error('Test signing is only available in development mode');
-    }
 
-    const { TransactionBuilder, Keypair } = await import('@stellar/stellar-sdk');
-    const { getNetworkPassphrase } = await import('../config/stellar.js');
-
-    // Identify which test account it is
-    let secretKey = null;
-    if (publicKey === process.env.TEST_INVESTOR_PUBLIC_KEY) {
-      secretKey = process.env.TEST_INVESTOR_SECRET_KEY;
-    } else if (publicKey === process.env.TEST_COMPANY_PUBLIC_KEY || publicKey === process.env.TEST_COMPANY_USER_PUBLIC_KEY) {
-      secretKey = process.env.TEST_COMPANY_SECRET_KEY;
-    }
-
-    if (!secretKey) {
-      throw new Error('Public key does not match any pre-seeded test accounts or missing secret key in .env');
-    }
-
-    const keypair = Keypair.fromSecret(secretKey);
-    const tx = TransactionBuilder.fromXDR(xdr, getNetworkPassphrase());
-
-    // Sign the transaction
-    tx.sign(keypair);
-
-    return tx.toXDR();
-  }
 
   /**
    * Send a signed transaction via Launchtube

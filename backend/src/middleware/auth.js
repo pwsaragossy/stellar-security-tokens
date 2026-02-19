@@ -45,8 +45,12 @@ export const authenticateToken = async (req, res, next) => {
       });
     }
   } catch (err) {
-    // If blocklist check fails, continue with validation (fail open)
-    console.warn('[Auth] Blocklist check failed:', err.message);
+    // Fail closed: if blocklist check fails, deny access
+    console.error('[Auth] Blocklist check failed — failing closed:', err.message);
+    return res.status(503).json({
+      success: false,
+      error: 'Authentication service temporarily unavailable. Please try again.',
+    });
   }
 
   // Wrap jwt.verify in a Promise to make it properly awaitable
@@ -91,16 +95,20 @@ export const generateToken = (payload, expiresIn = '24h') => {
  * @param {Function} next - Função next do Express
  * @returns {void} Sempre chama next()
  */
-export const optionalAuth = (req, res, next) => {
+export const optionalAuth = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
   if (token) {
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-      if (!err) {
+    try {
+      const isBlocklisted = await isTokenBlocklisted(token);
+      if (!isBlocklisted) {
+        const user = jwt.verify(token, JWT_SECRET);
         req.user = user;
       }
-    });
+    } catch {
+      // Silently skip — optional auth should not block the request
+    }
   }
 
   next();
@@ -177,7 +185,7 @@ export const authenticatePlatformAdmin = (req, res, next) => {
   authenticateToken(req, res, () => {
     const isAdmin = req.user.userType === 'platform_admin' ||
       req.user.role === 'platform_admin' ||
-      ['admin', 'manager', 'super_admin'].includes(req.user.role);
+      req.user.role === 'super_admin';
 
     if (isAdmin) {
       return next();

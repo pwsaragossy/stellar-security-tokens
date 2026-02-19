@@ -170,58 +170,18 @@ export class PasskeyClient {
      * @param walletContractId - Optional smart wallet contract ID (required for smart wallet signing)
      */
     async signTransaction(xdr: string, walletContractId?: string): Promise<string> {
-        // 1. Check if we are in development and using a test account
-        const isDev = import.meta.env.DEV || import.meta.env.VITE_ENABLE_TEST_LOGIN === 'true';
-
-        // Check both investor and company user storage
-        const user = authStorage.getUser<any>('investor') || authStorage.getUser<any>('company');
-        const token = authStorage.getToken('investor') || authStorage.getToken('company');
-
-        const isTestAccount = user?.stellarPublicKey?.startsWith('G');
-
-        if (isDev && isTestAccount && token) {
-            console.log('[Passkey] Test account detected, signing via backend...');
-            try {
-                const token = localStorage.getItem('token');
-                const response = await fetch(`${this.baseUrl}/wallets/test-sign`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        xdr,
-                        publicKey: user.stellarPublicKey
-                    }),
-                });
-
-                const data = await response.json();
-                if (!response.ok || !data.success) {
-                    throw new Error(data.error || 'Backend test-signing failed');
-                }
-
-                return data.signedXdr;
-            } catch (error) {
-                console.error('[Passkey] Backend signing error:', error);
-                throw error;
-            }
-        }
-
-        // 2. Normal Passkey signing — requires wallet to be connected
         await this.init();
         if (!this.kit) throw new Error('PasskeyKit not initialized');
 
-        // Connect wallet if not already connected — set it directly to avoid
-        // triggering a WebAuthn discovery prompt (connectWallet calls startAuthentication)
+        // Connect wallet if not already connected
         if (!this.kit.wallet) {
+            const user = authStorage.getUser<any>('investor') || authStorage.getUser<any>('company');
             const contractId = walletContractId || user?.stellarContractId;
             if (!contractId) {
                 throw new Error('Smart wallet contract ID not found. Cannot sign transaction.');
             }
             console.log('[Passkey] Setting wallet for signing:', contractId);
 
-            // Dynamically import the Client from passkey-kit-sdk to avoid
-            // adding a top-level import for a peer dependency
             const { Client } = await import('passkey-kit-sdk');
             this.kit.wallet = new Client({
                 contractId,
@@ -231,42 +191,8 @@ export class PasskeyClient {
         }
 
         try {
-            // === DIAGNOSTIC: Trace the signing process ===
-            const { TransactionBuilder } = await import('@stellar/stellar-sdk');
-            const inputTx = TransactionBuilder.fromXDR(xdr, this.kit.networkPassphrase) as any;
-            console.log('[Passkey] INPUT TX source:', inputTx.source);
-            console.log('[Passkey] INPUT TX fee:', inputTx.fee);
-            console.log('[Passkey] INPUT TX ops:', inputTx.operations?.length);
-            const inputOp = inputTx.operations?.[0] as any;
-            if (inputOp?.auth) {
-                console.log('[Passkey] INPUT auth entries:', inputOp.auth.length);
-                inputOp.auth.forEach((a: any, i: number) => {
-                    console.log(`[Passkey] INPUT auth[${i}] address:`, a.credentials?.address?.address?.toString());
-                    console.log(`[Passkey] INPUT auth[${i}] nonce:`, a.credentials?.address?.nonce?.toString());
-                });
-            }
-
             const signedTx = await this.kit.sign(xdr);
-
-            // Log output TX details
-            const outputXdr = signedTx.toXDR();
-            const outputTx = TransactionBuilder.fromXDR(outputXdr as string, this.kit.networkPassphrase) as any;
-            console.log('[Passkey] OUTPUT TX source:', outputTx.source);
-            console.log('[Passkey] OUTPUT TX fee:', outputTx.fee);
-            console.log('[Passkey] OUTPUT TX hash:', outputTx.hash().toString('hex'));
-            const outputOp = outputTx.operations?.[0] as any;
-            if (outputOp?.auth) {
-                console.log('[Passkey] OUTPUT auth entries:', outputOp.auth.length);
-                outputOp.auth.forEach((a: any, i: number) => {
-                    console.log(`[Passkey] OUTPUT auth[${i}] address:`, a.credentials?.address?.address?.toString());
-                    console.log(`[Passkey] OUTPUT auth[${i}] nonce:`, a.credentials?.address?.nonce?.toString());
-                    console.log(`[Passkey] OUTPUT auth[${i}] sig type:`, a.credentials?.address?.signature?.switch?.()?.name);
-                });
-            }
-            console.log('[Passkey] TX source changed?', inputTx.source !== outputTx.source);
-            // === END DIAGNOSTIC ===
-
-            return outputXdr as string;
+            return signedTx.toXDR() as string;
         } catch (error: any) {
             console.error('Signing error:', error);
             throw error;

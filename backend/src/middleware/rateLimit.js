@@ -70,7 +70,7 @@ function createLimiter(options) {
         standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
         legacyHeaders: true, // Also return `X-RateLimit-*` headers for compatibility
         // Skip rate limiting in test environment
-        skip: (req, res) => process.env.NODE_ENV === 'test' || process.env.SKIP_RATE_LIMIT === 'true',
+        skip: (req, res) => process.env.NODE_ENV === 'test',
         handler: (req, res, next, options) => {
             res.status(429).json(options.message);
         },
@@ -112,7 +112,7 @@ export const globalLimiter = createLimiter({
  */
 export const authLimiter = createLimiter({
     windowMs: 60 * 1000, // 1 minute
-    max: 30, // Increased from 5 to avoid blocking legitimate users during testing
+    max: 10, // Strict limit for auth endpoints to prevent brute-force
     message: 'Too many authentication attempts, please try again after a minute.',
     keyPrefix: 'rl:auth',
 });

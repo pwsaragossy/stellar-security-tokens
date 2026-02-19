@@ -147,7 +147,7 @@ describe('Auth Middleware', () => {
     assert.strictEqual(res.statusCode, 403);
   });
 
-  test('optionalAuth() - adiciona user quando token válido fornecido', () => {
+  test('optionalAuth() - adiciona user quando token válido fornecido', async () => {
     const payload = { id: 1, email: 'test@example.com', role: 'investor' };
     const token = generateToken(payload);
 
@@ -159,13 +159,13 @@ describe('Auth Middleware', () => {
     const res = createMockResponse();
     const next = createMockNext();
 
-    optionalAuth(req, res, next);
+    await optionalAuth(req, res, next);
 
     assert.strictEqual(next.called, true);
     assert.strictEqual(req.user.id, payload.id);
   });
 
-  test('optionalAuth() - não adiciona user quando token inválido', () => {
+  test('optionalAuth() - não adiciona user quando token inválido', async () => {
     const req = createMockRequest({
       headers: {
         authorization: 'Bearer invalid_token',
@@ -174,21 +174,21 @@ describe('Auth Middleware', () => {
     const res = createMockResponse();
     const next = createMockNext();
 
-    optionalAuth(req, res, next);
+    await optionalAuth(req, res, next);
 
     assert.strictEqual(next.called, true);
     // optionalAuth não lança erro, apenas não adiciona user se token inválido
     // req.user pode ser undefined ou não estar definido
   });
 
-  test('optionalAuth() - sempre chama next mesmo sem token', () => {
+  test('optionalAuth() - sempre chama next mesmo sem token', async () => {
     const req = createMockRequest({
       headers: {},
     });
     const res = createMockResponse();
     const next = createMockNext();
 
-    optionalAuth(req, res, next);
+    await optionalAuth(req, res, next);
 
     assert.strictEqual(next.called, true);
     // Sem token, req.user não deve estar definido

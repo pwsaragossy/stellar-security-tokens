@@ -47,44 +47,6 @@ export function Login() {
 
 
 
-    const handleTestLogin = async (type: 'investor' | 'company') => {
-        setIsLoading(true);
-        setError('');
-
-        try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/test-login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userType: type }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok || !result.success) {
-                throw new Error(result.error || 'Test login failed');
-            }
-
-            const actualUserType = result.data.userType === 'company' ? 'company' : 'investor';
-            const user = result.data.user;
-
-            authStorage.setToken(result.data.token, actualUserType);
-            authStorage.setUser(user, actualUserType);
-
-            console.log('Test login successful:', user.email);
-
-            if (result.data.userType === 'company') {
-                navigate('/company/dashboard');
-            } else {
-                navigate('/dashboard');
-            }
-        } catch (err: any) {
-            console.error(err);
-            setError(err.message || 'Failed to authenticate');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
             <div className="w-full max-w-md space-y-8 relative">
@@ -120,35 +82,6 @@ export function Login() {
                         {error && (
                             <div className="text-sm text-red-400 bg-red-900/20 p-3 rounded-lg">
                                 {error}
-                            </div>
-                        )}
-
-                        {/* Test Login Environment (Dev Only) */}
-                        {(import.meta.env.DEV || import.meta.env.VITE_ENABLE_TEST_LOGIN === 'true') && (
-                            <div className="space-y-3 pt-4 border-t border-white/5">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">
-                                    Development Test Login
-                                </p>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleTestLogin('investor')}
-                                        className="bg-blue-600/10 border-blue-500/20 text-blue-400 hover:bg-blue-600/20"
-                                        disabled={isLoading}
-                                    >
-                                        Test Investor
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleTestLogin('company')}
-                                        className="bg-teal-600/10 border-teal-500/20 text-teal-400 hover:bg-teal-600/20"
-                                        disabled={isLoading}
-                                    >
-                                        Test Company
-                                    </Button>
-                                </div>
                             </div>
                         )}
 
