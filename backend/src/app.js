@@ -90,6 +90,10 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '100kb' })); // Limit body size to prevent large payload attacks
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
+// Strip error.message / details from 5xx responses in production (H-1)
+import { responseSanitizer } from './middleware/responseSanitizer.js';
+app.use(responseSanitizer);
+
 // Apply global rate limiting to all routes (100 req/min per IP)
 app.use(globalLimiter);
 
