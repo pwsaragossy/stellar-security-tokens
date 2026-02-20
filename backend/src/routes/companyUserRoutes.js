@@ -6,128 +6,21 @@ import { CompanyUserController } from '../controllers/companyUserController.js';
 
 const router = express.Router();
 
-const registerValidation = [
-  body('company_id').isInt({ min: 1 }).withMessage('Valid company ID is required'),
-  body('email').isEmail().withMessage('Valid email is required'),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('name').trim().notEmpty().withMessage('Name is required'),
-  body('role').optional().isIn(['user', 'admin']).withMessage('Invalid role'),
-  validate,
-];
+// ============================================================================
+// AUTHENTICATED COMPANY USER ROUTES
+// ============================================================================
 
-const loginValidation = [
-  body('email').isEmail().withMessage('Valid email is required'),
-  body('password').notEmpty().withMessage('Password is required'),
-  validate,
-];
-
-/**
- * @swagger
- * /api/company-users/register:
- *   post:
- *     summary: Registrar usuário de empresa (tradicional)
- *     tags: [Company Users]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - company_id
- *               - email
- *               - password
- *               - name
- *             properties:
- *               company_id:
- *                 type: integer
- *               email:
- *                 type: string
- *                 format: email
- *               password:
- *                 type: string
- *                 minLength: 6
- *               name:
- *                 type: string
- *               role:
- *                 type: string
- *                 enum: [user, admin]
- *     responses:
- *       201:
- *         description: Usuário criado
- *       400:
- *         description: Dados inválidos
- */
-// Rotas públicas (com password)
-router.post('/register', registerValidation, CompanyUserController.registerCompanyUser);
-
-/**
- * @swagger
- * /api/company-users/login:
- *   post:
- *     summary: Login de usuário de empresa
- *     tags: [Company Users]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               password:
- *                 type: string
- *     responses:
- *       200:
- *         description: Login realizado, retorna JWT
- *       401:
- *         description: Credenciais inválidas
- */
-router.post('/login', loginValidation, CompanyUserController.loginCompanyUser);
-
-/**
- * @swagger
- * /api/company-users:
- *   get:
- *     summary: Listar usuários da empresa
- *     tags: [Company Users]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Lista de usuários
- */
-// Rotas para company_users autenticados
+// List company users
 router.get('/', requireCompanyUser, CompanyUserController.getCompanyUsers);
 
-/**
- * @swagger
- * /api/company-users/{id}:
- *   put:
- *     summary: Atualizar usuário de empresa
- *     tags: [Company Users]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Usuário atualizado
- */
+// Update company user
 router.put('/:id', requireCompanyUser, CompanyUserController.updateCompanyUser);
 
 // ============================================================================
 // PASSKEY WALLET REGISTRATION ROUTES
 // ============================================================================
+
+
 
 /**
  * @swagger

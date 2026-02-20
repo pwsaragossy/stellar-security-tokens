@@ -3,7 +3,7 @@ import { Investor } from '../models/Investor.js';
 import { Company } from '../models/Company.js';
 import { CompanyUser } from '../models/CompanyUser.js';
 import { PlatformAdmin } from '../models/PlatformAdmin.js';
-import { generateToken } from '../middleware/auth.js';
+import { generateToken, generateRefreshToken, setRefreshCookie } from '../middleware/auth.js';
 
 // Armazenar challenges temporariamente (em produção, usar Redis)
 const challenges = new Map();
@@ -355,6 +355,11 @@ export class WebAuthnController {
         email: user.email,
         role: userType === 'investor' ? 'investor' : userType === 'company_user' ? 'company' : 'platform_admin',
       });
+
+      // Generate refresh token and set httpOnly cookie
+      const cookieUserType = userType === 'company_user' ? 'company' : userType;
+      const refreshToken = await generateRefreshToken(cookieUserType, user.id);
+      setRefreshCookie(res, refreshToken, cookieUserType);
 
       // Preparar resposta baseada no tipo de usuário
       let userData;
