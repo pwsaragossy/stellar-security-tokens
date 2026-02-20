@@ -5,6 +5,7 @@ import { DepositRelayService } from '../services/depositRelay.service.js';
 import { PasskeyWalletService, UserType } from '../services/passkeyWallet.service.js';
 import { EmailService } from '../services/email.service.js';
 import { generateToken } from '../middleware/auth.js';
+import { generateRefreshToken, setRefreshCookie } from '../middleware/auth.js';
 import prisma from '../config/prisma.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
@@ -617,6 +618,10 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
       userType: 'investor',
       role: 'investor',
     });
+
+    // Generate refresh token and set httpOnly cookie
+    const refreshToken = await generateRefreshToken('investor', investor.id);
+    setRefreshCookie(res, refreshToken, 'investor');
 
     res.status(201).json({
       success: true,

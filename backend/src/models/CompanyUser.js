@@ -30,7 +30,7 @@ export class CompanyUser {
     if (!stellarPublicKey) {
       throw new Error('stellarPublicKey é obrigatório para criar um usuário da empresa');
     }
-    
+
     // Validar formato da chave Stellar (56 caracteres, começando com G)
     if (!/^G[A-Z0-9]{55}$/.test(stellarPublicKey)) {
       throw new Error('stellarPublicKey deve ter 56 caracteres e começar com G');
@@ -115,53 +115,7 @@ export class CompanyUser {
     });
   }
 
-  /**
-   * Autentica usuário com email e senha
-   * @param {string} email - Email do usuário
-   * @param {string} password - Senha do usuário
-   * @returns {Promise<Object|null>} Usuário autenticado (sem password_hash) ou null
-   */
-  static async authenticate(email, password) {
-    const user = await this.findByEmail(email);
-    if (!user || !user.passwordHash) {
-      return null;
-    }
 
-    const isValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isValid) {
-      return null;
-    }
-
-    if (!user.isActive) {
-      return null;
-    }
-
-    // Retornar sem password_hash
-    const { passwordHash, ...userWithoutPassword } = user;
-    return userWithoutPassword;
-  }
-
-  /**
-   * Atualiza senha do usuário
-   * @param {number} id - ID do usuário
-   * @param {string} newPassword - Nova senha
-   * @returns {Promise<boolean>} True se atualizado com sucesso
-   */
-  static async updatePassword(id, newPassword) {
-    const passwordHash = await bcrypt.hash(newPassword, 10);
-    try {
-      await prisma.companyUser.update({
-        where: { id },
-        data: { passwordHash },
-      });
-      return true;
-    } catch (error) {
-      if (error.code === 'P2025') {
-        return false;
-      }
-      throw error;
-    }
-  }
 
   /**
    * Atualiza dados do usuário

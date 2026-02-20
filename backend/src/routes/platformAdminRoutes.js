@@ -255,6 +255,11 @@ router.post('/passkey/login/verify', async (req, res) => {
     if (result.verified) {
       // Login successful -> Generate JWT
       const token = generateToken(admin);
+
+      // Generate refresh token and set httpOnly cookie
+      const refreshToken = await generateRefreshToken('platform_admin', admin.id);
+      setRefreshCookie(res, refreshToken, 'platform_admin');
+
       res.json({ success: true, token, user: { id: admin.id, name: admin.name, email: admin.email, role: admin.role } });
     } else {
       res.status(400).json({ success: false, error: 'Authentication failed' });
@@ -397,6 +402,10 @@ router.post('/passkey-login', async (req, res) => {
       userType: 'platform_admin',
       role: admin.role
     });
+
+    // Generate refresh token and set httpOnly cookie
+    const rtk = await generateRefreshToken('platform_admin', admin.id);
+    setRefreshCookie(res, rtk, 'platform_admin');
 
     res.json({
       success: true,
