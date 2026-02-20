@@ -26,6 +26,24 @@ const issueTokenValidation = [
   validate,
 ];
 
+const stellarKeyAndAssetValidation = [
+  body('investorPublicKey').isString().isLength({ min: 56, max: 56 }).matches(/^G[A-Z0-9]{55}$/).withMessage('Valid Stellar public key required (56 chars, starts with G)'),
+  body('assetCode').trim().isLength({ min: 1, max: 12 }).matches(/^[A-Z0-9]+$/).withMessage('Asset code must be 1-12 uppercase alphanumeric characters'),
+  validate,
+];
+
+const clawbackValidation = [
+  body('investorPublicKey').isString().isLength({ min: 56, max: 56 }).matches(/^G[A-Z0-9]{55}$/).withMessage('Valid Stellar public key required'),
+  body('assetCode').trim().isLength({ min: 1, max: 12 }).matches(/^[A-Z0-9]+$/).withMessage('Asset code must be 1-12 uppercase alphanumeric characters'),
+  body('amount').isFloat({ min: 0.0000001 }).withMessage('Amount must be a positive number'),
+  validate,
+];
+
+const deploySACValidation = [
+  body('assetCode').trim().isLength({ min: 1, max: 12 }).matches(/^[A-Z0-9]+$/).withMessage('Asset code must be 1-12 uppercase alphanumeric characters'),
+  validate,
+];
+
 
 
 /**
@@ -165,7 +183,7 @@ router.post('/sync', requirePlatformAdmin, syncTokens);
  *               assetCode:
  *                 type: string
  */
-router.post('/freeze', requirePlatformAdmin, freezeAccount);
+router.post('/freeze', requirePlatformAdmin, stellarKeyAndAssetValidation, freezeAccount);
 
 /**
  * @swagger
@@ -176,9 +194,9 @@ router.post('/freeze', requirePlatformAdmin, freezeAccount);
  *     security:
  *       - bearerAuth: []
  */
-router.post('/unfreeze', requirePlatformAdmin, unfreezeAccount);
+router.post('/unfreeze', requirePlatformAdmin, stellarKeyAndAssetValidation, unfreezeAccount);
 
-router.post('/clawback', requirePlatformAdmin, clawbackTokens);
+router.post('/clawback', requirePlatformAdmin, clawbackValidation, clawbackTokens);
 
 /**
  * @swagger
@@ -189,7 +207,7 @@ router.post('/clawback', requirePlatformAdmin, clawbackTokens);
  *     security:
  *       - bearerAuth: []
  */
-router.post('/disable-clawback', requirePlatformAdmin, disableClawback);
+router.post('/disable-clawback', requirePlatformAdmin, stellarKeyAndAssetValidation, disableClawback);
 
 /**
  * @swagger
@@ -224,7 +242,7 @@ router.get('/:assetCode/holders', requirePlatformAdmin, listAssetHolders);
  *                 type: string
  *                 example: QWE
  */
-router.post('/deploy-sac', requirePlatformAdmin, deploySAC);
+router.post('/deploy-sac', requirePlatformAdmin, deploySACValidation, deploySAC);
 
 export default router;
 
