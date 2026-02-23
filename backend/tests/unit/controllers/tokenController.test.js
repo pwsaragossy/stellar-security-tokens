@@ -4,13 +4,18 @@ import assert from 'node:assert';
 describe('TokenController - Structure Tests', () => {
   test('TokenController exports all required functions', async () => {
     const controllers = await import('../../../src/controllers/tokenController.js');
-    
+
     const requiredFunctions = [
       'issueToken',
       'getTokens',
       'getTokenByAssetCode',
-      'distributeTokens',
-      'getTokenBalance',
+      'freezeAccount',
+      'unfreezeAccount',
+      'clawbackTokens',
+      'disableClawback',
+      'deploySAC',
+      'syncTokens',
+      'listAssetHolders',
     ];
 
     for (const funcName of requiredFunctions) {

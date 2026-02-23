@@ -6,6 +6,8 @@
  * - SMS para emergências
  * - Integração com sistemas de monitoramento (Datadog, Sentry, etc)
  */
+import logger from '../utils/logger.js';
+const log = logger.scope('AlertService');
 
 const ALERT_LEVELS = {
   INFO: 'INFO',
@@ -27,7 +29,7 @@ export class AlertService {
   static async notify(level, message, metadata = {}) {
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] [${level}] ${message}`;
-    
+
     // Log baseado no nível
     switch (level) {
       case ALERT_LEVELS.CRITICAL:
