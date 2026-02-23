@@ -7,6 +7,8 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { PasskeyWalletService, UserType } from '../services/passkeyWallet.service.js';
 import { WebAuthnService } from '../services/webauthn.service.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('SecurityRoutes');
 
 const router = Router();
 
@@ -36,7 +38,7 @@ router.get('/passkeys', authenticateToken, async (req, res) => {
             data: passkeys,
         });
     } catch (error) {
-        console.error('Error listing passkeys:', error);
+        log.error('Error listing passkeys:', error);
         res.status(500).json({
             success: false,
             error: error.message,
@@ -86,7 +88,7 @@ router.post('/passkeys/verify/challenge', authenticateToken, async (req, res) =>
             data: { options },
         });
     } catch (error) {
-        console.error('Error generating verify challenge:', error);
+        log.error('Error generating verify challenge:', error);
         res.status(500).json({
             success: false,
             error: error.message,
@@ -131,7 +133,7 @@ router.post('/passkeys/add/options', authenticateToken, async (req, res) => {
         );
 
         // Debug: log the options structure
-        console.log('[Security] Registration options generated:', JSON.stringify({
+        log.info('[Security] Registration options generated:', JSON.stringify({
             hasChallenge: !!options.challenge,
             hasUser: !!options.user,
             userId: options.user?.id,
@@ -147,7 +149,7 @@ router.post('/passkeys/add/options', authenticateToken, async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('Error generating add passkey options:', error);
+        log.error('Error generating add passkey options:', error);
         res.status(500).json({
             success: false,
             error: error.message,
@@ -234,16 +236,16 @@ router.post('/passkeys/add', authenticateToken, async (req, res) => {
 
                 // Note: Full WebAuthn assertion verification would check signature here
                 // For now, we verify the credential ID matches and trust the browser's verification
-                console.log(`[Security] Passkey verification passed for user ${userId} with credential ${matchingPasskey.id}`);
+                log.info(`[Security] Passkey verification passed for user ${userId} with credential ${matchingPasskey.id}`);
             } catch (verifyError) {
-                console.error('Passkey verification failed:', verifyError);
+                log.error('Passkey verification failed:', verifyError);
                 return res.status(401).json({
                     success: false,
                     error: 'Passkey verification failed.',
                 });
             }
         } else {
-            console.log(`[Security] First passkey registration for user ${userId} - no verification needed`);
+            log.info(`[Security] First passkey registration for user ${userId} - no verification needed`);
         }
 
         const result = await PasskeyWalletService.addPasskeySigner(
@@ -260,7 +262,7 @@ router.post('/passkeys/add', authenticateToken, async (req, res) => {
             message: 'Passkey added successfully. You can now sign in with this device.',
         });
     } catch (error) {
-        console.error('Error adding passkey:', error);
+        log.error('Error adding passkey:', error);
         res.status(400).json({
             success: false,
             error: error.message,
@@ -314,7 +316,7 @@ router.delete('/passkeys/:passkeyId', authenticateToken, async (req, res) => {
             message: 'Passkey removed successfully.',
         });
     } catch (error) {
-        console.error('Error removing passkey:', error);
+        log.error('Error removing passkey:', error);
         res.status(400).json({
             success: false,
             error: error.message,
@@ -345,7 +347,7 @@ router.get('/passkey-config', async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('Error getting passkey config:', error);
+        log.error('Error getting passkey config:', error);
         res.status(500).json({
             success: false,
             error: error.message,
@@ -381,7 +383,7 @@ router.get('/recovery-signers', authenticateToken, async (req, res) => {
             data: signers,
         });
     } catch (error) {
-        console.error('Error listing recovery signers:', error);
+        log.error('Error listing recovery signers:', error);
         res.status(500).json({
             success: false,
             error: error.message,
@@ -452,7 +454,7 @@ router.post('/recovery-signers/add', authenticateToken, async (req, res) => {
             message: 'Recovery signer added. Your Ledger can now be used to recover your wallet.',
         });
     } catch (error) {
-        console.error('Error adding recovery signer:', error);
+        log.error('Error adding recovery signer:', error);
         res.status(400).json({
             success: false,
             error: error.message,
@@ -504,7 +506,7 @@ router.delete('/recovery-signers/:signerId', authenticateToken, async (req, res)
             message: 'Recovery signer removed.',
         });
     } catch (error) {
-        console.error('Error removing recovery signer:', error);
+        log.error('Error removing recovery signer:', error);
         res.status(400).json({
             success: false,
             error: error.message,

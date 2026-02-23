@@ -4,6 +4,8 @@ import { PasskeyWalletService, UserType } from '../services/passkeyWallet.servic
 import { EmailService } from '../services/email.service.js';
 import { generateToken, generateRefreshToken, setRefreshCookie } from '../middleware/auth.js';
 import prisma from '../config/prisma.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('CompanyUserController');
 
 /**
  * Controller para gerenciar usuários de empresas
@@ -31,7 +33,7 @@ export class CompanyUserController {
         data: users,
       });
     } catch (error) {
-      console.error('Error fetching company users:', error);
+      log.error('Error fetching company users:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch company users',
@@ -78,7 +80,7 @@ export class CompanyUserController {
         data: updatedUser,
       });
     } catch (error) {
-      console.error('Error updating company user:', error);
+      log.error('Error updating company user:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to update company user',
@@ -148,7 +150,7 @@ export class CompanyUserController {
       // Single-step flow (frontend already created passkey and deployed wallet)
       if (credentialId && contractId) {
         // Wallet is already deployed by frontend via passkey-kit
-        console.log(`[CompanyRegistration] Creating company user for ${email} with wallet ${contractId}`);
+        log.info(`[CompanyRegistration] Creating company user for ${email} with wallet ${contractId}`);
 
         // Generate verification token for email
         const verificationToken = EmailService.generateVerificationToken();
@@ -173,7 +175,7 @@ export class CompanyUserController {
         // Send verification email (async, don't block)
         EmailService.sendVerificationEmail(email, name, verificationToken)
           .catch(error => {
-            console.error('Failed to send verification email:', error);
+            log.error('Failed to send verification email:', error);
           });
 
         // Generate JWT token for immediate login
@@ -250,7 +252,7 @@ export class CompanyUserController {
         },
       });
     } catch (error) {
-      console.error('Error registering company user with passkey:', error);
+      log.error('Error registering company user with passkey:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to register company user',
@@ -326,7 +328,7 @@ export class CompanyUserController {
         },
       });
     } catch (error) {
-      console.error('Error verifying company user email:', error);
+      log.error('Error verifying company user email:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to verify email',
@@ -389,7 +391,7 @@ export class CompanyUserController {
         message: 'Verification email sent successfully',
       });
     } catch (error) {
-      console.error('Error resending verification email:', error);
+      log.error('Error resending verification email:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to resend verification email',
@@ -450,7 +452,7 @@ export class CompanyUserController {
         },
       });
     } catch (error) {
-      console.error('Error creating company user smart wallet:', error);
+      log.error('Error creating company user smart wallet:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to create smart wallet',
@@ -477,7 +479,7 @@ export class CompanyUserController {
         data: status,
       });
     } catch (error) {
-      console.error('Error getting company user wallet status:', error);
+      log.error('Error getting company user wallet status:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to get wallet status',
@@ -499,7 +501,7 @@ export class CompanyUserController {
         data: config,
       });
     } catch (error) {
-      console.error('Error getting passkey config:', error);
+      log.error('Error getting passkey config:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to get passkey configuration',
@@ -538,7 +540,7 @@ export class CompanyUserController {
         data: result,
       });
     } catch (error) {
-      console.error('Error proposing company user withdrawal:', error);
+      log.error('Error proposing company user withdrawal:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to propose withdrawal',
@@ -562,7 +564,7 @@ export class CompanyUserController {
         data: result,
       });
     } catch (error) {
-      console.error('Error submitting company user withdrawal:', error);
+      log.error('Error submitting company user withdrawal:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to submit withdrawal',

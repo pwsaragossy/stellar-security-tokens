@@ -6,6 +6,8 @@ import express from 'express';
 import prisma from '../config/prisma.js';
 import { authenticateToken, requireCompanyUser } from '../middleware/auth.js';
 import { CompanyPaymentService } from '../services/companyPayment.service.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('CompanyPayRoutes');
 
 const router = express.Router();
 
@@ -23,7 +25,7 @@ router.get('/', authenticateToken, requireCompanyUser, async (req, res) => {
             data: payments
         });
     } catch (error) {
-        console.error('[CompanyPayments] Error getting payments:', error);
+        log.error('[CompanyPayments] Error getting payments:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -64,7 +66,7 @@ router.get('/:offerId', authenticateToken, requireCompanyUser, async (req, res) 
             data: paymentDetails
         });
     } catch (error) {
-        console.error('[CompanyPayments] Error getting payment details:', error);
+        log.error('[CompanyPayments] Error getting payment details:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -105,7 +107,7 @@ router.post('/:offerId/prepare', authenticateToken, requireCompanyUser, async (r
             message: 'Transaction prepared. Sign with your passkey to complete payment.'
         });
     } catch (error) {
-        console.error('[CompanyPayments] Error preparing payment:', error);
+        log.error('[CompanyPayments] Error preparing payment:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -153,7 +155,7 @@ router.post('/:offerId/submit', authenticateToken, requireCompanyUser, async (re
             message: 'Payment submitted successfully'
         });
     } catch (error) {
-        console.error('[CompanyPayments] Error submitting payment:', error);
+        log.error('[CompanyPayments] Error submitting payment:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -197,7 +199,7 @@ router.get('/:offerId/history', authenticateToken, requireCompanyUser, async (re
             data: payments
         });
     } catch (error) {
-        console.error('[CompanyPayments] Error getting payment history:', error);
+        log.error('[CompanyPayments] Error getting payment history:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -223,7 +225,7 @@ router.get('/penalties/all', authenticateToken, requireCompanyUser, async (req, 
             data: penalties
         });
     } catch (error) {
-        console.error('[CompanyPayments] Error getting penalties:', error);
+        log.error('[CompanyPayments] Error getting penalties:', error);
         res.status(500).json({
             success: false,
             error: error.message

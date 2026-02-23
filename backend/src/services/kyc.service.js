@@ -1,4 +1,6 @@
 import { Investor } from '../models/Investor.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('KYCService');
 
 /**
  * Serviço para gerenciar verificação KYC (Know Your Customer) de investidores
@@ -36,7 +38,7 @@ export class KYCService {
 
       return verificationResult;
     } catch (error) {
-      console.error('Error verifying investor KYC:', error);
+      log.error('Error verifying investor KYC:', error);
       throw new Error(`KYC verification failed: ${error.message}`);
     }
   }
@@ -66,7 +68,7 @@ export class KYCService {
         investor: updatedInvestor,
       };
     } catch (error) {
-      console.error('Error approving investor:', error);
+      log.error('Error approving investor:', error);
       throw new Error(`Investor approval failed: ${error.message}`);
     }
   }
@@ -99,7 +101,7 @@ export class KYCService {
         reason,
       };
     } catch (error) {
-      console.error('Error rejecting investor:', error);
+      log.error('Error rejecting investor:', error);
       throw new Error(`Investor rejection failed: ${error.message}`);
     }
   }
@@ -127,7 +129,7 @@ export class KYCService {
         updatedAt: investor.updated_at,
       };
     } catch (error) {
-      console.error('Error getting KYC status:', error);
+      log.error('Error getting KYC status:', error);
       throw new Error(`Failed to get KYC status: ${error.message}`);
     }
   }

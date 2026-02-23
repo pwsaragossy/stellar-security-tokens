@@ -6,6 +6,8 @@ import { requirePlatformAdmin } from '../middleware/authorize.js';
 import { validate } from '../middleware/validator.js';
 
 import { strictLimiter } from '../middleware/rateLimit.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('WalletRoutes');
 
 const router = express.Router();
 
@@ -43,16 +45,16 @@ router.post('/submit-tx',
     async (req, res, next) => {
         try {
             const { xdr } = req.body;
-            console.log('[WalletRoutes] Submitting transaction from frontend (XDR length:', xdr.length, ')');
+            log.info('[WalletRoutes] Submitting transaction from frontend (XDR length:', xdr.length, ')');
 
             // Use the service method which has the sponsorship fallback
             const result = await PasskeyWalletService.sendTransaction(xdr);
 
-            console.log('[WalletRoutes] Submission result:', JSON.stringify(result));
+            log.info('[WalletRoutes] Submission result:', JSON.stringify(result));
 
             // Check if submission returned an error or failure
             if (result && (result.status === 'ERROR' || result.status === 'FAILED' || !result.hash)) {
-                console.error('[WalletRoutes] Transaction failed:', result);
+                log.error('[WalletRoutes] Transaction failed:', result);
                 return res.status(400).json({
                     success: false,
                     error: result.error || result.message || 'Transaction failed',
@@ -60,7 +62,7 @@ router.post('/submit-tx',
                 });
             }
 
-            console.log('[WalletRoutes] Transaction successful:', result.hash);
+            log.info('[WalletRoutes] Transaction successful:', result.hash);
 
             res.json({
                 success: true,
@@ -69,7 +71,7 @@ router.post('/submit-tx',
                 sponsored: result.sponsored || false
             });
         } catch (error) {
-            console.error('[WalletRoutes] Transaction submission error:', error);
+            log.error('[WalletRoutes] Transaction submission error:', error);
             res.status(500).json({
                 success: false,
                 error: error.message || 'Failed to submit transaction'

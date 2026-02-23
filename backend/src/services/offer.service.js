@@ -2,6 +2,8 @@ import { Offer } from '../models/Offer.js';
 import { Token } from '../models/Token.js';
 import { Company } from '../models/Company.js';
 import prisma from '../config/prisma.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('OfferService');
 
 /**
  * Serviço para gerenciar ofertas de tokenização
@@ -349,7 +351,7 @@ export class OfferService {
       });
       return config ? parseFloat(config.value) : 500;
     } catch (error) {
-      console.warn('Error fetching issuance fee config, using default 500');
+      log.warn('Error fetching issuance fee config, using default 500');
       return 500;
     }
   }

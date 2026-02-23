@@ -31,6 +31,8 @@ import {
   nativeToScVal,
   Account, // Imported Account class
 } from '@stellar/stellar-sdk';
+import logger from '../utils/logger.js';
+const log = logger.scope('StellarService');
 
 export class StellarService {
 
@@ -48,7 +50,7 @@ export class StellarService {
     } catch (error) {
       // Fallback to Horizon if RPC fails (during migration/testing)
       // or if account not found (404 handling differ between RPC/Horizon)
-      console.warn(`[StellarService] RPC getAccount failed for ${publicKey}, falling back to Horizon: ${error.message}`);
+      log.warn(`[StellarService] RPC getAccount failed for ${publicKey}, falling back to Horizon: ${error.message}`);
       return stellarServer.loadAccount(publicKey);
     }
   }
@@ -85,7 +87,7 @@ export class StellarService {
 
       try {
         const account = await stellarServer.loadAccount(issuerPublicKey);
-        console.log('Issuer account already exists:', issuerPublicKey);
+        log.info('Issuer account already exists:', issuerPublicKey);
 
         // Check if flags are set correctly
         const flags = account.flags;
@@ -97,8 +99,8 @@ export class StellarService {
           (flags.auth_clawback_enabled ? AuthClawbackEnabledFlag : 0);
 
         if ((currentFlagsValue & expectedFlags) !== expectedFlags) {
-          console.log('[StellarService] Issuer flags are missing. Setting them now...');
-          console.log('[StellarService] Current flags:', flags);
+          log.info('[StellarService] Issuer flags are missing. Setting them now...');
+          log.info('[StellarService] Current flags:', flags);
           const operations = [
             Operation.setOptions({
               source: issuerPublicKey,
@@ -117,18 +119,18 @@ export class StellarService {
           });
 
           if (!result.success) {
-            console.error('[StellarService] Failed to set issuer flags:', result);
+            log.error('[StellarService] Failed to set issuer flags:', result);
             throw new Error(`Failed to set issuer account flags: ${result.userFriendlyError || result.error}`);
           }
-          console.log('[StellarService] Issuer flags updated successfully. TxHash:', result.hash);
+          log.info('[StellarService] Issuer flags updated successfully. TxHash:', result.hash);
         } else {
-          console.log('[StellarService] Issuer flags already correct:', flags);
+          log.info('[StellarService] Issuer flags already correct:', flags);
         }
 
         // Check and set home_domain if configured
         const expectedHomeDomain = process.env.STELLAR_HOME_DOMAIN;
         if (expectedHomeDomain && account.home_domain !== expectedHomeDomain) {
-          console.log(`[StellarService] Setting home_domain to ${expectedHomeDomain}...`);
+          log.info(`[StellarService] Setting home_domain to ${expectedHomeDomain}...`);
           const homeDomainOps = [
             Operation.setOptions({
               source: issuerPublicKey,
@@ -146,13 +148,13 @@ export class StellarService {
           });
 
           if (!domainResult.success) {
-            console.error('[StellarService] Failed to set home_domain:', domainResult);
+            log.error('[StellarService] Failed to set home_domain:', domainResult);
             // Non-fatal: log but continue
           } else {
-            console.log('[StellarService] home_domain set successfully. TxHash:', domainResult.hash);
+            log.info('[StellarService] home_domain set successfully. TxHash:', domainResult.hash);
           }
         } else if (expectedHomeDomain) {
-          console.log('[StellarService] home_domain already correct:', account.home_domain);
+          log.info('[StellarService] home_domain already correct:', account.home_domain);
         }
 
         return {
@@ -231,7 +233,7 @@ export class StellarService {
         },
       };
     } catch (error) {
-      console.error('Error creating issuer account:', error);
+      log.error('Error creating issuer account:', error);
       throw new Error(`Issuer account creation failed: ${error.message}`);
     }
   }
@@ -252,7 +254,7 @@ export class StellarService {
 
       try {
         const account = await stellarServer.loadAccount(distributorPublicKey);
-        console.log('Distribution account already exists:', distributorPublicKey);
+        log.info('Distribution account already exists:', distributorPublicKey);
         return {
           success: true,
           publicKey: distributorPublicKey,
@@ -291,7 +293,7 @@ export class StellarService {
         publicKey: distributorPublicKey,
       };
     } catch (error) {
-      console.error('Error creating distribution account:', error);
+      log.error('Error creating distribution account:', error);
       throw new Error(`Distribution account creation failed: ${error.message}`);
     }
   }
@@ -315,14 +317,14 @@ export class StellarService {
    */
   static async unlockToken(assetCode) {
     try {
-      console.log(`[StellarService] Unlocking token ${assetCode} for DEX trading...`);
+      log.info(`[StellarService] Unlocking token ${assetCode} for DEX trading...`);
 
       const issuerPublicKey = keyManager.getIssuerPublicKey();
 
       // Verify the account currently has AUTH_REQUIRED set
       const account = await stellarServer.loadAccount(issuerPublicKey);
       if (!account.flags.auth_required) {
-        console.log(`[StellarService] Token ${assetCode} is already unlocked (AUTH_REQUIRED not set)`);
+        log.info(`[StellarService] Token ${assetCode} is already unlocked (AUTH_REQUIRED not set)`);
         return {
           success: true,
           alreadyUnlocked: true,
@@ -353,7 +355,7 @@ export class StellarService {
 
       // Handle multisig pending case
       if (result.status === 'pending_multisig') {
-        console.log(`[StellarService] Token unlock queued for MultiSig approval. ID: ${result.multiSigTransactionId}`);
+        log.info(`[StellarService] Token unlock queued for MultiSig approval. ID: ${result.multiSigTransactionId}`);
         return {
           success: true,
           pendingMultisig: true,
@@ -363,7 +365,7 @@ export class StellarService {
       }
 
       // Direct execution success
-      console.log(`[StellarService] Token ${assetCode} unlocked successfully. TxHash: ${result.hash}`);
+      log.info(`[StellarService] Token ${assetCode} unlocked successfully. TxHash: ${result.hash}`);
 
       return {
         success: true,
@@ -372,7 +374,7 @@ export class StellarService {
         message: `Token ${assetCode} is now unlocked for DEX trading`,
       };
     } catch (error) {
-      console.error(`[StellarService] Error unlocking token ${assetCode}:`, error);
+      log.error(`[StellarService] Error unlocking token ${assetCode}:`, error);
       throw new Error(`Token unlock failed: ${error.message}`);
     }
   }
@@ -409,7 +411,7 @@ export class StellarService {
           }
           await response.json();
         } catch (error) {
-          console.warn(`[StellarService] Friendbot failed, falling back to sponsorship: ${error.message}`);
+          log.warn(`[StellarService] Friendbot failed, falling back to sponsorship: ${error.message}`);
           // Fallback to sponsorship even on testnet if friendbot fails
           await this.setupSponsoredAccount(keypair.publicKey());
         }
@@ -423,8 +425,8 @@ export class StellarService {
       try {
         await stellarServer.loadAccount(keypair.publicKey());
       } catch (error) {
-        console.error(`[StellarService] Critical: Account ${keypair.publicKey()} was not found on the network after creation/funding attempt.`);
-        console.error(`[StellarService] This may be due to Horizon lag or Friendbot failure. Check: https://stellar.expert/explorer/testnet/account/${keypair.publicKey()}`);
+        log.error(`[StellarService] Critical: Account ${keypair.publicKey()} was not found on the network after creation/funding attempt.`);
+        log.error(`[StellarService] This may be due to Horizon lag or Friendbot failure. Check: https://stellar.expert/explorer/testnet/account/${keypair.publicKey()}`);
         throw new Error(`Account ${keypair.publicKey()} was not created successfully on ${process.env.STELLAR_NETWORK || 'testnet'}.`);
       }
 
@@ -434,7 +436,7 @@ export class StellarService {
         secretKey: keypair.secret(),
       };
     } catch (error) {
-      console.error('Error creating investor account:', error);
+      log.error('Error creating investor account:', error);
       throw new Error(`Investor account creation failed: ${error.message}`);
     }
   }
@@ -479,7 +481,7 @@ export class StellarService {
       );
 
       if (!trustline) {
-        console.log(`[StellarService] Including trustline creation for distributor (${distributorPublicKey}) for asset ${code}`);
+        log.info(`[StellarService] Including trustline creation for distributor (${distributorPublicKey}) for asset ${code}`);
         classicOperations.push(
           Operation.changeTrust({
             asset: asset,
@@ -495,7 +497,7 @@ export class StellarService {
       );
 
       if (needsAuth && (!currentTrust || !currentTrust.is_authorized)) {
-        console.log(`[StellarService] Including trustline authorization for asset ${code}`);
+        log.info(`[StellarService] Including trustline authorization for asset ${code}`);
         classicOperations.push(
           Operation.setTrustLineFlags({
             trustor: distributorPublicKey,
@@ -527,7 +529,7 @@ export class StellarService {
       );
 
       // ─── Submit the single atomic transaction ───
-      console.log(`[StellarService] Submitting atomic issuance for asset ${code} (${classicOperations.length} ops)`);
+      log.info(`[StellarService] Submitting atomic issuance for asset ${code} (${classicOperations.length} ops)`);
       const issuerAccountForTx = await this.getAccountRPC(issuerPublicKey);
       const classicTx = buildTransactionWithAccount(issuerAccountForTx, classicOperations);
 
@@ -549,7 +551,7 @@ export class StellarService {
 
       // If multisig is pending, return early — can't proceed to SAC until issuance is confirmed
       if (classicResult.status === 'pending_multisig') {
-        console.log(`[StellarService] Token issuance queued for MultiSig. ID: ${classicResult.multiSigTransactionId}`);
+        log.info(`[StellarService] Token issuance queued for MultiSig. ID: ${classicResult.multiSigTransactionId}`);
         return {
           success: true,
           status: 'pending_multisig',
@@ -571,7 +573,7 @@ export class StellarService {
       // --- TRANSACTION 2: SOROBAN SAC DEPLOYMENT ---
       // This is a separate transaction to avoid simulation errors with multiple ops
       const sacContractId = this.getSACContractId(asset);
-      console.log(`[StellarService] Deploying SAC for asset ${code} (${sacContractId})`);
+      log.info(`[StellarService] Deploying SAC for asset ${code} (${sacContractId})`);
 
       const sacOp = Operation.createStellarAssetContract({
         asset: asset,
@@ -582,7 +584,7 @@ export class StellarService {
       const issuerAccountSoroban = await this.getAccountRPC(issuerPublicKey);
       let sacTx = buildTransactionWithAccount(issuerAccountSoroban, [sacOp]);
 
-      console.log(`[StellarService] Preparing Soroban SAC deployment for asset ${code}...`);
+      log.info(`[StellarService] Preparing Soroban SAC deployment for asset ${code}...`);
       sacTx = await this.prepareSorobanTransaction(sacTx);
 
       const sacResult = await TransactionManager.submit({
@@ -599,7 +601,7 @@ export class StellarService {
       });
 
       if (!sacResult.success && sacResult.status !== 'pending_multisig') {
-        console.warn(`[StellarService] SAC deployment failed (classic succeeded): ${sacResult.error}`);
+        log.warn(`[StellarService] SAC deployment failed (classic succeeded): ${sacResult.error}`);
       }
 
       const returnData = {
@@ -620,7 +622,7 @@ export class StellarService {
 
       return returnData;
     } catch (error) {
-      console.error('Error issuing security token:', error);
+      log.error('Error issuing security token:', error);
       throw new Error(`Security token issuance failed: ${error.message}`);
     }
   }
@@ -640,7 +642,7 @@ export class StellarService {
       const asset = new Asset(code, assetIssuer);
       const sacContractId = this.getSACContractId(asset);
 
-      console.log(`[StellarService] Deploying SAC for existing asset ${code} (${sacContractId})`);
+      log.info(`[StellarService] Deploying SAC for existing asset ${code} (${sacContractId})`);
 
       const op = Operation.createStellarAssetContract({
         asset: asset,
@@ -675,7 +677,7 @@ export class StellarService {
         userFriendlyError: result.userFriendlyError
       };
     } catch (error) {
-      console.error(`[StellarService] SAC deployment failed for ${code}:`, error);
+      log.error(`[StellarService] SAC deployment failed for ${code}:`, error);
       throw error;
     }
   }
@@ -704,11 +706,11 @@ export class StellarService {
       }));
       const ledgerEntries = await rpcServer.getLedgerEntries(instanceKey);
       if (ledgerEntries.entries && ledgerEntries.entries.length > 0) {
-        console.log(`[StellarService] SAC already deployed for ${assetCode}: ${sacContractId}`);
+        log.info(`[StellarService] SAC already deployed for ${assetCode}: ${sacContractId}`);
         return sacContractId;
       }
     } catch (checkError) {
-      console.warn(`[StellarService] SAC existence check failed for ${assetCode}, attempting deploy: ${checkError.message}`);
+      log.warn(`[StellarService] SAC existence check failed for ${assetCode}, attempting deploy: ${checkError.message}`);
     }
 
     // SAC not found — check if a deploy is already pending in multisig queue
@@ -724,7 +726,7 @@ export class StellarService {
       });
 
       if (pendingSACDeploy) {
-        console.log(`[StellarService] SAC deploy already pending for ${assetCode} (TX #${pendingSACDeploy.id}). Reusing.`);
+        log.info(`[StellarService] SAC deploy already pending for ${assetCode} (TX #${pendingSACDeploy.id}). Reusing.`);
         const err = new Error(`SAC deploy pending multisig for ${assetCode}`);
         err.code = 'SAC_PENDING_MULTISIG';
         err.multiSigTransactionId = pendingSACDeploy.id;
@@ -733,11 +735,11 @@ export class StellarService {
       }
     } catch (dbCheckError) {
       if (dbCheckError.code === 'SAC_PENDING_MULTISIG') throw dbCheckError;
-      console.warn(`[StellarService] DB check for pending SAC deploy failed: ${dbCheckError.message}`);
+      log.warn(`[StellarService] DB check for pending SAC deploy failed: ${dbCheckError.message}`);
     }
 
     // No existing pending deploy — create one through multisig
-    console.log(`[StellarService] SAC not deployed for ${assetCode}. Deploying via multisig...`);
+    log.info(`[StellarService] SAC not deployed for ${assetCode}. Deploying via multisig...`);
     const result = await this.deploySACForAsset(assetCode, issuerPublicKey, chainMetadata);
 
     if (result.status === 'pending_multisig') {
@@ -760,9 +762,9 @@ export class StellarService {
         where: { assetCode },
         data: { sacContractId },
       });
-      console.log(`[StellarService] SAC deployed and DB updated for ${assetCode}: ${sacContractId}`);
+      log.info(`[StellarService] SAC deployed and DB updated for ${assetCode}: ${sacContractId}`);
     } catch (dbError) {
-      console.warn(`[StellarService] SAC deployed but DB update failed for ${assetCode}: ${dbError.message}`);
+      log.warn(`[StellarService] SAC deployed but DB update failed for ${assetCode}: ${dbError.message}`);
     }
 
     return sacContractId;
@@ -798,7 +800,7 @@ export class StellarService {
 
       if (isContract) {
         // --- SOROBAN SAC DISTRIBUTION ---
-        console.log(`[StellarService] Distributing via SAC to contract ${investorPublicKey}`);
+        log.info(`[StellarService] Distributing via SAC to contract ${investorPublicKey}`);
 
         // Chain metadata: if SAC deploy needs multisig, these fields let the post-sign
         // hook auto-queue the distribution after SAC is deployed
@@ -847,7 +849,7 @@ export class StellarService {
         let transaction = buildTransactionWithAccount(distributorAccount, [transferOp]);
 
         // Soroban Simulation & Preparation
-        console.log(`[StellarService] Simulating Soroban SAC transfer...`);
+        log.info(`[StellarService] Simulating Soroban SAC transfer...`);
         transaction = await this.prepareSorobanTransaction(transaction);
 
         result = await TransactionManager.submit({
@@ -876,13 +878,13 @@ export class StellarService {
           await stellarServer.loadAccount(investorPublicKey);
         } catch (error) {
           if (error.status === 404) {
-            console.log(`[StellarService] Investor account ${investorPublicKey} not found. Attempting JIT sponsored trustline...`);
+            log.info(`[StellarService] Investor account ${investorPublicKey} not found. Attempting JIT sponsored trustline...`);
             // Attempt to setup sponsored trustline automatically (JIT)
             const jitResult = await this.setupSponsoredTrustline(investorPublicKey, assetCode);
             if (!jitResult.success) {
               throw new Error(`JIT Sponsorship failed: ${jitResult.error || 'Unknown error'}`);
             }
-            console.log(`[StellarService] JIT Sponsored trustline setup successful for ${investorPublicKey}`);
+            log.info(`[StellarService] JIT Sponsored trustline setup successful for ${investorPublicKey}`);
           } else {
             throw error;
           }
@@ -959,7 +961,7 @@ export class StellarService {
         ledger: result.ledger,
       };
     } catch (error) {
-      console.error('Error distributing tokens:', error);
+      log.error('Error distributing tokens:', error);
       throw error;
     }
   }
@@ -1000,7 +1002,7 @@ export class StellarService {
 
       if (isContract) {
         // --- SOROBAN SAC TRANSFER (for C-addresses) ---
-        console.log(`[StellarService] Treasury withdrawal via SAC to contract ${destination}`);
+        log.info(`[StellarService] Treasury withdrawal via SAC to contract ${destination}`);
 
         if (isNative) {
           // Native XLM cannot be sent via SAC, need to wrap or use different approach
@@ -1023,7 +1025,7 @@ export class StellarService {
         let transaction = buildTransactionWithAccount(treasuryAccount, [transferOp]);
 
         // Soroban Simulation & Preparation
-        console.log(`[StellarService] Simulating Soroban SAC treasury transfer...`);
+        log.info(`[StellarService] Simulating Soroban SAC treasury transfer...`);
         transaction = await this.prepareSorobanTransaction(transaction);
 
         result = await TransactionManager.submit({
@@ -1081,7 +1083,7 @@ export class StellarService {
 
       return result;
     } catch (error) {
-      console.error('Error in treasury withdrawal:', error);
+      log.error('Error in treasury withdrawal:', error);
       throw error;
     }
   }
@@ -1192,7 +1194,7 @@ export class StellarService {
         message: 'Account frozen successfully (trustline authorization revoked)',
       };
     } catch (error) {
-      console.error('Error freezing account:', error);
+      log.error('Error freezing account:', error);
       throw new Error(`Account freeze failed: ${error.message}`);
     }
   }
@@ -1209,7 +1211,7 @@ export class StellarService {
     if (!assetCode) {
       throw new Error('assetCode is required');
     }
-    console.log(`[StellarService] Authorizing investor ${investorPublicKey} for asset ${assetCode}`);
+    log.info(`[StellarService] Authorizing investor ${investorPublicKey} for asset ${assetCode}`);
 
     try {
       const issuerPublicKey = keyManager.getIssuerPublicKey();
@@ -1226,11 +1228,11 @@ export class StellarService {
         );
 
         if (!hasTrustline) {
-          console.log(`[StellarService] Investor ${investorPublicKey} does not have a trustline for ${assetCode} yet. Skip auth.`);
+          log.info(`[StellarService] Investor ${investorPublicKey} does not have a trustline for ${assetCode} yet. Skip auth.`);
           return { success: false, reason: 'No trustline' };
         }
       } catch (err) {
-        console.log(`[StellarService] Investor account ${investorPublicKey} not found on ledger (might be un-funded). Skip auth.`);
+        log.info(`[StellarService] Investor account ${investorPublicKey} not found on ledger (might be un-funded). Skip auth.`);
         return { success: false, reason: 'Account not found' };
       }
 
@@ -1270,7 +1272,7 @@ export class StellarService {
       return result;
 
     } catch (error) {
-      console.error(`[StellarService] Failed to authorize investor:`, error);
+      log.error(`[StellarService] Failed to authorize investor:`, error);
       // Don't throw logic error, just return failure so bulk auth can continue
       return { success: false, error: error.message };
     }
@@ -1291,7 +1293,7 @@ export class StellarService {
       const operationsKeypair = getOperationsKeypair();
       const asset = createAsset(assetCode, issuerPublicKey);
 
-      console.log(`[StellarService] Setting up sponsored trustline for ${investorPublicKey} (${assetCode})`);
+      log.info(`[StellarService] Setting up sponsored trustline for ${investorPublicKey} (${assetCode})`);
 
       // 1. Verificar se a conta do investidor existe
       let investorExists = true;
@@ -1376,7 +1378,7 @@ export class StellarService {
       };
 
     } catch (error) {
-      console.error('[StellarService] Error in setupSponsoredTrustline:', error);
+      log.error('[StellarService] Error in setupSponsoredTrustline:', error);
       throw new Error(`Failed to setup sponsored trustline: ${error.message}`);
     }
   }
@@ -1411,7 +1413,7 @@ export class StellarService {
       transaction.sign(operationsKeypair);
       return await stellarServer.submitTransaction(transaction);
     } catch (error) {
-      console.error(`[StellarService] Sponsored account activation failed for ${destination}:`, error);
+      log.error(`[StellarService] Sponsored account activation failed for ${destination}:`, error);
       throw error;
     }
   }
@@ -1475,7 +1477,7 @@ export class StellarService {
         message: 'Account unfrozen successfully (trustline authorization restored)',
       };
     } catch (error) {
-      console.error('Error unfreezing account:', error);
+      log.error('Error unfreezing account:', error);
       throw new Error(`Account unfreeze failed: ${error.message}`);
     }
   }
@@ -1540,7 +1542,7 @@ export class StellarService {
         message: 'Clawback capability disabled for this trustline successfully',
       };
     } catch (error) {
-      console.error('Error disabling clawback for trustline:', error);
+      log.error('Error disabling clawback for trustline:', error);
       throw new Error(`Disable clawback failed: ${error.message}`);
     }
   }
@@ -1658,7 +1660,7 @@ export class StellarService {
         message: 'Tokens clawed back successfully',
       };
     } catch (error) {
-      console.error('Error clawing back tokens:', error);
+      log.error('Error clawing back tokens:', error);
       throw new Error(`Token clawback failed: ${error.message}`);
     }
   }
@@ -1695,7 +1697,7 @@ export class StellarService {
         isAuthorizedToMaintainLiabilities: balance ? balance.is_authorized_to_maintain_liabilities : false,
       };
     } catch (error) {
-      console.error('Error getting token balance:', error);
+      log.error('Error getting token balance:', error);
       throw new Error(`Failed to get token balance: ${error.message}`);
     }
   }
@@ -1727,7 +1729,7 @@ export class StellarService {
         },
       };
     } catch (error) {
-      console.error('Error getting account info:', error);
+      log.error('Error getting account info:', error);
       throw new Error(`Failed to get account info: ${error.message}`);
     }
   }
@@ -1833,11 +1835,11 @@ export class StellarService {
         try {
           const tx = await matchingPayment.transaction();
           if (tx.memo !== expectedMemo) {
-            console.log(`[verifyUSDCPayment] Memo mismatch. Expected: ${expectedMemo}, Got: ${tx.memo}`);
+            log.info(`[verifyUSDCPayment] Memo mismatch. Expected: ${expectedMemo}, Got: ${tx.memo}`);
             return null;
           }
         } catch (err) {
-          console.error(`[verifyUSDCPayment] Failed to fetch transaction ${matchingPayment.transaction_hash} for memo check`, err);
+          log.error(`[verifyUSDCPayment] Failed to fetch transaction ${matchingPayment.transaction_hash} for memo check`, err);
           return null;
         }
       }
@@ -1846,7 +1848,7 @@ export class StellarService {
       const { Investment } = await import('../models/Investment.js');
       const existingInvestment = await Investment.findByUSDC(matchingPayment.transaction_hash);
       if (existingInvestment) {
-        console.log(`[verifyUSDCPayment] Payment ${matchingPayment.transaction_hash} already claimed by investment ${existingInvestment.id}`);
+        log.info(`[verifyUSDCPayment] Payment ${matchingPayment.transaction_hash} already claimed by investment ${existingInvestment.id}`);
         return null; // Already claimed - prevent double-spend
       }
 
@@ -1858,7 +1860,7 @@ export class StellarService {
         memo: expectedMemo, // Return the verified memo
       };
     } catch (error) {
-      console.error('Error verifying USDC payment:', error);
+      log.error('Error verifying USDC payment:', error);
       throw new Error(`Failed to verify USDC payment: ${error.message}`);
     }
   }
@@ -1891,7 +1893,7 @@ export class StellarService {
         };
       });
     } catch (error) {
-      console.error('Error listing asset holders:', error);
+      log.error('Error listing asset holders:', error);
       throw new Error(`Failed to list asset holders: ${error.message}`);
     }
   }
@@ -1920,7 +1922,7 @@ export class StellarService {
         return { success: true, authorizedCount: 0, message: 'No trustlines to authorize' };
       }
 
-      console.log(`[Whitelisting] Authorizing ${unauthorizedTrustlines.length} trustlines for ${investorPublicKey}`);
+      log.info(`[Whitelisting] Authorizing ${unauthorizedTrustlines.length} trustlines for ${investorPublicKey}`);
 
       const operations = unauthorizedTrustlines.map(tl =>
         Operation.setTrustLineFlags({
@@ -1958,7 +1960,7 @@ export class StellarService {
         assets: unauthorizedTrustlines.map(tl => tl.asset_code)
       };
     } catch (error) {
-      console.error('Error in authorizeAllUserTrustlines:', error);
+      log.error('Error in authorizeAllUserTrustlines:', error);
       throw error;
     }
   }
@@ -1979,7 +1981,7 @@ export class StellarService {
 
       return response;
     } catch (error) {
-      console.error('[StellarService] Soroban simulation error:', error);
+      log.error('[StellarService] Soroban simulation error:', error);
       throw error;
     }
   }
@@ -2002,7 +2004,7 @@ export class StellarService {
       // ULTRATHINK FIX: assembleTransaction might return a TransactionBuilder instead of a Transaction
       // We must build it to get the signable Transaction object
       if (preparedTx instanceof TransactionBuilder) {
-        console.log('[StellarService] assembleTransaction returned a Builder. Building transaction...');
+        log.info('[StellarService] assembleTransaction returned a Builder. Building transaction...');
         preparedTx = preparedTx.build();
       }
 
@@ -2021,7 +2023,7 @@ export class StellarService {
 
       return preparedTx;
     } catch (error) {
-      console.error('[StellarService] Soroban preparation error:', error);
+      log.error('[StellarService] Soroban preparation error:', error);
       throw error;
     }
   }
@@ -2038,7 +2040,7 @@ export class StellarService {
       const operationsAccount = await stellarServer.loadAccount(operationsKeypair.publicKey());
       const contract = new Contract(contractId);
 
-      console.log(`[StellarService] Extending TTL for contract ${contractId} by ${ledgersToExtend} ledgers`);
+      log.info(`[StellarService] Extending TTL for contract ${contractId} by ${ledgersToExtend} ledgers`);
 
       // 1. Create operations for instance and code extension
       // Note: We use extendFootprintTtl operation which requires specific footprint
@@ -2112,7 +2114,7 @@ export class StellarService {
 
       return result;
     } catch (error) {
-      console.error(`[StellarService] Failed to extend TTL for contract ${contractId}:`, error);
+      log.error(`[StellarService] Failed to extend TTL for contract ${contractId}:`, error);
       throw error;
     }
   }
@@ -2146,7 +2148,7 @@ export class StellarService {
         ttlRemaining: entry.liveUntilLedgerSeq - latestLedger.sequence,
       };
     } catch (error) {
-      console.error(`[StellarService] Error checking TTL for ${contractId}:`, error);
+      log.error(`[StellarService] Error checking TTL for ${contractId}:`, error);
       throw error;
     }
   }
@@ -2168,7 +2170,7 @@ export class StellarService {
           isAuthorized: b.is_authorized,
         }));
     } catch (error) {
-      console.error(`[StellarService] Error listing assets for account ${publicKey}:`, error);
+      log.error(`[StellarService] Error listing assets for account ${publicKey}:`, error);
       throw new Error(`Failed to list account assets: ${error.message}`);
     }
   }

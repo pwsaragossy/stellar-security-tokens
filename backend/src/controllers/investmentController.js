@@ -9,6 +9,8 @@ import { addDistributionJob, isQueueAvailable } from '../services/distributionQu
 import { ConfigService } from '../services/config.service.js';
 import prisma from '../config/prisma.js';
 import crypto from 'crypto';
+import logger from '../utils/logger.js';
+const log = logger.scope('InvestmentController');
 
 
 const USDC_PAYMENT_WINDOW_MINUTES = parseInt(process.env.USDC_PAYMENT_WINDOW_MINUTES || '2', 10);
@@ -77,14 +79,14 @@ export const purchaseInvestment = async (req, res, next) => {
     // Skip for Soroban contracts (C...) — they use SAC, no classic trustlines.
     if (!investorWallet.startsWith('C')) {
       StellarService.setupSponsoredTrustline(investorWallet, assetCode)
-        .then(() => console.log(`[JIT Onboarding] Successfully ensured trustline for ${investor.id} / ${assetCode}`))
-        .catch(err => console.warn(`[JIT Onboarding] Non-critical failure during early trustline setup for ${investor.id}:`, err.message));
+        .then(() => log.info(`[JIT Onboarding] Successfully ensured trustline for ${investor.id} / ${assetCode}`))
+        .catch(err => log.warn(`[JIT Onboarding] Non-critical failure during early trustline setup for ${investor.id}:`, err.message));
     }
 
     // Cancel any stale pending investments for same investor/offer
     const existingPending = await Investment.findPendingByInvestorAndOffer(parseInt(investorId, 10), offerId);
     if (existingPending) {
-      console.log(`[Investment] Cancelling stale pending investment #${existingPending.id} for investor ${investorId}`);
+      log.info(`[Investment] Cancelling stale pending investment #${existingPending.id} for investor ${investorId}`);
       await Investment.updateStatus(existingPending.id, { status: 'cancelled' });
     }
 
@@ -233,7 +235,7 @@ export const purchaseInvestment = async (req, res, next) => {
         );
         const treasuryMuxed = muxedAcct.accountId(); // M... address
 
-        console.log(`[Investment] Routing ${totalDeduction} USDC to treasury muxed address (company #${companyId}): ${treasuryMuxed}`);
+        log.info(`[Investment] Routing ${totalDeduction} USDC to treasury muxed address (company #${companyId}): ${treasuryMuxed}`);
 
         const txData = await PasskeyWalletService.buildInvestmentTx(
           investorWallet,
@@ -265,7 +267,7 @@ export const purchaseInvestment = async (req, res, next) => {
           },
         });
       } catch (txError) {
-        console.error('[Investment] Failed to build smart wallet transfer:', txError);
+        log.error('[Investment] Failed to build smart wallet transfer:', txError);
         // Cancel the investment if we can't build the transaction
         await Investment.updateStatus(investment.id, {
           status: 'failed',
@@ -484,7 +486,7 @@ async function processInvestmentPayment(investment, usdcPayment, req, res, next)
     const targetWallet = investor.stellarContractId || investor.stellarPublicKey;
 
     if (targetWallet) {
-      console.log(`[InvestmentController] JIT Authorizing ${targetWallet} for ${investment.assetCode}...`);
+      log.info(`[InvestmentController] JIT Authorizing ${targetWallet} for ${investment.assetCode}...`);
       await StellarService.authorizeInvestor(targetWallet, investment.assetCode);
     }
 
@@ -596,7 +598,7 @@ async function processInvestmentPayment(investment, usdcPayment, req, res, next)
         error_message: error.message,
       });
     } catch (updateError) {
-      console.error('Failed to update investment status:', updateError);
+      log.error('Failed to update investment status:', updateError);
     }
     next(error);
   }
@@ -706,7 +708,7 @@ export const submitInvestmentTx = async (req, res, next) => {
     // Add the source account signature
     tx.sign(opsKeypair);
 
-    console.log(`[Investment] Submitting passkey-signed TX for investment #${investmentId}...`);
+    log.info(`[Investment] Submitting passkey-signed TX for investment #${investmentId}...`);
 
     // === DEBUG: Submit via Soroban RPC directly (bypasses fee-bump) ===
     // This gives us diagnostic events on failure, unlike Horizon's empty result_xdr.
@@ -715,11 +717,11 @@ export const submitInvestmentTx = async (req, res, next) => {
     const sorobanRpc = new rpcLib.Server(process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org');
 
     const sendResult = await sorobanRpc.sendTransaction(tx);
-    console.log(`[Investment] sendTransaction status: ${sendResult.status}`);
-    console.log(`[Investment] sendTransaction hash: ${sendResult.hash}`);
+    log.info(`[Investment] sendTransaction status: ${sendResult.status}`);
+    log.info(`[Investment] sendTransaction hash: ${sendResult.hash}`);
 
     if (sendResult.status === 'ERROR') {
-      console.error('[Investment] sendTransaction immediate ERROR:', JSON.stringify(sendResult, null, 2));
+      log.error('[Investment] sendTransaction immediate ERROR:', JSON.stringify(sendResult, null, 2));
       throw new Error(`Soroban sendTransaction rejected: ${sendResult.errorResult?.toXDR('base64') || 'unknown'}`);
     }
 
@@ -734,7 +736,7 @@ export const submitInvestmentTx = async (req, res, next) => {
       waited += pollInterval;
 
       txResult = await sorobanRpc.getTransaction(sendResult.hash);
-      console.log(`[Investment] getTransaction status: ${txResult.status} (${waited / 1000}s elapsed)`);
+      log.info(`[Investment] getTransaction status: ${txResult.status} (${waited / 1000}s elapsed)`);
 
       if (txResult.status !== 'NOT_FOUND') break;
     }
@@ -744,9 +746,9 @@ export const submitInvestmentTx = async (req, res, next) => {
     }
 
     if (txResult.status === 'FAILED') {
-      console.error('[Investment] === TRANSACTION FAILED ===');
-      console.error('[Investment] Result XDR:', txResult.resultXdr?.toXDR?.('base64') || 'N/A');
-      console.error('[Investment] Result meta XDR:', txResult.resultMetaXdr?.toXDR?.('base64') || 'N/A');
+      log.error('[Investment] === TRANSACTION FAILED ===');
+      log.error('[Investment] Result XDR:', txResult.resultXdr?.toXDR?.('base64') || 'N/A');
+      log.error('[Investment] Result meta XDR:', txResult.resultMetaXdr?.toXDR?.('base64') || 'N/A');
 
       // Extract diagnostic events from result meta
       try {
@@ -755,38 +757,38 @@ export const submitInvestmentTx = async (req, res, next) => {
           const v3 = meta.value?.()?.sorobanMeta?.();
           if (v3) {
             const diagEvents = v3.diagnosticEvents?.() || [];
-            console.error(`[Investment] Diagnostic events (${diagEvents.length}):`);
+            log.error(`[Investment] Diagnostic events (${diagEvents.length}):`);
             diagEvents.forEach((evt, i) => {
               try {
-                console.error(`[Investment]   Event[${i}]:`, JSON.stringify(evt.toXDR('base64')));
+                log.error(`[Investment]   Event[${i}]:`, JSON.stringify(evt.toXDR('base64')));
                 // Try to decode the event body
                 const body = evt.event?.()?.body?.();
                 if (body) {
                   const data = body.value?.()?.data?.();
                   if (data) {
-                    console.error(`[Investment]   Event[${i}] data type:`, data.switch?.()?.name);
+                    log.error(`[Investment]   Event[${i}] data type:`, data.switch?.()?.name);
                     if (data.switch?.()?.name === 'scvError') {
-                      console.error(`[Investment]   Event[${i}] ERROR:`, data.error?.()?.switch?.()?.name, data.error?.()?.value?.());
+                      log.error(`[Investment]   Event[${i}] ERROR:`, data.error?.()?.switch?.()?.name, data.error?.()?.value?.());
                     }
                     if (data.switch?.()?.name === 'scvU32') {
-                      console.error(`[Investment]   Event[${i}] U32 value:`, data.u32?.());
+                      log.error(`[Investment]   Event[${i}] U32 value:`, data.u32?.());
                     }
                   }
                 }
               } catch (evtErr) {
-                console.error(`[Investment]   Event[${i}] decode error:`, evtErr.message);
+                log.error(`[Investment]   Event[${i}] decode error:`, evtErr.message);
               }
             });
           }
         }
       } catch (metaErr) {
-        console.error('[Investment] Meta decode error:', metaErr.message);
+        log.error('[Investment] Meta decode error:', metaErr.message);
       }
 
       throw new Error(`Transaction FAILED on-chain. Hash: ${sendResult.hash}. Check logs for diagnostic events.`);
     }
 
-    console.log(`[Investment] Transaction SUCCEEDED: ${sendResult.hash}`);
+    log.info(`[Investment] Transaction SUCCEEDED: ${sendResult.hash}`);
     const result = { hash: sendResult.hash, ledger: txResult.ledger };
 
     // Update investment status
@@ -795,7 +797,7 @@ export const submitInvestmentTx = async (req, res, next) => {
       usdc_payment_hash: result.hash,
     });
 
-    console.log(`[Investment] Smart wallet payment submitted for investment #${investmentId}: ${result.hash}`);
+    log.info(`[Investment] Smart wallet payment submitted for investment #${investmentId}: ${result.hash}`);
 
     // Funds are now in the treasury muxed address (per-company segregation).
     // Company claims funds via admin-approved settlement (Phase 2).
@@ -821,7 +823,7 @@ export const submitInvestmentTx = async (req, res, next) => {
       },
     });
   } catch (error) {
-    console.error('[Investment] Submit TX failed:', error);
+    log.error('[Investment] Submit TX failed:', error);
 
     // If we have an investmentId, mark the investment as failed
     if (req.body?.investmentId) {
@@ -831,7 +833,7 @@ export const submitInvestmentTx = async (req, res, next) => {
           error_message: `Payment submission failed: ${error.message}`,
         });
       } catch (updateErr) {
-        console.error('[Investment] Failed to update investment status:', updateErr);
+        log.error('[Investment] Failed to update investment status:', updateErr);
       }
     }
 

@@ -5,6 +5,8 @@ import path from 'path';
 import crypto from 'crypto';
 import { isTokenBlocklisted } from '../config/redis.js';
 import prisma from '../config/prisma.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('Auth');
 
 // Try loading from current dir, then parent dir
 dotenv.config();
@@ -48,7 +50,7 @@ export const authenticateToken = async (req, res, next) => {
     }
   } catch (err) {
     // Fail closed: if blocklist check fails, deny access
-    console.error('[Auth] Blocklist check failed — failing closed:', err.message);
+    log.error('[Auth] Blocklist check failed — failing closed:', err.message);
     return res.status(503).json({
       success: false,
       error: 'Authentication service temporarily unavailable. Please try again.',

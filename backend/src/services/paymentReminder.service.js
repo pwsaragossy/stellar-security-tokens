@@ -16,6 +16,8 @@ import cron from 'node-cron';
 import prisma from '../config/prisma.js';
 import { EmailService } from './email.service.js';
 import { NotificationService } from './notification.service.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('PaymentReminder');
 
 // Reminder schedule configuration (days before due date)
 const REMINDER_SCHEDULE = [
@@ -42,24 +44,24 @@ export class PaymentReminderService {
      */
     static startReminderScheduler() {
         if (reminderJob) {
-            console.log('[PaymentReminder] Scheduler already running');
+            log.info('[PaymentReminder] Scheduler already running');
             return reminderJob;
         }
 
         // Run daily at 09:00 UTC
         reminderJob = cron.schedule('0 9 * * *', async () => {
-            console.log('[PaymentReminder] Running daily reminder check');
+            log.info('[PaymentReminder] Running daily reminder check');
             try {
                 await this.processReminders();
             } catch (error) {
-                console.error('[PaymentReminder] Error processing reminders', error);
+                log.error('[PaymentReminder] Error processing reminders', error);
             }
         }, {
             scheduled: true,
             timezone: 'UTC'
         });
 
-        console.log('[PaymentReminder] Reminder scheduler started (daily at 09:00 UTC)');
+        log.info('[PaymentReminder] Reminder scheduler started (daily at 09:00 UTC)');
         return reminderJob;
     }
 
@@ -70,7 +72,7 @@ export class PaymentReminderService {
         if (reminderJob) {
             reminderJob.stop();
             reminderJob = null;
-            console.log('[PaymentReminder] Reminder scheduler stopped');
+            log.info('[PaymentReminder] Reminder scheduler stopped');
         }
     }
 
@@ -129,7 +131,7 @@ export class PaymentReminderService {
             await this.updatePaymentDueStatus(offer, daysUntilDue);
         }
 
-        console.log(`[PaymentReminder] Processed ${offers.length} offers, sent ${remindersSent} reminders`);
+        log.info(`[PaymentReminder] Processed ${offers.length} offers, sent ${remindersSent} reminders`);
         return { offersChecked: offers.length, remindersSent };
     }
 
@@ -189,7 +191,7 @@ export class PaymentReminderService {
                         payInvestorsUrl: `${process.env.FRONTEND_URL}/company/payments/${offer.id}`
                     });
                 } catch (error) {
-                    console.error(`[PaymentReminder] Email failed for ${user.email}`, error);
+                    log.error(`[PaymentReminder] Email failed for ${user.email}`, error);
                 }
             }
         }
@@ -207,7 +209,7 @@ export class PaymentReminderService {
                         actionLink: `/company/payments/${offer.id}`
                     });
                 } catch (error) {
-                    console.error(`[PaymentReminder] Notification failed for user ${user.id}`, error);
+                    log.error(`[PaymentReminder] Notification failed for user ${user.id}`, error);
                 }
             }
         }
@@ -225,7 +227,7 @@ export class PaymentReminderService {
             }
         });
 
-        console.log(`[PaymentReminder] Sent ${reminderType} reminder for offer ${offer.id}`);
+        log.info(`[PaymentReminder] Sent ${reminderType} reminder for offer ${offer.id}`);
         return true;
     }
 
@@ -282,7 +284,7 @@ export class PaymentReminderService {
                     payInvestorsUrl: `${process.env.FRONTEND_URL}/company/payments/${offer.id}`
                 });
             } catch (error) {
-                console.error(`[PaymentReminder] Overdue email failed for ${user.email}`, error);
+                log.error(`[PaymentReminder] Overdue email failed for ${user.email}`, error);
             }
         }
 

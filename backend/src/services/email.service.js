@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
+import logger from '../utils/logger.js';
+const log = logger.scope('EmailService');
 
 dotenv.config();
 
@@ -21,17 +23,17 @@ const createTransporter = () => {
   };
 
   if (!smtpConfig.auth.user || !smtpConfig.auth.pass) {
-    console.log('ℹ️  Email service: Dev Mode (logging to console)');
+    log.info('ℹ️  Email service: Dev Mode (logging to console)');
     // Return mock transporter for Dev Mode
     return {
       sendMail: async (options) => {
-        console.log('\n📧 [DEV MODE] Sending Email:');
-        console.log(`   To: ${options.to}`);
-        console.log(`   Subject: ${options.subject}`);
-        console.log(`   From: ${options.from}`);
-        console.log('   --- Text Content ---');
-        console.log(options.text);
-        console.log('   --------------------\n');
+        log.info('\n📧 [DEV MODE] Sending Email:');
+        log.info(`   To: ${options.to}`);
+        log.info(`   Subject: ${options.subject}`);
+        log.info(`   From: ${options.from}`);
+        log.info('   --- Text Content ---');
+        log.info(options.text);
+        log.info('   --------------------\n');
         return { messageId: `dev-mock-${Date.now()}` };
       },
       verify: async () => true
@@ -44,14 +46,14 @@ const createTransporter = () => {
   // This prevents the "EAI_AGAIN" warning during container startup
   setTimeout(() => {
     transporter.verify().then(() => {
-      console.log('✅ Email service configured successfully');
-      console.log(`   SMTP Host: ${smtpConfig.host}:${smtpConfig.port}`);
-      console.log(`   From: ${process.env.SMTP_FROM || smtpConfig.auth.user}`);
+      log.info('✅ Email service configured successfully');
+      log.info(`   SMTP Host: ${smtpConfig.host}:${smtpConfig.port}`);
+      log.info(`   From: ${process.env.SMTP_FROM || smtpConfig.auth.user}`);
     }).catch((error) => {
-      console.warn('⚠️  SMTP connection verification failed:', error.message);
-      console.warn('   Email sending may not work. Please check your SMTP configuration.');
-      console.warn('   Run "npm run test:email" to diagnose the issue.');
-      console.warn('   System will continue to work, but emails will be skipped.');
+      log.warn('⚠️  SMTP connection verification failed:', error.message);
+      log.warn('   Email sending may not work. Please check your SMTP configuration.');
+      log.warn('   Run "npm run test:email" to diagnose the issue.');
+      log.warn('   System will continue to work, but emails will be skipped.');
     });
   }, 5000); // Wait 5 seconds for DNS to be ready
 
@@ -144,7 +146,7 @@ export class EmailService {
       };
 
       const info = await transporter.sendMail(mailOptions);
-      console.log(`Email sent successfully to ${investorEmail}:`, info.messageId);
+      log.info(`Email sent successfully to ${investorEmail}:`, info.messageId);
 
       return {
         success: true,
@@ -152,7 +154,7 @@ export class EmailService {
         message: 'Email sent successfully',
       };
     } catch (error) {
-      console.error(`Error sending email to ${investorEmail}:`, error);
+      log.error(`Error sending email to ${investorEmail}:`, error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
   }
@@ -184,8 +186,8 @@ export class EmailService {
    */
   static async send6DigitVerificationCode(email, code) {
     if (!transporter) {
-      console.warn('Email service not configured - verification code not sent');
-      console.log(`[DEV MODE] Verification code for ${email}: ${code}`);
+      log.warn('Email service not configured - verification code not sent');
+      log.info(`[DEV MODE] Verification code for ${email}: ${code}`);
       return { success: true, message: 'Dev mode - code logged to console' };
     }
 
@@ -245,7 +247,7 @@ export class EmailService {
       };
 
       const info = await transporter.sendMail(mailOptions);
-      console.log(`6-digit verification code sent to ${email}:`, info.messageId);
+      log.info(`6-digit verification code sent to ${email}:`, info.messageId);
 
       return {
         success: true,
@@ -253,7 +255,7 @@ export class EmailService {
         message: 'Verification code sent successfully',
       };
     } catch (error) {
-      console.error(`Error sending verification code to ${email}:`, error);
+      log.error(`Error sending verification code to ${email}:`, error);
       throw new Error(`Failed to send verification code: ${error.message}`);
     }
   }
@@ -268,7 +270,7 @@ export class EmailService {
    */
   static async sendVerificationEmail(investorEmail, investorName, verificationToken) {
     if (!transporter) {
-      console.warn('Email service not configured - verification email not sent');
+      log.warn('Email service not configured - verification email not sent');
       return { success: false, message: 'Email service not configured' };
     }
 
@@ -353,7 +355,7 @@ export class EmailService {
       };
 
       const info = await transporter.sendMail(mailOptions);
-      console.log(`Verification email sent to ${investorEmail}:`, info.messageId);
+      log.info(`Verification email sent to ${investorEmail}:`, info.messageId);
 
       return {
         success: true,
@@ -361,7 +363,7 @@ export class EmailService {
         message: 'Verification email sent successfully',
       };
     } catch (error) {
-      console.error(`Error sending verification email to ${investorEmail}:`, error);
+      log.error(`Error sending verification email to ${investorEmail}:`, error);
       throw new Error(`Failed to send verification email: ${error.message}`);
     }
   }
@@ -501,7 +503,7 @@ export class EmailService {
       };
 
       const info = await transporter.sendMail(mailOptions);
-      console.log(`Welcome email sent to ${investorEmail}:`, info.messageId);
+      log.info(`Welcome email sent to ${investorEmail}:`, info.messageId);
 
       return {
         success: true,
@@ -509,7 +511,7 @@ export class EmailService {
         message: 'Welcome email sent successfully',
       };
     } catch (error) {
-      console.error(`Error sending welcome email to ${investorEmail}:`, error);
+      log.error(`Error sending welcome email to ${investorEmail}:`, error);
       throw new Error(`Failed to send welcome email: ${error.message}`);
     }
   }
@@ -574,7 +576,7 @@ export class EmailService {
       const info = await transporter.sendMail(mailOptions);
       return { success: true, messageId: info.messageId };
     } catch (error) {
-      console.error(`Error sending bullet payment email to ${email}:`, error);
+      log.error(`Error sending bullet payment email to ${email}:`, error);
       throw new Error(`Failed to send bullet payment email: ${error.message}`);
     }
   }
@@ -639,7 +641,7 @@ export class EmailService {
       const info = await transporter.sendMail(mailOptions);
       return { success: true, messageId: info.messageId };
     } catch (error) {
-      console.error(`Error sending quarterly payment email to ${email}:`, error);
+      log.error(`Error sending quarterly payment email to ${email}:`, error);
       throw new Error(`Failed to send quarterly payment email: ${error.message}`);
     }
   }
@@ -704,7 +706,7 @@ export class EmailService {
       const info = await transporter.sendMail(mailOptions);
       return { success: true, messageId: info.messageId };
     } catch (error) {
-      console.error(`Error sending semi-annual payment email to ${email}:`, error);
+      log.error(`Error sending semi-annual payment email to ${email}:`, error);
       throw new Error(`Failed to send semi-annual payment email: ${error.message}`);
     }
   }
@@ -770,7 +772,7 @@ export class EmailService {
       const info = await transporter.sendMail(mailOptions);
       return { success: true, messageId: info.messageId };
     } catch (error) {
-      console.error(`Error sending investment confirmation to ${investorEmail}:`, error);
+      log.error(`Error sending investment confirmation to ${investorEmail}:`, error);
       // Don't throw here to avoid blocking payment processing flow? 
       // Actually keeping throw consistent with other methods is better for now.
       throw new Error(`Failed to send investment confirmation: ${error.message}`);
@@ -878,11 +880,11 @@ export class EmailService {
             '/investor/dashboard'
           );
         }
-      } catch (e) { console.error('Notification error:', e); }
+      } catch (e) { log.error('Notification error:', e); }
 
       return { success: true, messageId: info.messageId };
     } catch (error) {
-      console.error(`Error sending KYC approval email to ${investorEmail}:`, error);
+      log.error(`Error sending KYC approval email to ${investorEmail}:`, error);
       throw new Error(`Failed to send KYC approval email: ${error.message}`);
     }
   }
@@ -946,7 +948,7 @@ export class EmailService {
       const info = await transporter.sendMail(mailOptions);
       return { success: true, messageId: info.messageId };
     } catch (error) {
-      console.error(`Error sending KYC rejection email to ${investorEmail}:`, error);
+      log.error(`Error sending KYC rejection email to ${investorEmail}:`, error);
       throw new Error(`Failed to send KYC rejection email: ${error.message}`);
     }
   }
@@ -1065,7 +1067,7 @@ export class EmailService {
       const info = await transporter.sendMail(mailOptions);
       return { success: true, messageId: info.messageId };
     } catch (error) {
-      console.error(`Error sending company status email to ${email}:`, error);
+      log.error(`Error sending company status email to ${email}:`, error);
       throw new Error(`Failed to send company status email: ${error.message}`);
     }
   }
@@ -1136,7 +1138,7 @@ export class EmailService {
       const info = await transporter.sendMail(mailOptions);
       return { success: true, messageId: info.messageId };
     } catch (error) {
-      console.error(`Error sending offer status email to ${email}:`, error);
+      log.error(`Error sending offer status email to ${email}:`, error);
       throw new Error(`Failed to send offer status email: ${error.message}`);
     }
   }

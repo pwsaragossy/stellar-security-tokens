@@ -32,13 +32,13 @@ export class AlertService {
     switch (level) {
       case ALERT_LEVELS.CRITICAL:
       case ALERT_LEVELS.ERROR:
-        console.error(logMessage, metadata);
+        log.error(logMessage, metadata);
         break;
       case ALERT_LEVELS.WARNING:
-        console.warn(logMessage, metadata);
+        log.warn(logMessage, metadata);
         break;
       default:
-        console.log(logMessage, metadata);
+        log.info(logMessage, metadata);
     }
 
     // TODO: Implementar integrações externas

@@ -2,6 +2,8 @@ import { PlatformAdmin } from '../models/PlatformAdmin.js';
 import { StellarService } from '../services/stellar.service.js';
 import prisma from '../config/prisma.js';
 import { EmailService } from '../services/email.service.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('PlatformAdminController');
 
 /**
  * Controller para gerenciar administradores da plataforma
@@ -55,7 +57,7 @@ export class PlatformAdminController {
         },
       });
     } catch (error) {
-      console.error('Error creating platform admin:', error);
+      log.error('Error creating platform admin:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to create platform admin',
@@ -83,7 +85,7 @@ export class PlatformAdminController {
         },
       });
     } catch (error) {
-      console.error('Error fetching platform admins:', error);
+      log.error('Error fetching platform admins:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch platform admins',
@@ -127,7 +129,7 @@ export class PlatformAdminController {
         data: updatedAdmin,
       });
     } catch (error) {
-      console.error('Error updating platform admin:', error);
+      log.error('Error updating platform admin:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to update platform admin',
@@ -153,7 +155,7 @@ export class PlatformAdminController {
         data: configMap,
       });
     } catch (error) {
-      console.error('Error fetching system config:', error);
+      log.error('Error fetching system config:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch system config',
@@ -192,7 +194,7 @@ export class PlatformAdminController {
         data: results,
       });
     } catch (error) {
-      console.error('Error updating system config:', error);
+      log.error('Error updating system config:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to update system config',
@@ -233,7 +235,7 @@ export class PlatformAdminController {
         },
       });
     } catch (error) {
-      console.error('Error fetching fee logs:', error);
+      log.error('Error fetching fee logs:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch fee logs',
@@ -288,7 +290,7 @@ export class PlatformAdminController {
         },
       });
     } catch (error) {
-      console.error('Error fetching investors:', error);
+      log.error('Error fetching investors:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch investors',
@@ -333,10 +335,10 @@ export class PlatformAdminController {
       // Automated Whitelisting: If investor has a smart wallet (stellarContractId), authorize all trustlines
       if (updatedInvestor.stellarContractId) {
         try {
-          console.log(`[KYC Approval] Triggering automated whitelisting for ${updatedInvestor.email} (${updatedInvestor.stellarContractId})`);
+          log.info(`[KYC Approval] Triggering automated whitelisting for ${updatedInvestor.email} (${updatedInvestor.stellarContractId})`);
           await StellarService.authorizeAllUserTrustlines(updatedInvestor.stellarContractId);
         } catch (whitelistError) {
-          console.error(`[KYC Approval] Automated whitelisting failed for ${updatedInvestor.email}:`, whitelistError.message);
+          log.error(`[KYC Approval] Automated whitelisting failed for ${updatedInvestor.email}:`, whitelistError.message);
           // We don't fail the approval if whitelisting fails, but we log it
         }
       }
@@ -345,7 +347,7 @@ export class PlatformAdminController {
 
       // Send approval email to investor
       await EmailService.sendKYCApprovalEmail(updatedInvestor.email, updatedInvestor.name);
-      console.log(`[Admin] Investor ${id} approved by admin ${req.user?.id}`);
+      log.info(`[Admin] Investor ${id} approved by admin ${req.user?.id}`);
 
       res.json({
         success: true,
@@ -358,7 +360,7 @@ export class PlatformAdminController {
         },
       });
     } catch (error) {
-      console.error('Error approving investor:', error);
+      log.error('Error approving investor:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to approve investor',
@@ -405,7 +407,7 @@ export class PlatformAdminController {
 
       // Send rejection email to investor with reason
       await EmailService.sendKYCRejectionEmail(updatedInvestor.email, updatedInvestor.name, reason);
-      console.log(`[Admin] Investor ${id} rejected by admin ${req.user?.id}. Reason: ${reason}`);
+      log.info(`[Admin] Investor ${id} rejected by admin ${req.user?.id}. Reason: ${reason}`);
 
       res.json({
         success: true,
@@ -419,7 +421,7 @@ export class PlatformAdminController {
         },
       });
     } catch (error) {
-      console.error('Error rejecting investor:', error);
+      log.error('Error rejecting investor:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to reject investor',
@@ -452,7 +454,7 @@ export class PlatformAdminController {
         }
       });
     } catch (error) {
-      console.error('Error fetching TTL stats:', error);
+      log.error('Error fetching TTL stats:', error);
       res.status(500).json({ success: false, error: 'Failed to fetch TTL stats' });
     }
   }

@@ -6,6 +6,8 @@ import jwt from 'jsonwebtoken';
 import { generate6DigitCode, storeEmailCode, verifyEmailCode as redisVerifyEmailCode } from '../config/redis.js';
 import { EmailService } from '../services/email.service.js';
 import prisma from '../config/prisma.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('CompanyController');
 
 /**
  * Controller para gerenciar empresas
@@ -112,7 +114,7 @@ export class CompanyController {
         }
       } else {
         // For backwards compatibility, allow email in body (but log warning)
-        console.warn('[registerCompany] Registration without token - email not verified');
+        log.warn('[registerCompany] Registration without token - email not verified');
         verifiedEmail = req.body.email;
       }
 
@@ -197,7 +199,7 @@ export class CompanyController {
           passkeyPublicKey: company.passkeyPublicKey || null,
         }
       });
-      console.log(`[registerCompany] Created ghost CompanyUser ${ghostCompanyUser.id} for Company ${company.id}`);
+      log.info(`[registerCompany] Created ghost CompanyUser ${ghostCompanyUser.id} for Company ${company.id}`);
 
       // TODO: Send "registration pending" email to company
       // TODO: Send notification to admins about new company
@@ -208,7 +210,7 @@ export class CompanyController {
         data: CompanyController.formatCompanyForResponse(company),
       });
     } catch (error) {
-      console.error('Error registering company:', error);
+      log.error('Error registering company:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to register company',
@@ -245,7 +247,7 @@ export class CompanyController {
         data: CompanyController.formatCompanyForResponse(company),
       });
     } catch (error) {
-      console.error('Error fetching company profile:', error);
+      log.error('Error fetching company profile:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch company profile',
@@ -297,7 +299,7 @@ export class CompanyController {
         data: CompanyController.formatCompanyForResponse(updatedCompany),
       });
     } catch (error) {
-      console.error('Error updating company profile:', error);
+      log.error('Error updating company profile:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to update company profile',
@@ -333,7 +335,7 @@ export class CompanyController {
         data: formattedOffers,
       });
     } catch (error) {
-      console.error('Error fetching company offers:', error);
+      log.error('Error fetching company offers:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch company offers',
@@ -363,7 +365,7 @@ export class CompanyController {
         data: CompanyController.formatCompanyForResponse(company),
       });
     } catch (error) {
-      console.error('Error fetching company details:', error);
+      log.error('Error fetching company details:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch company details',
@@ -397,7 +399,7 @@ export class CompanyController {
         },
       });
     } catch (error) {
-      console.error('Error fetching companies:', error);
+      log.error('Error fetching companies:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch companies',
@@ -444,7 +446,7 @@ export class CompanyController {
         data: CompanyController.formatCompanyForResponse(updatedCompany),
       });
     } catch (error) {
-      console.error('Error updating company status:', error);
+      log.error('Error updating company status:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to update company status',
@@ -475,7 +477,7 @@ export class CompanyController {
         data: CompanyController.formatCompanyForResponse(updatedCompany),
       });
     } catch (error) {
-      console.error('Error approving company (debug):', error);
+      log.error('Error approving company (debug):', error);
       res.status(500).json({
         success: false,
         error: 'Failed to approve company',
@@ -526,7 +528,7 @@ export class CompanyController {
       const stored = await storeEmailCode(email, code);
 
       if (!stored) {
-        console.warn('[initiateCompanyRegistration] Redis unavailable, code storage failed');
+        log.warn('[initiateCompanyRegistration] Redis unavailable, code storage failed');
         // Continue anyway - email service will log code in dev mode
       }
 
@@ -542,7 +544,7 @@ export class CompanyController {
         },
       });
     } catch (error) {
-      console.error('Error initiating company registration:', error);
+      log.error('Error initiating company registration:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to send verification code',
@@ -598,7 +600,7 @@ export class CompanyController {
         },
       });
     } catch (error) {
-      console.error('Error verifying company email code:', error);
+      log.error('Error verifying company email code:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to verify code',
@@ -643,7 +645,7 @@ export class CompanyController {
         message: 'New verification code sent',
       });
     } catch (error) {
-      console.error('Error resending company verification code:', error);
+      log.error('Error resending company verification code:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to resend verification code',
@@ -711,7 +713,7 @@ export class CompanyController {
           explorer = `https://stellar.expert/explorer/${process.env.STELLAR_NETWORK === 'PUBLIC' ? 'public' : 'testnet'}/account/${company.stellarContractId}`;
         }
       } catch (balanceError) {
-        console.error('Failed to fetch wallet balances:', balanceError);
+        log.error('Failed to fetch wallet balances:', balanceError);
         // Continue with zero balances - wallet exists, just can't fetch balances
       }
 
@@ -726,7 +728,7 @@ export class CompanyController {
         },
       });
     } catch (error) {
-      console.error('Error getting company wallet status:', error);
+      log.error('Error getting company wallet status:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to get wallet status',
@@ -778,7 +780,7 @@ export class CompanyController {
         data: result,
       });
     } catch (error) {
-      console.error('Error proposing company withdrawal:', error);
+      log.error('Error proposing company withdrawal:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to propose withdrawal',
@@ -803,7 +805,7 @@ export class CompanyController {
         data: result,
       });
     } catch (error) {
-      console.error('Error submitting company withdrawal:', error);
+      log.error('Error submitting company withdrawal:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to submit withdrawal',

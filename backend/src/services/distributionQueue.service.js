@@ -5,6 +5,8 @@ import { StellarService } from './stellar.service.js';
 import { Token } from '../models/Token.js';
 import { AlertService } from './alert.service.js';
 import crypto from 'crypto';
+import logger from '../utils/logger.js';
+const log = logger.scope('DistribQueue');
 
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379', 10);
@@ -36,7 +38,7 @@ const redisConfig = {
   retryStrategy: (times) => {
     // Limitar tentativas de reconexão para evitar spam de erros
     if (times > 10) {
-      console.warn('[DistributionQueue] Max Redis reconnection attempts reached. Queue disabled.');
+      log.warn('[DistributionQueue] Max Redis reconnection attempts reached. Queue disabled.');
       return null; // Para de tentar reconectar
     }
     const delay = Math.min(times * 50, 2000);
@@ -179,10 +181,10 @@ export function initDistributionQueue() {
         if (shouldLog) {
           if (isNewError) {
             errorCount = 1;
-            console.error(`[DistributionQueue] Queue error: ${errorMessage}`);
+            log.error(`[DistributionQueue] Queue error: ${errorMessage}`);
           } else {
             errorCount++;
-            console.warn(`[DistributionQueue] Queue error (${errorCount}x): ${errorMessage} - Redis connection failed, queue disabled`);
+            log.warn(`[DistributionQueue] Queue error (${errorCount}x): ${errorMessage} - Redis connection failed, queue disabled`);
           }
           lastErrorMessage = errorMessage;
           lastErrorTime = now;
@@ -198,7 +200,7 @@ export function initDistributionQueue() {
         }
       } catch (handlerError) {
         // Catch any errors in the error handler itself to prevent unhandled rejections
-        console.error('[DistributionQueue] Error in error handler:', handlerError.message);
+        log.error('[DistributionQueue] Error in error handler:', handlerError.message);
       }
     });
 
@@ -206,7 +208,7 @@ export function initDistributionQueue() {
     distributionQueue.process('distribute-tokens', async (job) => {
       const { investmentId, investorPublicKey, assetCode, amount, memo } = job.data;
 
-      console.log(`[DistributionQueue] Processing job for investment ${investmentId}`);
+      log.info(`[DistributionQueue] Processing job for investment ${investmentId}`);
 
       // Buscar investment
       const investment = await Investment.findById(investmentId);
@@ -216,7 +218,7 @@ export function initDistributionQueue() {
 
       // Verificar se já foi processado (idempotência)
       if (investment.status === 'distributed') {
-        console.log(`[DistributionQueue] Investment ${investmentId} already distributed`);
+        log.info(`[DistributionQueue] Investment ${investmentId} already distributed`);
         return {
           success: true,
           message: 'Already distributed',
@@ -264,16 +266,16 @@ export function initDistributionQueue() {
       let targetWallet = investor.stellarContractId || investor.stellarPublicKey;
 
       if (targetWallet) {
-        console.log(`[DistributionQueue] Checking JIT Authorization for ${targetWallet} (${assetCode})...`);
+        log.info(`[DistributionQueue] Checking JIT Authorization for ${targetWallet} (${assetCode})...`);
 
         // For classic accounts, this will set the flag if trustline exists.
         // For smart wallets, we ensure they are whitelisted in the asset instance.
         const authResult = await StellarService.authorizeInvestor(targetWallet, assetCode);
 
         if (authResult.success) {
-          console.log(`[DistributionQueue] JIT Authorization successful for ${targetWallet}`);
+          log.info(`[DistributionQueue] JIT Authorization successful for ${targetWallet}`);
         } else if (authResult.reason === 'No trustline') {
-          console.warn(`[DistributionQueue] Trustline missing for ${targetWallet}. Distribution may fail if not a Smart Wallet.`);
+          log.warn(`[DistributionQueue] Trustline missing for ${targetWallet}. Distribution may fail if not a Smart Wallet.`);
         }
       }
 
@@ -297,7 +299,7 @@ export function initDistributionQueue() {
 
       // Handle pending multisig — the post-execution hook will complete this
       if (stellarResult.status === 'pending_multisig') {
-        console.log(`[DistributionQueue] Distribution for investment ${investmentId} queued for multisig (TX #${stellarResult.multiSigTransactionId}, step: ${stellarResult.step})`);
+        log.info(`[DistributionQueue] Distribution for investment ${investmentId} queued for multisig (TX #${stellarResult.multiSigTransactionId}, step: ${stellarResult.step})`);
         await Investment.updateStatus(investmentId, {
           status: 'pending_distribution',
           error_message: JSON.stringify({
@@ -331,7 +333,7 @@ export function initDistributionQueue() {
         distribution_tx_hash: stellarResult.transactionHash,
       });
 
-      console.log(`[DistributionQueue] Successfully distributed tokens for investment ${investmentId}`);
+      log.info(`[DistributionQueue] Successfully distributed tokens for investment ${investmentId}`);
 
       return {
         success: true,
@@ -344,11 +346,11 @@ export function initDistributionQueue() {
 
     // Event handlers
     distributionQueue.on('completed', (job, result) => {
-      console.log(`[DistributionQueue] Job ${job.id} completed:`, result);
+      log.info(`[DistributionQueue] Job ${job.id} completed:`, result);
     });
 
     distributionQueue.on('failed', async (job, err) => {
-      console.error(`[DistributionQueue] Job ${job.id} failed after ${job.attemptsMade} attempts:`, err.message);
+      log.error(`[DistributionQueue] Job ${job.id} failed after ${job.attemptsMade} attempts:`, err.message);
 
       // Marcar investment como failed após todas as tentativas
       if (job.attemptsMade >= MAX_RETRIES) {
@@ -356,7 +358,7 @@ export function initDistributionQueue() {
           status: 'failed',
           error_message: `Failed after ${MAX_RETRIES} attempts: ${err.message}`,
         }).catch(updateError => {
-          console.error('[DistributionQueue] Failed to update investment status:', updateError);
+          log.error('[DistributionQueue] Failed to update investment status:', updateError);
         });
 
         // Alertar equipe sobre falha crítica
@@ -365,15 +367,15 @@ export function initDistributionQueue() {
     });
 
     distributionQueue.on('stalled', (job) => {
-      console.warn(`[DistributionQueue] Job ${job.id} stalled`);
+      log.warn(`[DistributionQueue] Job ${job.id} stalled`);
     });
 
-    console.log('[DistributionQueue] Initialized successfully');
+    log.info('[DistributionQueue] Initialized successfully');
     return distributionQueue;
   } catch (error) {
     // Não alertar em erro de inicialização - é esperado se Redis não estiver disponível
-    console.error('[DistributionQueue] Failed to initialize:', error.message);
-    console.warn('[DistributionQueue] Queue disabled. Distributions will be processed synchronously.');
+    log.error('[DistributionQueue] Failed to initialize:', error.message);
+    log.warn('[DistributionQueue] Queue disabled. Distributions will be processed synchronously.');
     return null;
   }
 }
@@ -391,7 +393,7 @@ export function initDistributionQueue() {
 export async function addDistributionJob(jobData) {
   if (!distributionQueue) {
     // Se fila não disponível, processar sincronamente
-    console.warn('[DistributionQueue] Queue not available, processing synchronously');
+    log.warn('[DistributionQueue] Queue not available, processing synchronously');
     throw new Error('Distribution queue not available. Please ensure Redis is running.');
   }
 
@@ -400,7 +402,7 @@ export async function addDistributionJob(jobData) {
     delay: 0, // Processar imediatamente
   });
 
-  console.log(`[DistributionQueue] Added job ${job.id} for investment ${jobData.investmentId}`);
+  log.info(`[DistributionQueue] Added job ${job.id} for investment ${jobData.investmentId}`);
   return job;
 }
 
@@ -476,7 +478,7 @@ export async function closeDistributionQueue() {
       // Ignorar erros ao fechar (pode já estar fechada)
       // Não logar em testes para evitar poluição
       if (process.env.NODE_ENV !== 'test') {
-        console.warn('[DistributionQueue] Error closing queue:', error.message);
+        log.warn('[DistributionQueue] Error closing queue:', error.message);
       }
     }
   }

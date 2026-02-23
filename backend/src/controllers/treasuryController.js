@@ -1,5 +1,7 @@
 import { StellarService } from '../services/stellar.service.js';
 import prisma from '../config/prisma.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('TreasuryController');
 
 /**
  * Controller para operações de Tesouraria (OpEx)
@@ -27,7 +29,7 @@ export class TreasuryController {
                 }
             });
         } catch (error) {
-            console.error('[TreasuryController] Balances error:', error);
+            log.error('Balances error:', error);
             res.status(500).json({
                 success: false,
                 error: 'Failed to fetch treasury balances',

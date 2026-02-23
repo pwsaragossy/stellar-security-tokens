@@ -1,6 +1,8 @@
 import express from 'express';
 import { MultiSigTransactionService } from '../services/multiSigTransaction.service.js';
 import { authenticatePlatformAdmin } from '../middleware/auth.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('AdminTxRoutes');
 
 const router = express.Router();
 
@@ -36,7 +38,7 @@ router.get('/pending', authenticatePlatformAdmin, async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('Error listing pending transactions:', error);
+        log.error('Error listing pending transactions:', error);
         res.status(500).json({
             success: false,
             error: error.message,
@@ -94,7 +96,7 @@ router.get('/:id', authenticatePlatformAdmin, async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('Error getting transaction:', error);
+        log.error('Error getting transaction:', error);
         res.status(500).json({
             success: false,
             error: error.message,
@@ -151,7 +153,7 @@ router.get('/:id/xdr', authenticatePlatformAdmin, async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('Error getting XDR:', error);
+        log.error('Error getting XDR:', error);
         res.status(500).json({
             success: false,
             error: error.message,
@@ -216,7 +218,7 @@ router.post('/:id/sign', authenticatePlatformAdmin, async (req, res) => {
                 : `Signature added. ${result.remainingSignatures} more signature(s) needed.`,
         });
     } catch (error) {
-        console.error('Error adding signature:', error);
+        log.error('Error adding signature:', error);
         res.status(400).json({
             success: false,
             error: error.message,
@@ -259,13 +261,13 @@ router.post('/:id/submit', authenticatePlatformAdmin, async (req, res) => {
             }
 
             // Parse and submit the signed XDR
-            console.log(`[AdminTx] Parsing signed XDR (length: ${signedXDR.length})`);
+            log.info(`[AdminTx] Parsing signed XDR (length: ${signedXDR.length})`);
             const transaction = TransactionBuilder.fromXDR(signedXDR, getNetworkPassphrase());
-            console.log(`[AdminTx] Transaction parsed, hash: ${transaction.hash().toString('hex')}`);
+            log.info(`[AdminTx] Transaction parsed, hash: ${transaction.hash().toString('hex')}`);
 
             try {
-                console.log(`[AdminTx] Submitting to Stellar network...`);
-                console.log(`[AdminTx] Horizon URL: ${stellarServer.serverURL}`);
+                log.info(`[AdminTx] Submitting to Stellar network...`);
+                log.info(`[AdminTx] Horizon URL: ${stellarServer.serverURL}`);
 
                 // Use submitSignedTransaction helper which has proper URL validation
                 const { submitSignedTransaction } = await import('../config/stellar.js');
@@ -283,7 +285,7 @@ router.post('/:id/submit', authenticatePlatformAdmin, async (req, res) => {
                         }
                     });
 
-                    console.error(`[AdminTx] TX #${id} failed:`, result.error);
+                    log.error(`[AdminTx] TX #${id} failed:`, result.error);
                     return res.status(400).json({
                         success: false,
                         error: result.userFriendlyError || result.error
@@ -308,7 +310,7 @@ router.post('/:id/submit', authenticatePlatformAdmin, async (req, res) => {
                     }
                 });
 
-                console.log(`[AdminTx] TX #${id} submitted via Dev Keys: ${result.hash}`);
+                log.info(`[AdminTx] TX #${id} submitted via Dev Keys: ${result.hash}`);
 
                 return res.json({
                     success: true,
@@ -320,7 +322,7 @@ router.post('/:id/submit', authenticatePlatformAdmin, async (req, res) => {
                 });
             } catch (submitError) {
                 // Enhanced error logging for debugging
-                console.error(`[AdminTx] Horizon error details:`, {
+                log.error(`[AdminTx] Horizon error details:`, {
                     status: submitError.response?.status,
                     statusText: submitError.response?.statusText,
                     data: submitError.response?.data,
@@ -341,7 +343,7 @@ router.post('/:id/submit', authenticatePlatformAdmin, async (req, res) => {
                     }
                 });
 
-                console.error(`[AdminTx] TX #${id} failed:`, errorMessage);
+                log.error(`[AdminTx] TX #${id} failed:`, errorMessage);
                 return res.status(400).json({ success: false, error: errorMessage });
             }
         }
@@ -366,7 +368,7 @@ router.post('/:id/submit', authenticatePlatformAdmin, async (req, res) => {
             });
         }
     } catch (error) {
-        console.error('Error submitting transaction:', error);
+        log.error('Error submitting transaction:', error);
         res.status(400).json({
             success: false,
             error: error.message,
@@ -416,7 +418,7 @@ router.post('/:id/reject', authenticatePlatformAdmin, async (req, res) => {
             message: 'Transaction rejected',
         });
     } catch (error) {
-        console.error('Error rejecting transaction:', error);
+        log.error('Error rejecting transaction:', error);
         res.status(400).json({
             success: false,
             error: error.message,
@@ -445,7 +447,7 @@ router.get('/stats', authenticatePlatformAdmin, async (req, res) => {
             data: stats,
         });
     } catch (error) {
-        console.error('Error getting stats:', error);
+        log.error('Error getting stats:', error);
         res.status(500).json({
             success: false,
             error: error.message,
@@ -493,7 +495,7 @@ router.post('/deposits/:depositId/retry', authenticatePlatformAdmin, async (req,
             message: `Deposit ${depositId} forwarding triggered with asset ${assetCode}`,
         });
     } catch (error) {
-        console.error('Error retrying deposit forward:', error);
+        log.error('Error retrying deposit forward:', error);
         res.status(400).json({
             success: false,
             error: error.message,
@@ -523,7 +525,7 @@ router.post('/deposits/retry-all', authenticatePlatformAdmin, async (req, res) =
         try {
             summary.expiredMultisig = await MultiSigTransactionService.expireOldTransactions();
         } catch (err) {
-            console.error('[RetryAll] Error expiring multisig:', err.message);
+            log.error('[RetryAll] Error expiring multisig:', err.message);
         }
 
         // 2. Retry stuck deposits (received / failed / rejected)
@@ -541,7 +543,7 @@ router.post('/deposits/retry-all', authenticatePlatformAdmin, async (req, res) =
                 }
             }
         } catch (err) {
-            console.error('[RetryAll] Error retrying deposits:', err.message);
+            log.error('[RetryAll] Error retrying deposits:', err.message);
         }
 
         res.json({
@@ -550,7 +552,7 @@ router.post('/deposits/retry-all', authenticatePlatformAdmin, async (req, res) =
             message: `Healed: ${summary.expiredMultisig} expired tx, ${summary.retriedDeposits.length} retried deposits`,
         });
     } catch (error) {
-        console.error('Error in retry-all:', error);
+        log.error('Error in retry-all:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });

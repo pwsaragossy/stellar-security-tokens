@@ -2,6 +2,8 @@ import { PinataSDK } from 'pinata-web3';
 import dotenv from 'dotenv';
 import { Blob } from 'buffer';
 import path from 'path';
+import logger from '../utils/logger.js';
+const log = logger.scope('IPFSService');
 
 // Load env vars if not already loaded
 if (!process.env.PINATA_JWT) {
@@ -25,8 +27,8 @@ export class IpfsService {
       });
       this.isEnabled = true;
     } else {
-      console.warn('PINATA_JWT not found in environment variables. IPFS service running in mock mode.');
-      console.warn('Please migrate from PINATA_API_KEY/SECRET to PINATA_JWT for the new SDK.');
+      log.warn('PINATA_JWT not found in environment variables. IPFS service running in mock mode.');
+      log.warn('Please migrate from PINATA_API_KEY/SECRET to PINATA_JWT for the new SDK.');
       this.isEnabled = false;
     }
   }
@@ -42,7 +44,7 @@ export class IpfsService {
     if (!this.isEnabled) {
       // Mock implementation for development without keys
       const mockHash = 'Qm' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      console.log(`[MOCK IPFS] Uploaded ${fileName} with metadata:`, metadata);
+      log.info(`[MOCK IPFS] Uploaded ${fileName} with metadata:`, metadata);
       return {
         ipfsHash: mockHash,
         url: this.getGatewayUrl(mockHash),
@@ -77,7 +79,7 @@ export class IpfsService {
         url: this.getGatewayUrl(upload.IpfsHash),
       };
     } catch (error) {
-      console.error('IPFS upload failed:', error);
+      log.error('IPFS upload failed:', error);
       throw new Error(`Failed to upload file to IPFS: ${error.message}`);
     }
   }
@@ -99,14 +101,14 @@ export class IpfsService {
    */
   async testConnection() {
     if (!this.isEnabled) {
-      console.warn('Cannot test connection: IPFS service is in mock mode (missing PINATA_JWT)');
+      log.warn('Cannot test connection: IPFS service is in mock mode (missing PINATA_JWT)');
       return false;
     }
     try {
       const result = await this.pinata.testAuthentication();
       return result.message === 'Congratulations! You are communicating with the Pinata API!';
     } catch (error) {
-      console.error('Pinata authentication failed:', error.message);
+      log.error('Pinata authentication failed:', error.message);
       return false;
     }
   }

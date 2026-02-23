@@ -5,6 +5,8 @@ import { keyManager } from '../services/KeyManager.js';
 import { MultiSigTransactionService } from '../services/multiSigTransaction.service.js';
 import { buildUnsignedTransaction } from '../config/stellar.js';
 import { Operation } from '@stellar/stellar-sdk';
+import logger from '../utils/logger.js';
+const log = logger.scope('TokenController');
 
 export const issueToken = async (req, res, next) => {
   try {
@@ -240,7 +242,7 @@ export const disableClawback = async (req, res, next) => {
 
     // PHASE 2.1: Multi-Admin Consensus for Compliance Finality
     if (keyManager.requiresMultisigApproval('disable_clawback')) {
-      console.log(`[TokenController] Multi-Admin mode: Creating proposal for disable_clawback...`);
+      log.info('Multi-Admin mode: Creating proposal for disable_clawback...');
 
       const issuerPublicKey = keyManager.getIssuerPublicKey();
       const xdr = await buildUnsignedTransaction(

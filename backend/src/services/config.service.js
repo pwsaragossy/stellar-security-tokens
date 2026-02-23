@@ -1,4 +1,6 @@
 import prisma from '../config/prisma.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('ConfigService');
 
 export class ConfigService {
     /**
@@ -49,7 +51,7 @@ export class ConfigService {
                 },
             });
         } catch (error) {
-            console.error('Failed to log fee:', error);
+            log.error('Failed to log fee:', error);
             // Não lançar erro para não bloquear fluxo principal?
         }
     }

@@ -17,6 +17,8 @@ import prisma from '../config/prisma.js';
 import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
 import { WebAuthnService } from '../services/webauthn.service.js';
 import { blocklistToken } from '../config/redis.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('AuthRoutes');
 
 const router = express.Router();
 
@@ -327,7 +329,7 @@ router.post('/logout', authenticateToken, async (req, res, next) => {
     if (token) {
       const success = await blocklistToken(token);
       if (!success) {
-        console.warn('[Auth] Failed to blocklist token (Redis unavailable)');
+        log.warn('[Auth] Failed to blocklist token (Redis unavailable)');
       }
     }
 

@@ -8,6 +8,8 @@ import {
 import { keyManager } from '../services/KeyManager.js';
 import prisma from '../config/prisma.js';
 import { TransactionBuilder, Transaction, Networks as StellarNetworks, Operation, Asset } from '@stellar/stellar-sdk';
+import logger from '../utils/logger.js';
+const log = logger.scope('WalletController');
 
 /**
  * Resolve wallet role name to its public key via KeyManager.
@@ -28,7 +30,7 @@ async function runPostExecutionHook(proposal, stellarResult) {
 
     // ── SAC Deploy completed → auto-queue distribution ──
     if (operationType === 'sac_deploy' && meta.chainAction === 'token_distribute') {
-        console.log(`[PostHook] SAC deploy TX #${proposal.id} executed. Chaining distribution for investor ${meta.investorPublicKey}...`);
+        log.info(`[PostHook] SAC deploy TX #${proposal.id} executed. Chaining distribution for investor ${meta.investorPublicKey}...`);
         const { StellarService } = await import('../services/stellar.service.js');
         try {
             const distResult = await StellarService.distributeTokens(
@@ -46,7 +48,7 @@ async function runPostExecutionHook(proposal, stellarResult) {
                     usdcPaymentHash: meta.usdcPaymentHash,
                 }
             );
-            console.log(`[PostHook] Distribution chained:`, distResult.status || 'submitted', distResult.multiSigTransactionId || distResult.transactionHash);
+            log.info(`[PostHook] Distribution chained:`, distResult.status || 'submitted', distResult.multiSigTransactionId || distResult.transactionHash);
 
             // If distribution also went to multisig, update investment with the new TX ID
             if (distResult.status === 'pending_multisig' && meta.investmentId) {
@@ -60,14 +62,14 @@ async function runPostExecutionHook(proposal, stellarResult) {
                 });
             }
         } catch (distErr) {
-            console.error(`[PostHook] Chained distribution failed for investment ${meta.investmentId}:`, distErr);
+            log.error(`[PostHook] Chained distribution failed for investment ${meta.investmentId}:`, distErr);
         }
         return;
     }
 
     // ── Distribution completed → finalize investment ──
     if (operationType === 'token_distribute' && meta.investmentId) {
-        console.log(`[PostHook] Distribution TX #${proposal.id} executed. Completing investment ${meta.investmentId}...`);
+        log.info(`[PostHook] Distribution TX #${proposal.id} executed. Completing investment ${meta.investmentId}...`);
         try {
             const { Investment } = await import('../models/Investment.js');
             const { Token } = await import('../models/Token.js');
@@ -102,9 +104,9 @@ async function runPostExecutionHook(proposal, stellarResult) {
                 }
             }
 
-            console.log(`[PostHook] Investment ${meta.investmentId} completed. Distribution hash: ${txHash}`);
+            log.info(`[PostHook] Investment ${meta.investmentId} completed. Distribution hash: ${txHash}`);
         } catch (err) {
-            console.error(`[PostHook] Failed to complete investment ${meta.investmentId}:`, err);
+            log.error(`[PostHook] Failed to complete investment ${meta.investmentId}:`, err);
         }
         return;
     }
@@ -126,9 +128,9 @@ export const WalletController = {
             const statuses = await Promise.all(walletRoles.map(async (w) => {
                 const publicKey = keyManager.getPublicKey(w.role);
                 try {
-                    console.log(`[WalletController] Loading ${w.name} account: ${publicKey}`);
+                    log.info(`[WalletController] Loading ${w.name} account: ${publicKey}`);
                     const account = await createFreshServer().loadAccount(publicKey);
-                    console.log(`[WalletController] ${w.name} account loaded successfully`);
+                    log.info(`[WalletController] ${w.name} account loaded successfully`);
                     return {
                         name: w.name,
                         publicKey,
@@ -143,8 +145,8 @@ export const WalletController = {
                         error.name === 'NotFoundError' ||
                         (error.response && error.response.data && error.response.data.status === 404);
 
-                    console.error(`[WalletController] Error loading ${w.name} account:`, error.message);
-                    console.log(`[WalletController] Error details - name: ${error.name}, is404: ${is404}`);
+                    log.error(`[WalletController] Error loading ${w.name} account:`, error.message);
+                    log.info(`[WalletController] Error details - name: ${error.name}, is404: ${is404}`);
 
                     if (is404) {
                         return {
@@ -155,7 +157,7 @@ export const WalletController = {
                         };
                     }
                     // Log the full error for non-404 errors
-                    console.error(`[WalletController] ${w.name} full error:`, error);
+                    log.error(`[WalletController] ${w.name} full error:`, error);
                     return {
                         name: w.name,
                         publicKey,
@@ -167,7 +169,7 @@ export const WalletController = {
 
             res.status(200).json(statuses);
         } catch (error) {
-            console.error('Get Wallet Status Error:', error);
+            log.error('Get Wallet Status Error:', error);
             res.status(500).json({ error: 'Failed to fetch wallet statuses' });
         }
     },
@@ -195,7 +197,7 @@ export const WalletController = {
                 const { StellarService } = await import('../services/stellar.service.js');
                 sourceAccount = await StellarService.getAccountRPC(sourcePublicKey);
             } catch (e) {
-                console.warn('[WalletController] RPC fetch failed, falling back to Horizon check:', e.message);
+                log.warn('[WalletController] RPC fetch failed, falling back to Horizon check:', e.message);
                 try {
                     sourceAccount = await stellarServer.loadAccount(sourcePublicKey);
                 } catch (innerError) {
@@ -341,7 +343,7 @@ export const WalletController = {
 
             res.status(201).json(proposal);
         } catch (error) {
-            console.error('Create Proposal Error:', error);
+            log.error('Create Proposal Error:', error);
             res.status(500).json({ error: 'Failed to create transaction proposal' });
         }
     },
@@ -370,7 +372,7 @@ export const WalletController = {
 
             res.status(200).json({ rows: proposals, count: total });
         } catch (error) {
-            console.error('List Proposals Error:', error);
+            log.error('List Proposals Error:', error);
             res.status(500).json({ error: 'Failed to fetch proposals' });
         }
     },
@@ -418,12 +420,12 @@ export const WalletController = {
 
                 // Post-execution hook — runs async, doesn't block the response
                 runPostExecutionHook(updatedProposal, result).catch(err => {
-                    console.error(`[WalletController] Post-execution hook failed for TX #${updatedProposal.id}:`, err);
+                    log.error(`[WalletController] Post-execution hook failed for TX #${updatedProposal.id}:`, err);
                 });
 
                 res.status(200).json({ success: true, result });
             } catch (submitError) {
-                console.error('Stellar Submission Error:', submitError);
+                log.error('Stellar Submission Error:', submitError);
 
                 await prisma.multiSigTransaction.update({
                     where: { id: parseInt(id) },
@@ -437,7 +439,7 @@ export const WalletController = {
             }
 
         } catch (error) {
-            console.error('Submit Proposal Error:', error);
+            log.error('Submit Proposal Error:', error);
             res.status(500).json({ error: 'Failed to submit proposal' });
         }
     },

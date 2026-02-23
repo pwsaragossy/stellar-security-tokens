@@ -9,6 +9,8 @@ import { ipfsService } from '../services/ipfs.service.js';
 import { StellarTomlService } from '../services/stellarToml.service.js';
 import { CompanyUser } from '../models/CompanyUser.js';
 import { Keypair } from '@stellar/stellar-sdk';
+import logger from '../utils/logger.js';
+const log = logger.scope('OfferController');
 
 /**
  * Controller para gerenciar ofertas de tokenização
@@ -150,7 +152,7 @@ export class OfferController {
         },
       });
     } catch (error) {
-      console.error('Error fetching issuance fee:', error);
+      log.error('Error fetching issuance fee:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch issuance fee',
@@ -269,9 +271,9 @@ export class OfferController {
               role: 'admin'
             });
             requestedBy = newUser.id;
-            console.log(`[OfferController] Created system user for Company ${companyId}: ID ${newUser.id}`);
+            log.info(`[OfferController] Created system user for Company ${companyId}: ID ${newUser.id}`);
           } catch (err) {
-            console.error('[OfferController] Failed to create system user:', err);
+            log.error('[OfferController] Failed to create system user:', err);
             return res.status(400).json({
               success: false,
               error: 'Cannot create offer: No company users found and failed to create default user.',
@@ -349,7 +351,7 @@ export class OfferController {
         data: OfferController.formatOfferForResponse(offer),
       });
     } catch (error) {
-      console.error('Error creating offer:', error);
+      log.error('Error creating offer:', error);
 
       // Return 400 for known validation errors from OfferService
       const validationPrefixes = ['Invalid payment fields', 'Invalid offer rules', 'Invalid asset_code', 'Total supply', 'Unit price', 'Asset code already'];
@@ -382,7 +384,7 @@ export class OfferController {
         data: formattedOffers,
       });
     } catch (error) {
-      console.error('Error fetching company offers:', error);
+      log.error('Error fetching company offers:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch company offers',
@@ -421,7 +423,7 @@ export class OfferController {
         data: OfferController.formatOfferForResponse(offer),
       });
     } catch (error) {
-      console.error('Error fetching offer details:', error);
+      log.error('Error fetching offer details:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch offer details',
@@ -498,7 +500,7 @@ export class OfferController {
               url: uploadResult.url
             };
           } catch (uploadError) {
-            console.error(`Failed to upload ${docType}:`, uploadError);
+            log.error(`Failed to upload ${docType}:`, uploadError);
             // Decide if we abort or continue. For now, log and ensure partial success or fail hard?
             // Let's fail hard to ensure data integrity
             throw new Error(`Failed to upload document: ${file.originalname}`);
@@ -520,7 +522,7 @@ export class OfferController {
           updatedRules = JSON.parse(updatedRules);
         } catch (e) {
           // If parse fails, ignore or keep existing? Let's assume partial updates might send strings
-          console.warn('Failed to parse offer_rules string:', e);
+          log.warn('Failed to parse offer_rules string:', e);
         }
       }
 
@@ -547,7 +549,7 @@ export class OfferController {
         data: OfferController.formatOfferForResponse(updatedOffer),
       });
     } catch (error) {
-      console.error('Error fetching file uploads:', error);
+      log.error('Error fetching file uploads:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to update offer',
@@ -588,7 +590,7 @@ export class OfferController {
         data: investors,
       });
     } catch (error) {
-      console.error('Error fetching offer investors:', error);
+      log.error('Error fetching offer investors:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch offer investors',
@@ -638,7 +640,7 @@ export class OfferController {
         },
       });
     } catch (error) {
-      console.error('Error fetching active offers:', error);
+      log.error('Error fetching active offers:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch active offers',
@@ -683,7 +685,7 @@ export class OfferController {
         data: OfferController.formatOfferForResponse(offer, cutoffDays),
       });
     } catch (error) {
-      console.error('Error fetching public offer details:', error);
+      log.error('Error fetching public offer details:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch offer details',
@@ -725,7 +727,7 @@ export class OfferController {
         },
       });
     } catch (error) {
-      console.error('Error fetching all offers:', error);
+      log.error('Error fetching all offers:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch offers',
@@ -790,7 +792,7 @@ export class OfferController {
         data: OfferController.formatOfferForResponse(updatedOffer),
       });
     } catch (error) {
-      console.error('Error reviewing offer:', error);
+      log.error('Error reviewing offer:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to review offer',
@@ -829,7 +831,7 @@ export class OfferController {
         data: OfferController.formatOfferForResponse(updatedOffer),
       });
     } catch (error) {
-      console.error('Error adding due diligence notes:', error);
+      log.error('Error adding due diligence notes:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to add due diligence notes',
@@ -965,7 +967,7 @@ export class OfferController {
         },
       });
     } catch (error) {
-      console.error('Error issuing token from offer:', error);
+      log.error('Error issuing token from offer:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to issue token',
@@ -998,7 +1000,7 @@ export class OfferController {
         data: OfferController.formatOfferForResponse(updatedOffer),
       });
     } catch (error) {
-      console.error('Error activating offer:', error);
+      log.error('Error activating offer:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to activate offer',
@@ -1066,7 +1068,7 @@ export class OfferController {
         data: OfferController.formatOfferForResponse(updatedOffer),
       });
     } catch (error) {
-      console.error('Error activating offer by company:', error);
+      log.error('Error activating offer by company:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to activate offer',
@@ -1121,7 +1123,7 @@ export class OfferController {
         data: OfferController.formatOfferForResponse(updatedOffer),
       });
     } catch (error) {
-      console.error('Error verifying offer issuance:', error);
+      log.error('Error verifying offer issuance:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to verify offer',

@@ -9,6 +9,8 @@ import { NotificationService } from './notification.service.js';
 import { EmailService } from './email.service.js';
 import { Asset, Operation, Keypair } from '@stellar/stellar-sdk';
 import { getIssuerKeypair, getDistributorKeypair } from '../config/stellar.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('CollateralDist');
 
 /**
  * Collateral Distribution Service
@@ -92,7 +94,7 @@ export class CollateralDistributionService {
             const investorsWithBalances = await PaymentService.getInvestorsWithBalancesByOffer(offer.id);
 
             if (!investorsWithBalances || investorsWithBalances.length === 0) {
-                console.log(`[CollateralDistribution] No on-chain balances found for offer ${offer.id}`);
+                log.info(`[CollateralDistribution] No on-chain balances found for offer ${offer.id}`);
                 return {
                     offerId: offer.id,
                     assetCode: offer.assetCode,
@@ -133,7 +135,7 @@ export class CollateralDistributionService {
                 };
             }).filter(d => d.tokenBalance > 0);
 
-            console.log(`[CollateralDistribution] On-chain calculation for defaulted offer ${offer.id}:`, {
+            log.info(`[CollateralDistribution] On-chain calculation for defaulted offer ${offer.id}:`, {
                 investorCount: distributions.length,
                 totalTokensHeld,
                 collateralValue: offer.collateralValue,
@@ -156,7 +158,7 @@ export class CollateralDistributionService {
                 distributions
             };
         } catch (error) {
-            console.error(`[CollateralDistribution] Error fetching on-chain balances for offer ${offer.id}:`, error);
+            log.error(`[CollateralDistribution] Error fetching on-chain balances for offer ${offer.id}:`, error);
             throw new Error(`Failed to calculate on-chain collateral distribution: ${error.message}`);
         }
     }
@@ -299,11 +301,11 @@ export class CollateralDistributionService {
                         collateralDescription: offerDetails.collateralDescription
                     });
                 } catch (notifyError) {
-                    console.error(`Failed to notify investor ${distribution.investorId}:`, notifyError);
+                    log.error(`Failed to notify investor ${distribution.investorId}:`, notifyError);
                 }
             }
 
-            console.log(`[CollateralDistribution] Collateral distributed for offer ${offerId}`, {
+            log.info(`[CollateralDistribution] Collateral distributed for offer ${offerId}`, {
                 adminId,
                 transactionHash: result.transactionHash,
                 investorCount: offerDetails.distributions.length
@@ -317,7 +319,7 @@ export class CollateralDistributionService {
             };
 
         } catch (error) {
-            console.error(`[CollateralDistribution] Failed for offer ${offerId}:`, error);
+            log.error(`[CollateralDistribution] Failed for offer ${offerId}:`, error);
             throw error;
         }
     }

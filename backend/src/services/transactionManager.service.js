@@ -1,6 +1,8 @@
 import { keyManager } from './KeyManager.js';
 import { MultiSigTransactionService } from './multiSigTransaction.service.js';
 import { signAndSubmitTransaction, stellarServer } from '../config/stellar.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('TxManager');
 
 /**
  * TransactionManager Service
@@ -34,13 +36,13 @@ export class TransactionManager {
 
         if (!requiresMultisig) {
             // --- DIRECT SIGNING (ENV MODE) ---
-            console.log(`[TransactionManager] Direct signing ${operationType} (Auto-signing enabled)`);
+            log.info(`[TransactionManager] Direct signing ${operationType} (Auto-signing enabled)`);
             const signingKeypair = keyManager.getKeypairForRole(signingRole);
             return await signAndSubmitTransaction(transaction, signingKeypair);
         }
 
         // --- MULTISIG QUEUEING (PRODUCTION MODE) ---
-        console.log(`[TransactionManager] Queueing ${operationType} for MultiSig approval`);
+        log.info(`[TransactionManager] Queueing ${operationType} for MultiSig approval`);
 
         const xdr = transaction.toXDR();
         const requiredSigners = keyManager.getRequiredSigners(operationType);

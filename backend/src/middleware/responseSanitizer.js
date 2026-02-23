@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import logger from '../utils/logger.js';
+const log = logger.scope('ResponseSanitizer');
 
 /**
  * Response Sanitizer Middleware (H-1 Security Fix)
@@ -22,7 +24,7 @@ export function responseSanitizer(req, res, next) {
             const errorId = body.errorId || crypto.randomUUID();
 
             // Log the original response server-side for debugging
-            console.error(`[ErrorSanitizer ${errorId}]`, JSON.stringify(body));
+            log.error(`[ErrorSanitizer ${errorId}]`, JSON.stringify(body));
 
             return originalJson({
                 success: false,

@@ -1,6 +1,8 @@
 import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { createClient } from 'redis';
+import logger from '../utils/logger.js';
+const log = logger.scope('RateLimit');
 
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379', 10);
@@ -33,13 +35,13 @@ async function getRedisClient() {
 
         redisClient.on('error', (err) => {
             if (redisAvailable) {
-                console.warn('[RateLimit] Redis connection lost, falling back to memory store:', err.message);
+                log.warn('[RateLimit] Redis connection lost, falling back to memory store:', err.message);
                 redisAvailable = false;
             }
         });
 
         redisClient.on('connect', () => {
-            console.log('[RateLimit] Redis connected for rate limiting');
+            log.info('[RateLimit] Redis connected for rate limiting');
             redisAvailable = true;
         });
 
@@ -47,7 +49,7 @@ async function getRedisClient() {
         redisAvailable = true;
         return redisClient;
     } catch (error) {
-        console.warn('[RateLimit] Redis not available, using memory store:', error.message);
+        log.warn('[RateLimit] Redis not available, using memory store:', error.message);
         redisAvailable = false;
         return null;
     }
@@ -86,7 +88,7 @@ function createLimiter(options) {
                 sendCommand: (...args) => client.sendCommand(args),
                 prefix: `${keyPrefix}:`,
             });
-            console.log(`[RateLimit] Upgraded ${keyPrefix} limiter to Redis store`);
+            log.info(`[RateLimit] Upgraded ${keyPrefix} limiter to Redis store`);
         }
     }).catch(() => {
         // Keep using memory store

@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import logger from '../utils/logger.js';
+const log = logger.scope('ErrorHandler');
 
 /**
  * Middleware de tratamento de erros global
@@ -10,7 +12,7 @@ export const errorHandler = (err, req, res, next) => {
   const errorId = crypto.randomUUID();
 
   // Always log full error server-side
-  console.error(`[Error ${errorId}]`, err);
+  log.error(`[Error ${errorId}]`, err);
 
   if (err.name === 'ValidationError') {
     return res.status(400).json({

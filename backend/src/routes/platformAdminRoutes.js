@@ -99,7 +99,7 @@ router.post('/freighter/challenge', async (req, res) => {
       expiresAt: Date.now() + 5 * 60 * 1000,
     });
 
-    console.log(`[Freighter Auth] Challenge TX issued for admin ${admin.email} (${publicKey.slice(0, 8)}...)`);
+    log.info(`[Freighter Auth] Challenge TX issued for admin ${admin.email} (${publicKey.slice(0, 8)}...)`);
 
     res.json({
       success: true,
@@ -109,7 +109,7 @@ router.post('/freighter/challenge', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[Freighter Auth] Challenge error:', error);
+    log.error('[Freighter Auth] Challenge error:', error);
     res.status(500).json({ success: false, error: 'Failed to generate challenge' });
   }
 });
@@ -176,7 +176,7 @@ router.post('/freighter/verify', async (req, res) => {
     freighterChallenges.delete(publicKey);
 
     if (!verified) {
-      console.log(`[Freighter Auth] Signature verification failed for ${publicKey.slice(0, 8)}... (${signatures.length} signatures on TX)`);
+      log.info(`[Freighter Auth] Signature verification failed for ${publicKey.slice(0, 8)}... (${signatures.length} signatures on TX)`);
       return res.status(401).json({ success: false, error: 'Invalid signature. Authentication failed.' });
     }
 
@@ -202,7 +202,7 @@ router.post('/freighter/verify', async (req, res) => {
     const refreshToken = await generateRefreshToken('platform_admin', admin.id);
     setRefreshCookie(res, refreshToken, 'platform_admin');
 
-    console.log(`[Freighter Auth] Login successful for ${admin.email}`);
+    log.info(`[Freighter Auth] Login successful for ${admin.email}`);
 
     res.json({
       success: true,
@@ -217,7 +217,7 @@ router.post('/freighter/verify', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[Freighter Auth] Verify error:', error);
+    log.error('[Freighter Auth] Verify error:', error);
     res.status(500).json({ success: false, error: 'Authentication failed' });
   }
 });
@@ -235,7 +235,7 @@ router.post('/passkey/login/options', async (req, res) => {
     const options = await WebAuthnService.generateAuthenticationOptions('platform_admin', admin.id);
     res.json(options);
   } catch (error) {
-    console.error('Passkey Auth Options Error:', error);
+    log.error('Passkey Auth Options Error:', error);
     res.status(500).json({ error: 'Failed to generate auth options' });
   }
 });
@@ -265,7 +265,7 @@ router.post('/passkey/login/verify', async (req, res) => {
       res.status(400).json({ success: false, error: 'Authentication failed' });
     }
   } catch (error) {
-    console.error('Passkey Verify Error:', error);
+    log.error('Passkey Verify Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -298,7 +298,7 @@ router.post('/passkey/register/options', authenticateToken, requirePlatformAdmin
 
     res.json({ success: true, options, challenge: options.challenge });
   } catch (error) {
-    console.error('[Admin Passkey] Registration options error:', error);
+    log.error('[Admin Passkey] Registration options error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -333,7 +333,7 @@ router.post('/passkey/register', authenticateToken, requirePlatformAdmin, async 
       res.status(400).json({ success: false, error: 'Passkey verification failed' });
     }
   } catch (error) {
-    console.error('[Admin Passkey] Registration error:', error);
+    log.error('[Admin Passkey] Registration error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -352,7 +352,7 @@ router.get('/passkey-login', async (req, res) => {
       timeout: options.timeout
     });
   } catch (error) {
-    console.error('[Admin Passkey] Auth options error:', error);
+    log.error('[Admin Passkey] Auth options error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -420,7 +420,7 @@ router.post('/passkey-login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[Admin Passkey] Login error:', error);
+    log.error('[Admin Passkey] Login error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -765,7 +765,7 @@ router.get('/companies', authenticateToken, requirePlatformAdmin, async (req, re
 
     res.json({ success: true, data: result });
   } catch (error) {
-    console.error('[Companies List] Error:', error);
+    log.error('[Companies List] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -831,7 +831,7 @@ router.get('/companies/:id/details', authenticateToken, requirePlatformAdmin, as
       try {
         balances = await PasskeyWalletService.getSorobanWalletBalances(company.stellarContractId);
       } catch (err) {
-        console.log('[Company Details] Balance fetch error:', err.message);
+        log.info('[Company Details] Balance fetch error:', err.message);
       }
     }
 
@@ -845,7 +845,7 @@ router.get('/companies/:id/details', authenticateToken, requirePlatformAdmin, as
       }
     });
   } catch (error) {
-    console.error('[Company Details] Error:', error);
+    log.error('[Company Details] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -898,13 +898,13 @@ router.post('/companies/:id/approve', authenticateToken, requirePlatformAdmin, a
     // Send approval email to company
     try {
       await EmailService.sendCompanyStatusUpdate(company.email, company.name, 'approved');
-      console.log(`[Admin] Approval email sent to ${company.email}`);
+      log.info(`[Admin] Approval email sent to ${company.email}`);
     } catch (emailErr) {
-      console.error(`[Admin] Failed to send approval email:`, emailErr.message);
+      log.error(`[Admin] Failed to send approval email:`, emailErr.message);
       // Don't fail the approval if email fails
     }
 
-    console.log(`[Admin] Company ${id} (${company.name}) approved by admin ${req.user.userId}`);
+    log.info(`[Admin] Company ${id} (${company.name}) approved by admin ${req.user.userId}`);
 
     res.json({
       success: true,
@@ -912,7 +912,7 @@ router.post('/companies/:id/approve', authenticateToken, requirePlatformAdmin, a
       data: updatedCompany
     });
   } catch (error) {
-    console.error('[Company Approve] Error:', error);
+    log.error('[Company Approve] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -984,13 +984,13 @@ router.post('/companies/:id/reject', authenticateToken, requirePlatformAdmin, as
     // Send rejection email to company with reason
     try {
       await EmailService.sendCompanyStatusUpdate(company.email, company.name, 'rejected', reason);
-      console.log(`[Admin] Rejection email sent to ${company.email}`);
+      log.info(`[Admin] Rejection email sent to ${company.email}`);
     } catch (emailErr) {
-      console.error(`[Admin] Failed to send rejection email:`, emailErr.message);
+      log.error(`[Admin] Failed to send rejection email:`, emailErr.message);
       // Don't fail the rejection if email fails
     }
 
-    console.log(`[Admin] Company ${id} (${company.name}) rejected by admin ${req.user.userId}. Reason: ${reason}`);
+    log.info(`[Admin] Company ${id} (${company.name}) rejected by admin ${req.user.userId}. Reason: ${reason}`);
 
     res.json({
       success: true,
@@ -998,7 +998,7 @@ router.post('/companies/:id/reject', authenticateToken, requirePlatformAdmin, as
       data: updatedCompany
     });
   } catch (error) {
-    console.error('[Company Reject] Error:', error);
+    log.error('[Company Reject] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1082,8 +1082,8 @@ router.post('/companies/:id/sponsor', authenticateToken, requirePlatformAdmin, a
       });
     }
 
-    console.log(`[Admin Sponsor Company] Sponsoring wallet for company ${company.id} (${company.name})`);
-    console.log(`[Admin Sponsor Company] Sending ${xlmAmount} XLM to ${company.stellarContractId}`);
+    log.info(`[Admin Sponsor Company] Sponsoring wallet for company ${company.id} (${company.name})`);
+    log.info(`[Admin Sponsor Company] Sending ${xlmAmount} XLM to ${company.stellarContractId}`);
 
     // Get Treasury keypair (imported at bottom of file)
     const { getTreasuryKeypair, getNetworkPassphrase } = await import('../config/stellar.js');
@@ -1132,11 +1132,11 @@ router.post('/companies/:id/sponsor', authenticateToken, requirePlatformAdmin, a
       .build();
 
     // Simulate the transaction
-    console.log('[Admin Sponsor Company] Simulating transaction...');
+    log.info('[Admin Sponsor Company] Simulating transaction...');
     const simResult = await sorobanServer.simulateTransaction(tx);
 
     if (rpc.Api.isSimulationError(simResult)) {
-      console.error('[Admin Sponsor Company] Simulation error:', simResult.error);
+      log.error('[Admin Sponsor Company] Simulation error:', simResult.error);
       throw new Error(`Simulation failed: ${simResult.error}`);
     }
 
@@ -1147,7 +1147,7 @@ router.post('/companies/:id/sponsor', authenticateToken, requirePlatformAdmin, a
     tx.sign(treasuryKeypair);
 
     // Submit via Soroban RPC
-    console.log('[Admin Sponsor Company] Submitting transaction...');
+    log.info('[Admin Sponsor Company] Submitting transaction...');
     const sendResponse = await sorobanServer.sendTransaction(tx);
 
     if (sendResponse.status === 'ERROR') {
@@ -1171,7 +1171,7 @@ router.post('/companies/:id/sponsor', authenticateToken, requirePlatformAdmin, a
       throw new Error(`Transaction failed: ${getResponse?.status || 'TIMEOUT'}`);
     }
 
-    console.log(`[Admin Sponsor Company] Success! TX Hash: ${sendResponse.hash}`);
+    log.info(`[Admin Sponsor Company] Success! TX Hash: ${sendResponse.hash}`);
 
     res.json({
       success: true,
@@ -1187,7 +1187,7 @@ router.post('/companies/:id/sponsor', authenticateToken, requirePlatformAdmin, a
     });
 
   } catch (error) {
-    console.error('[Admin Sponsor Company] Error:', error);
+    log.error('[Admin Sponsor Company] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1259,7 +1259,7 @@ router.get('/investors/:id/details', authenticateToken, requirePlatformAdmin, as
         const balanceResult = await PasskeyWalletService.getSorobanWalletBalances(investor.stellarContractId);
         balances = balanceResult;
       } catch (err) {
-        console.log('[Investor Details] Balance fetch error:', err.message);
+        log.info('[Investor Details] Balance fetch error:', err.message);
       }
 
       // Map DB investments to transactions for display
@@ -1281,7 +1281,7 @@ router.get('/investors/:id/details', authenticateToken, requirePlatformAdmin, as
       }
     });
   } catch (error) {
-    console.error('[Investor Details] Error:', error);
+    log.error('[Investor Details] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1431,8 +1431,8 @@ router.post('/investors/:id/sponsor', authenticateToken, requirePlatformAdmin, a
       });
     }
 
-    console.log(`[Admin Sponsor] Sponsoring wallet for investor ${investor.id} (${investor.email})`);
-    console.log(`[Admin Sponsor] Sending ${xlmAmount} XLM to ${investor.stellarContractId}`);
+    log.info(`[Admin Sponsor] Sponsoring wallet for investor ${investor.id} (${investor.email})`);
+    log.info(`[Admin Sponsor] Sending ${xlmAmount} XLM to ${investor.stellarContractId}`);
 
     // Get Treasury keypair
     const treasuryKeypair = getTreasuryKeypair();
@@ -1480,11 +1480,11 @@ router.post('/investors/:id/sponsor', authenticateToken, requirePlatformAdmin, a
       .build();
 
     // Simulate the transaction to get proper footprint and auth
-    console.log('[Admin Sponsor] Simulating transaction...');
+    log.info('[Admin Sponsor] Simulating transaction...');
     const simResult = await sorobanServer.simulateTransaction(tx);
 
     if (rpc.Api.isSimulationError(simResult)) {
-      console.error('[Admin Sponsor] Simulation error:', simResult.error);
+      log.error('[Admin Sponsor] Simulation error:', simResult.error);
       throw new Error(`Simulation failed: ${simResult.error}`);
     }
 
@@ -1495,7 +1495,7 @@ router.post('/investors/:id/sponsor', authenticateToken, requirePlatformAdmin, a
     tx.sign(treasuryKeypair);
 
     // Submit via Soroban RPC
-    console.log('[Admin Sponsor] Submitting transaction...');
+    log.info('[Admin Sponsor] Submitting transaction...');
     const sendResponse = await sorobanServer.sendTransaction(tx);
 
     if (sendResponse.status === 'ERROR') {
@@ -1519,7 +1519,7 @@ router.post('/investors/:id/sponsor', authenticateToken, requirePlatformAdmin, a
       throw new Error(`Transaction failed: ${getResponse?.status || 'TIMEOUT'}`);
     }
 
-    console.log(`[Admin Sponsor] Success! TX Hash: ${sendResponse.hash}`);
+    log.info(`[Admin Sponsor] Success! TX Hash: ${sendResponse.hash}`);
 
     res.json({
       success: true,
@@ -1535,13 +1535,15 @@ router.post('/investors/:id/sponsor', authenticateToken, requirePlatformAdmin, a
     });
 
   } catch (error) {
-    console.error('[Admin Sponsor] Error:', error);
+    log.error('[Admin Sponsor] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============ Default Management Routes ============
 import { CollateralDistributionService } from '../services/collateralDistribution.service.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('AdminRoutes');
 
 /**
  * GET /api/platform-admins/defaults
@@ -1557,7 +1559,7 @@ router.get('/defaults', authenticateToken, requirePlatformAdmin, async (req, res
       data: { defaults, stats }
     });
   } catch (error) {
-    console.error('[Admin Defaults] Error:', error);
+    log.error('[Admin Defaults] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1577,7 +1579,7 @@ router.get('/defaults/:offerId', authenticateToken, requirePlatformAdmin, async 
 
     res.json({ success: true, data: details });
   } catch (error) {
-    console.error('[Admin Defaults] Error:', error);
+    log.error('[Admin Defaults] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1597,7 +1599,7 @@ router.post('/defaults/:offerId/prepare', authenticateToken, requirePlatformAdmi
       message: 'Transaction prepared. Sign with admin passkey to distribute collateral.'
     });
   } catch (error) {
-    console.error('[Admin Defaults] Prepare error:', error);
+    log.error('[Admin Defaults] Prepare error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1627,7 +1629,7 @@ router.post('/defaults/:offerId/distribute', authenticateToken, requirePlatformA
       message: 'Collateral distributed to investors successfully'
     });
   } catch (error) {
-    console.error('[Admin Defaults] Distribute error:', error);
+    log.error('[Admin Defaults] Distribute error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1728,7 +1730,7 @@ router.post('/offers/:offerId/unlock-token', authenticateToken, requirePlatformA
       }
     });
 
-    console.log(`[Admin] Token ${offer.assetCode} unlocked by admin ${req.user.userId}. TxHash: ${stellarResult.txHash || 'N/A'}`);
+    log.info(`[Admin] Token ${offer.assetCode} unlocked by admin ${req.user.userId}. TxHash: ${stellarResult.txHash || 'N/A'}`);
 
     res.json({
       success: true,
@@ -1743,7 +1745,7 @@ router.post('/offers/:offerId/unlock-token', authenticateToken, requirePlatformA
       }
     });
   } catch (error) {
-    console.error('[Token Unlock] Error:', error);
+    log.error('[Token Unlock] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

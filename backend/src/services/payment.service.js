@@ -15,6 +15,8 @@ import { keyManager } from './KeyManager.js';
 import { TransactionManager } from './transactionManager.service.js';
 import { Operation, Asset, rpc, scValToNative, Address } from '@stellar/stellar-sdk';
 import cron from 'node-cron';
+import logger from '../utils/logger.js';
+const log = logger.scope('PaymentService');
 
 const DEFAULT_ANNUAL_INTEREST_RATE = 10.0; // Fallback se não encontrar no banco
 const MAX_OPERATIONS_PER_TX = 95; // Buffer de segurança (Stellar limit is 100)
@@ -36,17 +38,8 @@ const getUSDCConfig = async () => {
   return { issuer, code };
 };
 
-const logger = {
-  info: (message, data = {}) => {
-    console.log(`[PAYMENT SERVICE] [INFO] ${new Date().toISOString()} - ${message}`, data);
-  },
-  error: (message, error = {}) => {
-    console.error(`[PAYMENT SERVICE] [ERROR] ${new Date().toISOString()} - ${message}`, error);
-  },
-  warn: (message, data = {}) => {
-    console.warn(`[PAYMENT SERVICE] [WARN] ${new Date().toISOString()} - ${message}`, data);
-  },
-};
+
+
 
 /**
  * Aguarda um período de tempo especificado

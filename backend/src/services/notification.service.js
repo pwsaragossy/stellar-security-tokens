@@ -1,5 +1,7 @@
 import prisma from '../config/prisma.js';
 import { AlertService } from './alert.service.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('NotificationService');
 
 export class NotificationService {
     /**
@@ -26,7 +28,7 @@ export class NotificationService {
             });
             return notification;
         } catch (error) {
-            console.error('Error creating notification:', error);
+            log.error('Error creating notification:', error);
             // Don't throw, just log - notifications shouldn't block main flow
             return null;
         }
@@ -63,7 +65,7 @@ export class NotificationService {
 
             return { notifications, unreadCount };
         } catch (error) {
-            console.error('Error fetching notifications:', error);
+            log.error('Error fetching notifications:', error);
             throw error;
         }
     }
@@ -94,7 +96,7 @@ export class NotificationService {
                 data: { isRead: true },
             });
         } catch (error) {
-            console.error('Error marking notification as read:', error);
+            log.error('Error marking notification as read:', error);
             throw error;
         }
     }
@@ -113,7 +115,7 @@ export class NotificationService {
                 data: { isRead: true },
             });
         } catch (error) {
-            console.error('Error marking all notifications as read:', error);
+            log.error('Error marking all notifications as read:', error);
             throw error;
         }
     }

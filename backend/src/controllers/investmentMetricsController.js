@@ -1,4 +1,6 @@
 import { InvestmentMetricsService } from '../services/investmentMetrics.service.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('InvestmentMetrics');
 import { requirePlatformAdmin } from '../middleware/authorize.js';
 
 /**
@@ -25,7 +27,7 @@ export class InvestmentMetricsController {
         data: metrics,
       });
     } catch (error) {
-      console.error('Error fetching investment metrics:', error);
+      log.error('Error fetching investment metrics:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch investment metrics',
@@ -60,7 +62,7 @@ export class InvestmentMetricsController {
         data: statistics,
       });
     } catch (error) {
-      console.error('Error fetching investment statistics:', error);
+      log.error('Error fetching investment statistics:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch investment statistics',
@@ -84,7 +86,7 @@ export class InvestmentMetricsController {
         data: pending,
       });
     } catch (error) {
-      console.error('Error fetching pending investments:', error);
+      log.error('Error fetching pending investments:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch pending investments',
@@ -104,7 +106,7 @@ export class InvestmentMetricsController {
         data: progress,
       });
     } catch (error) {
-      console.error('Error fetching fundraising progress:', error);
+      log.error('Error fetching fundraising progress:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch fundraising progress',
@@ -124,7 +126,7 @@ export class InvestmentMetricsController {
         data: breakdown,
       });
     } catch (error) {
-      console.error('Error fetching revenue breakdown:', error);
+      log.error('Error fetching revenue breakdown:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch revenue breakdown',
@@ -145,7 +147,7 @@ export class InvestmentMetricsController {
         data: cohorts,
       });
     } catch (error) {
-      console.error('Error fetching investor cohorts:', error);
+      log.error('Error fetching investor cohorts:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch investor cohorts',

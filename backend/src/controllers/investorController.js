@@ -10,6 +10,8 @@ import prisma from '../config/prisma.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { generate6DigitCode, storeEmailCode, verifyEmailCode as redisVerifyEmailCode } from '../config/redis.js';
+import logger from '../utils/logger.js';
+const log = logger.scope('InvestorController');
 
 
 
@@ -271,7 +273,7 @@ export const getInvestorInvestments = async (req, res, next) => {
     try {
       treasuryAddress = getTreasuryPublicKey();
     } catch {
-      console.warn('[getInvestorInvestments] Treasury public key not configured');
+      log.warn('[getInvestorInvestments] Treasury public key not configured');
     }
 
     // Enhance investments with payment info for pending status
@@ -377,7 +379,7 @@ export const initiateRegistration = async (req, res, next) => {
     const stored = await storeEmailCode(email, code);
 
     if (!stored) {
-      console.warn('[initiateRegistration] Redis unavailable, code storage failed');
+      log.warn('[initiateRegistration] Redis unavailable, code storage failed');
       // Continue anyway - email service will log code in dev mode
     }
 
@@ -508,7 +510,7 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
     const { name, document, credentialId, publicKey, contractId, registrationToken } = req.body;
 
     // Debug logging
-    console.log('[Registration] Received registration request:', {
+    log.info('[Registration] Received registration request:', {
       name,
       email: registrationToken ? 'present' : 'missing',
       hasCredentialId: !!credentialId,
@@ -587,7 +589,7 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
       });
     }
 
-    console.log(`[Registration] Creating investor for ${verifiedEmail} with wallet ${contractId}`);
+    log.info(`[Registration] Creating investor for ${verifiedEmail} with wallet ${contractId}`);
 
     // Create investor with wallet contract ID from frontend - wallet already deployed!
     const investor = await prisma.investor.create({
@@ -608,7 +610,7 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
     // Send welcome email (async, don't wait)
     EmailService.sendWelcomeEmail(verifiedEmail, name, contractId)
       .catch(error => {
-        console.error('Failed to send welcome email:', error);
+        log.error('Failed to send welcome email:', error);
       });
 
     // Generate JWT token for immediate login

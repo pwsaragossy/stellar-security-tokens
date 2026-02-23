@@ -1,4 +1,8 @@
+import prisma from '../config/prisma.js';
+import logger from '../utils/logger.js';
 import { NotificationService } from '../services/notification.service.js';
+
+const log = logger.scope('NotificationController');
 
 export class NotificationController {
     static async getNotifications(req, res) {
@@ -34,7 +38,7 @@ export class NotificationController {
                 data: result,
             });
         } catch (error) {
-            console.error('NotificationController error:', error);
+            log.error('Error:', error);
             res.status(500).json({ success: false, error: 'Failed to fetch notifications' });
         }
     }
@@ -52,7 +56,7 @@ export class NotificationController {
 
             res.json({ success: true });
         } catch (error) {
-            console.error('NotificationController error:', error);
+            log.error('Error:', error);
             res.status(500).json({ success: false, error: 'Failed to mark as read' });
         }
     }
@@ -69,7 +73,7 @@ export class NotificationController {
 
             res.json({ success: true });
         } catch (error) {
-            console.error('NotificationController error:', error);
+            log.error('Error:', error);
             res.status(500).json({ success: false, error: 'Failed to mark all as read' });
         }
     }
