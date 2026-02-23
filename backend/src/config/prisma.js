@@ -33,5 +33,28 @@ process.on('beforeExit', async () => {
   await prisma.$disconnect();
 });
 
-export default prisma;
+// Backup: snapshot user creation events via $extends (Prisma 7+)
+const BACKUP_MODELS = ['Investor', 'CompanyUser', 'PlatformAdmin'];
+
+function createBackupExtension() {
+  const queryHooks = {};
+  for (const model of BACKUP_MODELS) {
+    const key = model.charAt(0).toLowerCase() + model.slice(1);
+    queryHooks[key] = {
+      async create({ args, query }) {
+        const result = await query(args);
+        // Fire-and-forget: never block the request
+        import('../services/backup.service.js')
+          .then(({ BackupService }) => BackupService.snapshotUserCreation(model, result))
+          .catch(() => { });
+        return result;
+      },
+    };
+  }
+  return { query: queryHooks };
+}
+
+const extendedPrisma = prisma.$extends(createBackupExtension());
+
+export default extendedPrisma;
 

@@ -108,8 +108,8 @@ services:
         condition: service_healthy
     networks:
       - stellar_network
-    # volumes:
-    #   - ./backend:/app/backend
+    volumes:
+      - backups_data:/app/backups
     command: >
       sh -c "
         echo 'Waiting for database...' &&
@@ -136,6 +136,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  backups_data:
 
 
 networks:

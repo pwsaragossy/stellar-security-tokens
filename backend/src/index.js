@@ -202,6 +202,31 @@ app.listen(PORT, async () => {
     console.log('Distribution queue is disabled (ENABLE_DISTRIBUTION_QUEUE=false)');
   }
 
+  // --- DAILY DATABASE BACKUP (3:00 AM UTC) ---
+  try {
+    const cron = await import('node-cron');
+    const { BackupService } = await import('./services/backup.service.js');
+
+    cron.default.schedule('0 3 * * *', async () => {
+      console.log('[Backup] Starting daily database dump');
+      try {
+        const filepath = await BackupService.fullDatabaseDump();
+        if (filepath) {
+          console.log('[Backup] Daily dump completed:', filepath);
+        }
+      } catch (error) {
+        console.error('[Backup] Daily dump failed:', error.message);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'UTC'
+    });
+
+    console.log('Daily database backup enabled - runs at 3:00 AM UTC');
+  } catch (error) {
+    console.error('Failed to start daily backup scheduler:', error.message);
+  }
+
   // --- SOROBAN TTL MAINTENANCE ---
   try {
     MaintenanceService.init();
