@@ -54,6 +54,21 @@ app.use(helmet({
         },
     },
 }));
+
+// SEP-1: stellar.toml MUST be served with CORS * (before the restrictive global CORS)
+import { TomlService } from './services/toml.service.js';
+app.options('/.well-known/stellar.toml', cors({ origin: '*' })); // Preflight
+app.get('/.well-known/stellar.toml', cors({ origin: '*' }), async (req, res) => {
+    try {
+        const tomlContent = await TomlService.generateToml();
+        res.setHeader('Content-Type', 'text/plain');
+        res.send(tomlContent);
+    } catch (error) {
+        log.error('Error generating stellar.toml:', error);
+        res.status(500).send('# Error generating stellar.toml');
+    }
+});
+
 // CORS: Support multiple origins (comma-separated in FRONTEND_URL)
 const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
     .split(',')
@@ -117,19 +132,7 @@ app.get('/api-docs.json', (req, res) => {
     res.send(swaggerSpec);
 });
 
-// Serve stellar.toml for domain verification
-import { TomlService } from './services/toml.service.js';
-app.get('/.well-known/stellar.toml', async (req, res) => {
-    try {
-        const tomlContent = await TomlService.generateToml();
-        res.setHeader('Content-Type', 'text/plain');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.send(tomlContent);
-    } catch (error) {
-        log.error('Error generating stellar.toml:', error);
-        res.status(500).send('# Error generating stellar.toml');
-    }
-});
+
 
 /**
  * @swagger

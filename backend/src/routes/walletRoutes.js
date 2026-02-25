@@ -6,6 +6,7 @@ import { requirePlatformAdmin } from '../middleware/authorize.js';
 import { validate } from '../middleware/validator.js';
 
 import { strictLimiter } from '../middleware/rateLimit.js';
+import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
 import logger from '../utils/logger.js';
 const log = logger.scope('WalletRoutes');
 
