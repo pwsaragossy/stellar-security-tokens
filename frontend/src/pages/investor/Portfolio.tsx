@@ -30,6 +30,7 @@ interface PortfolioHolding {
     issuerPublicKey: string | null;
     sacContractId: string | null;
     offerStatus: string | null;
+    issuedAt: string | null;
 }
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -275,11 +276,15 @@ function HoldingCard({ holding, index }: { holding: PortfolioHolding; index: num
             {holding.maturityDate && (() => {
                 const maturity = new Date(holding.maturityDate).getTime();
                 const now = Date.now();
-                // Estimate start as 1 year before maturity (or use actual if available)
-                const totalDuration = 365 * 24 * 60 * 60 * 1000;
-                const start = maturity - totalDuration;
+                // Use actual issuance date as start, fall back to 1 year before maturity
+                const start = holding.issuedAt
+                    ? new Date(holding.issuedAt).getTime()
+                    : maturity - 365 * 24 * 60 * 60 * 1000;
+                const totalDuration = maturity - start;
                 const elapsed = Math.max(0, now - start);
-                const progress = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
+                const progress = totalDuration > 0
+                    ? Math.min(100, Math.max(0, (elapsed / totalDuration) * 100))
+                    : 0;
                 const isMatured = now >= maturity;
 
                 return (
@@ -293,10 +298,10 @@ function HoldingCard({ holding, index }: { holding: PortfolioHolding; index: num
                         <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
                             <div
                                 className={`h-full rounded-full transition-all duration-500 ${isMatured
-                                        ? 'bg-emerald-400'
-                                        : progress > 75
-                                            ? 'bg-amber-400'
-                                            : 'bg-[hsl(43_45%_55%)]'
+                                    ? 'bg-emerald-400'
+                                    : progress > 75
+                                        ? 'bg-amber-400'
+                                        : 'bg-[hsl(43_45%_55%)]'
                                     }`}
                                 style={{ width: `${isMatured ? 100 : progress}%` }}
                             />
@@ -411,6 +416,7 @@ export function Portfolio() {
                         issuerPublicKey: inv.issuerPublicKey || inv.issuer_public_key || null,
                         sacContractId: inv.sacContractId || inv.sac_contract_id || null,
                         offerStatus: inv.offerStatus || inv.offer_status || null,
+                        issuedAt: inv.issuedAt || inv.issued_at || null,
                     })));
                 } else {
                     throw new Error(portfolioRes.reason?.message || 'Failed to load portfolio');

@@ -86,7 +86,7 @@ export const authenticateToken = async (req, res, next) => {
  * @param {string} [expiresIn='24h'] - Tempo de expiração do token (ex: '15m', '1h', '7d')
  * @returns {string} Token JWT assinado (padrão: expira em 24 horas)
  */
-export const generateToken = (payload, expiresIn = '15m') => {
+export const generateToken = (payload, expiresIn = '24h') => {
   return jwt.sign(payload, JWT_SECRET, { expiresIn });
 };
 
