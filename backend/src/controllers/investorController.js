@@ -431,7 +431,7 @@ export const verifyEmailCode = async (req, res, next) => {
         purpose: 'registration',
         verified: true,
       },
-      process.env.JWT_SECRET || 'stellar-tokens-secret',
+      process.env.JWT_SECRET,
       { expiresIn: '30m' }
     );
 
@@ -539,7 +539,7 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
     try {
       const decoded = jwt.verify(
         registrationToken,
-        process.env.JWT_SECRET || 'stellar-tokens-secret'
+        process.env.JWT_SECRET
       );
 
       if (decoded.purpose !== 'registration' || !decoded.verified) {

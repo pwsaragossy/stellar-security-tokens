@@ -98,7 +98,7 @@ export class CompanyController {
       let verifiedEmail;
       if (registrationToken) {
         try {
-          const decoded = jwt.verify(registrationToken, process.env.JWT_SECRET || 'stellar-tokens-secret');
+          const decoded = jwt.verify(registrationToken, process.env.JWT_SECRET);
           if (decoded.purpose !== 'company_registration' || !decoded.verified) {
             return res.status(401).json({
               success: false,
@@ -585,7 +585,7 @@ export class CompanyController {
           purpose: 'company_registration',
           verified: true,
         },
-        process.env.JWT_SECRET || 'stellar-tokens-secret',
+        process.env.JWT_SECRET,
         { expiresIn: '30m' }
       );
 
