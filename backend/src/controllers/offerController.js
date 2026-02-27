@@ -138,29 +138,6 @@ export class OfferController {
   }
 
   /**
-   * Obtém a taxa de emissão de token (público/opcional)
-   * GET /api/offers/fees
-   */
-  static async getIssuanceFee(req, res) {
-    try {
-      const fee = await OfferService.getIssuanceFee();
-      res.json({
-        success: true,
-        data: {
-          issuanceFee: fee,
-          currency: 'USDC', // Configurable? currently assumed
-        },
-      });
-    } catch (error) {
-      log.error('Error fetching issuance fee:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to fetch issuance fee',
-      });
-    }
-  }
-
-  /**
    * Cria uma nova oferta (company_user)
    * POST /api/companies/offers
    */

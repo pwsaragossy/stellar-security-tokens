@@ -265,34 +265,6 @@ router.get('/companies/offers/:id/investors', requireRole(['company_user', 'plat
 // Rotas públicas (para investidores)
 router.get('/offers/active', optionalAuth, OfferController.getActiveOffers);
 
-/**
- * @swagger
- * /api/offers/fees:
- *   get:
- *     summary: Obter taxas de emissão
- *     description: Retorna o valor atual da taxa de emissão de tokens
- *     tags: [Offers]
- *     responses:
- *       200:
- *         description: Valor da taxa
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     issuanceFee:
- *                       type: number
- *                       example: 500
- *                     currency:
- *                       type: string
- *                       example: USDC
- */
-router.get('/offers/fees', optionalAuth, OfferController.getIssuanceFee);
 
 /**
  * @swagger
