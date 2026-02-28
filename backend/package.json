@@ -45,7 +45,7 @@
   "license": "MIT",
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.1",
-    "@prisma/client": "^7.4.1",
+    "@prisma/client": "^7.4.2",
     "@sentry/node": "^10.34.0",
     "@simplewebauthn/browser": "^13.2.2",
     "@simplewebauthn/server": "^13.2.2",
@@ -71,7 +71,7 @@
     "passkey-kit": "^0.11.3",
     "pg": "^8.11.3",
     "pinata-web3": "^0.5.4",
-    "prisma": "^7.4.1",
+    "prisma": "^7.4.2",
     "pusher": "^5.3.2",
     "rate-limit-redis": "^4.3.1",
     "redis": "^5.10.0",
