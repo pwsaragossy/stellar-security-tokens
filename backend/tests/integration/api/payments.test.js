@@ -35,8 +35,8 @@ describe('Payments API Integration Tests', () => {
       .expect(200);
 
     assert.strictEqual(res.body.success, true);
-    assert.ok(Array.isArray(res.body.data.payments));
-    assert.strictEqual(res.body.data.payments.length, 0);
+    assert.ok(Array.isArray(res.body.data.transactions));
+    assert.strictEqual(res.body.data.transactions.length, 0);
   });
 
   test('GET /api/payments/history - should fail without auth', async () => {

@@ -19,17 +19,24 @@ export const cleanDatabase = async () => {
     // Use Prisma transaction to delete all data in correct order
     await prisma.$transaction(async (tx) => {
       // Delete in dependency order to avoid foreign key violations
+      await tx.refreshToken.deleteMany({});
+      await tx.notification.deleteMany({});
+      await tx.paymentReminder.deleteMany({});
       await tx.interestPayment.deleteMany({});
       await tx.tokenDistribution.deleteMany({});
+      await tx.deposit.deleteMany({});
       await tx.investment.deleteMany({});
+      await tx.companyPenalty.deleteMany({});
       await tx.offer.deleteMany({});
       await tx.feeLog.deleteMany({});
       // We don't delete systemConfig here because many tests rely on the initial setup
       // and it doesn't change much between tests.
       await tx.multiSigTransaction.deleteMany({});
       await tx.companyUserWebauthnCredential.deleteMany({});
+      await tx.companyUserEd25519Signer.deleteMany({});
       await tx.platformAdminWebauthnCredential.deleteMany({});
       await tx.investorWebauthnCredential.deleteMany({});
+      await tx.investorEd25519Signer.deleteMany({});
       await tx.companyUser.deleteMany({});
       await tx.platformAdmin.deleteMany({});
       await tx.company.deleteMany({});
