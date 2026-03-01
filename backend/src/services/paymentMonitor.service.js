@@ -308,7 +308,7 @@ export class PaymentMonitor {
       log.warn(`Could not fetch transaction ${payment.transaction_hash} for memo: ${err.message}`);
     }
 
-    // Check if it's a deposit relay payment (memo starts with DEP-)
+    // Check if it's a deposit relay payment (memo starts with DEP)
     // Deposit relay accepts ANY asset (XLM or USDC)
     if (memo && memo.startsWith(DepositRelayService.MEMO_PREFIX)) {
       log.info(`Deposit relay payment detected: ${payment.amount} ${assetCode} from ${payment.from}, memo: ${memo}`);

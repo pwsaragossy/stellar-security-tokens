@@ -7,7 +7,7 @@ import crypto from 'crypto';
 // Scoped logger for this service
 const log = logger.scope('DepositRelay');
 export class DepositRelayService {
-    static MEMO_PREFIX = 'DEP-';
+    static MEMO_PREFIX = 'DEP';
 
 
     /**
@@ -26,11 +26,10 @@ export class DepositRelayService {
         }
 
         // Generate a deterministic memo for this investor
-        // Format: DEP-<8 hex chars from hash> (total 12 chars)
-        // Stellar Text Memo limit is 28 chars.
-        // Using investor ID ensures the same memo is always generated for the same investor.
+        // Format: DEP-<4 hex chars from hash> (total 8 chars, e.g. DEP-A3F7)
+        // Short enough for users to verify, unique enough for our scale (65k values)
         const hash = crypto.createHash('sha256').update(`investor-${investorId}`).digest('hex');
-        const memoSuffix = hash.substring(0, 8).toUpperCase();
+        const memoSuffix = hash.substring(0, 4).toUpperCase();
         const memo = `${this.MEMO_PREFIX}${memoSuffix}`;
 
         // Check if there's already a deposit with this memo (unique constraint on memo)
@@ -82,6 +81,7 @@ export class DepositRelayService {
                 memo,
                 expectedAmount,
                 status: 'pending',
+                expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
             }
         });
 

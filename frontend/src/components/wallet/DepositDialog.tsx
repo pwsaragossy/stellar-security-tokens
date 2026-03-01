@@ -6,7 +6,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
-import { Copy, Check, Shield, ExternalLink, Loader2, AlertCircle, RefreshCw, ChevronDown } from 'lucide-react';
+import { Copy, Check, Shield, Loader2, AlertCircle, RefreshCw, ChevronDown } from 'lucide-react';
 import { QRCode } from '@/components/ui/qrcode';
 import { investorsApi } from '@/api/investors';
 
@@ -173,7 +173,7 @@ export function DepositDialog({ investorId, walletAddress }: DepositDialogProps)
             <DialogHeader>
                 <DialogTitle>Deposit USDC</DialogTitle>
                 <DialogDescription className="text-gray-400">
-                    Follow these steps to deposit USDC into your wallet.
+                    Send Stellar USDC to the address below with your memo.
                 </DialogDescription>
             </DialogHeader>
 
@@ -181,7 +181,7 @@ export function DepositDialog({ investorId, walletAddress }: DepositDialogProps)
             {loading && !deposit ? (
                 <div className="flex flex-col items-center justify-center py-12 space-y-4">
                     <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                    <p className="text-sm text-gray-400">Preparing deposit instructions…</p>
+                    <p className="text-sm text-gray-400">Preparing deposit…</p>
                 </div>
 
                 /* Error State */
@@ -212,8 +212,8 @@ export function DepositDialog({ investorId, walletAddress }: DepositDialogProps)
                         <div className="space-y-2">
                             <div className="flex items-center gap-2 px-1">
                                 <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold shrink-0">1</span>
-                                <p className="text-xs font-semibold text-gray-300">Copy the Relay Address</p>
-                                <span className="text-[10px] text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded ml-auto">Safe for Exchanges</span>
+                                <p className="text-xs font-semibold text-gray-300">Send to this address</p>
+                                <span className="text-[10px] text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded ml-auto">Exchange-compatible</span>
                             </div>
                             <div className="flex items-start gap-3 p-3 bg-black/30 rounded-xl border border-white/10">
                                 <div className="bg-white rounded-lg p-1.5 shrink-0">
@@ -239,11 +239,11 @@ export function DepositDialog({ investorId, walletAddress }: DepositDialogProps)
                         <div className="space-y-2">
                             <div className="flex items-center gap-2 px-1">
                                 <span className="flex items-center justify-center w-5 h-5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold shrink-0">2</span>
-                                <p className="text-xs font-semibold text-gray-300">Include this exact Memo</p>
+                                <p className="text-xs font-semibold text-gray-300">Include this Memo</p>
                             </div>
                             <div className="p-3 bg-red-500/5 rounded-xl border-2 border-red-500/30 space-y-2">
                                 <div className="flex items-center gap-2">
-                                    <p className="text-sm font-bold font-mono text-red-400 flex-1">
+                                    <p className="text-lg font-bold font-mono text-red-400 flex-1 tracking-wider">
                                         {deposit.memo}
                                     </p>
                                     <Button
@@ -255,30 +255,21 @@ export function DepositDialog({ investorId, walletAddress }: DepositDialogProps)
                                         {copied === 'memo' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-red-400" />}
                                     </Button>
                                 </div>
-                                <p className="text-[10px] text-red-300/70 leading-relaxed">
-                                    ⚠ Without this memo, your deposit cannot be identified and funds may be lost.
+                                <p className="text-[10px] text-red-300/70">
+                                    ⚠ Without the memo, your deposit can't be identified.
                                 </p>
                             </div>
                         </div>
 
-                        {/* Step 3: Send */}
+                        {/* Step 3: Confirmation */}
                         <div className="space-y-2">
                             <div className="flex items-center gap-2 px-1">
                                 <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold shrink-0">3</span>
-                                <p className="text-xs font-semibold text-gray-300">Send Stellar USDC</p>
+                                <p className="text-xs font-semibold text-gray-300">Send & wait</p>
                             </div>
-                            <div className="p-3 bg-white/5 rounded-xl border border-white/5 space-y-1.5">
-                                <p className="text-[11px] text-gray-400 leading-relaxed">
-                                    From your exchange or wallet, send <strong className="text-white">USDC on the Stellar network</strong> to the relay address above with the memo.
-                                    Funds are auto-detected and forwarded to your wallet within seconds.
-                                </p>
-                                <p className="text-[10px] text-gray-500">
-                                    Need USDC?{' '}
-                                    <a href="https://www.coinbase.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-0.5">Coinbase<ExternalLink className="w-2.5 h-2.5" /></a>,{' '}
-                                    <a href="https://www.kraken.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-0.5">Kraken<ExternalLink className="w-2.5 h-2.5" /></a>, or{' '}
-                                    <a href="https://www.binance.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-0.5">Binance<ExternalLink className="w-2.5 h-2.5" /></a>
-                                </p>
-                            </div>
+                            <p className="text-[11px] text-gray-500 px-1">
+                                Funds are auto-detected and forwarded to your wallet within seconds.
+                            </p>
                         </div>
                     </div>
 
@@ -290,21 +281,16 @@ export function DepositDialog({ investorId, walletAddress }: DepositDialogProps)
                         >
                             <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform duration-200 ${advancedOpen ? 'rotate-0' : '-rotate-90'}`} />
                             <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 group-hover:text-gray-400 transition-colors">
-                                Advanced: Direct to Smart Wallet
+                                Direct to Smart Wallet
                             </span>
                         </button>
 
                         {advancedOpen && (
                             <div className="mt-3 space-y-3 animate-in slide-in-from-top-2 duration-200">
-                                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1.5">
-                                    <div className="flex items-center gap-2 text-amber-500 text-xs font-bold">
-                                        <Shield className="w-3.5 h-3.5" />
-                                        <span>Advanced Users Only</span>
-                                    </div>
-                                    <p className="text-[10px] text-amber-300/80 leading-relaxed">
-                                        Most exchanges (Binance, Coinbase) <strong>do not</strong> support direct deposits to contract addresses yet. Use the relay method above instead.
-                                    </p>
-                                </div>
+                                <p className="text-[10px] text-amber-300/80 flex items-center gap-1.5">
+                                    <Shield className="w-3 h-3 text-amber-500 shrink-0" />
+                                    Most exchanges don't support contract addresses yet. Use the relay above.
+                                </p>
 
                                 <div className="flex items-start gap-3 p-3 bg-black/30 rounded-xl border border-white/5">
                                     <div className="bg-white rounded-lg p-1.5 shrink-0">

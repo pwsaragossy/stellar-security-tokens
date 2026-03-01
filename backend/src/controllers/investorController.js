@@ -795,10 +795,10 @@ export const getWalletStatus = async (req, res, next) => {
       id
     );
 
-    // Compute deterministic deposit memo for this investor
+    // Compute deterministic deposit memo for this investor (DEP-XXXX format)
     const crypto = await import('crypto');
     const hash = crypto.createHash('sha256').update(`investor-${id}`).digest('hex');
-    const depositMemo = `DEP-${hash.substring(0, 8).toUpperCase()}`;
+    const depositMemo = `DEP${hash.substring(0, 4).toUpperCase()}`;
 
     res.json({
       success: true,
