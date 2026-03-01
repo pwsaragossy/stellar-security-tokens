@@ -7,6 +7,7 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { MobileSidebar, MenuToggleButton, useMobileSidebar } from '@/components/MobileSidebar';
 import { authStorage } from '@/utils/authStorage';
 import { useAuthRefresh } from '@/hooks/useAuthRefresh';
+import { DepositTracker } from '@/components/wallet/DepositTracker';
 
 export function DashboardLayout() {
     const navigate = useNavigate();
@@ -123,6 +124,7 @@ export function DashboardLayout() {
 
                 <div className="flex-1 p-4 md:p-6 overflow-auto">
                     <Outlet />
+                    <DepositTracker />
                 </div>
             </main>
         </div>
