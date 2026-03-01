@@ -12,11 +12,12 @@ export class DepositRelayService {
 
     /**
      * Initiate a new deposit request
+     * Generate deposit instructions for an investor (read-only, no DB record).
+     * The deposit record is only created when actual payment arrives via handleIncomingPayment.
      * @param {number} investorId 
-     * @param {number} expectedAmount (optional)
-     * @returns {Promise<Object>} The created deposit record
+     * @returns {Promise<Object>} Deposit instructions (memo + treasury address)
      */
-    static async initiateDeposit(investorId, expectedAmount = null) {
+    static async initiateDeposit(investorId) {
         const investor = await prisma.investor.findUnique({
             where: { id: investorId }
         });
@@ -25,74 +26,30 @@ export class DepositRelayService {
             throw new Error('Investor not found');
         }
 
-        // Generate a deterministic memo for this investor
-        // Format: DEP-<4 hex chars from hash> (total 8 chars, e.g. DEP-A3F7)
-        // Short enough for users to verify, unique enough for our scale (65k values)
+        // Deterministic memo from investor ID — always the same for this investor
         const hash = crypto.createHash('sha256').update(`investor-${investorId}`).digest('hex');
-        const memoSuffix = hash.substring(0, 4).toUpperCase();
-        const memo = `${this.MEMO_PREFIX}${memoSuffix}`;
-
-        // Check if there's already a deposit with this memo (unique constraint on memo)
-        const existingDeposit = await prisma.deposit.findFirst({
-            where: {
-                investorId: investor.id,
-                memo,
-            }
-        });
-
-        if (existingDeposit) {
-            if (existingDeposit.status === 'pending') {
-                // Return the existing pending deposit
-                return {
-                    ...existingDeposit,
-                    treasuryAddress: process.env.TREASURY_PUBLIC_KEY
-                };
-            }
-
-            // If failed/expired/rejected, reset it to pending for reuse
-            if (['failed', 'expired', 'rejected'].includes(existingDeposit.status)) {
-                const updatedDeposit = await prisma.deposit.update({
-                    where: { id: existingDeposit.id },
-                    data: {
-                        status: 'pending',
-                        expectedAmount,
-                        errorMessage: null,
-                        actualAmount: null,
-                        incomingTxHash: null,
-                    }
-                });
-
-                return {
-                    ...updatedDeposit,
-                    treasuryAddress: process.env.TREASURY_PUBLIC_KEY
-                };
-            }
-
-            // If completed, return it as-is
-            return {
-                ...existingDeposit,
-                treasuryAddress: process.env.TREASURY_PUBLIC_KEY
-            };
-        }
-
-        const deposit = await prisma.deposit.create({
-            data: {
-                investorId: investor.id,
-                memo,
-                expectedAmount,
-                status: 'pending',
-                expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-            }
-        });
+        const memo = `${this.MEMO_PREFIX}${hash.substring(0, 4).toUpperCase()}`;
 
         return {
-            ...deposit,
-            treasuryAddress: process.env.TREASURY_PUBLIC_KEY
+            memo,
+            treasuryAddress: process.env.TREASURY_PUBLIC_KEY,
+            status: 'ready', // UI hint: instructions are ready, no payment yet
         };
     }
 
     /**
-     * Process a received payment matching a deposit memo
+     * Compute the deterministic memo for an investor (utility).
+     * @param {number} investorId 
+     * @returns {string} The memo string
+     */
+    static computeMemo(investorId) {
+        const hash = crypto.createHash('sha256').update(`investor-${investorId}`).digest('hex');
+        return `${this.MEMO_PREFIX}${hash.substring(0, 4).toUpperCase()}`;
+    }
+
+    /**
+     * Process a received payment matching a deposit memo.
+     * Creates the deposit record on first payment — no pre-creation needed.
      * @param {string} memoText 
      * @param {string} amount 
      * @param {string} txHash 
@@ -101,38 +58,60 @@ export class DepositRelayService {
     static async handleIncomingPayment(memoText, amount, txHash, assetCode = 'USDC') {
         log.info(`Processing incoming payment: ${amount} ${assetCode}, memo: ${memoText}, tx: ${txHash}`);
 
-        const deposit = await prisma.deposit.findUnique({
+        // Find existing deposit by memo, or determine the investor from the memo
+        let deposit = await prisma.deposit.findUnique({
             where: { memo: memoText },
             include: { investor: true }
         });
 
-        if (!deposit) {
-            log.warn(`No pending deposit found for memo ${memoText}`);
-            return;
-        }
-
-        // Only skip if the deposit already completed successfully
-        if (deposit.status === 'completed') {
+        if (deposit && deposit.status === 'completed') {
             log.warn(`Deposit ${deposit.id} is already completed, skipping duplicate payment.`);
             return;
         }
 
-        // For retryable statuses (pending_approval, rejected, failed, forwarding, expired),
-        // a new incoming payment resets the deposit and re-triggers the relay.
-        if (deposit.status !== 'pending' && deposit.status !== 'received') {
-            log.info(`Deposit ${deposit.id} was in '${deposit.status}' — new payment received, resetting to 'received'.`);
-        }
+        // No deposit record exists yet — this is the first payment. Create it.
+        if (!deposit) {
+            // Reverse-lookup: find investor whose deterministic memo matches
+            const investors = await prisma.investor.findMany();
+            const matchingInvestor = investors.find(inv => {
+                const expectedMemo = this.computeMemo(inv.id);
+                return expectedMemo === memoText;
+            });
 
-        // Update status to received
-        await prisma.deposit.update({
-            where: { id: deposit.id },
-            data: {
-                status: 'received',
-                actualAmount: amount,
-                incomingTxHash: txHash,
-                updatedAt: new Date()
+            if (!matchingInvestor) {
+                log.warn(`No investor found for memo ${memoText} — ignoring payment.`);
+                return;
             }
-        });
+
+            deposit = await prisma.deposit.create({
+                data: {
+                    investorId: matchingInvestor.id,
+                    memo: memoText,
+                    status: 'received',
+                    actualAmount: amount,
+                    incomingTxHash: txHash,
+                    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
+                },
+                include: { investor: true }
+            });
+
+            log.info(`Created deposit record ${deposit.id} for investor ${matchingInvestor.id}`);
+        } else {
+            // Existing deposit — update with new payment
+            if (deposit.status !== 'pending' && deposit.status !== 'received') {
+                log.info(`Deposit ${deposit.id} was in '${deposit.status}' — new payment received, resetting to 'received'.`);
+            }
+
+            await prisma.deposit.update({
+                where: { id: deposit.id },
+                data: {
+                    status: 'received',
+                    actualAmount: amount,
+                    incomingTxHash: txHash,
+                    updatedAt: new Date()
+                }
+            });
+        }
 
         // Start forwarding process with the correct asset
         await this.forwardAsset(deposit.id, assetCode);

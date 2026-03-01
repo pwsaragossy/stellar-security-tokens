@@ -881,13 +881,12 @@ export const submitWithdrawal = async (req, res, next) => {
 export const initiateDeposit = async (req, res, next) => {
   try {
     const investorId = parseInt(req.params.id, 10);
-    const { expectedAmount } = req.body;
 
-    const deposit = await DepositRelayService.initiateDeposit(investorId, expectedAmount);
+    const depositInfo = await DepositRelayService.initiateDeposit(investorId);
 
-    res.status(201).json({
+    res.status(200).json({
       success: true,
-      data: deposit,
+      data: depositInfo,
     });
   } catch (error) {
     next(error);
