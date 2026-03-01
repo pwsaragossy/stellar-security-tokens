@@ -56,7 +56,7 @@ This document tracks items that need to be addressed **after** the initial Mainn
 - [ ] **AlertService External Integrations**: Add Slack/Discord webhooks, Email, SMS for CRITICAL/ERROR alerts. Currently just logs. See [alert.service.js L44](file:///Users/pedrosaragossy/Workspace/Tokenizadora/stellar-security-tokens/backend/src/services/alert.service.js#L44).
 
 ## 4. Housekeeping
-- [x] ~~**Clean `.env`**: `.env` is the base dev config (multisig mode), `.env.tests` for test suite (env mode with all secrets), `.env.production` for mainnet. Docker Compose reads `.env` automatically.~~
+- [x] ~~**Clean `.env`**: `.env` is the dev config (loaded by Docker Compose automatically), `.env.production` for mainnet. Tests use an isolated `stellar_tokens_test` database with a safety guard in `cleanDatabase()`.~~
 
 ## 5. Security Hardening
 - [x] ~~**Admin Seeding Scripts**: Added `NODE_ENV=production` check to `seed.js`, `checkAndCreateAdmin.js`, and `create_admin.js` — scripts now refuse to run in production. Use `createAdmin.js` with CLI args for prod.~~

@@ -1,5 +1,8 @@
 FROM node:20-alpine
 
+# Install pg_dump for daily database backups (backup.service.js)
+RUN apk add --no-cache postgresql15-client
+
 WORKDIR /app
 
 # Copiar arquivos de dependências do backend

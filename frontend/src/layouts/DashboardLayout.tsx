@@ -21,6 +21,11 @@ export function DashboardLayout() {
         }
     }, [isLoading, isAuthenticated, navigate]);
 
+    // Close mobile sidebar on route change
+    useEffect(() => {
+        close();
+    }, [location.pathname]);
+
     // Show loading while restoring session
     if (isLoading) {
         return (
@@ -29,11 +34,6 @@ export function DashboardLayout() {
             </div>
         );
     }
-
-    // Close mobile sidebar on route change
-    useEffect(() => {
-        close();
-    }, [location.pathname]);
 
     const navItems = [
         { id: 'market', label: 'Marketplace', icon: Store, path: '/market' },

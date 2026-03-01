@@ -9,6 +9,20 @@ import bcrypt from 'bcrypt';
  * Limpa todas as tabelas do banco de testes usando Prisma
  */
 export const cleanDatabase = async () => {
+  // ═══════════════════════════════════════════════════════════════════════
+  // SAFETY GUARD: Refuse to delete data from non-test databases.
+  // This prevents accidental data loss if tests are misconfigured.
+  // ═══════════════════════════════════════════════════════════════════════
+  const dbUrl = process.env.DATABASE_URL || '';
+  if (!dbUrl.includes('_test')) {
+    throw new Error(
+      `🛑 SAFETY GUARD: cleanDatabase() refused to execute.\n` +
+      `DATABASE_URL does not point to a test database (must contain '_test').\n` +
+      `Current DATABASE_URL points to: ${dbUrl.replace(/\/\/.*@/, '//***@')}\n` +
+      `This guard exists to prevent accidental deletion of dev/production data.`
+    );
+  }
+
   const isTestEnv = process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
 
   try {

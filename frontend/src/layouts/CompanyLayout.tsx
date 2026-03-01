@@ -24,31 +24,10 @@ export function CompanyLayout() {
         }
     }, [isLoading, isAuthenticated, navigate]);
 
-    // Show loading while restoring session
-    if (isLoading) {
-        return (
-            <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-            </div>
-        );
-    }
-
     // Close mobile sidebar on route change
     useEffect(() => {
         close();
     }, [location.pathname]);
-
-    const navItems = [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/company/dashboard' },
-        { id: 'offers', label: 'My Offers', icon: FileText, path: '/company/offers' },
-        { id: 'tokens', label: 'My Tokens', icon: Coins, path: '/company/tokens' },
-        { id: 'wallet', label: 'Wallet', icon: Wallet, path: '/company/wallet' },
-        { id: 'documents', label: 'Documents', icon: Files, path: '/company/documents' },
-        { id: 'reports', label: 'Reports', icon: BarChart3, path: '/company/reports' },
-        { id: 'settings', label: 'Settings', icon: Settings, path: '/company/settings' },
-    ];
-
-    const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
     useEffect(() => {
         const fetchCompany = async () => {
@@ -63,6 +42,26 @@ export function CompanyLayout() {
         };
         fetchCompany();
     }, []);
+
+    // Show loading while restoring session
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            </div>
+        );
+    }
+    const navItems = [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/company/dashboard' },
+        { id: 'offers', label: 'My Offers', icon: FileText, path: '/company/offers' },
+        { id: 'tokens', label: 'My Tokens', icon: Coins, path: '/company/tokens' },
+        { id: 'wallet', label: 'Wallet', icon: Wallet, path: '/company/wallet' },
+        { id: 'documents', label: 'Documents', icon: Files, path: '/company/documents' },
+        { id: 'reports', label: 'Reports', icon: BarChart3, path: '/company/reports' },
+        { id: 'settings', label: 'Settings', icon: Settings, path: '/company/settings' },
+    ];
+
+    const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
     const handleLogout = () => {
         // Only clear company session, preserve other user sessions

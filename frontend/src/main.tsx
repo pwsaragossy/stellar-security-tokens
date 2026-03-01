@@ -19,10 +19,14 @@ const ErrorFallback = () => (
         We've been notified and are looking into it.
       </p>
       <button
-        onClick={() => window.location.reload()}
+        onClick={() => {
+          localStorage.clear();
+          sessionStorage.clear();
+          window.location.href = '/';
+        }}
         className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
       >
-        Reload Page
+        Go to Home
       </button>
     </div>
   </div>

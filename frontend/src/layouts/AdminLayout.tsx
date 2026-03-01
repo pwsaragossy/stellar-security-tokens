@@ -186,6 +186,11 @@ export function AdminLayout() {
         }
     }, [isLoading, isAuthenticated, navigate]);
 
+    // Close mobile sidebar on route change
+    useEffect(() => {
+        close();
+    }, [location.pathname]);
+
     // Show loading while restoring session
     if (isLoading) {
         return (
@@ -194,11 +199,6 @@ export function AdminLayout() {
             </div>
         );
     }
-
-    // Close mobile sidebar on route change
-    useEffect(() => {
-        close();
-    }, [location.pathname]);
 
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },

@@ -103,7 +103,9 @@ export const mockJWTToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW
 
 import dotenv from 'dotenv';
 import path from 'path';
-dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
+// Load .env but DO NOT override env vars already set by test scripts.
+// The test scripts set DATABASE_URL to stellar_tokens_test — dotenv must not overwrite it.
+dotenv.config({ path: path.resolve(process.cwd(), '../.env'), override: false });
 
 import prisma from '../../src/config/prisma.js';
 import { generateToken } from '../../src/middleware/auth.js';
