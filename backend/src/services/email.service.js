@@ -224,7 +224,7 @@ export class EmailService {
             <div class="wrapper">
               <div class="container">
                 <div class="header">
-                  <div class="logo">✦ STELLAR TOKENS</div>
+                  <div class="logo">✦ RADOX</div>
                   <div class="header-subtitle">Secure Digital Securities Platform</div>
                 </div>
                 <div class="content">
@@ -311,7 +311,7 @@ export class EmailService {
             <div class="wrapper">
               <div class="container">
                 <div class="header">
-                  <div class="logo">✦ STELLAR TOKENS</div>
+                  <div class="logo">✦ RADOX</div>
                   <div class="header-subtitle">Secure Digital Securities Platform</div>
                 </div>
                 <div class="content">
@@ -437,7 +437,7 @@ export class EmailService {
               <div class="container">
                 <div class="header">
                   <div class="celebration">🎉</div>
-                  <div class="logo">✦ STELLAR TOKENS</div>
+                  <div class="logo">✦ RADOX</div>
                   <div class="header-subtitle">Sua carteira digital foi criada com sucesso!</div>
                 </div>
                 <div class="content">
@@ -830,7 +830,7 @@ export class EmailService {
               <div class="container">
                 <div class="header">
                   <div class="celebration">🎉</div>
-                  <div class="logo">✦ STELLAR TOKENS</div>
+                  <div class="logo">✦ RADOX</div>
                   <div class="header-subtitle">Conta Aprovada!</div>
                 </div>
                 <div class="content">
@@ -1039,7 +1039,7 @@ export class EmailService {
               <div class="container">
                 <div class="header">
                   ${status === 'approved' ? '<div style="font-size: 48px; margin-bottom: 16px;">🎉</div>' : ''}
-                  <div class="logo">✦ STELLAR TOKENS</div>
+                  <div class="logo">✦ RADOX</div>
                   <div class="header-subtitle">Atualização de Status da Empresa</div>
                 </div>
                 <div class="content">

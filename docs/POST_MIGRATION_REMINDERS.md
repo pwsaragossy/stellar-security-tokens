@@ -59,6 +59,7 @@ This document tracks items that need to be addressed **after** the initial Mainn
 
 ## 4. Housekeeping
 - [x] ~~**Clean `.env`**: `.env` is the dev config (loaded by Docker Compose automatically), `.env.production` for mainnet. Tests use an isolated `stellar_tokens_test` database with a safety guard in `cleanDatabase()`.~~
+- [ ] **Rename Git Repository**: Current repo is `stellar-security-tokens`. Rename to `radox` (or `radox-platform`) on GitHub/GitLab to match the new branding. Update all remote URLs, CI/CD pipelines, and documentation references.
 
 ## 5. Security Hardening
 - [x] ~~**Admin Seeding Scripts**: Added `NODE_ENV=production` check to `seed.js`, `checkAndCreateAdmin.js`, and `create_admin.js` — scripts now refuse to run in production. Use `createAdmin.js` with CLI args for prod.~~
