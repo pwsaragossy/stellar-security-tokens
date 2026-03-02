@@ -325,31 +325,6 @@ export class PasskeyWalletService {
     }
   }
 
-  /**
-   * Get the contract address for a user from our database
-   * This replaces the Mercury reverse lookup functionality
-   * 
-   * @param {string} userType - Type of user: 'investor' or 'company_user'
-   * @param {string} email - User's email
-   * @returns {Promise<string|null>} Contract address or null if not found
-   */
-  static async getContractIdByEmail(userType, email) {
-    const model = this.#getPrismaModel(userType);
-
-    if (!model) {
-      throw new Error(`Invalid user type: ${userType}`);
-    }
-
-    const user = await prisma[model].findUnique({
-      where: { email },
-      select: {
-        stellarContractId: true,
-        passkeyCredentialId: true,
-      },
-    });
-
-    return user?.stellarContractId || null;
-  }
 
   /**
    * Get user by passkey credential ID

@@ -24,7 +24,7 @@ export function RegistrationSuccess() {
 
                 <Card className="border-slate-800 bg-slate-900/90 backdrop-blur-xl">
                     <CardHeader>
-                        <CardTitle className="text-white">Welcome to Stellar Tokens</CardTitle>
+                        <CardTitle className="text-white">Welcome to Radox</CardTitle>
                         <CardDescription className="text-slate-400">
                             Your account has been created successfully. Now let's make sure your passkey works.
                         </CardDescription>

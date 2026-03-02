@@ -54,7 +54,7 @@ export function Login() {
                 <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full blur-3xl -z-10 transition-colors duration-500 ${userType === 'investor' ? 'bg-blue-500/20' : 'bg-teal-500/20'}`} />
 
                 <div className="text-center space-y-2">
-                    <h1 className="text-3xl font-bold tracking-tighter text-white">Stellar Tokens</h1>
+                    <h1 className="text-3xl font-bold tracking-tighter text-white">Radox</h1>
                     <p className="text-muted-foreground">Institutional-Grade Security Token Platform</p>
                 </div>
 
