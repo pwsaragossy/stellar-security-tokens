@@ -211,7 +211,7 @@ export function setRefreshCookie(res, rawToken, userType) {
   const frontendUrl = process.env.FRONTEND_URL || '';
   const requiresSecure = isProduction || frontendUrl.startsWith('https://');
 
-  log.info(`[Cookie] Setting ${cookieName} for ${userType} | secure=${requiresSecure} | sameSite=${requiresSecure ? 'none' : 'lax'}`);
+
   res.cookie(cookieName, rawToken, {
     httpOnly: true,
     secure: requiresSecure,
@@ -234,9 +234,7 @@ export function clearRefreshCookie(res, userType) {
  * @param {Object} cookies - Parsed cookies from the request
  * @param {string} [preferredType] - Optional userType hint (e.g., 'admin', 'platform_admin') to check first
  */
-export function getRefreshTokenFromCookies(cookies, preferredType) {
-  log.info(`[Cookie] Looking for refresh cookie | preferredType=${preferredType} | cookies=${Object.keys(cookies).join(',')}`);
-  // If a preferred type is given, check its cookie first
+export function getRefreshTokenFromCookies(cookies, preferredType) {  // If a preferred type is given, check its cookie first
   if (preferredType) {
     // Normalize: 'admin' -> 'platform_admin' for cookie lookup
     const normalized = preferredType === 'admin' ? 'platform_admin' : preferredType;
