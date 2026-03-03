@@ -1,4 +1,4 @@
-import { authStorage } from '@/utils/authStorage';
+import { authStorage, detectUserType } from '@/utils/authStorage';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -12,6 +12,7 @@ async function refreshAccessToken(): Promise<string | null> {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userType: detectUserType() }),
     });
 
     if (!response.ok) return null;

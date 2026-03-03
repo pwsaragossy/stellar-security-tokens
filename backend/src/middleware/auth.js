@@ -207,11 +207,15 @@ export async function rotateRefreshToken(rawToken) {
 export function setRefreshCookie(res, rawToken, userType) {
   const cookieName = COOKIE_NAMES[userType] || 'rt';
   const isProduction = process.env.NODE_ENV === 'production';
+  // Secure flag must be true whenever the frontend uses HTTPS (including Cloudflare Tunnels in dev)
+  const frontendUrl = process.env.FRONTEND_URL || '';
+  const requiresSecure = isProduction || frontendUrl.startsWith('https://');
 
+  log.info(`[Cookie] Setting ${cookieName} for ${userType} | secure=${requiresSecure} | sameSite=${requiresSecure ? 'none' : 'lax'}`);
   res.cookie(cookieName, rawToken, {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? 'strict' : 'lax',
+    secure: requiresSecure,
+    sameSite: requiresSecure ? 'none' : 'lax', // 'none' required for cross-site cookies over HTTPS
     maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000, // 7 days in ms
     path: '/api/auth', // Only sent to auth endpoints
   });
@@ -226,10 +230,23 @@ export function clearRefreshCookie(res, userType) {
 }
 
 /**
- * Get the refresh token from the correct cookie based on userType hint
+ * Get the refresh token from the correct cookie based on userType hint.
+ * @param {Object} cookies - Parsed cookies from the request
+ * @param {string} [preferredType] - Optional userType hint (e.g., 'admin', 'platform_admin') to check first
  */
-export function getRefreshTokenFromCookies(cookies) {
-  // Try all cookie names, return first found
+export function getRefreshTokenFromCookies(cookies, preferredType) {
+  log.info(`[Cookie] Looking for refresh cookie | preferredType=${preferredType} | cookies=${Object.keys(cookies).join(',')}`);
+  // If a preferred type is given, check its cookie first
+  if (preferredType) {
+    // Normalize: 'admin' -> 'platform_admin' for cookie lookup
+    const normalized = preferredType === 'admin' ? 'platform_admin' : preferredType;
+    const name = COOKIE_NAMES[normalized];
+    if (name && cookies[name]) {
+      return { token: cookies[name], userType: normalized };
+    }
+  }
+
+  // Fallback: try all cookie names, return first found
   for (const [type, name] of Object.entries(COOKIE_NAMES)) {
     if (cookies[name]) {
       return { token: cookies[name], userType: type };

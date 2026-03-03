@@ -22,6 +22,22 @@ const log = logger.scope('AuthRoutes');
 
 const router = express.Router();
 
+/**
+ * Detect user type from the Referer header URL path.
+ * Used as a fallback when the frontend doesn't send an explicit userType hint.
+ */
+function detectUserTypeFromReferer(referer) {
+  if (!referer) return undefined;
+  try {
+    const url = new URL(referer);
+    if (url.pathname.startsWith('/admin')) return 'platform_admin';
+    if (url.pathname.startsWith('/company')) return 'company';
+    return 'investor';
+  } catch {
+    return undefined;
+  }
+}
+
 
 /**
  * @swagger
@@ -272,7 +288,8 @@ router.post('/passkey-login/discover', [
  */
 router.post('/refresh', async (req, res, next) => {
   try {
-    const cookieData = getRefreshTokenFromCookies(req.cookies || {});
+    const userTypeHint = req.body?.userType || detectUserTypeFromReferer(req.headers.referer);
+    const cookieData = getRefreshTokenFromCookies(req.cookies || {}, userTypeHint);
 
     if (!cookieData) {
       return res.status(401).json({

@@ -49,7 +49,7 @@ export function useAuthRefresh(userType: UserType) {
             try {
                 const response = await axios.post(
                     `${API_URL}/auth/refresh`,
-                    {},
+                    { userType },
                     { withCredentials: true }
                 );
 

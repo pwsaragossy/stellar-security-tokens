@@ -1,6 +1,6 @@
 import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import type { ApiResponse } from '@/types';
-import { authStorage } from '@/utils/authStorage';
+import { authStorage, detectUserType } from '@/utils/authStorage';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -29,7 +29,7 @@ async function refreshAccessToken(): Promise<string | null> {
   try {
     const response = await axios.post(
       `${API_URL}/auth/refresh`,
-      {},
+      { userType: detectUserType() },
       { withCredentials: true }
     );
     if (response.data?.success && response.data?.data?.token) {
