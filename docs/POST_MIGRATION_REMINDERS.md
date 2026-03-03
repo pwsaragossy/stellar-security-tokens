@@ -51,7 +51,7 @@ This document tracks items that need to be addressed **after** the initial Mainn
 > ✅ **Completed:** No custom Soroban contracts needed — using SDF `passkey-kit` Smart Wallet (pre-verified) + SAC (protocol-native).
 
 ## 3.1 Company Features
-- [ ] **Full Company KYC**: Current registration only requires company name. Implement full KYC flow to collect and verify:
+- [ ] **Full Company KYC** *(Low Priority — companies onboard offline for now)*: If needed later, implement in-app KYC to collect:
     - Tax ID (CNPJ/EIN) with validation
     - Legal representative identity verification
     - Articles of incorporation / business registration documents
@@ -69,7 +69,7 @@ This document tracks items that need to be addressed **after** the initial Mainn
 
 ## 5. Security Hardening
 - [ ] **CORS Configuration**: Set `FRONTEND_URL` to production domain (e.g., `https://app.radox.net`). Restrict origins in `backend/src/app.js`.
-- [ ] **Short-Lived Access Tokens**: Reduce access token expiry from 24h to 15 minutes. Refresh tokens (7-day, httpOnly cookie, rotation) are already implemented.
+- [ ] **Short-Lived Access Tokens**: Reduce access token expiry from 24h to 15 minutes. Refresh tokens (7-day, httpOnly cookie, rotation) are already implemented. *(Previously failed because of a cookie priority bug — `rt_inv` shadowed `rt_adm` — fixed Mar 2026 via Referer-based detection in `authRoutes.js`. Safe to retry.)*
 - [ ] **Security Audit Logging**: Dedicated audit log for logins, failed auth, admin actions. Consider winston/pino with separate transport.
 - [ ] **Cold Issuer Wallet** (Phased):
     - Phase 1 (MVP): Admin Passkeys as 2nd signer.
