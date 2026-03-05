@@ -1,0 +1,31 @@
+# =============================================================================
+# Caddy Reverse Proxy Configuration
+# =============================================================================
+# Auto-HTTPS for all domains via Let's Encrypt.
+# DNS records must point to the VM IP (Cloudflare: DNS only / grey cloud).
+# =============================================================================
+
+# Landing page — static files + stellar.toml from backend
+radox.net {
+    # SEP-1: stellar.toml MUST be served by backend (dynamic, DB-driven)
+    handle /.well-known/* {
+        reverse_proxy backend:3000
+    }
+
+    # Everything else → static landing page
+    handle {
+        root * /srv/landing
+        file_server
+        try_files {path} /index.html
+    }
+}
+
+# Frontend app — React SPA served by nginx
+app.radox.net {
+    reverse_proxy frontend:80
+}
+
+# Backend API — direct access for Swagger, monitoring, future mobile apps
+api.radox.net {
+    reverse_proxy backend:3000
+}

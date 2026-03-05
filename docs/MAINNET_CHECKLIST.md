@@ -44,11 +44,11 @@ Create a production `.env` file with the following changes:
 ### Infrastructure & Security
 - [ ] **`DB_SSL`**: Set to `true` (Required for cloud databases).
 - [ ] **`JWT_SECRET`**: Generate with `openssl rand -hex 32`.
-- [ ] **`WEBAUTHN_RP_ID`**: Change to your production domain (e.g., `radox.net`).
-- [ ] **`WEBAUTHN_ORIGIN`**: Change to `https://radox.net`.
-- [ ] **`FRONTEND_URL`**: Update to `https://radox.net`.
+- [ ] **`WEBAUTHN_RP_ID`**: Keep as `radox.net` (covers all subdomains).
+- [ ] **`WEBAUTHN_ORIGIN`**: Change to `https://app.radox.net`.
+- [ ] **`FRONTEND_URL`**: Update to `https://app.radox.net`.
 - [ ] **`API_URL`**: Update to `https://api.radox.net`.
-- [ ] **`VITE_API_URL`**: Update in frontend to `https://api.radox.net/api`.
+- [ ] **`VITE_API_URL`**: Keep as `/api` (same-origin proxy via nginx).
 
 ### Third Party Services
 - [ ] **Launchtube**: Get Mainnet JWT from Stellar Discord #launchtube.

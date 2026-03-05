@@ -39,8 +39,9 @@ initSentry();
 
 const app = express();
 
-// Trust first proxy (nginx) - needed for rate limiting behind reverse proxy
-app.set('trust proxy', 1);
+// Trust proxies on private networks (Docker internal IPs)
+// Handles both Caddy→Backend (1 hop) and Caddy→Nginx→Backend (2 hops)
+app.set('trust proxy', 'loopback, linklocal, uniquelocal');
 
 // Security Middleware
 app.use(helmet({

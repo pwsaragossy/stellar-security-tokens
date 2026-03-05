@@ -3,9 +3,13 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Argumento de build para URL da API
+# Build arguments for Vite environment variables (baked into JS bundle)
 ARG VITE_API_URL=/api
 ARG VITE_ENABLE_TEST_LOGIN=false
+ARG VITE_STELLAR_NETWORK=testnet
+ARG VITE_SOROBAN_RPC_URL
+ARG VITE_STELLAR_NETWORK_PASSPHRASE
+ARG VITE_FACTORY_CONTRACT_ID
 
 # Copiar arquivos de dependências
 COPY package*.json ./
@@ -21,6 +25,10 @@ COPY frontend/ ./frontend/
 WORKDIR /app/frontend
 ENV VITE_API_URL=${VITE_API_URL}
 ENV VITE_ENABLE_TEST_LOGIN=${VITE_ENABLE_TEST_LOGIN}
+ENV VITE_STELLAR_NETWORK=${VITE_STELLAR_NETWORK}
+ENV VITE_SOROBAN_RPC_URL=${VITE_SOROBAN_RPC_URL}
+ENV VITE_STELLAR_NETWORK_PASSPHRASE=${VITE_STELLAR_NETWORK_PASSPHRASE}
+ENV VITE_FACTORY_CONTRACT_ID=${VITE_FACTORY_CONTRACT_ID}
 RUN npm run build
 
 # Stage 2: Nginx para servir arquivos estáticos

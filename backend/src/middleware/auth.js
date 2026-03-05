@@ -215,7 +215,7 @@ export function setRefreshCookie(res, rawToken, userType) {
   res.cookie(cookieName, rawToken, {
     httpOnly: true,
     secure: requiresSecure,
-    sameSite: requiresSecure ? 'none' : 'lax', // 'none' required for cross-site cookies over HTTPS
+    sameSite: 'lax', // Same-origin API proxy — no cross-site cookie access needed
     maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000, // 7 days in ms
     path: '/api/auth', // Only sent to auth endpoints
   });

@@ -1,16 +1,15 @@
 # =============================================================================
-# Docker Compose for Production (MAINNET)
+# Docker Compose for Production
 # =============================================================================
 # PREREQUISITES:
-#   - Create .env.production with ALL required variables (see below)
+#   - Create .env.production with ALL required variables
 #   - Generate strong passwords for DB and Redis
-#   - Use mainnet Stellar keys (NEVER testnet keys)
 #
 # Usage:
-#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.production up -d --build
 #
 # To stop:
-#   docker compose -f docker-compose.prod.yml down
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml down
 #
 # REQUIRED ENV VARS (will fail if not set):
 #   - POSTGRES_PASSWORD
@@ -103,8 +102,8 @@ services:
       DISTRIBUTOR_PUBLIC_KEY: ${DISTRIBUTOR_PUBLIC_KEY:?DISTRIBUTOR_PUBLIC_KEY is required}
       OPERATIONS_PUBLIC_KEY: ${OPERATIONS_PUBLIC_KEY:?OPERATIONS_PUBLIC_KEY is required}
       TREASURY_PUBLIC_KEY: ${TREASURY_PUBLIC_KEY:?TREASURY_PUBLIC_KEY is required}
-      # USDC - REQUIRED (mainnet issuer differs from testnet)
-      USDC_ISSUER: ${USDC_ISSUER:?USDC_ISSUER is required for mainnet}
+      # USDC (empty on testnet = auto-detect, required on mainnet)
+      USDC_ISSUER: ${USDC_ISSUER:-}
       # Soroban Asset Contracts - REQUIRED for balance queries
       XLM_SAC_CONTRACT_ID: ${XLM_SAC_CONTRACT_ID:?XLM_SAC_CONTRACT_ID is required}
       USDC_SAC_CONTRACT_ID: ${USDC_SAC_CONTRACT_ID:?USDC_SAC_CONTRACT_ID is required}
@@ -167,6 +166,8 @@ services:
         node --import tsx src/database/migrate.js &&
         node --import tsx src/index.js
       "
+    volumes:
+      - backups_data:/app/backups
 
   frontend:
     build:
@@ -174,9 +175,11 @@ services:
       dockerfile: frontend/Dockerfile
       args:
         VITE_API_URL: /api
-    ports:
-      - "80:80"
-      # SSL handled by external reverse proxy (Cloudflare, nginx, etc)
+        VITE_STELLAR_NETWORK: ${STELLAR_NETWORK:-testnet}
+        VITE_SOROBAN_RPC_URL: ${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
+        VITE_STELLAR_NETWORK_PASSPHRASE: "${VITE_STELLAR_NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
+        VITE_FACTORY_CONTRACT_ID: ${FACTORY_CONTRACT_ID}
+    # No external ports — Caddy handles all external traffic
     depends_on:
       backend:
         condition: service_healthy
@@ -199,9 +202,44 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Caddy — Reverse proxy with automatic HTTPS for all domains
+  caddy:
+    image: caddy:2-alpine
+    container_name: stellar_caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/landing:/srv/landing:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - stellar_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   postgres_data:
   redis_data:
+  backups_data:
+  caddy_data:
+  caddy_config:
 
 
 networks:
