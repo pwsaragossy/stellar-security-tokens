@@ -35,9 +35,9 @@ VERSION="2.0.0"
 NETWORK_PASSPHRASE="${networkPassphrase}"
 
 [DOCUMENTATION]
-ORG_NAME="${configMap.org_name || 'Stellar Security Tokens Platform'}"
+ORG_NAME="${configMap.org_name || 'Radox'}"
 ORG_URL="${process.env.FRONTEND_URL || 'http://localhost:5173'}"
-ORG_DESCRIPTION="${configMap.org_description || 'Security Token Issuance Platform'}"
+ORG_DESCRIPTION="${configMap.org_description || 'Fixed Income Tokenization Platform'}"
 
 ACCOUNTS=[
   "${issuerKey}"
@@ -85,8 +85,8 @@ ACCOUNTS=[
 code="${token.assetCode}"
 issuer="${token.issuerPublicKey}"
 display_decimals=7
-name="${token.assetCode} Security Token"
-desc="${token.description || 'Stellar Security Token'}"
+name="${token.assetCode} Token"
+desc="${token.description || 'Tokenized Fixed Income Asset'}"
 conditions="${conditionsParts.join(' ')}"
 is_asset_withheld=false
 is_stackable=false
