@@ -52,14 +52,14 @@ const PAGE_DESCRIPTIONS: Record<string, { title: string, description: string, ke
         description: 'Manage and approve corporate issuers on the platform.',
         keyFeatures: [
             'Verify company registration and legal documents',
-            'Approve companies to issue security tokens',
+            'Approve companies to issue tokens',
             'Monitor company-specific activity',
             'Manage platform-issuer relationships'
         ]
     },
     '/admin/tokens': {
         title: 'Token Catalog',
-        description: 'Central registry of all security tokens issued on the platform.',
+        description: 'Central registry of all tokens issued on the platform.',
         keyFeatures: [
             'Monitor total supply and circulating tokens',
             'View asset metadata and contract IDs',

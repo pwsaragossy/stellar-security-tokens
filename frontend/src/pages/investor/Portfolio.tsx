@@ -476,7 +476,7 @@ export function Portfolio() {
             <div className="animate-fade-in space-y-4">
                 <div className="space-y-1">
                     <h2 className="text-3xl font-bold tracking-tight">My Portfolio</h2>
-                    <p className="text-muted-foreground">Your security token holdings</p>
+                    <p className="text-muted-foreground">Your digital asset holdings</p>
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
@@ -586,7 +586,7 @@ export function Portfolio() {
                     </div>
                     <p className="text-lg font-medium mb-1">No investments yet</p>
                     <p className="text-sm text-muted-foreground mb-5">
-                        Explore our marketplace to invest in security tokens.
+                        Explore our marketplace to invest in digital assets.
                     </p>
                     <Button
                         className="bg-[hsl(160_60%_40%)] hover:bg-[hsl(160_60%_35%)] text-white rounded-xl px-6"

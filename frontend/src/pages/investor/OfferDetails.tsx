@@ -503,7 +503,7 @@ export function OfferDetails() {
             <div className="mt-10 flex items-start gap-3 text-muted-foreground/40">
                 <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
                 <p className="text-[11px] leading-relaxed">
-                    Security tokens involve risk and may not be suitable for all investors.
+                    Digital assets involve risk and may not be suitable for all investors.
                     Past performance does not guarantee future results. Review all legal
                     documents before investing. Your investment is not FDIC insured and
                     may lose value.

@@ -363,7 +363,7 @@ export function CompanyDashboard() {
                                 <div>
                                     <h3 className="text-xl font-bold font-heading mb-2">Initialize New Offering</h3>
                                     <p className="text-muted-foreground max-w-sm mx-auto">
-                                        Begin the process of creating a new security token offering.
+                                        Begin the process of creating a new token offering.
                                     </p>
                                 </div>
                             </div>

@@ -47,7 +47,7 @@ export function Tokens() {
                         <Coins className="w-6 h-6 text-primary" />
                         My Tokens
                     </h2>
-                    <p className="text-muted-foreground">Monitor your issued security tokens.</p>
+                    <p className="text-muted-foreground">Monitor your issued tokens.</p>
                 </div>
                 <div className="flex gap-2">
                     <Button variant="outline" size="icon" onClick={fetchTokens} title="Refresh">

@@ -148,7 +148,7 @@ export function Wallet() {
 
                         setTokenizedAssets(assets.map((inv: any) => ({
                             assetCode: inv.assetCode || inv.asset_code || 'N/A',
-                            tokenName: inv.offerName || inv.offer_name || inv.assetCode || 'Security Token',
+                            tokenName: inv.offerName || inv.offer_name || inv.assetCode || 'Token',
                             amount: Number(inv.totalDistributed || inv.total_distributed || inv.amount) || 0,
                             currentValue: Number(inv.totalDistributed || inv.total_distributed || 0) * Number(inv.unitPrice || inv.unit_price || 1),
                             issuerPublicKey: inv.issuerPublicKey || inv.issuer_public_key || null,

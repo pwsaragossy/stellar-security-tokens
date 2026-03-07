@@ -310,7 +310,7 @@ export function AssetCompliance() {
                     <CardContent className="space-y-4">
                         <div>
                             <p className="text-2xl font-bold text-white">{selectedAsset || '---'}</p>
-                            <p className="text-xs text-muted-foreground mb-2">Active Security Token</p>
+                            <p className="text-xs text-muted-foreground mb-2">Active Token</p>
                             {tokens.find(t => t.assetCode === selectedAsset)?.sacContractId && (
                                 <div className="p-2 bg-white/5 rounded-lg border border-white/10 mt-2">
                                     <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Soroban SAC ID</p>

@@ -55,7 +55,7 @@ export function Login() {
 
                 <div className="text-center space-y-2">
                     <h1 className="text-3xl font-bold tracking-tighter text-white">Radox</h1>
-                    <p className="text-muted-foreground">Institutional-Grade Security Token Platform</p>
+                    <p className="text-muted-foreground">Institutional-Grade Digital Asset Platform</p>
                 </div>
 
                 <Card className="border-slate-800 bg-slate-900/90 backdrop-blur-xl">

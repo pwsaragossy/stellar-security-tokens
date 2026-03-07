@@ -102,7 +102,7 @@ export class EmailService {
                 <p><strong>Hash da Transação:</strong></p>
                 <div class="transaction">${transactionHash}</div>
                 <p>Você pode verificar a transação no Stellar Explorer usando o hash acima.</p>
-                <p>Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+                <p>Atenciosamente,<br>Equipe Radox</p>
               </div>
               <div class="footer">
                 <p>Este é um email automático, por favor não responda.</p>
@@ -111,7 +111,7 @@ export class EmailService {
           </body>
           </html>
         `,
-        text: `Pagamento de Juros Recebido\n\nOlá ${investorName},\n\nInformamos que seu pagamento de juros foi processado com sucesso.\n\nValor: ${amount} USDC\nData do Pagamento: ${paymentDate}\nHash da Transação: ${transactionHash}\n\nVocê pode verificar a transação no Stellar Explorer usando o hash acima.\n\nAtenciosamente,\nEquipe Stellar Security Tokens`,
+        text: `Pagamento de Juros Recebido\n\nOlá ${investorName},\n\nInformamos que seu pagamento de juros foi processado com sucesso.\n\nValor: ${amount} USDC\nData do Pagamento: ${paymentDate}\nHash da Transação: ${transactionHash}\n\nVocê pode verificar a transação no Stellar Explorer usando o hash acima.\n\nAtenciosamente,\nEquipe Radox`,
       });
     } catch (error) {
       log.error(`Error sending email to ${investorEmail}:`, error);
@@ -189,7 +189,7 @@ export class EmailService {
                   <p class="note">If you didn't request this code, you can safely ignore this email. Someone may have entered your email address by mistake.</p>
                 </div>
                 <div class="footer">
-                  <p class="footer-text">This is an automated message from <span class="brand">Stellar Security Tokens</span>.<br>Please do not reply to this email.</p>
+                  <p class="footer-text">This is an automated message from <span class="brand">Radox</span>.<br>Please do not reply to this email.</p>
                 </div>
               </div>
             </div>
@@ -219,7 +219,7 @@ export class EmailService {
 
       return await sendEmail({
         to: investorEmail,
-        subject: 'Confirme seu email - Stellar Security Tokens',
+        subject: 'Confirme seu email - Radox',
         html: `
           <!DOCTYPE html>
           <html>
@@ -254,7 +254,7 @@ export class EmailService {
                 </div>
                 <div class="content">
                   <p class="greeting">Olá ${investorName},</p>
-                  <p class="text">Obrigado por se cadastrar na plataforma Stellar Security Tokens!</p>
+                  <p class="text">Obrigado por se cadastrar na plataforma Radox!</p>
                   <p class="text">Para continuar com a criação da sua conta e carteira digital, por favor confirme seu email clicando no botão abaixo:</p>
                   <div class="button-container">
                     <a href="${verificationLink}" class="button">✓ Confirmar Email</a>
@@ -265,14 +265,14 @@ export class EmailService {
                   <p class="text">Se você não solicitou este cadastro, por favor ignore este email.</p>
                 </div>
                 <div class="footer">
-                  <p class="footer-text">Esta é uma mensagem automática da <span class="brand">Stellar Security Tokens</span>.<br>Por favor, não responda este email.</p>
+                  <p class="footer-text">Esta é uma mensagem automática da <span class="brand">Radox</span>.<br>Por favor, não responda este email.</p>
                 </div>
               </div>
             </div>
           </body>
           </html>
         `,
-        text: `Confirme seu Email\n\nOlá ${investorName},\n\nObrigado por se cadastrar na plataforma Stellar Security Tokens!\n\nPara continuar com a criação da sua conta e carteira digital, por favor confirme seu email acessando o link abaixo:\n\n${verificationLink}\n\nEste link é válido por 24 horas.\n\nSe você não solicitou este cadastro, por favor ignore este email.\n\nAtenciosamente,\nEquipe Stellar Security Tokens`,
+        text: `Confirme seu Email\n\nOlá ${investorName},\n\nObrigado por se cadastrar na plataforma Radox!\n\nPara continuar com a criação da sua conta e carteira digital, por favor confirme seu email acessando o link abaixo:\n\n${verificationLink}\n\nEste link é válido por 24 horas.\n\nSe você não solicitou este cadastro, por favor ignore este email.\n\nAtenciosamente,\nEquipe Radox`,
       });
     } catch (error) {
       log.error(`Error sending verification email to ${investorEmail}:`, error);
@@ -296,7 +296,7 @@ export class EmailService {
 
       return await sendEmail({
         to: investorEmail,
-        subject: 'Bem-vindo! Sua carteira foi criada - Stellar Security Tokens',
+        subject: 'Bem-vindo! Sua carteira foi criada - Radox',
         html: `
           <!DOCTYPE html>
           <html>
@@ -373,14 +373,14 @@ export class EmailService {
                   </div>
                 </div>
                 <div class="footer">
-                  <p class="footer-text">Esta é uma mensagem automática da <span class="brand">Stellar Security Tokens</span>.<br>Por favor, não responda este email.</p>
+                  <p class="footer-text">Esta é uma mensagem automática da <span class="brand">Radox</span>.<br>Por favor, não responda este email.</p>
                 </div>
               </div>
             </div>
           </body>
           </html>
         `,
-        text: `Bem-vindo!\n\nOlá ${investorName},\n\nParabéns! Sua conta foi verificada e sua carteira digital Stellar foi criada com sucesso!\n\nEndereço da sua Carteira: ${contractId}\n\nPróximos passos:\n1. Complete seu KYC para poder investir\n2. Explore as ofertas de tokens disponíveis\n3. Faça seu primeiro investimento\n\nSua carteira é protegida por passkey (biometria). Você não precisa guardar senhas ou chaves privadas!\n\nAtenciosamente,\nEquipe Stellar Security Tokens`,
+        text: `Bem-vindo!\n\nOlá ${investorName},\n\nParabéns! Sua conta foi verificada e sua carteira digital Stellar foi criada com sucesso!\n\nEndereço da sua Carteira: ${contractId}\n\nPróximos passos:\n1. Complete seu KYC para poder investir\n2. Explore as ofertas de tokens disponíveis\n3. Faça seu primeiro investimento\n\nSua carteira é protegida por passkey (biometria). Você não precisa guardar senhas ou chaves privadas!\n\nAtenciosamente,\nEquipe Radox`,
       });
     } catch (error) {
       log.error(`Error sending welcome email to ${investorEmail}:`, error);
@@ -425,7 +425,7 @@ export class EmailService {
                 <p><strong>Data:</strong> ${paymentDate}</p>
                 <p><strong>Hash da Transação:</strong></p>
                 <div class="transaction">${transactionHash}</div>
-                <p>Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+                <p>Atenciosamente,<br>Equipe Radox</p>
               </div>
               <div class="footer">
                 <p>Este é um email automático, por favor não responda.</p>
@@ -434,7 +434,7 @@ export class EmailService {
           </body>
           </html>
         `,
-        text: `Pagamento Bullet Processado\n\nOlá ${investorName},\n\nSeu pagamento bullet foi processado com sucesso!\n\nValor Total: ${totalAmount.toFixed(2)} USDC\nData: ${paymentDate}\nHash: ${transactionHash}\n\nAtenciosamente,\nEquipe Stellar Security Tokens`,
+        text: `Pagamento Bullet Processado\n\nOlá ${investorName},\n\nSeu pagamento bullet foi processado com sucesso!\n\nValor Total: ${totalAmount.toFixed(2)} USDC\nData: ${paymentDate}\nHash: ${transactionHash}\n\nAtenciosamente,\nEquipe Radox`,
       });
     } catch (error) {
       log.error(`Error sending bullet payment email to ${email}:`, error);
@@ -479,7 +479,7 @@ export class EmailService {
                 <p><strong>Data:</strong> ${paymentDate}</p>
                 <p><strong>Hash da Transação:</strong></p>
                 <div class="transaction">${transactionHash}</div>
-                <p>Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+                <p>Atenciosamente,<br>Equipe Radox</p>
               </div>
               <div class="footer">
                 <p>Este é um email automático, por favor não responda.</p>
@@ -488,7 +488,7 @@ export class EmailService {
           </body>
           </html>
         `,
-        text: `Pagamento de Juros Trimestral\n\nOlá ${investorName},\n\nSeu pagamento de juros trimestral foi processado com sucesso!\n\nValor: ${totalAmount.toFixed(2)} USDC\nData: ${paymentDate}\nHash: ${transactionHash}\n\nAtenciosamente,\nEquipe Stellar Security Tokens`,
+        text: `Pagamento de Juros Trimestral\n\nOlá ${investorName},\n\nSeu pagamento de juros trimestral foi processado com sucesso!\n\nValor: ${totalAmount.toFixed(2)} USDC\nData: ${paymentDate}\nHash: ${transactionHash}\n\nAtenciosamente,\nEquipe Radox`,
       });
     } catch (error) {
       log.error(`Error sending quarterly payment email to ${email}:`, error);
@@ -533,7 +533,7 @@ export class EmailService {
                 <p><strong>Data:</strong> ${paymentDate}</p>
                 <p><strong>Hash da Transação:</strong></p>
                 <div class="transaction">${transactionHash}</div>
-                <p>Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+                <p>Atenciosamente,<br>Equipe Radox</p>
               </div>
               <div class="footer">
                 <p>Este é um email automático, por favor não responda.</p>
@@ -542,7 +542,7 @@ export class EmailService {
           </body>
           </html>
         `,
-        text: `Pagamento de Juros Semestral\n\nOlá ${investorName},\n\nSeu pagamento de juros semestral foi processado com sucesso!\n\nValor: ${totalAmount.toFixed(2)} USDC\nData: ${paymentDate}\nHash: ${transactionHash}\n\nAtenciosamente,\nEquipe Stellar Security Tokens`,
+        text: `Pagamento de Juros Semestral\n\nOlá ${investorName},\n\nSeu pagamento de juros semestral foi processado com sucesso!\n\nValor: ${totalAmount.toFixed(2)} USDC\nData: ${paymentDate}\nHash: ${transactionHash}\n\nAtenciosamente,\nEquipe Radox`,
       });
     } catch (error) {
       log.error(`Error sending semi-annual payment email to ${email}:`, error);
@@ -588,7 +588,7 @@ export class EmailService {
                 <p><strong>Hash da Transação:</strong></p>
                 <div class="transaction">${transactionHash}</div>
                 <p>Você já pode visualizar seus tokens no painel do investidor.</p>
-                <p>Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+                <p>Atenciosamente,<br>Equipe Radox</p>
               </div>
               <div class="footer">
                 <p>Este é um email automático, por favor não responda.</p>
@@ -597,7 +597,7 @@ export class EmailService {
           </body>
           </html>
         `,
-        text: `Investimento Confirmado - ${assetCode}\n\nSeu investimento foi processado com sucesso.\n\nTokens: ${tokenAmount} ${assetCode}\nHash da Transação: ${transactionHash}\n\nAtenciosamente,\nEquipe Stellar Security Tokens`,
+        text: `Investimento Confirmado - ${assetCode}\n\nSeu investimento foi processado com sucesso.\n\nTokens: ${tokenAmount} ${assetCode}\nHash da Transação: ${transactionHash}\n\nAtenciosamente,\nEquipe Radox`,
       });
     } catch (error) {
       log.error(`Error sending investment confirmation to ${investorEmail}:`, error);
@@ -615,7 +615,7 @@ export class EmailService {
 
       return await sendEmail({
         to: investorEmail,
-        subject: 'Sua conta foi aprovada! - Stellar Security Tokens',
+        subject: 'Sua conta foi aprovada! - Radox',
         html: `
           <!DOCTYPE html>
           <html>
@@ -659,17 +659,17 @@ export class EmailService {
                   <div class="button-container">
                     <a href="${dashboardLink}" class="button">Acessar Dashboard</a>
                   </div>
-                  <p class="text">Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+                  <p class="text">Atenciosamente,<br>Equipe Radox</p>
                 </div>
                 <div class="footer">
-                  <p class="footer-text">Esta é uma mensagem automática da <span class="brand">Stellar Security Tokens</span>.<br>Por favor, não responda este email.</p>
+                  <p class="footer-text">Esta é uma mensagem automática da <span class="brand">Radox</span>.<br>Por favor, não responda este email.</p>
                 </div>
               </div>
             </div>
           </body>
           </html>
         `,
-        text: `Sua conta foi aprovada!\n\nOlá ${investorName},\n\nSua verificação de identidade (KYC) foi aprovada!\n\nAcesse o dashboard: ${dashboardLink}\n\nAtenciosamente,\nEquipe Stellar Security Tokens`,
+        text: `Sua conta foi aprovada!\n\nOlá ${investorName},\n\nSua verificação de identidade (KYC) foi aprovada!\n\nAcesse o dashboard: ${dashboardLink}\n\nAtenciosamente,\nEquipe Radox`,
       });
     } catch (error) {
       log.error(`Error sending KYC approval email to ${investorEmail}:`, error);
@@ -684,7 +684,7 @@ export class EmailService {
     try {
       return await sendEmail({
         to: investorEmail,
-        subject: 'Atualização sobre sua conta - Stellar Security Tokens',
+        subject: 'Atualização sobre sua conta - Radox',
         html: `
           <!DOCTYPE html>
           <html>
@@ -712,7 +712,7 @@ export class EmailService {
                   ${reason}
                 </div>
                 <p>Por favor, verifique se seus documentos estão legíveis e atualizados. Você pode entrar em contato com nosso suporte para mais detalhes ou tentar enviar novamente.</p>
-                <p>Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+                <p>Atenciosamente,<br>Equipe Radox</p>
               </div>
               <div class="footer">
                 <p>Este é um email automático, por favor não responda.</p>
@@ -721,7 +721,7 @@ export class EmailService {
           </body>
           </html>
         `,
-        text: `Atualização sobre sua conta\n\nOlá ${investorName},\n\nInfelizmente sua verificação de identidade não foi aprovada.\n\nMotivo: ${reason}\n\nPor favor, entre em contato com o suporte.\n\nAtenciosamente,\nEquipe Stellar Security Tokens`,
+        text: `Atualização sobre sua conta\n\nOlá ${investorName},\n\nInfelizmente sua verificação de identidade não foi aprovada.\n\nMotivo: ${reason}\n\nPor favor, entre em contato com o suporte.\n\nAtenciosamente,\nEquipe Radox`,
       });
     } catch (error) {
       log.error(`Error sending KYC rejection email to ${investorEmail}:`, error);
@@ -814,17 +814,17 @@ export class EmailService {
                   ${approvedContent}
                   ${reasonHtml}
                   ${loginButtonHtml}
-                  <p class="text">Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+                  <p class="text">Atenciosamente,<br>Equipe Radox</p>
                 </div>
                 <div class="footer">
-                  <p class="footer-text">Esta é uma mensagem automática da <span class="brand">Stellar Security Tokens</span>.<br>Por favor, não responda este email.</p>
+                  <p class="footer-text">Esta é uma mensagem automática da <span class="brand">Radox</span>.<br>Por favor, não responda este email.</p>
                 </div>
               </div>
             </div>
           </body>
           </html>
         `,
-        text: `Atualização de Status - ${companyName}\n\nNovo Status: ${readableStatus}\n${reason ? `Motivo: ${reason}\n` : ''}${status === 'approved' ? `\nAcesse o painel: ${loginLink}\n` : ''}\nAtenciosamente,\nEquipe Stellar Security Tokens`
+        text: `Atualização de Status - ${companyName}\n\nNovo Status: ${readableStatus}\n${reason ? `Motivo: ${reason}\n` : ''}${status === 'approved' ? `\nAcesse o painel: ${loginLink}\n` : ''}\nAtenciosamente,\nEquipe Radox`
       });
     } catch (error) {
       log.error(`Error sending company status email to ${email}:`, error);
@@ -873,7 +873,7 @@ export class EmailService {
                 <p>A oferta <strong>${offerTitle}</strong> foi atualizada para o status: <span class="status">${status}</span></p>
                 ${reasonHtml}
                 <p>Acesse o painel para mais detalhes.</p>
-                <p>Atenciosamente,<br>Equipe Stellar Security Tokens</p>
+                <p>Atenciosamente,<br>Equipe Radox</p>
               </div>
               <div class="footer">
                 <p>Este é um email automático.</p>
@@ -882,7 +882,7 @@ export class EmailService {
           </body>
           </html>
         `,
-        text: `Atualização de Oferta - ${offerTitle}\n\nNovo Status: ${status}\n${reason ? `Motivo: ${reason}\n` : ''}\nAtenciosamente,\nEquipe Stellar Security Tokens`
+        text: `Atualização de Oferta - ${offerTitle}\n\nNovo Status: ${status}\n${reason ? `Motivo: ${reason}\n` : ''}\nAtenciosamente,\nEquipe Radox`
       });
     } catch (error) {
       log.error(`Error sending offer status email to ${email}:`, error);

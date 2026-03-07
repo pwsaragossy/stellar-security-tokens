@@ -399,7 +399,7 @@ export function TokensPage() {
                 <TokenManagementModal
                     token={managingToken}
                     distributorPublicKey={distributorKey}
-                    walletName="Security Tokens"
+                    walletName="Tokens"
                     onClose={() => setManagingToken(null)}
                 />
             )}
