@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-    Loader2, TrendingUp, Briefcase, Clock, Copy, Check,
-    RefreshCw, AlertCircle, Hourglass, ExternalLink,
+    Loader2, TrendingUp, Briefcase, Clock,
+    RefreshCw, Hourglass, ExternalLink,
     ChevronDown, Calendar, Percent, DollarSign, ArrowRight,
     Hash, Coins,
 } from 'lucide-react';
@@ -70,39 +70,21 @@ function getMaturityAccent(date: string | null): string {
     return 'text-muted-foreground';
 }
 
-/* ─── Copy Button ─── */
-function CopyButton({ text, label }: { text: string; label: string }) {
-    const [copied, setCopied] = useState(false);
-    const handleCopy = async () => {
-        await navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
-    return (
-        <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopy}
-            className="h-8 gap-2 text-xs border-white/10 hover:bg-white/5"
-        >
-            {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
-            {label}
-        </Button>
-    );
-}
 
 /* ─── Pending Investment Card (kept compact) ─── */
 function PendingInvestmentCard({ investment, isProcessing }: { investment: PendingInvestment; isProcessing?: boolean }) {
     const statusConfig = isProcessing ? {
-        label: 'Processing',
-        sublabel: 'Payment detected, distributing tokens…',
+        label: investment.status === 'trade_submitted' ? 'Submitting Trade' : 'Processing',
+        sublabel: investment.status === 'trade_submitted'
+            ? 'Soroban atomic swap in progress…'
+            : 'Payment detected, distributing tokens…',
         bgClass: 'bg-blue-500/10 border-blue-500/30',
         textClass: 'text-blue-400',
         icon: RefreshCw,
         iconClass: 'animate-spin',
     } : {
-        label: 'Awaiting Payment',
-        sublabel: 'Send USDC to complete your investment',
+        label: 'Awaiting Signature',
+        sublabel: 'Sign with your passkey to complete this investment',
         bgClass: 'bg-amber-500/10 border-amber-500/30',
         textClass: 'text-amber-400',
         icon: Hourglass,
@@ -142,28 +124,11 @@ function PendingInvestmentCard({ investment, isProcessing }: { investment: Pendi
                 </div>
             </div>
 
-            {/* Payment Instructions (pending_payment only) */}
-            {!isProcessing && investment.paymentInstructions && (
-                <div className="space-y-3 pt-2 border-t border-white/10">
+
+            {/* Pending status message */}
+            {!isProcessing && (
+                <div className="pt-2 border-t border-white/10">
                     <p className={`text-xs ${statusConfig.textClass}`}>{statusConfig.sublabel}</p>
-                    <div className="bg-amber-500/5 p-3 rounded-lg border border-amber-500/20">
-                        <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-medium text-amber-400 flex items-center gap-1">
-                                <AlertCircle className="h-3 w-3" /> MEMO (Required)
-                            </span>
-                            <CopyButton text={investment.paymentInstructions.memo} label="Copy Memo" />
-                        </div>
-                        <p className="font-mono text-sm break-all">{investment.paymentInstructions.memo}</p>
-                    </div>
-                    <div className="bg-white/5 p-3 rounded-lg">
-                        <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-muted-foreground">Treasury Address</span>
-                            <CopyButton text={investment.paymentInstructions.treasuryAddress} label="Copy" />
-                        </div>
-                        <p className="font-mono text-xs break-all text-muted-foreground">
-                            {investment.paymentInstructions.treasuryAddress}
-                        </p>
-                    </div>
                 </div>
             )}
 

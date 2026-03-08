@@ -134,22 +134,33 @@ async function main() {
         failed++;
     }
 
-    // ─── 7. Rollback Path ───
-    console.log('\n--- Item 7: Rollback Verification ---');
-    // The rollback mechanism is: set sorobanContractId = null → falls through to legacy
+    // ─── 7. Soroban-Only Architecture ───
+    console.log('\n--- Item 7: Soroban-Only Architecture ---');
+    // Kill switch: returns 503 when ENABLE_SOROBAN_SALE is false
     assert(
-        controllerCode.includes('offer.sorobanContractId && sorobanEnabled'),
-        'Controller branches on sorobanContractId + feature flag'
+        controllerCode.includes("ENABLE_SOROBAN_SALE !== 'true'"),
+        'Has 503 kill switch when Soroban disabled'
     );
     assert(
-        controllerCode.includes('Legacy SAC transfer'),
-        'Has legacy fallback path'
+        controllerCode.includes('503'),
+        'Returns 503 for service unavailable'
     );
+    // G-address wallets rejected
     assert(
-        controllerCode.includes('PasskeyWalletService.buildInvestmentTx'),
-        'Legacy path calls buildInvestmentTx'
+        controllerCode.includes("!investorWallet.startsWith('C')"),
+        'Rejects legacy G-address wallets'
     );
-    // Reconciler handles trade_submitted orphans during rollback
+    // Contract ID required
+    assert(
+        controllerCode.includes('!offer.sorobanContractId'),
+        'Validates offer has Soroban contract'
+    );
+    // No legacy SAC transfer path
+    assert(
+        !controllerCode.includes('PasskeyWalletService.buildInvestmentTx'),
+        'Legacy SAC transfer path removed'
+    );
+    // Reconciler still handles orphans
     const reconcilerCode = readFileSync(
         path.resolve(__dirname, '../../src/services/sorobanReconciler.js'), 'utf-8'
     );

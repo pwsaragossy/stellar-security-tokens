@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { startPaymentScheduler } from './services/paymentScheduler.js';
 import { PaymentReminderService } from './services/paymentReminder.service.js';
-import { getPaymentMonitor } from './services/paymentMonitor.service.js';
+// NOTE: PaymentMonitor removed — legacy manual USDC monitoring discontinued
 import { initDistributionQueue } from './services/distributionQueue.service.js';
 import { MaintenanceService } from './services/maintenance.service.js';
 
@@ -168,21 +168,8 @@ app.listen(PORT, async () => {
     console.error('Failed to start MultiSig expiry checker:', error.message);
   }
 
-
-  // Iniciar monitoramento de pagamentos USDC em tempo real
-  const enablePaymentMonitoring = process.env.ENABLE_PAYMENT_MONITORING !== 'false';
-  if (enablePaymentMonitoring) {
-    try {
-      const paymentMonitor = getPaymentMonitor();
-      await paymentMonitor.start();
-      console.log('Payment monitoring enabled - USDC payments will be processed automatically');
-    } catch (error) {
-      console.error('Failed to start payment monitoring:', error.message);
-      console.warn('Payment monitoring disabled. Investments will require manual verification.');
-    }
-  } else {
-    console.log('Payment monitoring is disabled (ENABLE_PAYMENT_MONITORING=false)');
-  }
+  // NOTE: PaymentMonitor removed — all investments now use Soroban atomic swap.
+  // Legacy manual USDC payment monitoring is no longer needed.
 
   // Inicializar fila de distribuição de tokens (com retry automático)
   const enableDistributionQueue = process.env.ENABLE_DISTRIBUTION_QUEUE !== 'false';

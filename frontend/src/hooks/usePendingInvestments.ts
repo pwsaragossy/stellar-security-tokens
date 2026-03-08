@@ -9,16 +9,11 @@ export type PendingInvestment = {
     assetCode: string;
     usdcAmount: number;
     tokenAmount: number;
-    status: 'pending_payment' | 'payment_received' | 'pending_distribution' | 'distributed' | 'failed';
+    status: 'pending_payment' | 'trade_submitted' | 'payment_received' | 'pending_distribution' | 'distributed' | 'failed' | 'cancelled';
     memo: string | null;
     createdAt: string;
     updatedAt: string;
-    paymentInstructions?: {
-        treasuryAddress: string;
-        memo: string;
-        amount: number;
-        asset: string;
-    };
+
     usdcPaymentHash?: string;
     distributionTxHash?: string;
     errorMessage?: string;
@@ -53,9 +48,9 @@ export function usePendingInvestments(options: UsePendingInvestmentsOptions = {}
             if (!silent) setLoading(true);
             setError(null);
 
-            // Fetch pending and processing investments
+            // Fetch pending, trade_submitted, and processing investments
             const response = await investmentsApi.getMyInvestments(user.id, {
-                status: 'pending_payment,payment_received,pending_distribution',
+                status: 'pending_payment,trade_submitted,payment_received,pending_distribution',
             });
 
             if (!isMountedRef.current) return;
@@ -63,7 +58,7 @@ export function usePendingInvestments(options: UsePendingInvestmentsOptions = {}
             if (response.success && response.data) {
                 const investments = response.data.investments;
                 setPendingInvestments(investments.filter(i => i.status === 'pending_payment'));
-                setProcessingInvestments(investments.filter(i => ['payment_received', 'pending_distribution'].includes(i.status)));
+                setProcessingInvestments(investments.filter(i => ['trade_submitted', 'payment_received', 'pending_distribution'].includes(i.status)));
                 setLastUpdated(new Date());
             }
         } catch (err: unknown) {

@@ -15,16 +15,11 @@ export const investmentsApi = {
       assetCode: string;
       usdcAmount: number;
       tokenAmount: number;
-      status: 'pending_payment' | 'payment_received' | 'pending_distribution' | 'distributed' | 'failed';
+      status: 'pending_payment' | 'trade_submitted' | 'payment_received' | 'pending_distribution' | 'distributed' | 'failed' | 'cancelled';
       memo: string | null;
       createdAt: string;
       updatedAt: string;
-      paymentInstructions?: {
-        treasuryAddress: string;
-        memo: string;
-        amount: number;
-        asset: string;
-      };
+
       usdcPaymentHash?: string;
       distributionTxHash?: string;
       errorMessage?: string;

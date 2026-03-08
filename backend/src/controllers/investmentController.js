@@ -233,120 +233,64 @@ export const purchaseInvestment = async (req, res, next) => {
     // Update investment with the generated memo
     await Investment.updateStatus(investment.id, { memo: memo });
 
-    // --- SMART WALLET FLOW: Build transaction for passkey signing ---
-    if (investorWallet.startsWith('C') && offerId) {
-      try {
-        // Resolve company wallet from offer
-        const offer = await (await import('../models/Offer.js')).Offer.findById(parseInt(offerId));
-        const companyWallet = offer?.company?.stellarContractId || offer?.company?.stellarPublicKey;
-
-        if (!companyWallet) {
-          throw new Error('Company wallet not found for this offer');
-        }
-
-        let txData;
-
-        // ─── SOROBAN CONTRACT PATH: atomic trade() ───
-        // When offer has a sorobanContractId AND feature flag is enabled, use trade().
-        // This atomically: transfers USDC buyer→treasury AND sell_token contract→buyer.
-        // Guard: only use Soroban path when ENABLE_SOROBAN_SALE is true.
-        const sorobanEnabled = process.env.ENABLE_SOROBAN_SALE === 'true';
-        if (offer.sorobanContractId && sorobanEnabled) {
-          log.info(`[Investment] Using Soroban contract ${offer.sorobanContractId} for trade (${totalDeduction} USDC)`);
-          txData = await SorobanSaleService.buildTradeXdr(
-            offer.sorobanContractId,
-            investorWallet,
-            totalDeduction
-          );
-          // Mark as contract-based so submitInvestmentTx knows to skip distribution
-          txData._isContractTrade = true;
-        } else {
-          // ─── LEGACY SAC TRANSFER PATH ───
-          // Route to treasury muxed address (per-company fund segregation)
-          const { getTreasuryPublicKey } = await import('../config/stellar.js');
-          const { MuxedAccount, Account: StellarAccount } = await import('@stellar/stellar-sdk');
-          const treasuryPubKey = getTreasuryPublicKey();
-          const companyId = offer?.company?.id || 0;
-          const muxedAcct = new MuxedAccount(
-            new StellarAccount(treasuryPubKey, '0'),
-            companyId.toString()
-          );
-          const treasuryMuxed = muxedAcct.accountId(); // M... address
-
-          log.info(`[Investment] Legacy SAC transfer: ${totalDeduction} USDC → treasury muxed (company #${companyId}): ${treasuryMuxed}`);
-          txData = await PasskeyWalletService.buildInvestmentTx(
-            investorWallet,
-            treasuryMuxed,
-            totalDeduction
-          );
-        }
-
-        return res.status(200).json({
-          success: true,
-          message: 'Investment created. Sign with your passkey to complete.',
-          data: {
-            investment: {
-              id: investment.id,
-              status: investment.status,
-              usdcAmount: grossAmount,
-              feeAmount: fixedFee,
-              totalDeduction: totalDeduction,
-              tokenAmount: tokenAmount,
-              assetCode: assetCode,
-              memo: memo,
-              isContractTrade: !!(offer.sorobanContractId && sorobanEnabled),
-            },
-            // Smart wallet transaction for passkey signing
-            transaction: {
-              xdr: txData.xdr,
-              networkPassphrase: txData.networkPassphrase,
-              walletId: txData.walletId,
-              companyWallet: companyWallet,
-              contractId: txData.contractId || null,
-            },
-          },
-        });
-      } catch (txError) {
-        log.error('[Investment] Failed to build smart wallet transfer:', txError);
-        // Cancel the investment if we can't build the transaction
-        await Investment.updateStatus(investment.id, {
-          status: 'failed',
-          error_message: `Transaction build failed: ${txError.message}`,
-        });
-
-        // If it's a SaleError, return the mapped HTTP status
-        const contractErr = SorobanSaleService.parseContractError?.(txError);
-        if (contractErr) {
-          return res.status(contractErr.httpStatus).json({
-            success: false,
-            error: contractErr.message,
-            code: contractErr.code,
-          });
-        }
-
-        return res.status(500).json({
-          success: false,
-          error: `Failed to prepare investment transaction: ${txError.message}`,
-        });
-      }
+    // ─── SOROBAN-ONLY PATH ───
+    // All investments go through Soroban contract atomic swap.
+    // Kill switch: returns 503 when ENABLE_SOROBAN_SALE is false.
+    if (process.env.ENABLE_SOROBAN_SALE !== 'true') {
+      await Investment.updateStatus(investment.id, {
+        status: 'failed',
+        error_message: 'Soroban sale is currently disabled (maintenance)',
+      });
+      return res.status(503).json({
+        success: false,
+        error: 'Investment service is temporarily unavailable. Please try again later.',
+      });
     }
 
-    // --- LEGACY FLOW: Manual USDC transfer (classic G-address accounts) ---
-    const treasuryAddress = getTreasuryPublicKey();
+    if (!investorWallet.startsWith('C')) {
+      await Investment.updateStatus(investment.id, {
+        status: 'failed',
+        error_message: 'Legacy G-address wallets are no longer supported',
+      });
+      return res.status(400).json({
+        success: false,
+        error: 'A smart wallet (passkey) is required to invest. Please register a passkey in Settings.',
+      });
+    }
 
-    // Verificar se pagamento USDC já foi recebido (Passando o Memo)
-    const usdcPayment = await StellarService.verifyUSDCPayment(
-      investorWallet,
-      usdcAmount,
-      treasuryAddress,
-      USDC_PAYMENT_WINDOW_MINUTES,
-      memo
-    );
+    if (!offerId) {
+      await Investment.updateStatus(investment.id, {
+        status: 'failed',
+        error_message: 'Offer ID is required for all investments',
+      });
+      return res.status(400).json({ success: false, error: 'Offer ID is required.' });
+    }
 
-    if (!usdcPayment) {
-      return res.status(202).json({
+    try {
+      // Resolve company wallet from offer
+      const offer = await (await import('../models/Offer.js')).Offer.findById(parseInt(offerId));
+      const companyWallet = offer?.company?.stellarContractId || offer?.company?.stellarPublicKey;
+
+      if (!companyWallet) {
+        throw new Error('Company wallet not found for this offer');
+      }
+
+      if (!offer.sorobanContractId) {
+        throw new Error(`Offer #${offerId} does not have a Soroban sale contract. Run initSorobanSale.js first.`);
+      }
+
+      log.info(`[Investment] Using Soroban contract ${offer.sorobanContractId} for trade (${totalDeduction} USDC)`);
+      const txData = await SorobanSaleService.buildTradeXdr(
+        offer.sorobanContractId,
+        investorWallet,
+        totalDeduction
+      );
+      // Mark as contract-based so submitInvestmentTx knows to skip distribution
+      txData._isContractTrade = true;
+
+      return res.status(200).json({
         success: true,
-        message: 'Investment created. Please send USDC payment.',
+        message: 'Investment created. Sign with your passkey to complete.',
         data: {
           investment: {
             id: investment.id,
@@ -357,28 +301,40 @@ export const purchaseInvestment = async (req, res, next) => {
             tokenAmount: tokenAmount,
             assetCode: assetCode,
             memo: memo,
+            isContractTrade: true,
           },
-          paymentInstructions: {
-            treasuryAddress: treasuryAddress,
-            requiredAmount: totalDeduction.toString(),
-            investmentAmount: grossAmount.toString(),
-            blockchainFee: fixedFee.toString(),
-            assetCode: 'USDC',
-            memo: memo,
-            memoType: 'text',
-            windowMinutes: USDC_PAYMENT_WINDOW_MINUTES,
-            message: `Send ${totalDeduction} USDC to ${treasuryAddress} with MEMO: ${memo}`,
+          // Smart wallet transaction for passkey signing
+          transaction: {
+            xdr: txData.xdr,
+            networkPassphrase: txData.networkPassphrase,
+            walletId: txData.walletId,
+            companyWallet: companyWallet,
+            contractId: txData.contractId || null,
           },
         },
       });
-    }
+    } catch (txError) {
+      log.error('[Investment] Failed to build smart wallet transfer:', txError);
+      // Cancel the investment if we can't build the transaction
+      await Investment.updateStatus(investment.id, {
+        status: 'failed',
+        error_message: `Transaction build failed: ${txError.message}`,
+      });
 
-    // Pagamento encontrado, processar distribuição
-    // Tentar usar fila se disponível, senão processar sincronamente
-    if (isQueueAvailable()) {
-      return await processInvestmentPaymentWithQueue(investment, usdcPayment, req, res, next);
-    } else {
-      return await processInvestmentPayment(investment, usdcPayment, req, res, next);
+      // If it's a SaleError, return the mapped HTTP status
+      const contractErr = SorobanSaleService.parseContractError?.(txError);
+      if (contractErr) {
+        return res.status(contractErr.httpStatus).json({
+          success: false,
+          error: contractErr.message,
+          code: contractErr.code,
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        error: `Failed to prepare investment transaction: ${txError.message}`,
+      });
     }
   } catch (error) {
     next(error);

@@ -267,16 +267,7 @@ export const getInvestorInvestments = async (req, res, next) => {
       prisma.investment.count({ where }),
     ]);
 
-    // For pending investments, include payment instructions
-    const { getTreasuryPublicKey } = await import('../config/stellar.js');
-    let treasuryAddress = null;
-    try {
-      treasuryAddress = getTreasuryPublicKey();
-    } catch {
-      log.warn('[getInvestorInvestments] Treasury public key not configured');
-    }
-
-    // Enhance investments with payment info for pending status
+    // Enhance investments with status-specific info
     const enhancedInvestments = investments.map(inv => ({
       id: inv.id,
       offerId: inv.offerId,
@@ -288,15 +279,6 @@ export const getInvestorInvestments = async (req, res, next) => {
       memo: inv.memo,
       createdAt: inv.createdAt,
       updatedAt: inv.updatedAt,
-      // Payment info for pending investments
-      ...(inv.status === 'pending_payment' && treasuryAddress ? {
-        paymentInstructions: {
-          treasuryAddress,
-          memo: inv.memo,
-          amount: parseFloat(inv.usdcAmount),
-          asset: 'USDC',
-        },
-      } : {}),
       // Status-specific info
       ...(inv.status === 'payment_received' ? {
         usdcPaymentHash: inv.usdcPaymentHash,

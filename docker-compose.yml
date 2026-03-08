@@ -73,14 +73,10 @@ services:
       # Security
       JWT_SECRET: ${JWT_SECRET:-change_this_in_production}
       API_KEY: ${API_KEY}
-      # Email (opcional)
-      SMTP_HOST: ${SMTP_HOST}
+      # Email (Resend HTTP API — no SMTP needed)
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Radox <noreply@mail.radox.net>}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
-      SMTP_PORT: ${SMTP_PORT}
-      SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM: ${SMTP_FROM}
       # Payment Scheduler
       ENABLE_AUTO_PAYMENTS: ${ENABLE_AUTO_PAYMENTS:-true}
       # Redis Configuration
