@@ -69,6 +69,20 @@ export class MaintenanceService {
             });
         }
 
+        // 3. Get all Offers with Soroban Sale Contracts (instance TTL)
+        const offers = await prisma.offer.findMany({
+            where: { sorobanContractId: { not: null } },
+            select: { id: true, assetCode: true, sorobanContractId: true }
+        });
+
+        for (const offer of offers) {
+            contractsToCheck.push({
+                id: offer.sorobanContractId,
+                name: `Sale (Offer #${offer.id} — ${offer.assetCode})`,
+                type: 'sale'
+            });
+        }
+
         log.info(`Found ${contractsToCheck.length} contracts to audit.`);
 
         let successCount = 0;

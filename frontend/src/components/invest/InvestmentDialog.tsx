@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Shield } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -65,6 +66,7 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
     const [step, setStep] = useState<'form' | 'signing' | 'success'>('form');
     const [txResult, setTxResult] = useState<{ investmentId: number; transactionHash: string } | null>(null);
     const [signingError, setSigningError] = useState<string | null>(null);
+    const [isContractTrade, setIsContractTrade] = useState(false);
     const { purchase, submitSignedTx, loading, error } = useInvestment();
     const { usdcBalance, loading: balanceLoading, refresh: refreshBalance } = useWalletBalance();
     const { blockchainFee } = useInvestmentFees();
@@ -118,6 +120,7 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
                 // Smart wallet flow — sign with passkey and submit
                 setStep('signing');
                 setSigningError(null);
+                setIsContractTrade(!!result.investment?.isContractTrade);
                 try {
                     const signedXdr = await passkeyClient.signTransaction(result.transaction.xdr, result.transaction.walletId);
                     const submitResult = await submitSignedTx(signedXdr, result.investment.id);
@@ -148,6 +151,7 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
         setStep('form');
         setTxResult(null);
         setSigningError(null);
+        setIsContractTrade(false);
     };
 
     return (
@@ -211,15 +215,29 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
                         <div className="space-y-1">
                             <p className="font-semibold text-lg text-white">Investment Confirmed!</p>
                             <p className="text-sm text-slate-400">
-                                Your USDC has been transferred. Token distribution will follow shortly.
+                                {isContractTrade
+                                    ? 'Atomic swap complete — your tokens have been delivered instantly.'
+                                    : 'Your USDC has been transferred. Token distribution will follow shortly.'
+                                }
                             </p>
                         </div>
                         {txResult && (
-                            <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 text-left">
-                                <Label className="text-xs text-slate-500 uppercase">Transaction Hash</Label>
-                                <code className="text-xs text-blue-400 break-all block mt-1">
-                                    {txResult.transactionHash}
-                                </code>
+                            <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 text-left space-y-2">
+                                <div>
+                                    <Label className="text-xs text-slate-500 uppercase">Transaction Hash</Label>
+                                    <code className="text-xs text-blue-400 break-all block mt-1">
+                                        {txResult.transactionHash}
+                                    </code>
+                                </div>
+                                <div className="flex items-center gap-1.5 pt-1 border-t border-slate-800">
+                                    <Shield className="h-3 w-3 text-emerald-400" />
+                                    <span className="text-[10px] text-slate-400">
+                                        {isContractTrade
+                                            ? 'Soroban Atomic Swap — funds and tokens exchanged in a single transaction'
+                                            : 'SAC Transfer — tokens will be distributed after confirmation'
+                                        }
+                                    </span>
+                                </div>
                             </div>
                         )}
                         <p className="text-xs text-slate-500">

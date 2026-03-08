@@ -244,7 +244,47 @@ app.listen(PORT, async () => {
     } catch (error) {
       console.error('Failed to start Soroban event indexer:', error.message);
     }
+
+    try {
+      const { SorobanReconciler } = await import('./services/sorobanReconciler.js');
+      SorobanReconciler.start();
+      console.log('Soroban reconciler enabled - checking orphaned investments every 5 min');
+    } catch (error) {
+      console.error('Failed to start Soroban reconciler:', error.message);
+    }
+    try {
+      const { SorobanMetrics } = await import('./services/sorobanMetrics.service.js');
+      SorobanMetrics.start();
+      console.log('Soroban metrics enabled - flushing to DB every 10 min');
+    } catch (error) {
+      console.error('Failed to start Soroban metrics:', error.message);
+    }
   } else {
     console.log('Soroban event indexer disabled (ENABLE_SOROBAN_SALE != true)');
   }
 });
+
+// ─── GRACEFUL SHUTDOWN ───
+// Stop background crons before exiting to prevent orphaned mid-poll investments.
+const gracefulShutdown = async (signal) => {
+  console.log(`\n${signal} received — shutting down gracefully...`);
+
+  try {
+    if (process.env.ENABLE_SOROBAN_SALE === 'true') {
+      const { SorobanEventIndexer } = await import('./services/sorobanEventIndexer.js');
+      const { SorobanReconciler } = await import('./services/sorobanReconciler.js');
+      const { SorobanMetrics } = await import('./services/sorobanMetrics.service.js');
+      SorobanEventIndexer.stop?.();
+      SorobanReconciler.stop?.();
+      SorobanMetrics.stop?.(); // Final flush to DB
+      console.log('Soroban services stopped.');
+    }
+  } catch (err) {
+    console.error('Error during shutdown:', err.message);
+  }
+
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

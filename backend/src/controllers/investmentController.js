@@ -196,13 +196,34 @@ export const purchaseInvestment = async (req, res, next) => {
       });
     }
 
-    // Criar registro de investimento primeiro
+    // ─── RACE CONDITION GUARD ───
+    // Prevent duplicate pending investments for the same investor/offer.
+    // Without this, concurrent requests can over-subscribe an offer.
+    if (offerId) {
+      const existingPending = await prisma.investment.findFirst({
+        where: {
+          investorId: investorId,
+          offerId: parseInt(offerId),
+          status: { in: ['pending_payment', 'trade_submitted'] },
+        },
+      });
+      if (existingPending) {
+        log.warn(`[Investment] Duplicate pending investment blocked: investor #${investorId}, offer #${offerId} (existing: #${existingPending.id})`);
+        return res.status(409).json({
+          success: false,
+          error: 'You already have a pending investment for this offer. Please complete or cancel it first.',
+          existingInvestmentId: existingPending.id,
+        });
+      }
+    }
+
+    // Criar registro de investimento
     const investment = await Investment.create({
       investor_id: investorId,
       offer_id: offerId || null,
       asset_code: assetCode,
-      usdc_amount: totalDeduction, // Total wallet deduction (investment + fee)
-      token_amount: tokenAmount,   // Full investment amount in tokens
+      usdc_amount: totalDeduction,
+      token_amount: tokenAmount,
       memo: null,
     });
 
@@ -226,10 +247,11 @@ export const purchaseInvestment = async (req, res, next) => {
         let txData;
 
         // ─── SOROBAN CONTRACT PATH: atomic trade() ───
-        // When offer has a sorobanContractId, use the contract's trade() function.
+        // When offer has a sorobanContractId AND feature flag is enabled, use trade().
         // This atomically: transfers USDC buyer→treasury AND sell_token contract→buyer.
-        // No separate distribution step needed.
-        if (offer.sorobanContractId) {
+        // Guard: only use Soroban path when ENABLE_SOROBAN_SALE is true.
+        const sorobanEnabled = process.env.ENABLE_SOROBAN_SALE === 'true';
+        if (offer.sorobanContractId && sorobanEnabled) {
           log.info(`[Investment] Using Soroban contract ${offer.sorobanContractId} for trade (${totalDeduction} USDC)`);
           txData = await SorobanSaleService.buildTradeXdr(
             offer.sorobanContractId,
@@ -272,7 +294,7 @@ export const purchaseInvestment = async (req, res, next) => {
               tokenAmount: tokenAmount,
               assetCode: assetCode,
               memo: memo,
-              isContractTrade: !!offer.sorobanContractId,
+              isContractTrade: !!(offer.sorobanContractId && sorobanEnabled),
             },
             // Smart wallet transaction for passkey signing
             transaction: {
@@ -717,13 +739,47 @@ export const submitInvestmentTx = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Investment not found' });
     }
     if (investment.status !== 'pending_payment' && investment.status !== 'trade_submitted') {
+      // Idempotency: if already has a payment hash, return it (retry scenario)
+      if (investment.usdcPaymentHash && (investment.status === 'payment_received' || investment.status === 'distributed')) {
+        log.info(`[Investment] Idempotent return — investment #${investmentId} already processed with hash ${investment.usdcPaymentHash}`);
+        return res.json({
+          success: true,
+          message: 'Investment already processed',
+          data: {
+            investmentId: parseInt(investmentId),
+            transactionHash: investment.usdcPaymentHash,
+            status: investment.status,
+            idempotent: true,
+          },
+        });
+      }
       return res.status(400).json({
         success: false,
         error: `Investment is not pending payment (status: ${investment.status})`,
       });
     }
 
-    // Add operations keypair signature and submit directly to Soroban RPC
+    // ─── RATE LIMIT: prevent fee bump drain via spam ───
+    // Max 3 submit attempts per investor per minute
+    const investorKey = `submit_tx:${investment.investorId}`;
+    if (!submitInvestmentTx._rateLimiter) submitInvestmentTx._rateLimiter = new Map();
+    const limiter = submitInvestmentTx._rateLimiter;
+    const now = Date.now();
+    const windowMs = 60_000;
+    const maxAttempts = 3;
+    const attempts = limiter.get(investorKey) || [];
+    const recent = attempts.filter(t => now - t < windowMs);
+    if (recent.length >= maxAttempts) {
+      log.warn(`[Investment] Rate limit hit for investor ${investment.investorId}`);
+      return res.status(429).json({
+        success: false,
+        error: 'Too many submission attempts. Please wait 1 minute.',
+      });
+    }
+    recent.push(now);
+    limiter.set(investorKey, recent);
+
+    // Add operations keypair signature and submit.
     // The frontend only signed the Soroban auth entries (passkey).
     // We need to add the envelope signature (ops keypair = source account).
     const { TransactionBuilder, xdr } = await import('@stellar/stellar-sdk');
@@ -738,23 +794,47 @@ export const submitInvestmentTx = async (req, res, next) => {
     tx.sign(opsKeypair);
 
     log.info(`[Investment] Submitting passkey-signed TX for investment #${investmentId}...`);
+    const metricsStart = Date.now(); // ← Metrics timer
 
-    // === DEBUG: Submit via Soroban RPC directly (bypasses fee-bump) ===
-    // This gives us diagnostic events on failure, unlike Horizon's empty result_xdr.
-    // TODO: Revert to fee-bump after fixing the auth issue.
+    // ─── SET STATUS TO trade_submitted BEFORE SENDING ───
+    // This ensures reconciler can find and fix orphans if we crash after send.
+    await Investment.updateStatus(parseInt(investmentId), {
+      status: 'trade_submitted',
+    });
+
+    // ─── CAPTURE INNER TX HASH before fee bumping ───
+    // Fee bump wraps the TX → Horizon returns the OUTER hash.
+    // But Soroban RPC getTransaction() needs the INNER hash.
+    const innerTxHash = tx.hash().toString('hex');
+    log.info(`[Investment] Inner TX hash: ${innerTxHash}`);
+
+    // ─── FEE BUMP SPONSORSHIP ───
+    // Wrap the signed TX in a fee bump so the investor doesn't need XLM (gasless UX).
+    let feeBumpHash;
+    try {
+      const sponsorResult = await PasskeyWalletService.submitWithSponsorship(tx);
+      feeBumpHash = sponsorResult.hash;
+      log.info(`[Investment] Fee-bumped TX submitted: ${feeBumpHash} (inner: ${innerTxHash})`);
+    } catch (sponsorErr) {
+      // ─── RECOVERY: revert to pending_payment so investor can retry ───
+      log.error(`[Investment] Fee bump sponsorship failed: ${sponsorErr.message}`);
+      await Investment.updateStatus(parseInt(investmentId), {
+        status: 'pending_payment',
+        error_message: `Fee bump failed: ${sponsorErr.message}`,
+      });
+      throw new Error(`Fee-bump sponsorship failed: ${sponsorErr.message}`);
+    }
+
+    // Record the INNER TX hash (for Soroban RPC lookups) and fee bump hash
+    await Investment.updateStatus(parseInt(investmentId), {
+      usdc_payment_hash: innerTxHash,
+    });
+
+    // ─── POLL SOROBAN RPC for result with diagnostic events ───
+    // Use INNER hash — getTransaction() returns NOT_FOUND for fee bump hashes.
     const { rpc: rpcLib } = await import('@stellar/stellar-sdk');
     const sorobanRpc = new rpcLib.Server(process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org');
 
-    const sendResult = await sorobanRpc.sendTransaction(tx);
-    log.info(`[Investment] sendTransaction status: ${sendResult.status}`);
-    log.info(`[Investment] sendTransaction hash: ${sendResult.hash}`);
-
-    if (sendResult.status === 'ERROR') {
-      log.error('[Investment] sendTransaction immediate ERROR:', JSON.stringify(sendResult, null, 2));
-      throw new Error(`Soroban sendTransaction rejected: ${sendResult.errorResult?.toXDR('base64') || 'unknown'}`);
-    }
-
-    // Poll getTransaction until resolved or timeout (60s max)
     let txResult;
     const maxWait = 60_000;
     const pollInterval = 3_000;
@@ -764,7 +844,7 @@ export const submitInvestmentTx = async (req, res, next) => {
       await new Promise(r => setTimeout(r, pollInterval));
       waited += pollInterval;
 
-      txResult = await sorobanRpc.getTransaction(sendResult.hash);
+      txResult = await sorobanRpc.getTransaction(innerTxHash);
       log.info(`[Investment] getTransaction status: ${txResult.status} (${waited / 1000}s elapsed)`);
 
       if (txResult.status !== 'NOT_FOUND') break;
@@ -824,11 +904,28 @@ export const submitInvestmentTx = async (req, res, next) => {
         );
       }
 
-      throw new Error(`Transaction FAILED on-chain. Hash: ${sendResult.hash}. Check logs for diagnostic events.`);
+      throw new Error(`Transaction FAILED on-chain. Hash: ${innerTxHash}. Check logs for diagnostic events.`);
     }
 
-    log.info(`[Investment] Transaction SUCCEEDED: ${sendResult.hash}`);
-    const result = { hash: sendResult.hash, ledger: txResult.ledger };
+    log.info(`[Investment] Transaction SUCCEEDED: ${innerTxHash}`);
+    const result = { hash: innerTxHash, ledger: txResult.ledger };
+
+    // ─── RECORD METRICS ───
+    try {
+      const { SorobanMetrics } = await import('../services/sorobanMetrics.service.js');
+      const offerForMetrics = investment.offerId
+        ? await (await import('../models/Offer.js')).Offer.findById(parseInt(investment.offerId))
+        : null;
+      const isContractMetric = !!offerForMetrics?.sorobanContractId;
+      const durationMs = Date.now() - metricsStart;
+      if (isContractMetric) {
+        SorobanMetrics.recordTrade({ durationMs, success: true, investmentId: parseInt(investmentId) });
+      } else {
+        SorobanMetrics.recordLegacyTransfer({ durationMs, success: true, investmentId: parseInt(investmentId) });
+      }
+    } catch (metricsErr) {
+      log.warn(`[Investment] Metrics recording failed: ${metricsErr.message}`);
+    }
 
     // Update investment status
     await Investment.updateStatus(parseInt(investmentId), {

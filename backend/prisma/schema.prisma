@@ -434,6 +434,10 @@ model Investment {
   @@index([usdcPaymentHash])
   @@index([distributionTxHash])
   @@index([createdAt(sort: Desc)])
+  // NOTE: A partial unique index exists in the DB but can't be expressed in Prisma DSL:
+  //   UNIQUE (investor_id, offer_id) WHERE status IN ('pending_payment', 'trade_submitted')
+  //   Applied via: prisma/migrations/20260308140000_.../migration.sql
+  //   Purpose: Prevents race condition in concurrent investment submissions
   @@map("investments")
 }
 

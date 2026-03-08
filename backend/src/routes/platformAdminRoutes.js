@@ -1764,5 +1764,113 @@ router.post('/offers/:offerId/unlock-token', authenticateToken, requirePlatformA
   }
 });
 
+// ============ Soroban Contract Dashboard ============
+
+/**
+ * GET /api/platform-admins/soroban/dashboard
+ * Returns all Soroban sale contracts with on-chain state + metrics.
+ */
+router.get('/soroban/dashboard', authenticateToken, requirePlatformAdmin, async (req, res) => {
+  try {
+    // 1. Get all offers with Soroban contracts
+    const offers = await prisma.offer.findMany({
+      where: { sorobanContractId: { not: null } },
+      select: {
+        id: true,
+        offerName: true,
+        assetCode: true,
+        status: true,
+        sorobanContractId: true,
+        unitPrice: true,
+        totalSupply: true,
+        _count: {
+          select: {
+            investments: { where: { status: { in: ['distributed', 'payment_received'] } } },
+          },
+        },
+      },
+    });
+
+    // 2. Query on-chain state for each contract
+    const { SorobanSaleService } = await import('../services/sorobanSale.service.js');
+    const contracts = [];
+
+    for (const offer of offers) {
+      let onChain = { status: 'unknown', error: null };
+      try {
+        const [version, saleOffer, isFrozen] = await Promise.allSettled([
+          SorobanSaleService.getVersion(offer.sorobanContractId),
+          SorobanSaleService.getOffer(offer.sorobanContractId),
+          SorobanSaleService.isFrozen(offer.sorobanContractId, 'DUMMY'), // will fail but tells us contract exists
+        ]);
+
+        onChain = {
+          version: version.status === 'fulfilled' ? version.value : null,
+          initialized: saleOffer.status === 'fulfilled',
+          offer: saleOffer.status === 'fulfilled' ? saleOffer.value : null,
+          status: saleOffer.status === 'fulfilled' ? 'active' : 'uninitialized',
+        };
+      } catch (err) {
+        onChain.error = err.message;
+      }
+
+      // TTL check
+      let ttl = null;
+      try {
+        const { StellarService } = await import('../services/stellar.service.js');
+        ttl = await StellarService.getContractTTL(offer.sorobanContractId);
+      } catch (_) { /* ignore */ }
+
+      contracts.push({
+        offerId: offer.id,
+        offerName: offer.offerName,
+        assetCode: offer.assetCode,
+        offerStatus: offer.status,
+        contractId: offer.sorobanContractId,
+        unitPrice: offer.unitPrice,
+        totalSupply: offer.totalSupply,
+        investmentCount: offer._count.investments,
+        onChain,
+        ttl,
+      });
+    }
+
+    // 3. Get metrics
+    let metrics = null;
+    try {
+      const { SorobanMetrics } = await import('../services/sorobanMetrics.service.js');
+      metrics = SorobanMetrics.getStats();
+    } catch (_) { /* metrics not started */ }
+
+    // 4. Get reconciler stats from last run
+    let reconcilerInfo = null;
+    try {
+      const pendingOrphans = await prisma.investment.count({
+        where: { status: 'trade_submitted' },
+      });
+      const pendingPayments = await prisma.investment.count({
+        where: { status: 'pending_payment', offer: { sorobanContractId: { not: null } } },
+      });
+      reconcilerInfo = {
+        orphanedTradeSubmitted: pendingOrphans,
+        pendingSorobanPayments: pendingPayments,
+      };
+    } catch (_) { /* ignore */ }
+
+    res.json({
+      success: true,
+      data: {
+        contracts,
+        metrics,
+        reconciler: reconcilerInfo,
+        featureFlag: process.env.ENABLE_SOROBAN_SALE === 'true',
+      },
+    });
+  } catch (error) {
+    log.error('[Soroban Dashboard] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
 
