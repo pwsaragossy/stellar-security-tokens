@@ -3,7 +3,7 @@
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{token, Address, Env};
 
-use crate::{SaleError, TokenSale, TokenSaleClient};
+use crate::{DataKey, Offer, SaleError, TokenSale, TokenSaleClient};
 
 fn create_token_contract<'a>(
     e: &Env,
@@ -1113,4 +1113,173 @@ fn test_atomicity_failed_trade_reverts() {
     assert_eq!(buy_token.balance(&buyer), buyer_before);
     assert_eq!(sell_token.balance(&sale_id), contract_before);
     assert_eq!(buy_token.balance(&treasury), treasury_before);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  11. AUTH ENFORCEMENT — 9 tests (NO mock_all_auths!)
+//
+//  These tests run WITHOUT mock_all_auths(). They use
+//  e.as_contract() to seed storage directly, then verify
+//  that require_auth() panics for every sensitive function.
+//  If require_auth() was ever accidentally removed from
+//  any function, these tests would FAIL (not panic).
+// ═══════════════════════════════════════════════════════════
+
+/// Helper: seed the Offer into contract storage without mock_all_auths.
+fn seed_offer(e: &Env, contract: &Address, admin: &Address, seller: &Address) {
+    e.as_contract(contract, || {
+        e.storage().instance().set(
+            &DataKey::Offer,
+            &Offer {
+                admin: admin.clone(),
+                seller: seller.clone(),
+                sell_token: Address::generate(e),
+                buy_token: Address::generate(e),
+                treasury: Address::generate(e),
+                sell_price: 1,
+                buy_price: 1,
+                is_active: true,
+                deadline_ledger: 0,
+                min_buy_amount: 0,
+                max_buy_per_buyer: 0,
+            },
+        );
+    });
+}
+
+#[test]
+#[should_panic]
+fn test_auth_create_requires_admin_auth() {
+    let e = Env::default();
+    // NO mock_all_auths
+    let admin = Address::generate(&e);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+
+    // require_auth() on admin will panic — no auth provided
+    sale.create(
+        &admin, &admin,
+        &Address::generate(&e), &Address::generate(&e), &Address::generate(&e),
+        &1, &1, &0, &0, &0,
+    );
+}
+
+#[test]
+#[should_panic]
+fn test_auth_trade_requires_buyer_auth() {
+    let e = Env::default();
+    // NO mock_all_auths
+    let buyer = Address::generate(&e);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+
+    // buyer.require_auth() is the FIRST statement in trade()
+    // Panics before even loading the offer
+    sale.trade(&buyer, &100);
+}
+
+#[test]
+#[should_panic]
+fn test_auth_withdraw_requires_admin_auth() {
+    let e = Env::default();
+    // NO mock_all_auths
+    let admin = Address::generate(&e);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+    seed_offer(&e, &sale_id, &admin, &admin);
+
+    // offer.admin.require_auth() panics — no auth
+    sale.withdraw(&Address::generate(&e), &100);
+}
+
+#[test]
+#[should_panic]
+fn test_auth_emergency_drain_requires_admin_auth() {
+    let e = Env::default();
+    // NO mock_all_auths
+    let admin = Address::generate(&e);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+    seed_offer(&e, &sale_id, &admin, &admin);
+
+    // offer.admin.require_auth() panics — no auth
+    sale.emergency_drain();
+}
+
+#[test]
+#[should_panic]
+fn test_auth_set_active_requires_seller_auth() {
+    let e = Env::default();
+    // NO mock_all_auths
+    let admin = Address::generate(&e);
+    let seller = Address::generate(&e);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+    seed_offer(&e, &sale_id, &admin, &seller);
+
+    // offer.seller.require_auth() panics — no auth
+    sale.set_active(&true);
+}
+
+#[test]
+#[should_panic]
+fn test_auth_updt_price_requires_seller_auth() {
+    let e = Env::default();
+    // NO mock_all_auths
+    let admin = Address::generate(&e);
+    let seller = Address::generate(&e);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+    seed_offer(&e, &sale_id, &admin, &seller);
+
+    // offer.seller.require_auth() panics — no auth
+    sale.updt_price(&5, &2);
+}
+
+#[test]
+#[should_panic]
+fn test_auth_propose_admin_requires_admin_auth() {
+    let e = Env::default();
+    // NO mock_all_auths
+    let admin = Address::generate(&e);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+    seed_offer(&e, &sale_id, &admin, &admin);
+
+    // offer.admin.require_auth() panics — no auth
+    sale.propose_admin(&Address::generate(&e));
+}
+
+#[test]
+#[should_panic]
+fn test_auth_accept_admin_requires_pending_auth() {
+    let e = Env::default();
+    // NO mock_all_auths
+    let admin = Address::generate(&e);
+    let pending = Address::generate(&e);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+    seed_offer(&e, &sale_id, &admin, &admin);
+
+    // Seed pending admin in storage
+    e.as_contract(&sale_id, || {
+        e.storage().instance().set(&DataKey::PendingAdmin, &pending);
+    });
+
+    // pending.require_auth() panics — no auth
+    sale.accept_admin();
+}
+
+#[test]
+#[should_panic]
+fn test_auth_freeze_buyer_requires_admin_auth() {
+    let e = Env::default();
+    // NO mock_all_auths
+    let admin = Address::generate(&e);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+    seed_offer(&e, &sale_id, &admin, &admin);
+
+    // offer.admin.require_auth() panics — no auth
+    sale.freeze_buyer(&Address::generate(&e), &true);
 }
