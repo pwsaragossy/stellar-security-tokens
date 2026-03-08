@@ -61,9 +61,9 @@ services:
       OPERATIONS_PUBLIC_KEY: ${OPERATIONS_PUBLIC_KEY}
       TREASURY_PUBLIC_KEY: ${TREASURY_PUBLIC_KEY}
       # Stellar Accounts - Secret keys (only needed when KEY_MANAGEMENT_MODE=env)
+      # In production, OPERATIONS uses Docker Secrets (see docker-compose.prod.yml)
       ISSUER_SECRET_KEY: ${ISSUER_SECRET_KEY:-}
       DISTRIBUTOR_SECRET_KEY: ${DISTRIBUTOR_SECRET_KEY:-}
-      OPERATIONS_SECRET_KEY: ${OPERATIONS_SECRET_KEY:-}
       TREASURY_SECRET_KEY: ${TREASURY_SECRET_KEY:-}
       # Token Details
       # ASSET_CODE and ASSET_SUPPLY removed - using offer-specific assets

@@ -18,6 +18,8 @@ services:
     environment:
       NODE_ENV: development
       LOG_LEVEL: debug
+      # Operations secret key for dev (in prod this comes from Docker Secrets)
+      OPERATIONS_SECRET_KEY: ${OPERATIONS_SECRET_KEY:-}
     volumes:
       - ./backend/src:/app/backend/src
       - ./backend/prisma:/app/backend/prisma

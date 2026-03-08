@@ -21,7 +21,12 @@
 #   - FRONTEND_URL
 #   - LAUNCHTUBE_JWT, FACTORY_CONTRACT_ID
 #
-# NOTE: No wallet secret keys! All admin signing via Freighter/Ledger multisig.
+# SECRETS (Docker Secrets — never in .env):
+#   - Operations key stored at /root/.secrets/operations_key (chmod 600)
+#   - Mounted to container at /run/secrets/operations_key (tmpfs)
+#
+# NOTE: No wallet secret keys in env! Admin signing via Freighter/Ledger multisig.
+#       Operations hot wallet key via Docker Secrets (tmpfs, never on disk).
 # =============================================================================
 
 services:
@@ -82,6 +87,8 @@ services:
       dockerfile: Dockerfile
       args:
         NODE_ENV: production
+    secrets:
+      - operations_key
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -234,6 +241,10 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+secrets:
+  operations_key:
+    file: /root/.secrets/operations_key
 
 volumes:
   postgres_data:

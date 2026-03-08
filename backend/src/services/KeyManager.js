@@ -1,5 +1,6 @@
 import { Keypair } from '@stellar/stellar-sdk';
 import dotenv from 'dotenv';
+import { readFileSync, existsSync } from 'fs';
 import logger from '../utils/logger.js';
 
 dotenv.config();
@@ -97,7 +98,7 @@ class KeyManager {
             // Operations is the "hot wallet" — allowed in multisig mode
             // for automated sponsorships, trustlines, and channel operations
             if (role.toUpperCase() === 'OPERATIONS') {
-                const secret = process.env.OPERATIONS_SECRET_KEY;
+                const secret = this.#readOperationsSecret();
                 if (!secret) {
                     throw new Error('[KeyManager] Missing OPERATIONS_SECRET_KEY — required as hot wallet in multisig mode');
                 }
@@ -109,6 +110,12 @@ class KeyManager {
             );
         }
 
+        // In env mode, Operations also tries Docker Secrets first
+        if (role.toUpperCase() === 'OPERATIONS') {
+            const secret = this.#readOperationsSecret();
+            if (secret) return secret;
+        }
+
         const keyName = `${role.toUpperCase()}_SECRET_KEY`;
         const secret = process.env[keyName];
 
@@ -117,6 +124,48 @@ class KeyManager {
         }
 
         return secret;
+    }
+
+    /**
+     * Read operations secret key from Docker Secrets first, then env var fallback.
+     * Docker Secrets are mounted at /run/secrets/ as tmpfs (never touches disk).
+     * @private
+     * @returns {string|null} The secret key or null if not found
+     */
+    #readOperationsSecret() {
+        const DOCKER_SECRET_PATH = '/run/secrets/operations_key';
+
+        // 1. Docker Secret (production — tmpfs, never on disk)
+        if (existsSync(DOCKER_SECRET_PATH)) {
+            try {
+                const secret = readFileSync(DOCKER_SECRET_PATH, 'utf8').trim();
+                if (secret) {
+                    if (!this._opsSecretLogged) {
+                        log.info('Operations key loaded from Docker Secret (tmpfs)');
+                        this._opsSecretLogged = true;
+                    }
+                    return secret;
+                }
+            } catch (e) {
+                log.error('Failed to read Docker Secret:', e.message);
+            }
+        }
+
+        // 2. Environment variable fallback (development)
+        const envSecret = process.env.OPERATIONS_SECRET_KEY;
+        if (envSecret) {
+            if (!this._opsSecretLogged) {
+                if (this.env === 'production') {
+                    log.warn('⚠️  Operations key loaded from env var (plaintext). Migrate to Docker Secrets.');
+                } else {
+                    log.info('Operations key loaded from environment variable');
+                }
+                this._opsSecretLogged = true;
+            }
+            return envSecret;
+        }
+
+        return null;
     }
 
     /**
