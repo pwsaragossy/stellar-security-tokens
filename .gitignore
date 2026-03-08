@@ -19,3 +19,6 @@ coverage/
 .obsidian/workspace.json
 backend/tests/integration/models/PlatformAdmin.test.js
 docs/ADMIN_CREDENTIALS.md
+
+# Rust/Soroban build artifacts
+**/target/
