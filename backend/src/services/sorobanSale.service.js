@@ -285,20 +285,20 @@ export class SorobanSaleService {
                 const resources = sorobanData.resources();
 
                 const simInstructions = resources.instructions();
-                const boostedInstructions = Math.ceil(simInstructions * 5);
+                const boostedInstructions = Math.max(Math.ceil(simInstructions * 5), 100_000_000);
                 resources.instructions(boostedInstructions);
 
                 const simReadBytes = resources.diskReadBytes();
-                const boostedReadBytes = Math.ceil(simReadBytes * 5) + 40000;
+                const boostedReadBytes = Math.max(Math.ceil(simReadBytes * 5) + 40000, 200_000);
                 resources.diskReadBytes(boostedReadBytes);
 
                 const simWriteBytes = resources.writeBytes();
-                const boostedWriteBytes = Math.max(simWriteBytes * 3, simWriteBytes + 1000);
+                const boostedWriteBytes = Math.max(simWriteBytes * 3, simWriteBytes + 5000);
                 resources.writeBytes(boostedWriteBytes);
 
                 log.info(`[boostResources] instructions ${simInstructions}→${boostedInstructions}, readBytes ${simReadBytes}→${boostedReadBytes}, writeBytes ${simWriteBytes}→${boostedWriteBytes}`);
 
-                const boostedFee = Math.ceil(parseInt(tx.fee) * 5).toString();
+                const boostedFee = Math.max(Math.ceil(parseInt(tx.fee) * 10), 10_000_000).toString();
                 tx = TransactionBuilder.cloneFrom(tx, {
                     fee: boostedFee,
                     sorobanData,
