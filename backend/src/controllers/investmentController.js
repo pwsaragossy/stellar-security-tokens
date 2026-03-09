@@ -735,19 +735,50 @@ export const submitInvestmentTx = async (req, res, next) => {
     recent.push(now);
     limiter.set(investorKey, recent);
 
-    // Add operations keypair signature and submit.
-    // The frontend only signed the Soroban auth entries (passkey).
-    // We need to add the envelope signature (ops keypair = source account).
-    const { TransactionBuilder, xdr } = await import('@stellar/stellar-sdk');
-    const { getNetworkPassphrase, getOperationsKeypair } = await import('../config/stellar.js');
+    // ─── RE-SIMULATE WITH SIGNED AUTH ENTRIES ───
+    // The initial simulation (in buildTradeXdr) mocked auth, so __check_auth
+    // costs (passkey secp256r1 verification) weren't included in the resource estimate.
+    // Now that the frontend's passkey-kit sign() has signed the auth entries,
+    // we re-simulate to get accurate resource estimates.
+    //
+    // IMPORTANT: We only extract sorobanData (resources) via cloneFrom().
+    // The operation's signed auth entries are preserved — cloneFrom only touches
+    // the TX envelope's ext field (sorobanData + fee), not the operations.
+    const { TransactionBuilder, xdr, rpc: rpcMod } = await import('@stellar/stellar-sdk');
+    const { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl } = await import('../config/stellar.js');
 
     const networkPassphrase = getNetworkPassphrase();
     const opsKeypair = getOperationsKeypair();
-    const tx = TransactionBuilder.fromXDR(signedXdr, networkPassphrase);
+    let tx = TransactionBuilder.fromXDR(signedXdr, networkPassphrase);
 
+    try {
+      const sorobanRpc = new rpcMod.Server(getSorobanRpcUrl());
+      log.info(`[Investment] Re-simulating signed TX to include __check_auth costs...`);
+      const simResult = await sorobanRpc.simulateTransaction(tx);
+
+      if (simResult.error) {
+        log.error(`[Investment] Re-simulation error: ${simResult.error}`);
+      } else if (simResult.transactionData) {
+        // Extract ONLY the resource allocation from re-simulation.
+        // cloneFrom preserves operations (including passkey-signed auth entries).
+        const newSorobanData = simResult.transactionData.build();
+        const newFee = Math.ceil(parseInt(simResult.minResourceFee) * 1.15).toString();
+
+        tx = TransactionBuilder.cloneFrom(tx, {
+          fee: newFee,
+          sorobanData: newSorobanData,
+        }).build();
+
+        const resources = newSorobanData.resources();
+        log.info(`[Investment] Re-simulated: instructions=${resources.instructions()}, readBytes=${resources.diskReadBytes()}, writeBytes=${resources.writeBytes()}, fee=${newFee}`);
+      }
+    } catch (resimErr) {
+      log.warn(`[Investment] Re-simulation failed (non-fatal): ${resimErr.message}`);
+    }
 
     // Add the source account signature
     tx.sign(opsKeypair);
+
 
     log.info(`[Investment] Submitting passkey-signed TX for investment #${investmentId}...`);
     const metricsStart = Date.now(); // ← Metrics timer
@@ -909,6 +940,29 @@ export const submitInvestmentTx = async (req, res, next) => {
         status: 'distributed',
         distribution_tx_hash: result.hash, // Same TX did both payment + distribution
       });
+
+      // Create token_distributions record so the portfolio query shows this investment.
+      // Soroban atomic swaps bypass the traditional distribution pipeline but the
+      // portfolio page (Investor.getPortfolio) depends on token_distributions rows.
+      try {
+        const { default: prisma } = await import('../config/database.js');
+        await prisma.tokenDistribution.create({
+          data: {
+            investorId: investment.investorId,
+            assetCode: investment.assetCode,
+            amount: investment.tokenAmount,
+            transactionHash: result.hash,
+            usdcPaymentHash: result.hash,
+            offerId: investment.offerId,
+            memo: investment.memo || null,
+            approvalStatus: 'approved',
+          },
+        });
+        log.info(`[Investment] Created token_distributions record for atomic trade #${investmentId}`);
+      } catch (distErr) {
+        // Non-fatal — tokens are on-chain regardless
+        log.error(`[Investment] Failed to create distribution record: ${distErr.message}`);
+      }
     } else {
       // Legacy SAC transfer: funds are in treasury, tokens need separate distribution.
       log.info(`[Investment] Legacy flow — triggering token distribution...`);

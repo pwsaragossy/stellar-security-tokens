@@ -256,7 +256,7 @@ export class SorobanSaleService {
         log.info(`[buildTradeXdr] Simulating trade: ${parsedAmount} USDC via contract ${contractId}`);
         tx = await StellarService.prepareSorobanTransaction(tx);
 
-        // Boost resources for smart wallet passkey auth (same pattern as buildInvestmentTx)
+        // Boost resources for smart wallet passkey auth (safety margin)
         tx = this.#boostResourcesForPasskey(tx);
 
         return {
