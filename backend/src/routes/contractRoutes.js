@@ -28,6 +28,24 @@ router.get('/', ContractController.list);
 
 /**
  * @swagger
+ * /api/admin/contracts/batch/ttl:
+ *   post:
+ *     summary: Batch extend TTL for multiple contracts
+ *     tags: [Contracts]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [offerIds]
+ *             properties:
+ *               offerIds: { type: array, items: { type: integer } }
+ */
+router.post('/batch/ttl', ContractController.batchExtendTtl);
+
+/**
+ * @swagger
  * /api/admin/contracts/{offerId}:
  *   get:
  *     summary: Get contract detail with on-chain state
@@ -112,24 +130,6 @@ router.post('/:offerId/ttl', ContractController.extendTtl);
  *     tags: [Contracts]
  */
 router.post('/:offerId/retry', ContractController.retry);
-
-/**
- * @swagger
- * /api/admin/contracts/batch/ttl:
- *   post:
- *     summary: Batch extend TTL for multiple contracts
- *     tags: [Contracts]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [offerIds]
- *             properties:
- *               offerIds: { type: array, items: { type: integer } }
- */
-router.post('/batch/ttl', ContractController.batchExtendTtl);
 
 /**
  * @swagger

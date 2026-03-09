@@ -17,14 +17,14 @@ import api from '@/api/client';
 
 interface ContractItem {
     id: number;
-    name: string;
+    offerName: string;
     assetCode: string;
     sorobanContractId: string | null;
     sorobanInitStatus: string;
     sorobanInitError: string | null;
     status: string;
     unitPrice: string;
-    totalTokens: string;
+    totalSupply: string;
     createdAt: string;
 }
 
@@ -178,7 +178,7 @@ export function Contracts() {
     // ─── Filtering ─────────────────────────────────
 
     const filtered = contracts.filter(c =>
-        (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.offerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (c.assetCode || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
@@ -234,7 +234,7 @@ export function Contracts() {
                                             className={`w-full text-left grid grid-cols-[1fr_100px_80px] gap-2 items-center px-3 py-2.5 transition-colors hover:bg-white/[0.04] ${isSelected ? 'bg-white/[0.06] border-l-2 border-l-blue-500' : 'border-l-2 border-l-transparent'}`}
                                         >
                                             <div className="min-w-0">
-                                                <p className="text-[13px] font-medium text-white truncate">{c.name || c.assetCode}</p>
+                                                <p className="text-[13px] font-medium text-white truncate">{c.offerName || c.assetCode}</p>
                                                 <p className="text-[11px] text-zinc-500 font-mono truncate">{c.sorobanContractId?.slice(0, 12)}…</p>
                                             </div>
                                             <div className="text-center">
@@ -271,7 +271,7 @@ export function Contracts() {
                                         {selected.offer.assetCode?.slice(0, 3) || '?'}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h3 className="text-lg font-semibold text-white">{selected.offer.name}</h3>
+                                        <h3 className="text-lg font-semibold text-white">{selected.offer.offerName}</h3>
                                         <p className="text-[11px] text-zinc-500 font-mono">{selected.offer.sorobanContractId}</p>
                                     </div>
                                     <Badge variant="outline" className={INIT_STATUS[selected.offer.sorobanInitStatus]?.className || ''}>

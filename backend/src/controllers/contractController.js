@@ -77,14 +77,14 @@ export class ContractController {
                 where: { sorobanContractId: { not: null } },
                 select: {
                     id: true,
-                    name: true,
+                    offerName: true,
                     assetCode: true,
                     sorobanContractId: true,
                     sorobanInitStatus: true,
                     sorobanInitError: true,
                     status: true,
                     unitPrice: true,
-                    totalTokens: true,
+                    totalSupply: true,
                     createdAt: true,
                 },
                 orderBy: { createdAt: 'desc' },
@@ -111,13 +111,14 @@ export class ContractController {
             res.json({
                 offer: {
                     id: offer.id,
-                    name: offer.name,
+                    name: offer.offerName,
                     assetCode: offer.assetCode,
                     sorobanContractId: contractId,
                     sorobanInitStatus: offer.sorobanInitStatus,
+                    sorobanInitError: offer.sorobanInitError,
                     status: offer.status,
                     unitPrice: offer.unitPrice,
-                    totalTokens: offer.totalTokens,
+                    totalTokens: offer.totalSupply,
                     sacContractId: offer.tokens?.[0]?.sacContractId || null,
                 },
                 onChain: {
@@ -178,7 +179,7 @@ export class ContractController {
         try {
             const offer = await resolveContract(req.params.offerId);
             const amount = validateAmount(req.body.amount);
-            const amountStroops = BigInt(Math.round(amount * 1e7));
+            const amountStroops = BigInt(Math.round(parseFloat(amount.toFixed(7)) * 1e7));
 
             const sacContractId = offer.tokens?.[0]?.sacContractId;
             if (!sacContractId) {
@@ -318,7 +319,8 @@ export class ContractController {
     static async freeze(req, res, next) {
         try {
             const offer = await resolveContract(req.params.offerId);
-            const { buyerAddress, frozen = true } = req.body;
+            const { buyerAddress } = req.body;
+            const frozen = req.body.frozen !== false && req.body.frozen !== 'false';
             validateAddress(buyerAddress, 'buyerAddress');
             const result = await SorobanSaleService.buildFreezeBuyerXdr(
                 offer.sorobanContractId, buyerAddress, frozen
