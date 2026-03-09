@@ -382,7 +382,8 @@ export class OfferService {
 
     if (alreadyDeployed) {
       log.info(`[activateOffer] Contract ${precomputedId} already deployed, skipping to create step`);
-      // Update DB and chain directly to the create step
+      // Update DB and return — the sale_create chain must be triggered
+      // manually via retrySorobanInit or processEffects when the original TX is re-processed.
       await prisma.offer.update({
         where: { id: offer.id },
         data: {
@@ -391,8 +392,57 @@ export class OfferService {
           sorobanInitError: null,
         },
       });
-      // TODO: In a future iteration, auto-chain the create TX here.
-      // For now, processEffects('sale_deploy') handles the chaining.
+
+      // Directly chain the sale_create TX
+      const { SorobanSaleService: SaleService } = await import('../services/sorobanSale.service.js');
+      const { TransactionManager: TxMgr } = await import('../services/transactionManager.service.js');
+      const { keyManager: km } = await import('../services/KeyManager.js');
+
+      const deployedOffer = await prisma.offer.findUnique({
+        where: { id: offer.id },
+        include: { tokens: true },
+      });
+
+      const sellToken = deployedOffer.tokens?.[0]?.sacContractId;
+      if (!sellToken) throw new Error(`Token SAC not deployed for offer #${offer.id}`);
+      const buyToken = process.env.USDC_SAC_CONTRACT_ID;
+      if (!buyToken) throw new Error('USDC_SAC_CONTRACT_ID env var is required');
+
+      const rules = typeof deployedOffer.offerRules === 'string'
+        ? JSON.parse(deployedOffer.offerRules)
+        : deployedOffer.offerRules || {};
+
+      const createResult = await SaleService.buildCreateSaleXdr(
+        precomputedId,
+        km.getIssuerPublicKey(),
+        {
+          admin: km.getIssuerPublicKey(),
+          seller: km.getIssuerPublicKey(),
+          sellToken,
+          buyToken,
+          treasury: km.getTreasuryPublicKey(),
+          sellPrice: parseInt(deployedOffer.unitPrice * 10000000) || 1,
+          buyPrice: 10000000,
+          deadlineLedger: 0,
+          minBuyAmount: BigInt(Math.floor((rules.min_investment || 0) * 10000000)),
+          maxBuyPerBuyer: BigInt(Math.floor((rules.max_investment || 0) * 10000000)),
+        }
+      );
+
+      await TxMgr.submit({
+        xdr: createResult.xdr,
+        operationType: 'sale_create',
+        signingRole: 'ISSUER',
+        metadata: {
+          offerId: offer.id,
+          contractId: precomputedId,
+          assetCode: offer.assetCode,
+        },
+        description: `Initialize sale contract for ${offer.assetCode}`,
+      });
+
+      log.info(`[activateOffer] Crash recovery: chained sale_create for offer #${offer.id}`);
+      return await Offer.findById(offer.id);
     }
 
     // Build unsigned deploy TX

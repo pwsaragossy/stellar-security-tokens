@@ -107,7 +107,8 @@ export class ContractController {
                 SorobanSaleService.getVersion(contractId).catch(() => null),
             ]);
 
-            res.json({
+            // BigInt-safe serialization (Soroban RPC returns BigInts)
+            const payload = {
                 offer: {
                     id: offer.id,
                     name: offer.offerName,
@@ -125,7 +126,9 @@ export class ContractController {
                     balance: balance?.toString() || '0',
                     version,
                 },
-            });
+            };
+            const safe = JSON.parse(JSON.stringify(payload, (_, v) => typeof v === 'bigint' ? v.toString() : v));
+            res.json(safe);
         } catch (err) {
             next(err);
         }
