@@ -700,8 +700,13 @@ export class MultiSigTransactionService {
                             : offer.offerRules || {};
 
                         const sellToken = offer.tokens?.[0]?.sacContractId;
-                        const usdcAsset = getUsdcAsset();
-                        const buyToken = usdcAsset.contractId(km.getIssuerPublicKey().substring(0, 1) === 'G' ? undefined : undefined);
+                        if (!sellToken) {
+                            throw new Error(`Token SAC not deployed for offer #${deployOfferId}`);
+                        }
+                        const buyToken = process.env.USDC_SAC_CONTRACT_ID;
+                        if (!buyToken) {
+                            throw new Error('USDC_SAC_CONTRACT_ID environment variable is required');
+                        }
 
                         // Build the create() XDR
                         const createResult = await SorobanSaleService.buildCreateSaleXdr(

@@ -323,6 +323,14 @@ export class OfferService {
       throw new Error('Offer must be approved before activation');
     }
 
+    // Idempotency: don't queue another deploy if one is already in progress
+    if (offer.sorobanInitStatus === 'deploying') {
+      throw new Error('Soroban deploy already in progress — check the Approvals tab');
+    }
+    if (offer.sorobanInitStatus === 'deployed') {
+      throw new Error('Soroban contract already deployed — awaiting sale_create step');
+    }
+
     // All offer types need a Soroban sale contract for the crowdfunding flow
     return await this.#initSorobanDeploy(offer, token);
   }
