@@ -256,8 +256,6 @@ export class SorobanSaleService {
         log.info(`[buildTradeXdr] Simulating trade: ${parsedAmount} USDC via contract ${contractId}`);
         tx = await StellarService.prepareSorobanTransaction(tx);
 
-        // Boost resources for smart wallet passkey auth (safety margin)
-        tx = this.#boostResourcesForPasskey(tx);
 
         return {
             xdr: tx.toXDR('base64'),
@@ -268,47 +266,6 @@ export class SorobanSaleService {
         };
     }
 
-    /**
-     * Boost Soroban resource budget for smart wallet passkey auth.
-     * Simulation doesn't account for WebAuthn secp256r1 signature verification,
-     * so we need significant buffers for CPU, read bytes, and write bytes.
-     * @private
-     */
-    static #boostResourcesForPasskey(tx) {
-        try {
-            const envelope = xdr.TransactionEnvelope.fromXDR(tx.toXDR('base64'), 'base64');
-            const txBody = envelope.value().tx();
-            const sorobanExt = txBody.ext();
-
-            if (sorobanExt?.switch() === 1) {
-                const sorobanData = sorobanExt.sorobanData();
-                const resources = sorobanData.resources();
-
-                const simInstructions = resources.instructions();
-                const boostedInstructions = Math.max(Math.ceil(simInstructions * 5), 100_000_000);
-                resources.instructions(boostedInstructions);
-
-                const simReadBytes = resources.diskReadBytes();
-                const boostedReadBytes = Math.max(Math.ceil(simReadBytes * 5) + 40000, 200_000);
-                resources.diskReadBytes(boostedReadBytes);
-
-                const simWriteBytes = resources.writeBytes();
-                const boostedWriteBytes = Math.max(simWriteBytes * 3, simWriteBytes + 5000);
-                resources.writeBytes(boostedWriteBytes);
-
-                log.info(`[boostResources] instructions ${simInstructions}→${boostedInstructions}, readBytes ${simReadBytes}→${boostedReadBytes}, writeBytes ${simWriteBytes}→${boostedWriteBytes}`);
-
-                const boostedFee = Math.max(Math.ceil(parseInt(tx.fee) * 10), 1_000_000).toString();
-                tx = TransactionBuilder.cloneFrom(tx, {
-                    fee: boostedFee,
-                    sorobanData,
-                }).build();
-            }
-        } catch (err) {
-            log.warn(`[boostResources] Non-fatal: ${err.message}`);
-        }
-        return tx;
-    }
 
     // ═══════════════════════════════════════════════════════════════
     // Read-Only Queries

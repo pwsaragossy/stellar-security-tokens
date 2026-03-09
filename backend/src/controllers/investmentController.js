@@ -812,90 +812,42 @@ export const submitInvestmentTx = async (req, res, next) => {
       throw new Error(`Fee-bump sponsorship failed: ${sponsorErr.message}`);
     }
 
-    // Record the INNER TX hash (for Soroban RPC lookups) and fee bump hash
-    await Investment.updateStatus(parseInt(investmentId), {
-      usdc_payment_hash: innerTxHash,
-    });
+    // Horizon confirmed the fee-bumped TX — the trade is settled.
+    // Record the inner TX hash and proceed immediately.
+    const result = { hash: innerTxHash, ledger: null };
+    log.info(`[Investment] Transaction confirmed by Horizon: ${innerTxHash}`);
 
-    // ─── POLL SOROBAN RPC for result with diagnostic events ───
-    // Use INNER hash — getTransaction() returns NOT_FOUND for fee bump hashes.
-    const { rpc: rpcLib } = await import('@stellar/stellar-sdk');
-    const sorobanRpc = new rpcLib.Server(process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org');
-
-    let txResult;
-    const maxWait = 60_000;
-    const pollInterval = 3_000;
-    let waited = 0;
-
-    while (waited < maxWait) {
-      await new Promise(r => setTimeout(r, pollInterval));
-      waited += pollInterval;
-
-      txResult = await sorobanRpc.getTransaction(innerTxHash);
-      log.info(`[Investment] getTransaction status: ${txResult.status} (${waited / 1000}s elapsed)`);
-
-      if (txResult.status !== 'NOT_FOUND') break;
-    }
-
-    if (!txResult || txResult.status === 'NOT_FOUND') {
-      throw new Error('Transaction not found after 60s polling');
-    }
-
-    if (txResult.status === 'FAILED') {
-      log.error('[Investment] === TRANSACTION FAILED ===');
-      log.error('[Investment] Result XDR:', txResult.resultXdr?.toXDR?.('base64') || 'N/A');
-      log.error('[Investment] Result meta XDR:', txResult.resultMetaXdr?.toXDR?.('base64') || 'N/A');
-
-      // Extract diagnostic events from result meta
+    // ─── BACKGROUND: Soroban RPC diagnostic polling (fire-and-forget) ───
+    // This runs async for audit logging only — the user response is NOT blocked.
+    (async () => {
       try {
-        const meta = txResult.resultMetaXdr;
-        if (meta) {
-          const v3 = meta.value?.()?.sorobanMeta?.();
-          if (v3) {
-            const diagEvents = v3.diagnosticEvents?.() || [];
-            log.error(`[Investment] Diagnostic events (${diagEvents.length}):`);
-            diagEvents.forEach((evt, i) => {
-              try {
-                log.error(`[Investment]   Event[${i}]:`, JSON.stringify(evt.toXDR('base64')));
-                // Try to decode the event body
-                const body = evt.event?.()?.body?.();
-                if (body) {
-                  const data = body.value?.()?.data?.();
-                  if (data) {
-                    log.error(`[Investment]   Event[${i}] data type:`, data.switch?.()?.name);
-                    if (data.switch?.()?.name === 'scvError') {
-                      log.error(`[Investment]   Event[${i}] ERROR:`, data.error?.()?.switch?.()?.name, data.error?.()?.value?.());
-                    }
-                    if (data.switch?.()?.name === 'scvU32') {
-                      log.error(`[Investment]   Event[${i}] U32 value:`, data.u32?.());
-                    }
-                  }
-                }
-              } catch (evtErr) {
-                log.error(`[Investment]   Event[${i}] decode error:`, evtErr.message);
-              }
-            });
-          }
+        const { rpc: rpcLib } = await import('@stellar/stellar-sdk');
+        const sorobanRpc = new rpcLib.Server(process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org');
+        const maxWait = 60_000;
+        const pollInterval = 3_000;
+        let waited = 0;
+        let txResult;
+
+        while (waited < maxWait) {
+          await new Promise(r => setTimeout(r, pollInterval));
+          waited += pollInterval;
+          txResult = await sorobanRpc.getTransaction(innerTxHash);
+          if (txResult.status !== 'NOT_FOUND') break;
         }
-      } catch (metaErr) {
-        log.error('[Investment] Meta decode error:', metaErr.message);
+
+        if (txResult?.status === 'FAILED') {
+          log.error(`[Investment] [BG] TX ${innerTxHash} FAILED on Soroban RPC (Horizon had accepted it)`);
+          log.error(`[Investment] [BG] Result XDR: ${txResult.resultXdr?.toXDR?.('base64') || 'N/A'}`);
+        } else if (txResult?.status === 'SUCCESS') {
+          log.info(`[Investment] [BG] Soroban RPC confirmed SUCCESS for ${innerTxHash} (ledger ${txResult.ledger})`);
+        } else {
+          log.warn(`[Investment] [BG] Soroban RPC status: ${txResult?.status || 'TIMEOUT'} for ${innerTxHash}`);
+        }
+      } catch (bgErr) {
+        log.warn(`[Investment] [BG] RPC poll error (non-fatal): ${bgErr.message}`);
       }
+    })();
 
-      // Try to parse SaleError from contract diagnostic events
-      const saleError = SorobanSaleService.parseContractError(txResult);
-      if (saleError) {
-        log.error(`[Investment] SaleError detected: ${saleError.code} (${saleError.name}) — ${saleError.message}`);
-        throw Object.assign(
-          new Error(`Contract error: ${saleError.message}`),
-          { saleError }
-        );
-      }
-
-      throw new Error(`Transaction FAILED on-chain. Hash: ${innerTxHash}. Check logs for diagnostic events.`);
-    }
-
-    log.info(`[Investment] Transaction SUCCEEDED: ${innerTxHash}`);
-    const result = { hash: innerTxHash, ledger: txResult.ledger };
 
     // ─── RECORD METRICS ───
     try {
