@@ -111,6 +111,14 @@ export const getInvestorPayments = async (req, res, next) => {
       }) : [],
     ]);
 
+    // Deduplicate: for Soroban atomic swaps, the investment and distribution
+    // share the same TX hash. Keep only the investment entry (richer data).
+    const investmentTxHashes = new Set(
+      investments
+        .filter(inv => inv.usdcPaymentHash || inv.distributionTxHash)
+        .map(inv => inv.distributionTxHash || inv.usdcPaymentHash)
+    );
+
     // Normalize into unified shape
     const all = [
       ...interestPayments.map(p => ({
@@ -143,16 +151,18 @@ export const getInvestorPayments = async (req, res, next) => {
         txHash: d.incomingTxHash || d.outgoingTxHash || null,
         details: null,
       })),
-      ...distributions.map(td => ({
-        id: `td-${td.id}`,
-        type: 'Token Distribution',
-        amount: parseFloat(td.amount || 0),
-        date: td.createdAt,
-        status: td.approvalStatus || 'completed',
-        assetCode: td.assetCode,
-        txHash: td.transactionHash || null,
-        details: null,
-      })),
+      ...distributions
+        .filter(td => !td.transactionHash || !investmentTxHashes.has(td.transactionHash))
+        .map(td => ({
+          id: `td-${td.id}`,
+          type: 'Token Distribution',
+          amount: parseFloat(td.amount || 0),
+          date: td.createdAt,
+          status: td.approvalStatus || 'completed',
+          assetCode: td.assetCode,
+          txHash: td.transactionHash || null,
+          details: null,
+        })),
     ];
 
     // Sort by date descending
