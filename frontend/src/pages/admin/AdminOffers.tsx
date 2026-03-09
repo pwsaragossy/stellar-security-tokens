@@ -14,6 +14,7 @@ import {
     Inbox,
     AlertTriangle,
     Rocket,
+    Play,
     ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -501,6 +502,11 @@ export function AdminOffers() {
                                 {selected.token && !(selected.offer_rules as any)?.admin_verified && selected.status !== 'active' && (
                                     <Button size="sm" onClick={() => openAction(selected, 'verify')} disabled={isSubmitting} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
                                         <Check className="w-3.5 h-3.5" /> Verify & Enable
+                                    </Button>
+                                )}
+                                {selected.token && (selected.offer_rules as any)?.admin_verified && selected.status !== 'active' && (
+                                    <Button size="sm" onClick={() => openAction(selected, 'activate')} disabled={isSubmitting} className="gap-1.5 bg-primary hover:bg-primary/90 text-white">
+                                        <Play className="w-3.5 h-3.5" /> Activate
                                     </Button>
                                 )}
                                 {selected.token && selected.status !== 'active' && (
