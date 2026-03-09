@@ -472,7 +472,7 @@ export class MultiSigTransactionService {
                     // issueSecurityToken returns early for multisig, skipping SAC deploy.
                     // We deploy it here after the classic issuance is confirmed on-chain.
                     try {
-                        const StellarService = (await import('./stellar.service.js')).default;
+                        const { StellarService } = await import('./stellar.service.js');
                         log.info(`Deploying SAC for ${metadata.assetCode} after multisig confirmation...`);
                         const sacResult = await StellarService.deploySACForAsset(
                             metadata.assetCode,
