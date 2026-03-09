@@ -141,10 +141,41 @@ router.get('/:id/xdr', authenticatePlatformAdmin, async (req, res) => {
             });
         }
 
+        // Soroban TXs need just-in-time rebuild — simulation data + time bounds expire in ~5 min
+        const SOROBAN_OPS = [
+            'sale_deploy', 'sale_create',
+            'contract_pause', 'contract_resume',
+            'contract_deposit_auth', 'contract_deposit_transfer',
+            'contract_price', 'contract_withdraw',
+            'contract_freeze', 'contract_drain',
+            'contract_propose_admin', 'contract_accept_admin',
+            'contract_upgrade',
+        ];
+
+        let xdr = transaction.xdr;
+
+        if (SOROBAN_OPS.includes(transaction.operationType)) {
+            try {
+                const freshXdr = await MultiSigTransactionService.rebuildSorobanXdr(transaction);
+                if (freshXdr) {
+                    xdr = freshXdr;
+                    // Persist the fresh XDR so the sign endpoint uses it too
+                    const prisma = (await import('../config/prisma.js')).default;
+                    await prisma.multiSigTransaction.update({
+                        where: { id: transaction.id },
+                        data: { xdr: freshXdr },
+                    });
+                    log.info(`[AdminTx] Rebuilt Soroban XDR for TX #${id} (${transaction.operationType})`);
+                }
+            } catch (rebuildErr) {
+                log.warn(`[AdminTx] JIT rebuild failed for TX #${id}, serving stale XDR: ${rebuildErr.message}`);
+            }
+        }
+
         res.json({
             success: true,
             data: {
-                xdr: transaction.xdr,
+                xdr,
                 networkPassphrase: transaction.networkPassphrase,
                 requiredSigners: transaction.requiredSigners,
                 description: transaction.description,

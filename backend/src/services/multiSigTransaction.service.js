@@ -443,6 +443,101 @@ export class MultiSigTransactionService {
     }
 
     /**
+     * Rebuild a Soroban TX XDR with fresh time bounds and simulation data.
+     * Called just-in-time when the frontend fetches XDR for signing.
+     * Maps each operation type to its builder function using stored metadata.
+     *
+     * @param {Object} tx - The stored multisig transaction record
+     * @returns {Promise<string|null>} Fresh XDR (base64) or null if rebuild not possible
+     */
+    static async rebuildSorobanXdr(tx) {
+        const metadata = typeof tx.metadata === 'string' ? JSON.parse(tx.metadata) : tx.metadata || {};
+        const { SorobanSaleService } = await import('./sorobanSale.service.js');
+
+        let result;
+
+        switch (tx.operationType) {
+            case 'contract_resume':
+                result = await SorobanSaleService.buildSetActiveXdr(metadata.contractId, true);
+                break;
+            case 'contract_pause':
+                result = await SorobanSaleService.buildSetActiveXdr(metadata.contractId, false);
+                break;
+            case 'sale_create': {
+                const { keyManager: km } = await import('./KeyManager.js');
+                const offer = await prisma.offer.findUnique({
+                    where: { id: parseInt(metadata.offerId) },
+                    include: { tokens: true },
+                });
+                if (!offer) return null;
+                const sellToken = offer.tokens?.[0]?.sacContractId;
+                const buyToken = process.env.USDC_SAC_CONTRACT_ID;
+                if (!sellToken || !buyToken) return null;
+                const rules = typeof offer.offerRules === 'string' ? JSON.parse(offer.offerRules) : offer.offerRules || {};
+                result = await SorobanSaleService.buildCreateSaleXdr(
+                    metadata.contractId,
+                    km.getIssuerPublicKey(),
+                    {
+                        admin: km.getIssuerPublicKey(),
+                        seller: km.getIssuerPublicKey(),
+                        sellToken,
+                        buyToken,
+                        treasury: km.getTreasuryPublicKey(),
+                        sellPrice: parseInt(offer.unitPrice * 10000000) || 1,
+                        buyPrice: 10000000,
+                        deadlineLedger: 0,
+                        minBuyAmount: BigInt(Math.floor((rules.min_investment || 0) * 10000000)),
+                        maxBuyPerBuyer: BigInt(Math.floor((rules.max_investment || 0) * 10000000)),
+                    }
+                );
+                break;
+            }
+            case 'contract_freeze':
+                result = await SorobanSaleService.buildFreezeBuyerXdr(
+                    metadata.contractId, metadata.buyerAddress, metadata.frozen ?? true
+                );
+                break;
+            case 'contract_withdraw':
+                result = await SorobanSaleService.buildWithdrawXdr(
+                    metadata.contractId, metadata.tokenAddress, BigInt(metadata.amount)
+                );
+                break;
+            case 'contract_drain':
+                result = await SorobanSaleService.buildEmergencyDrainXdr(metadata.contractId);
+                break;
+            case 'contract_propose_admin':
+                result = await SorobanSaleService.buildProposeAdminXdr(metadata.contractId, metadata.newAdmin);
+                break;
+            case 'contract_accept_admin':
+                result = await SorobanSaleService.buildAcceptAdminXdr(metadata.contractId);
+                break;
+            case 'contract_upgrade':
+                result = await SorobanSaleService.buildUpgradeXdr(metadata.contractId, metadata.newWasmHash);
+                break;
+            case 'contract_price':
+                result = await SorobanSaleService.buildUpdatePriceXdr(
+                    metadata.contractId, metadata.sellPrice, metadata.buyPrice
+                );
+                break;
+            case 'contract_deposit_auth':
+                result = await SorobanSaleService.buildSacAuthorizeXdr(
+                    metadata.sacContractId, metadata.contractId, true
+                );
+                break;
+            case 'contract_deposit_transfer':
+                result = await SorobanSaleService.buildSacTransferXdr(
+                    metadata.sacContractId, metadata.from, metadata.contractId, BigInt(metadata.amount)
+                );
+                break;
+            default:
+                log.warn(`[rebuildSorobanXdr] No rebuild handler for ${tx.operationType}`);
+                return null;
+        }
+
+        return result?.xdr || null;
+    }
+
+    /**
      * Executes post-transaction side effects (database updates)
      * @param {Object} tx - The executed transaction record
      * @param {string} [txHashOverride] - Hash from submit result (tx.txHash may not be set yet)
