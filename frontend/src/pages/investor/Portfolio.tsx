@@ -73,6 +73,7 @@ function getMaturityAccent(date: string | null): string {
 
 /* ─── Pending Investment Card (kept compact) ─── */
 function PendingInvestmentCard({ investment, isProcessing }: { investment: PendingInvestment; isProcessing?: boolean }) {
+    const navigate = useNavigate();
     const statusConfig = isProcessing ? {
         label: investment.status === 'trade_submitted' ? 'Submitting Trade' : 'Processing',
         sublabel: investment.status === 'trade_submitted'
@@ -84,7 +85,7 @@ function PendingInvestmentCard({ investment, isProcessing }: { investment: Pendi
         iconClass: 'animate-spin',
     } : {
         label: 'Awaiting Signature',
-        sublabel: 'Sign with your passkey to complete this investment',
+        sublabel: 'Your transaction was prepared but not signed yet.',
         bgClass: 'bg-amber-500/10 border-amber-500/30',
         textClass: 'text-amber-400',
         icon: Hourglass,
@@ -124,11 +125,20 @@ function PendingInvestmentCard({ investment, isProcessing }: { investment: Pendi
                 </div>
             </div>
 
-
-            {/* Pending status message */}
+            {/* Pending: action button + message */}
             {!isProcessing && (
-                <div className="pt-2 border-t border-white/10">
+                <div className="pt-3 border-t border-white/10 space-y-3">
                     <p className={`text-xs ${statusConfig.textClass}`}>{statusConfig.sublabel}</p>
+                    {investment.offerId && (
+                        <Button
+                            size="sm"
+                            className="w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-medium gap-2"
+                            onClick={() => navigate(`/market/${investment.offerId}`)}
+                        >
+                            <ArrowRight className="h-3.5 w-3.5" />
+                            Complete Investment
+                        </Button>
+                    )}
                 </div>
             )}
 

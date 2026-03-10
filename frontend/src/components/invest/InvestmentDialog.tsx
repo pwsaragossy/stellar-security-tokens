@@ -81,7 +81,7 @@ function FlyingRocket({ className = '' }: { className?: string }) {
                 <div className="absolute w-6 h-[1.5px] bg-gradient-to-r from-transparent to-[hsl(160_60%_45%/0.3)] -translate-x-6 translate-y-1 rounded-full" style={{ animationDelay: '0.3s' }} />
                 <div className="absolute w-3 h-[1.5px] bg-gradient-to-r from-transparent to-[hsl(160_60%_45%/0.5)] -translate-x-4 translate-y-3 rounded-full" style={{ animationDelay: '0.6s' }} />
             </div>
-            <Rocket className="w-6 h-6 text-[hsl(160_60%_45%)] rotate-[135deg]" style={{ animation: 'rocket-fly 1.5s ease-in-out infinite' }} />
+            <Rocket className="w-6 h-6 text-[hsl(160_60%_45%)]" style={{ animation: 'rocket-fly 1.5s ease-in-out infinite' }} />
         </div>
     );
 }
@@ -111,7 +111,7 @@ function ShuttleProgress({ activeIndex }: { activeIndex: number }) {
                     <div className="relative -translate-x-1/2 flex items-center justify-center">
                         <div className="w-7 h-7 rounded-full bg-slate-900 border-2 border-[hsl(160_60%_45%)] flex items-center justify-center shadow-[0_0_12px_hsl(160_60%_45%/0.4)]">
                             <Rocket
-                                className="w-3.5 h-3.5 text-[hsl(160_60%_45%)] rotate-[135deg]"
+                                className="w-3.5 h-3.5 text-[hsl(160_60%_45%)]"
                                 style={{
                                     animation: activeIndex === 1
                                         ? 'shuttle-bounce 1.5s ease-in-out infinite'
@@ -421,17 +421,17 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
                 {/* ─── SHUTTLE ANIMATION KEYFRAMES (injected once) ─── */}
                 <style>{`
                     @keyframes shuttle-bounce {
-                        0%, 100% { transform: translateY(0) rotate(135deg); }
-                        50% { transform: translateY(-3px) rotate(135deg); }
+                        0%, 100% { transform: translateY(0); }
+                        50% { transform: translateY(-3px); }
                     }
                     @keyframes shuttle-pulse {
                         0%, 100% { opacity: 0.7; }
                         50% { opacity: 1; }
                     }
                     @keyframes rocket-fly {
-                        0%, 100% { transform: translateX(0) rotate(135deg); }
-                        25% { transform: translateX(3px) translateY(-2px) rotate(135deg); }
-                        75% { transform: translateX(-2px) translateY(1px) rotate(135deg); }
+                        0%, 100% { transform: translateX(0); }
+                        25% { transform: translateX(3px) translateY(-2px); }
+                        75% { transform: translateX(-2px) translateY(1px); }
                     }
                     @keyframes speed-lines {
                         0%, 100% { opacity: 0.3; transform: translateX(0); }
