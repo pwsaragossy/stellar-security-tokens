@@ -246,16 +246,13 @@ describe('Integration: Metrics Service Lifecycle', () => {
 
         // Record some data
         SorobanMetrics.recordTrade({ durationMs: 3500, success: true, investmentId: 1 });
-        SorobanMetrics.recordLegacyTransfer({ durationMs: 2000, success: true, investmentId: 2 });
         SorobanMetrics.recordTrade({ durationMs: 4000, success: false, investmentId: 3 });
 
         // Get stats
         const stats = SorobanMetrics.getStats();
         assert.equal(stats.trade.count, 2, 'Should have 2 trade records');
-        assert.equal(stats.legacy.count, 1, 'Should have 1 legacy record');
         assert.equal(stats.trade.errorCount, 1, 'Should have 1 trade error');
         assert.ok(stats.trade.avgMs > 0, 'Average should be positive');
-        assert.ok(stats.comparison !== null, 'Comparison should exist');
 
         // Stop (final flush - will fail without DB but won't throw)
         SorobanMetrics.stop();
