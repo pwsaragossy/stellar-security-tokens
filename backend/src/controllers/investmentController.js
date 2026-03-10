@@ -2,11 +2,8 @@ import { Investor } from '../models/Investor.js';
 import { Token } from '../models/Token.js';
 import { Investment } from '../models/Investment.js';
 import { StellarService } from '../services/stellar.service.js';
-import { PaymentService } from '../services/payment.service.js';
-import { getTreasuryPublicKey } from '../config/stellar.js';
 import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
 import { SorobanSaleService } from '../services/sorobanSale.service.js';
-import { addDistributionJob, isQueueAvailable } from '../services/distributionQueue.service.js';
 import { ConfigService } from '../services/config.service.js';
 import prisma from '../config/prisma.js';
 import crypto from 'crypto';
@@ -341,275 +338,8 @@ export const purchaseInvestment = async (req, res, next) => {
   }
 };
 
-/**
- * Processa pagamento USDC usando fila assíncrona (com retry automático)
- * @param {Object} investment - Investimento criado
- * @param {Object} usdcPayment - Dados do pagamento USDC
- * @param {Object} req - Request object
- * @param {Object} res - Response object
- * @param {Function} next - Next middleware
- */
-async function processInvestmentPaymentWithQueue(investment, usdcPayment, req, res, next) {
-  try {
-    // Verificar idempotência: se já existe distribuição para este pagamento
-    const existingDistribution = await Token.findDistributionByUSDC(usdcPayment.transactionHash);
 
-    if (existingDistribution) {
-      await Investment.updateStatus(investment.id, {
-        status: 'distributed',
-        usdc_payment_hash: usdcPayment.transactionHash,
-        distribution_tx_hash: existingDistribution.transaction_hash,
-      });
 
-      return res.status(200).json({
-        success: true,
-        message: 'Investment already processed (idempotency)',
-        data: {
-          investment: {
-            id: investment.id,
-            status: 'distributed',
-          },
-          distribution: existingDistribution,
-        },
-      });
-    }
-
-    // Buscar investidor para obter chave pública
-    const investor = await Investor.findById(investment.investorId);
-    const walletAddress = investor?.stellarContractId || investor?.stellarPublicKey;
-    if (!investor || !walletAddress) {
-      throw new Error(`Investor ${investment.investorId} not found or missing Stellar wallet`);
-    }
-
-    // Gerar memo único
-    const memo = generateInvestmentMemo(investment.id, investment.investorId, investment.assetCode);
-
-    // Atualizar investment com hash do pagamento
-    await Investment.updateStatus(investment.id, {
-      status: 'payment_received',
-      usdc_payment_hash: usdcPayment.transactionHash,
-    });
-
-    // Adicionar job à fila para processamento assíncrono com retry
-    const job = await addDistributionJob({
-      investmentId: investment.id,
-      investorPublicKey: walletAddress,
-      assetCode: investment.assetCode,
-      amount: investment.tokenAmount.toString(),
-      memo,
-    });
-
-    res.status(202).json({
-      success: true,
-      message: 'Payment received. Token distribution queued for processing.',
-      data: {
-        investment: {
-          id: investment.id,
-          status: 'payment_received',
-          usdcAmount: parseFloat(investment.usdcAmount.toString()),
-          tokenAmount: parseFloat(investment.tokenAmount.toString()),
-          assetCode: investment.assetCode,
-        },
-        queue: {
-          jobId: job.id,
-          status: 'queued',
-          message: 'Distribution will be processed automatically with retry on failure',
-        },
-        usdcPayment: {
-          transactionHash: usdcPayment.transactionHash,
-          ledger: usdcPayment.ledger,
-          verifiedAt: usdcPayment.createdAt,
-        },
-      },
-    });
-  } catch (error) {
-    await Investment.updateStatus(investment.id, {
-      status: 'failed',
-      error_message: error.message,
-    });
-    next(error);
-  }
-}
-
-/**
- * Processa pagamento USDC e distribui tokens (síncrono, fallback)
- * @param {Object} investment - Investimento criado
- * @param {Object} usdcPayment - Dados do pagamento USDC
- * @param {Object} req - Request object
- * @param {Object} res - Response object
- * @param {Function} next - Next middleware
- */
-async function processInvestmentPayment(investment, usdcPayment, req, res, next) {
-  try {
-    // Verificar idempotência: se já existe distribuição para este pagamento
-    const existingDistribution = await Token.findDistributionByUSDC(usdcPayment.transactionHash);
-
-    if (existingDistribution) {
-      // Já processado, atualizar investment e retornar distribuição existente
-      await Investment.updateStatus(investment.id, {
-        status: 'distributed',
-        usdc_payment_hash: usdcPayment.transactionHash,
-        distribution_tx_hash: existingDistribution.transaction_hash,
-      });
-
-      return res.status(200).json({
-        success: true,
-        message: 'Investment already processed (idempotency)',
-        data: {
-          investment: {
-            id: investment.id,
-            status: 'distributed',
-          },
-          distribution: existingDistribution,
-        },
-      });
-    }
-
-    // Verificar se investment já foi processado
-    const currentInvestment = await Investment.findById(investment.id);
-    if (currentInvestment.status === 'distributed') {
-      return res.status(200).json({
-        success: true,
-        message: 'Investment already processed',
-        data: {
-          investment: currentInvestment,
-        },
-      });
-    }
-
-    // Gerar memo único
-    const memo = generateInvestmentMemo(investment.id, investment.investorId, investment.assetCode);
-
-    // Atualizar investment com hash do pagamento
-    await Investment.updateStatus(investment.id, {
-      status: 'payment_received',
-      usdc_payment_hash: usdcPayment.transactionHash,
-    });
-
-    // Distribuir tokens com memo
-    const investor = await Investor.findById(investment.investorId);
-
-    // JIT AUTHORIZATION
-    const targetWallet = investor.stellarContractId || investor.stellarPublicKey;
-
-    if (targetWallet) {
-      log.info(`[InvestmentController] JIT Authorizing ${targetWallet} for ${investment.assetCode}...`);
-      await StellarService.authorizeInvestor(targetWallet, investment.assetCode);
-    }
-
-    // Fetch offer name for metadata
-    const offer = investment.offerId ? await prisma.offer.findUnique({ where: { id: investment.offerId }, select: { offerName: true } }) : null;
-
-    const stellarResult = await StellarService.distributeTokens(
-      targetWallet,
-      investment.tokenAmount.toString(),
-      investment.assetCode,
-      {
-        memo,
-        investorId: investment.investorId,
-        investorName: investor.name,
-        investorEmail: investor.email,
-        investmentId: investment.id,
-        offerId: investment.offerId,
-        offerName: offer?.offerName || investment.assetCode,
-        usdcAmount: investment.usdcAmount?.toString(),
-        usdcPaymentHash: usdcPayment.transactionHash,
-      }
-    );
-
-    // Handle pending multisig (distribution queued for admin signing)
-    if (stellarResult.status === 'pending_multisig') {
-      await Investment.updateStatus(investment.id, {
-        status: 'pending_distribution',
-        error_message: JSON.stringify({
-          multiSigTransactionId: stellarResult.multiSigTransactionId,
-          step: stellarResult.step,
-          message: stellarResult.message,
-        }),
-      });
-
-      return res.status(202).json({
-        success: true,
-        message: 'Distribution queued for multisig approval',
-        data: {
-          investment: {
-            id: investment.id,
-            status: 'pending_distribution',
-            usdcAmount: parseFloat(investment.usdcAmount.toString()),
-            tokenAmount: parseFloat(investment.tokenAmount.toString()),
-            assetCode: investment.assetCode,
-          },
-          multisig: {
-            transactionId: stellarResult.multiSigTransactionId,
-            step: stellarResult.step,
-            message: stellarResult.message,
-          },
-        },
-      });
-    }
-
-    // Criar distribuição (com verificação de idempotência interna)
-    const distribution = await Token.createDistribution({
-      investorId: investment.investorId,
-      assetCode: investment.assetCode,
-      amount: investment.tokenAmount,
-      transactionHash: stellarResult.transactionHash,
-      usdcPaymentHash: usdcPayment.transactionHash,
-      offerId: investment.offerId,
-      memo,
-    });
-
-    // Atualizar investment com hash da distribuição
-    await Investment.updateStatus(investment.id, {
-      status: 'distributed',
-      distribution_tx_hash: stellarResult.transactionHash,
-    });
-
-    res.status(201).json({
-      success: true,
-      message: 'Investment purchased successfully',
-      data: {
-        investment: {
-          id: investment.id,
-          status: 'distributed',
-          usdcAmount: parseFloat(investment.usdcAmount.toString()),
-          tokenAmount: parseFloat(investment.tokenAmount.toString()),
-          assetCode: investment.assetCode,
-        },
-        distribution: {
-          id: distribution.id,
-          amount: distribution.amount,
-          transactionHash: distribution.transaction_hash,
-          memo: distribution.memo,
-          createdAt: distribution.created_at,
-        },
-        transactions: {
-          usdcPayment: {
-            hash: usdcPayment.transactionHash,
-            ledger: usdcPayment.ledger,
-            verifiedAt: usdcPayment.createdAt,
-          },
-          tokenDistribution: {
-            hash: stellarResult.transactionHash,
-            ledger: stellarResult.ledger,
-            memo: memo,
-          },
-        },
-      },
-    });
-  } catch (error) {
-    // Marcar investment como failed em caso de erro
-    try {
-      await Investment.updateStatus(investment.id, {
-        status: 'failed',
-        error_message: error.message,
-      });
-    } catch (updateError) {
-      log.error('Failed to update investment status:', updateError);
-    }
-    next(error);
-  }
-}
 
 /**
  * Verifica status de um investimento
@@ -855,13 +585,8 @@ export const submitInvestmentTx = async (req, res, next) => {
       const offerForMetrics = investment.offerId
         ? await (await import('../models/Offer.js')).Offer.findById(parseInt(investment.offerId))
         : null;
-      const isContractMetric = !!offerForMetrics?.sorobanContractId;
       const durationMs = Date.now() - metricsStart;
-      if (isContractMetric) {
-        SorobanMetrics.recordTrade({ durationMs, success: true, investmentId: parseInt(investmentId) });
-      } else {
-        SorobanMetrics.recordLegacyTransfer({ durationMs, success: true, investmentId: parseInt(investmentId) });
-      }
+      SorobanMetrics.recordTrade({ durationMs, success: true, investmentId: parseInt(investmentId) });
     } catch (metricsErr) {
       log.warn(`[Investment] Metrics recording failed: ${metricsErr.message}`);
     }
@@ -874,71 +599,43 @@ export const submitInvestmentTx = async (req, res, next) => {
 
     log.info(`[Investment] Smart wallet payment submitted for investment #${investmentId}: ${result.hash}`);
 
-    // Determine if this was a Soroban contract trade or a legacy SAC transfer.
-    // For contract trades, distribution is ATOMIC — the contract already sent tokens to buyer.
-    // For legacy transfers, we still need to trigger separate token distribution.
-    // Note: Investment.findById() doesn't include offer relation, so query separately.
-    let isContractTrade = false;
-    if (investment.offerId) {
-      const { Offer } = await import('../models/Offer.js');
-      const offer = await Offer.findById(investment.offerId);
-      isContractTrade = !!offer?.sorobanContractId;
-    }
+    // Soroban atomic trade: tokens already in buyer's wallet. Update to 'distributed' directly.
+    log.info(`[Investment] Contract trade complete — tokens distributed atomically.`);
+    await Investment.updateStatus(parseInt(investmentId), {
+      status: 'distributed',
+      distribution_tx_hash: result.hash, // Same TX did both payment + distribution
+    });
 
-    if (isContractTrade) {
-      // Contract trade: tokens already in buyer's wallet. Update to 'distributed' directly.
-      log.info(`[Investment] Contract trade complete — tokens distributed atomically. Skipping distributeTokens.`);
-      await Investment.updateStatus(parseInt(investmentId), {
-        status: 'distributed',
-        distribution_tx_hash: result.hash, // Same TX did both payment + distribution
-      });
-
-      // Create token_distributions record so the portfolio query shows this investment.
-      // Soroban atomic swaps bypass the traditional distribution pipeline but the
-      // portfolio page (Investor.getPortfolio) depends on token_distributions rows.
-      try {
-        const { default: prisma } = await import('../config/database.js');
-        await prisma.tokenDistribution.create({
-          data: {
-            investorId: investment.investorId,
-            assetCode: investment.assetCode,
-            amount: investment.tokenAmount,
-            transactionHash: result.hash,
-            usdcPaymentHash: result.hash,
-            offerId: investment.offerId,
-            memo: investment.memo || null,
-            approvalStatus: 'approved',
-          },
-        });
-        log.info(`[Investment] Created token_distributions record for atomic trade #${investmentId}`);
-      } catch (distErr) {
-        // Non-fatal — tokens are on-chain regardless
-        log.error(`[Investment] Failed to create distribution record: ${distErr.message}`);
-      }
-    } else {
-      // Legacy SAC transfer: funds are in treasury, tokens need separate distribution.
-      log.info(`[Investment] Legacy flow — triggering token distribution...`);
-      if (isQueueAvailable()) {
-        await addDistributionJob({
-          investmentId: parseInt(investmentId),
-          investorPublicKey: investment.investorId?.toString(),
+    // Create token_distributions record so the portfolio query shows this investment.
+    // Soroban atomic swaps bypass the traditional distribution pipeline but the
+    // portfolio page (Investor.getPortfolio) depends on token_distributions rows.
+    try {
+      const { default: prisma } = await import('../config/database.js');
+      await prisma.tokenDistribution.create({
+        data: {
+          investorId: investment.investorId,
           assetCode: investment.assetCode,
-          amount: investment.tokenAmount?.toString(),
-          memo: investment.memo,
-        });
-      }
+          amount: investment.tokenAmount,
+          transactionHash: result.hash,
+          usdcPaymentHash: result.hash,
+          offerId: investment.offerId,
+          memo: investment.memo || null,
+          approvalStatus: 'approved',
+        },
+      });
+      log.info(`[Investment] Created token_distributions record for atomic trade #${investmentId}`);
+    } catch (distErr) {
+      // Non-fatal — tokens are on-chain regardless
+      log.error(`[Investment] Failed to create distribution record: ${distErr.message}`);
     }
 
     return res.json({
       success: true,
-      message: isContractTrade
-        ? 'Investment completed — tokens received'
-        : 'Investment payment submitted successfully',
+      message: 'Investment completed — tokens received',
       data: {
         investmentId: parseInt(investmentId),
         transactionHash: result.hash,
-        status: isContractTrade ? 'distributed' : 'payment_received',
-        isContractTrade,
+        status: 'distributed',
       },
     });
   } catch (error) {

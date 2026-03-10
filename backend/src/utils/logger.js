@@ -74,7 +74,7 @@ function createLogFn(level) {
 
 /**
  * Create a scoped logger for a specific component
- * Usage: const log = logger.scope('PaymentMonitor');
+ * Usage: const log = logger.scope('InvestmentController');
  *        log.info('Started');
  */
 function createScopedLogger(component) {
@@ -114,7 +114,7 @@ const logger = {
 
     /**
      * Create a scoped logger for a component
-     * @param {string} component - Component name (e.g., 'PaymentMonitor', 'KeyManager')
+     * @param {string} component - Component name (e.g., 'InvestmentController', 'KeyManager')
      * @returns {Object} Scoped logger with error, warn, info, debug methods
      */
     scope: createScopedLogger,

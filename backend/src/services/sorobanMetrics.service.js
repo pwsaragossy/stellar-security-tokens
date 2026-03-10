@@ -1,13 +1,12 @@
 /**
  * sorobanMetrics.service.js — Latency tracking for Soroban vs Legacy paths.
  *
- * Tracks trade() vs transfer() latencies, success rates, and fee costs.
+ * Tracks trade() latencies, success rates, and fee costs.
  * Stored in-memory with periodic DB flush for lightweight operation.
  *
  * Usage:
  *   SorobanMetrics.recordTrade({ durationMs, success, gasUsed, investmentId });
- *   SorobanMetrics.recordLegacyTransfer({ durationMs, success, investmentId });
- *   SorobanMetrics.getStats(); // { trade: {...}, legacy: {...} }
+ *   SorobanMetrics.getStats(); // { trade: {...} }
  */
 import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
@@ -16,9 +15,7 @@ const log = logger.scope('SorobanMetrics');
 
 class SorobanMetrics {
     static _tradeLatencies = [];
-    static _legacyLatencies = [];
     static _tradeErrors = 0;
-    static _legacyErrors = 0;
     static _flushInterval = null;
 
     /**
@@ -28,15 +25,6 @@ class SorobanMetrics {
         this._tradeLatencies.push({ durationMs, success, gasUsed, ts: Date.now(), investmentId });
         if (!success) this._tradeErrors++;
         log.info(`[trade] ${success ? '✅' : '❌'} ${durationMs}ms (gas: ${gasUsed}, inv: ${investmentId})`);
-    }
-
-    /**
-     * Record a legacy SAC transfer execution
-     */
-    static recordLegacyTransfer({ durationMs, success = true, investmentId = null }) {
-        this._legacyLatencies.push({ durationMs, success, ts: Date.now(), investmentId });
-        if (!success) this._legacyErrors++;
-        log.info(`[legacy] ${success ? '✅' : '❌'} ${durationMs}ms (inv: ${investmentId})`);
     }
 
     /**
@@ -64,18 +52,8 @@ class SorobanMetrics {
 
         return {
             trade: calcStats(this._tradeLatencies, this._tradeErrors),
-            legacy: calcStats(this._legacyLatencies, this._legacyErrors),
-            comparison: this._tradeLatencies.length > 0 && this._legacyLatencies.length > 0
-                ? {
-                    avgDiffMs: (
-                        Math.round(this._tradeLatencies.filter(l => l.success).reduce((a, l) => a + l.durationMs, 0) / this._tradeLatencies.filter(l => l.success).length) -
-                        Math.round(this._legacyLatencies.filter(l => l.success).reduce((a, l) => a + l.durationMs, 0) / this._legacyLatencies.filter(l => l.success).length)
-                    ),
-                    note: 'Positive = Soroban slower, Negative = Soroban faster',
-                }
-                : null,
             since: this._tradeLatencies.length > 0
-                ? new Date(Math.min(...this._tradeLatencies.map(l => l.ts), ...this._legacyLatencies.map(l => l.ts))).toISOString()
+                ? new Date(Math.min(...this._tradeLatencies.map(l => l.ts))).toISOString()
                 : null,
         };
     }
@@ -118,9 +96,7 @@ class SorobanMetrics {
      */
     static reset() {
         this._tradeLatencies = [];
-        this._legacyLatencies = [];
         this._tradeErrors = 0;
-        this._legacyErrors = 0;
     }
 }
 
