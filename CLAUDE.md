@@ -1,202 +1,67 @@
-# Project Instructions
+# Radox Platform — Project Context
 
-This file provides context and rules for AI coding assistants working on this project.
+## Identity
+- **Product**: Radox — security token platform for real-world asset tokenization
+- **Stack**: Node.js/Express + React/TypeScript/Vite + PostgreSQL + Redis + Stellar/Soroban
+- **UI**: shadcn/ui + Radix primitives + Tailwind. Never rebuild what the library provides.
+- **Auth**: Passkeys (WebAuthn) for all users. No passwords anywhere. Admin uses Freighter wallet.
+- **Brand domain**: `radox.net` (landing), `app.radox.net` (SPA), `api.radox.net` (API)
 
-## Project Overview
+## First Action — Every Session
+1. Read `docs/Project_Bible/00_index.md` — master index linking 15 code-verified reference docs
+2. Use the Bible question→artifact lookup table to find answers before grepping the codebase
+3. If the Bible doesn't cover it, then read source files directly
 
-Stellar Security Tokens - A blockchain-based security token platform with:
-- **Backend**: Node.js/Express API with Prisma ORM, Stellar SDK integration
-- **Frontend**: React/TypeScript with Vite, TailwindCSS
+## Project Bible (`docs/Project_Bible/`)
+| I need to know... | Read |
+|---|---|
+| How X calls Y | `01_call_graph.md` |
+| If feature X exists | `02_feature_matrix.md` |
+| How data flows | `03_data_flow.md` |
+| If code is dead | `04_dead_code.md` |
+| What an env var does | `05_config_env_map.md` |
+| If something is secure | `06_security_audit.md` |
+| How errors propagate | `07_error_recovery.md` |
+| What emails are sent | `08_email_inventory.md` |
+| Backend internals | `services_layer.md` · `controllers_layer.md` · `routes_layer.md` |
+| Frontend internals | `frontend_layer.md` |
+| Smart contract | `smart_contract_layer.md` |
+| Deployment | `deploy_layer.md` |
 
----
+Operational runbooks, mainnet checklist → `docs/Operations/`
 
-## Auto-Invoked Skills
+## Code Patterns (enforce these)
+- **Backend**: ES modules, async/await, thin controllers → fat services → Prisma
+- **Frontend**: Functional components + hooks, typed props/state, `types/index.ts` interfaces
+- **Tests**: `*.test.js` (unit), `*.mocked.test.js` (CI), `*.integration.test.js` (testnet)
+- **Security**: No `eval`, no `exec` (use `execFile`), no `dangerouslySetInnerHTML` without DOMPurify
 
-### Frontend Design Skill (Auto-Detect)
+## Frontend Design (auto-apply when touching UI)
+No generic aesthetics. No default Tailwind. No cookie-cutter cards. Distinctive typography, cohesive color via CSS custom properties, micro-animations on interactions, gradients and layered shadows for atmosphere. Full spec: `.agent/workflows/frontend-design.md`
 
-**When working on any files in `frontend/src/` involving UI components, pages, or styling, automatically apply the `/frontend-design` workflow principles:**
+## Stellar Documentation
+Stellar docs are available via the **Obsidian MCP tool** — no local folder. Use it to look up SDK methods, transaction operations, or protocol details. Never hallucinate Stellar SDK methods — always verify.
 
-1. **Design Thinking**: Before coding, consider purpose, tone, and what makes it unforgettable
-2. **Typography**: Never use generic fonts (Inter, Roboto, Arial). Choose distinctive, characterful fonts
-3. **Color**: Cohesive palettes with CSS custom properties. Avoid cliché purple-to-pink gradients
-4. **Motion**: High-impact animations at key moments (page load, hover states, transitions)
-5. **Spatial Composition**: Embrace asymmetry, overlap, unexpected layouts
-6. **Visual Details**: Create atmosphere with gradients, textures, shadows - never solid colors
+## Browser Testing — HARD RULES
 
-**Anti-patterns to avoid:**
-- Generic Bootstrap/Tailwind default aesthetics
-- Cookie-cutter card grids
-- Predictable component patterns
-- Lack of distinctive character
+> ⚠️ **This platform uses passkeys and Freighter. The browser agent CANNOT authenticate. Do not attempt to.**
 
-See `.agent/workflows/frontend-design.md` for full guidelines.
+**BEFORE launching the browser agent:**
+1. Ask the user which portal they need (Admin / Investor / Company)
+2. Ask them to login in their browser and confirm they're on an authenticated page
+3. Only then launch the browser agent
 
-### Security Guidance Skill (Auto-Detect)
+**WHILE the browser agent is running — STOP IMMEDIATELY if you see ANY of these:**
+- A login page or login form
+- "Login with Passkey" or "Connect Freighter" buttons
+- A WebAuthn/biometric prompt
+- A redirect to `/login` or `/admin/login`
+- Any "unauthorized" or "session expired" message
+- The page is blank or shows a loading spinner that never resolves (likely auth redirect)
 
-**When writing or editing code, automatically check for these security anti-patterns and warn if detected:**
+**When stopped:** Do NOT retry, do NOT try to click around it, do NOT attempt alternative auth flows. Return control to the user with: *"I hit an auth wall. Please login at [URL] and confirm when ready."*
 
-| Pattern | Trigger | Guidance |
-|---------|---------|----------|
-| **GitHub Actions Injection** | `.github/workflows/*.yml` | Never use untrusted input (issue titles, PR descriptions) directly in `run:` commands. Use `env:` with proper quoting. |
-| **Command Injection** | `child_process.exec`, `exec()`, `execSync()` | Use `execFile` instead of `exec` to prevent shell injection. Never pass user input to shell commands. |
-| **Code Injection** | `new Function()`, `eval()` | Avoid evaluating arbitrary code. Use `JSON.parse()` for data, consider alternative designs. |
-| **XSS via React** | `dangerouslySetInnerHTML` | Sanitize all content with DOMPurify before rendering. |
-| **XSS via DOM** | `document.write`, `.innerHTML =` | Use `textContent` for plain text, or safe DOM methods with sanitization. |
-| **Pickle Deserialization** | `pickle` | Can lead to arbitrary code execution. Use JSON or other safe formats. |
-| **OS Command Injection** | `os.system` | Only use with static arguments, never with user-controlled input. |
-
-**Format for warnings:**
-```
-⚠️ Security Warning: [Pattern detected]. [Brief explanation]. [Safer alternative].
-```
-
-### Explanatory Output Style (Auto-Invoke)
-
-**Provide educational insights about implementation choices as you help with tasks.**
-
-When writing or modifying code, include brief educational explanations using this format:
-
-```
-★ Insight ─────────────────────────────────────
-[2-3 key educational points about the implementation]
-─────────────────────────────────────────────────
-```
-
-Focus on:
-- Specific implementation choices for THIS codebase
-- Patterns and conventions in the existing code
-- Trade-offs and design decisions
-- Codebase-specific details (not general programming concepts)
-
-Provide insights as you write code, not just at the end.
-
----
-
-## Code Style
-
-### Backend (JavaScript)
-- Use ES modules (`import`/`export`)
-- Async/await for all async operations
-- JSDoc comments for public functions
-- Error handling with try/catch and proper logging
-
-### Frontend (TypeScript/React)
-- Functional components with hooks
-- Type all props and state
-- Use React Query for server state
-- Tailwind for styling (but make it distinctive, not generic)
-
----
-
-## Testing
-
-- Backend: Jest with `*.test.js` naming
-- Mocked integration tests: `*.mocked.test.js` (for CI)
-- Real integration tests: `*.integration.test.js` (for local Stellar testnet)
-
----
-
-## Key Directories
-
-```
-backend/
-├── src/
-│   ├── routes/       # Express route handlers
-│   ├── services/     # Business logic
-│   ├── middleware/   # Auth, rate limiting, etc.
-│   └── utils/        # Helpers
-frontend/
-├── src/
-│   ├── pages/        # Route pages
-│   ├── components/   # Reusable components
-│   ├── lib/          # API clients, utilities
-│   └── hooks/        # Custom React hooks
-```
-
----
-
-## Project Bible (Deep Context)
-
-> **Location**: `docs/Project_Bible/`
-> **Start here**: [`00_index.md`](docs/Project_Bible/00_index.md)
-
-The Project Bible is a comprehensive, code-verified reference of the entire codebase — generated from a full deep read of ~180 files (~35,000+ lines). **Before researching any question about how the system works, check the Bible first.**
-
-| Question | Read This |
-|----------|-----------|
-| "How does X call Y?" | `01_call_graph.md` |
-| "Is feature X implemented?" | `02_feature_matrix.md` |
-| "How does data flow through X?" | `03_data_flow.md` |
-| "Is this code still used?" | `04_dead_code.md` |
-| "What does this env var do?" | `05_config_env_map.md` |
-| "Is this secure?" | `06_security_audit.md` |
-| "What happens when X fails?" | `07_error_recovery.md` |
-| "What emails does the platform send?" | `08_email_inventory.md` |
-| "How does [backend layer] work?" | `services_layer.md`, `controllers_layer.md`, `routes_layer.md` |
-| "How does [frontend layer] work?" | `frontend_layer.md` |
-| "How does the smart contract work?" | `smart_contract_layer.md` |
-| "How is it deployed?" | `deploy_layer.md` |
-
-**Operational docs** (runbooks, checklists) are in `docs/Operations/`.
-
----
-
-## Stellar Documentation Reference
-
-> ⚠️ **SKIP DURING CODEBASE SCANNING**: The folder `Stellar Docs (...)` is **NOT part of the codebase** - it's the complete official Stellar developer documentation for reference only. Do not index or analyze when understanding the project structure.
-
-### Contents
-
-This folder contains the **full scraped Stellar developer docs** including:
-- **Build**: Smart contracts, apps, how-to guides
-- **Learn**: Fundamentals, transactions, consensus protocol, data structures
-- **Tokens**: Asset issuance, SAC, token interface, access control
-- **Data**: Horizon API, RPC, Hubble analytics, indexers
-- **Tools**: SDKs, CLI, Stellar Lab, developer tools
-- **Networks**: Mainnet, Testnet, Futurenet config
-- **Validators**: Running and maintaining nodes
-- **Platforms**: Anchor Platform, Disbursement Platform
-
-### Key Files by Task
-
-| Task | Reference File |
-|------|---------------|
-| **Multisig Setup** | `learn/fundamentals/transactions/signatures-multisig.md` |
-| **Asset Issuance** | `tokens/how-to-issue-an-asset.md` |
-| **Asset Flags** | `tokens/control-asset-access.md` |
-| **Transactions** | `learn/fundamentals/transactions/` |
-| **Smart Contracts** | `build/smart-contracts/` |
-| **Horizon API** | `data/apis/horizon/` |
-| **JavaScript SDK** | `tools/sdks/client-sdks.md` |
-| **CLI Reference** | `tools/cli/stellar-cli.md` |
-| **Network Config** | `networks.md` |
-
-### Quick Reference
-
-- **Testnet Passphrase**: `Test SDF Network ; September 2015`
-- **Mainnet Passphrase**: `Public Global Stellar Network ; September 2015`
-- **Horizon Testnet**: `https://horizon-testnet.stellar.org`
-- **Stellar Lab**: `https://lab.stellar.org`
-
----
-
-## Browser Testing Protocol
-
-> ⚠️ **CRITICAL: Passkey Login Required**
->
-> All logins on this platform use **passkeys (WebAuthn)**. The browser subagent **cannot** complete passkey authentication.
-> **YOU MUST always prompt the user to login FIRST before taking browser control.**
-
-### Login URLs
-
-| Portal | URL | Auth Method |
-|--------|-----|-------------|
-| **Admin** | `https://dev.radox.net/admin/login` | Passkey (Freighter) |
-| **Company / Investor** | `https://dev.radox.net/login` | Passkey |
-
-### Pre-Browser Checklist
-
-1. **Ask the user** to login to the target portal in their browser
-2. **Wait for confirmation** that they are logged in and on the correct page
-3. **Only then** launch the browser subagent to inspect/interact with the page
-4. If the subagent encounters a login page, **stop immediately** and ask the user to re-authenticate
+| Portal | URL |
+|--------|-----|
+| Admin | `https://dev.radox.net/admin/login` |
+| Investor / Company | `https://dev.radox.net/login` |
