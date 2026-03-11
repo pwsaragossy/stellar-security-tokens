@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
     Search,
     Loader2,
@@ -13,6 +13,7 @@ import {
     AlertTriangle,
     Rocket,
     ExternalLink,
+    Lock, Unlock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +31,8 @@ import { toast } from 'sonner';
 import api from '@/api/client';
 import { offersApi } from '@/api/offers';
 import type { Offer } from '@/types';
+import { RelatedEntities } from '@/components/admin/RelatedEntities';
+import { useAutoSelect } from '@/hooks/useAdminNavigation';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -140,6 +143,13 @@ export function AdminOffers() {
             else setSelected(null);
         }
     }, [offers]);
+
+    // Auto-select from URL ?id= param (for cross-navigation)
+    const handleAutoSelect = useCallback((id: number) => {
+        const offer = offers.find(o => o.id === id);
+        if (offer) setSelected(offer);
+    }, [offers]);
+    useAutoSelect(handleAutoSelect);
 
     // ─── Actions ──────────────────────────────────────────────────────────
 
@@ -354,6 +364,13 @@ export function AdminOffers() {
                                     })()}
                                 </div>
 
+                                {/* Cross-links */}
+                                <RelatedEntities items={[
+                                    ...((selected as any).company ? [{ tab: 'companies' as const, id: (selected as any).company.id, label: (selected as any).company.name }] : []),
+                                    ...(selected.token ? [{ tab: 'tokens' as const, id: selected.token.id, label: selected.token.assetCode || selected.asset_code }] : []),
+                                    ...((selected as any).sorobanContractId ? [{ tab: 'contracts' as const, id: selected.id, label: `${(selected as any).sorobanContractId?.slice(0, 12)}…` }] : []),
+                                ]} />
+
                                 {/* Info grid */}
                                 <div className="grid grid-cols-4 gap-3">
                                     <div className="bg-white/[0.03] rounded-lg p-3">
@@ -375,6 +392,25 @@ export function AdminOffers() {
                                         <p className="text-sm font-medium text-white">
                                             {selected.maturity_date ? formatDate(selected.maturity_date) : '—'}
                                         </p>
+                                    </div>
+                                </div>
+
+                                {/* Extra info row */}
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div className="bg-white/[0.03] rounded-lg p-3">
+                                        <p className="text-[11px] text-zinc-500 mb-1">Payment</p>
+                                        <p className="text-sm text-white capitalize">{(selected as any).payment_type?.replace('_', ' ') || (selected as any).paymentType?.replace('_', ' ') || '—'}</p>
+                                    </div>
+                                    <div className="bg-white/[0.03] rounded-lg p-3">
+                                        <p className="text-[11px] text-zinc-500 mb-1">Unit Price</p>
+                                        <p className="text-sm font-mono text-white">{(selected as any).unit_price || (selected as any).unitPrice || '—'}</p>
+                                    </div>
+                                    <div className="bg-white/[0.03] rounded-lg p-3 flex items-center gap-2">
+                                        {(selected as any).isTokenLocked !== false ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Unlock className="w-3.5 h-3.5 text-emerald-400" />}
+                                        <div>
+                                            <p className="text-[11px] text-zinc-500">Token</p>
+                                            <p className="text-sm text-white">{(selected as any).isTokenLocked !== false ? 'Locked' : 'Unlocked'}</p>
+                                        </div>
                                     </div>
                                 </div>
 

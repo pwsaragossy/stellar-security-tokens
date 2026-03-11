@@ -815,6 +815,9 @@ router.get('/companies/:id/details', authenticateToken, requirePlatformAdmin, as
         name: true,
         cnpj: true,
         email: true,
+        legalRepresentative: true,
+        phone: true,
+        address: true,
         status: true,
         stellarContractId: true,
         createdAt: true,
@@ -825,19 +828,34 @@ router.get('/companies/:id/details', authenticateToken, requirePlatformAdmin, as
           select: {
             id: true,
             offerName: true,
+            assetCode: true,
             status: true,
             totalSupply: true,
+            annualInterestRate: true,
+            maturityDate: true,
+            sorobanContractId: true,
+            offerType: true,
             createdAt: true,
+            tokens: { select: { id: true, assetCode: true, sacContractId: true } },
+            _count: { select: { investments: true } },
           },
           orderBy: { createdAt: 'desc' },
-          take: 10
-        }
+          take: 20
+        },
+        _count: { select: { offers: true } },
       }
     });
 
     if (!company) {
       return res.status(404).json({ success: false, error: 'Company not found' });
     }
+
+    // Aggregate investment stats across all offers
+    const investmentStats = await prisma.investment.aggregate({
+      where: { offer: { companyId: parseInt(id) } },
+      _sum: { usdcAmount: true },
+      _count: true,
+    });
 
     // Get balances if wallet exists
     let balances = { xlm: '0', usdc: '0' };
@@ -855,6 +873,9 @@ router.get('/companies/:id/details', authenticateToken, requirePlatformAdmin, as
         ...company,
         walletAddress: company.stellarContractId,
         activeOffers: company.offers.filter(o => o.status === 'active').length,
+        totalOfferCount: company._count?.offers || 0,
+        totalInvestments: investmentStats._count || 0,
+        totalInvestmentVolume: investmentStats._sum?.usdcAmount?.toString() || '0',
         balances,
       }
     });
@@ -1241,18 +1262,26 @@ router.get('/investors/:id/details', authenticateToken, requirePlatformAdmin, as
         kycStatus: true,
         emailVerified: true,
         stellarContractId: true,
+        lastLogin: true,
         createdAt: true,
         updatedAt: true,
         investments: {
-          take: 5,
+          take: 20,
           orderBy: { createdAt: 'desc' },
           select: {
             id: true,
             usdcAmount: true,
-            createdAt: true,
+            tokenAmount: true,
+            assetCode: true,
             status: true,
+            createdAt: true,
             offer: {
-              select: { offerName: true }
+              select: {
+                id: true,
+                offerName: true,
+                assetCode: true,
+                company: { select: { id: true, name: true } },
+              }
             }
           }
         }
@@ -1263,20 +1292,26 @@ router.get('/investors/:id/details', authenticateToken, requirePlatformAdmin, as
       return res.status(404).json({ success: false, error: 'Investor not found' });
     }
 
+    // Aggregate total invested
+    const investmentStats = await prisma.investment.aggregate({
+      where: { investorId: parseInt(id) },
+      _sum: { usdcAmount: true },
+      _count: true,
+    });
+
     // Get balances from Soroban if wallet exists
     let balances = { xlm: '0', usdc: '0' };
     let transactions = [];
 
     if (investor.stellarContractId) {
       try {
-        // Use PasskeyWalletService to get balances
         const balanceResult = await PasskeyWalletService.getSorobanWalletBalances(investor.stellarContractId);
         balances = balanceResult;
       } catch (err) {
         log.info('[Investor Details] Balance fetch error:', err.message);
       }
 
-      // Map DB investments to transactions for display
+      // Map DB investments to transactions for display (legacy compat)
       transactions = investor.investments.map(inv => ({
         type: inv.offer ? `Investment: ${inv.offer.offerName}` : 'Investment',
         amount: `$${Number(inv.usdcAmount).toFixed(2)}`,
@@ -1288,10 +1323,12 @@ router.get('/investors/:id/details', authenticateToken, requirePlatformAdmin, as
       success: true,
       data: {
         ...investor,
-        status: investor.kycStatus, // Map kycStatus → status for frontend consistency
+        status: investor.kycStatus,
         walletAddress: investor.stellarContractId,
         balances,
         transactions,
+        totalInvestedAmount: investmentStats._sum?.usdcAmount?.toString() || '0',
+        investmentCount: investmentStats._count || 0,
       }
     });
   } catch (error) {

@@ -41,7 +41,11 @@ export class Token {
     return await prisma.token.findUnique({
       where: { assetCode },
       include: {
-        offer: true,
+        offer: {
+          include: {
+            company: { select: { id: true, name: true } },
+          },
+        },
       },
     });
   }
@@ -67,7 +71,11 @@ export class Token {
       take: limit,
       skip: offset,
       include: {
-        offer: true,
+        offer: {
+          include: {
+            company: { select: { id: true, name: true } },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });

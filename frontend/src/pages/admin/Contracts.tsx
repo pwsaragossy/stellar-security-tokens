@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
     Search, Loader2, RefreshCw, Inbox, Check, Copy,
     Pause, Play, Upload, DollarSign, Clock, Trash2, ArrowUpCircle,
-    Snowflake, ExternalLink,
+    Snowflake, ExternalLink, Lock, Unlock, Users, Calendar, Percent, Tag,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import api from '@/api/client';
+import { RelatedEntities } from '@/components/admin/RelatedEntities';
+import { useAutoSelect } from '@/hooks/useAdminNavigation';
 
 // ─── Types ─────────────────────────────────────────
 
@@ -28,8 +30,37 @@ interface ContractItem {
     createdAt: string;
 }
 
+interface ContractDetailOffer extends ContractItem {
+    sacContractId: string | null;
+    offerType?: string;
+    paymentType?: string;
+    annualInterestRate?: string | number;
+    maturityDate?: string;
+    description?: string;
+    isTokenLocked?: boolean;
+    investmentCount?: number;
+}
+
+interface ContractDetailCompany {
+    id: number;
+    name: string;
+    cnpj?: string;
+    stellarContractId?: string;
+}
+
+interface ContractDetailToken {
+    id: number;
+    assetCode: string;
+    sacContractId?: string;
+    issuerPublicKey?: string;
+    totalSupply?: string;
+    issuanceTransactionHash?: string;
+}
+
 interface ContractDetail {
-    offer: ContractItem & { sacContractId: string | null };
+    offer: ContractDetailOffer;
+    company: ContractDetailCompany | null;
+    token: ContractDetailToken | null;
     onChain: { offer: any; balance: string; version: number | null };
 }
 
@@ -74,7 +105,7 @@ export function Contracts() {
         }
     };
 
-    const loadDetail = async (offerId: number) => {
+    const loadDetail = useCallback(async (offerId: number) => {
         try {
             setDetailLoading(true);
             const res = await api.get(`/admin/contracts/${offerId}`);
@@ -84,13 +115,16 @@ export function Contracts() {
         } finally {
             setDetailLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         loadContracts();
         const i = setInterval(loadContracts, 30000);
         return () => clearInterval(i);
     }, []);
+
+    // Auto-select from URL ?id= param (for cross-navigation)
+    useAutoSelect(loadDetail);
 
     // ─── Actions ───────────────────────────────────
 
@@ -279,6 +313,13 @@ export function Contracts() {
                                     </Badge>
                                 </div>
 
+                                {/* Cross-links */}
+                                <RelatedEntities items={[
+                                    ...(selected.company ? [{ tab: 'companies' as const, id: selected.company.id, label: selected.company.name }] : []),
+                                    { tab: 'offers', id: selected.offer.id, label: selected.offer.offerName || selected.offer.assetCode },
+                                    ...(selected.token ? [{ tab: 'tokens' as const, id: selected.token.id, label: selected.token.assetCode }] : []),
+                                ]} />
+
                                 {/* On-chain stats */}
                                 <div className="grid grid-cols-3 gap-3">
                                     <div className="bg-white/[0.03] rounded-lg p-3">
@@ -298,6 +339,74 @@ export function Contracts() {
                                         <p className="text-sm font-mono text-white">{selected.onChain?.version ?? '—'}</p>
                                     </div>
                                 </div>
+
+                                {/* Offer & Token info */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-white/[0.03] rounded-lg p-3 flex items-center gap-2">
+                                        <Tag className="w-3.5 h-3.5 text-zinc-500" />
+                                        <div>
+                                            <p className="text-[11px] text-zinc-500">Type</p>
+                                            <p className="text-sm text-white capitalize">{selected.offer.offerType || '—'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/[0.03] rounded-lg p-3 flex items-center gap-2">
+                                        <Calendar className="w-3.5 h-3.5 text-zinc-500" />
+                                        <div>
+                                            <p className="text-[11px] text-zinc-500">Payment</p>
+                                            <p className="text-sm text-white capitalize">{selected.offer.paymentType?.replace('_', ' ') || '—'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/[0.03] rounded-lg p-3 flex items-center gap-2">
+                                        <Percent className="w-3.5 h-3.5 text-zinc-500" />
+                                        <div>
+                                            <p className="text-[11px] text-zinc-500">Interest Rate</p>
+                                            <p className="text-sm text-white">{selected.offer.annualInterestRate ? `${Number(selected.offer.annualInterestRate).toFixed(2)}%` : '—'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/[0.03] rounded-lg p-3 flex items-center gap-2">
+                                        <DollarSign className="w-3.5 h-3.5 text-zinc-500" />
+                                        <div>
+                                            <p className="text-[11px] text-zinc-500">Unit Price</p>
+                                            <p className="text-sm font-mono text-white">{selected.offer.unitPrice ?? '—'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/[0.03] rounded-lg p-3 flex items-center gap-2">
+                                        <Calendar className="w-3.5 h-3.5 text-zinc-500" />
+                                        <div>
+                                            <p className="text-[11px] text-zinc-500">Maturity</p>
+                                            <p className="text-sm text-white">{selected.offer.maturityDate ? new Date(selected.offer.maturityDate).toLocaleDateString() : '—'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/[0.03] rounded-lg p-3 flex items-center gap-2">
+                                        <Users className="w-3.5 h-3.5 text-zinc-500" />
+                                        <div>
+                                            <p className="text-[11px] text-zinc-500">Investors</p>
+                                            <p className="text-sm text-white">{selected.offer.investmentCount ?? 0}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/[0.03] rounded-lg p-3 flex items-center gap-2">
+                                        {selected.offer.isTokenLocked ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Unlock className="w-3.5 h-3.5 text-emerald-400" />}
+                                        <div>
+                                            <p className="text-[11px] text-zinc-500">Token</p>
+                                            <p className="text-sm text-white">{selected.offer.isTokenLocked ? 'Locked' : 'Unlocked'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/[0.03] rounded-lg p-3 flex items-center gap-2">
+                                        <DollarSign className="w-3.5 h-3.5 text-zinc-500" />
+                                        <div>
+                                            <p className="text-[11px] text-zinc-500">Total Supply</p>
+                                            <p className="text-sm font-mono text-white">{Number(selected.offer.totalSupply || 0).toLocaleString()}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Description */}
+                                {selected.offer.description && (
+                                    <div className="bg-white/[0.02] rounded-lg p-3 border border-white/[0.04]">
+                                        <p className="text-[11px] text-zinc-500 mb-1">Description</p>
+                                        <p className="text-sm text-zinc-300 line-clamp-3">{selected.offer.description}</p>
+                                    </div>
+                                )}
 
                                 {/* Contract ID + Explorer */}
                                 {selected.offer.sorobanContractId && (

@@ -851,7 +851,7 @@ export function Approvals() {
                     }
                 }}
             >
-                <DialogContent className="bg-slate-900 border-white/10 max-w-lg">
+                <DialogContent className="bg-slate-900 border-white/10 max-w-lg overflow-hidden">
                     {signingResult && (
                         <>
                             <DialogHeader className="items-center text-center">
@@ -916,15 +916,15 @@ export function Approvals() {
 
                                 {/* TX hash + Stellar Expert link */}
                                 {signingResult.txHash && (
-                                    <div className="p-3 rounded-lg bg-white/5 border border-white/10 space-y-2">
+                                    <div className="p-3 rounded-lg bg-white/5 border border-white/10 space-y-2 overflow-hidden">
                                         <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-medium">Transaction Hash</span>
                                         <a
                                             href={getStellarExplorerTxUrl(signingResult.txHash)}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex items-center gap-2 group"
+                                            className="flex items-center gap-2 group min-w-0 overflow-hidden"
                                         >
-                                            <code className="text-xs text-emerald-400 font-mono truncate flex-1">
+                                            <code className="text-xs text-emerald-400 font-mono truncate min-w-0 flex-1 break-all">
                                                 {signingResult.txHash}
                                             </code>
                                             <ExternalLink className="w-3.5 h-3.5 text-zinc-500 group-hover:text-emerald-400 transition-colors shrink-0" />

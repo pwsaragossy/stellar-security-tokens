@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
     Search,
     Loader2,
@@ -21,6 +21,8 @@ import { formatCurrency } from '@/utils/format';
 import { TransactionLink } from '@/components/ui/TransactionLink';
 import { TokenManagementModal } from '@/components/admin/TokenManagementModal';
 import { toast } from 'sonner';
+import { RelatedEntities } from '@/components/admin/RelatedEntities';
+import { useAutoSelect } from '@/hooks/useAdminNavigation';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -79,6 +81,13 @@ export function TokensPage() {
             else setSelected(null);
         }
     }, [tokens]);
+
+    // Auto-select from URL ?id= param (for cross-navigation)
+    const handleAutoSelect = useCallback((id: number) => {
+        const token = tokens.find(t => t.id === id);
+        if (token) setSelected(token);
+    }, [tokens]);
+    useAutoSelect(handleAutoSelect);
 
     const filteredTokens = tokens.filter(token =>
         token.assetCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -284,6 +293,13 @@ export function TokensPage() {
                                     )}
                                 </div>
 
+                                {/* Cross-links */}
+                                <RelatedEntities items={[
+                                    ...(selected.offer?.company ? [{ tab: 'companies' as const, id: (selected.offer as any).company.id, label: (selected.offer as any).company.name }] : []),
+                                    ...(selected.offer ? [{ tab: 'offers' as const, id: selected.offer.id, label: (selected.offer as any).offer_name || (selected.offer as any).offerName || selected.assetCode }] : []),
+                                    ...((selected.offer as any)?.sorobanContractId ? [{ tab: 'contracts' as const, id: selected.offer!.id, label: `${(selected.offer as any).sorobanContractId.slice(0, 12)}…` }] : []),
+                                ]} />
+
                                 {/* Info grid */}
                                 <div className="grid grid-cols-4 gap-3">
                                     <div className="bg-white/[0.03] rounded-lg p-3">
@@ -306,6 +322,26 @@ export function TokensPage() {
                                         <p className="text-[11px] text-zinc-500 mb-1">Maturity</p>
                                         <p className="text-sm font-medium text-white">
                                             {selected.offer?.maturity_date ? formatDate(selected.offer.maturity_date as string) : '—'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Company & Offer type */}
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div className="bg-white/[0.03] rounded-lg p-3">
+                                        <p className="text-[11px] text-zinc-500 mb-1">Company</p>
+                                        <p className="text-sm text-white truncate">{(selected.offer as any)?.company?.name || '—'}</p>
+                                    </div>
+                                    <div className="bg-white/[0.03] rounded-lg p-3">
+                                        <p className="text-[11px] text-zinc-500 mb-1">Type</p>
+                                        <p className="text-sm text-white capitalize">{selected.offer?.offer_type?.replace('_', ' ') || '—'}</p>
+                                    </div>
+                                    <div className="bg-white/[0.03] rounded-lg p-3">
+                                        <p className="text-[11px] text-zinc-500 mb-1">Contract</p>
+                                        <p className="text-sm text-white">
+                                            {(selected.offer as any)?.sorobanContractId
+                                                ? <code className="text-xs font-mono text-blue-300">{(selected.offer as any).sorobanContractId.slice(0, 12)}…</code>
+                                                : '—'}
                                         </p>
                                     </div>
                                 </div>

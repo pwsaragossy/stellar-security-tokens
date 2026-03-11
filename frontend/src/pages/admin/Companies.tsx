@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
     Building2,
     Search,
@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import api from '@/api/client';
+import { useAutoSelect, useAdminNavigation } from '@/hooks/useAdminNavigation';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -45,8 +46,28 @@ interface Company {
 }
 
 interface CompanyDetails extends Company {
+    email?: string;
+    legalRepresentative?: string;
+    phone?: string;
+    address?: string;
     balances?: { xlm: string; usdc: string };
-    offers: Array<{ id: number; name: string; status: string; totalAmount: number }>;
+    totalOfferCount?: number;
+    totalInvestmentVolume?: string;
+    offers: Array<{
+        id: number;
+        offerName?: string;
+        name?: string;
+        assetCode?: string;
+        status: string;
+        totalSupply?: number;
+        totalAmount?: number;
+        annualInterestRate?: number;
+        maturityDate?: string;
+        sorobanContractId?: string;
+        offerType?: string;
+        tokens?: Array<{ id: number; assetCode: string; sacContractId?: string }>;
+        _count?: { investments: number };
+    }>;
 }
 
 type FilterKey = 'all' | 'pending' | 'approved' | 'suspended' | 'rejected';
@@ -159,6 +180,15 @@ export function Companies() {
             if (!updated) setSelected(null);
         }
     }, [companies]);
+
+    // Auto-select from URL ?id= param (for cross-navigation)
+    const handleAutoSelect = useCallback((id: number) => {
+        const company = companies.find(c => c.id === id);
+        if (company) loadDetails(company);
+    }, [companies]);
+    useAutoSelect(handleAutoSelect);
+
+    const { navigateTo } = useAdminNavigation();
 
     // ─── Actions ──────────────────────────────────────────────────────────
 
@@ -404,12 +434,40 @@ export function Companies() {
                                             </div>
                                             <div className="bg-white/[0.03] rounded-lg p-3">
                                                 <p className="text-[11px] text-zinc-500 mb-1">Total Investments</p>
-                                                <p className="text-lg font-semibold text-white">{selected.totalInvestments}</p>
+                                                <p className="text-lg font-semibold text-white">{selected.totalInvestments ?? 0}</p>
                                             </div>
                                             <div className="bg-white/[0.03] rounded-lg p-3">
                                                 <p className="text-[11px] text-zinc-500 mb-1">Registered</p>
                                                 <p className="text-sm font-medium text-white">{formatDate(selected.createdAt)}</p>
                                             </div>
+                                        </div>
+
+                                        {/* Extra info */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {selected.email && (
+                                                <div className="bg-white/[0.03] rounded-lg p-3">
+                                                    <p className="text-[11px] text-zinc-500 mb-1">Email</p>
+                                                    <p className="text-sm text-white truncate">{selected.email}</p>
+                                                </div>
+                                            )}
+                                            {selected.legalRepresentative && (
+                                                <div className="bg-white/[0.03] rounded-lg p-3">
+                                                    <p className="text-[11px] text-zinc-500 mb-1">Legal Rep</p>
+                                                    <p className="text-sm text-white truncate">{selected.legalRepresentative}</p>
+                                                </div>
+                                            )}
+                                            {selected.phone && (
+                                                <div className="bg-white/[0.03] rounded-lg p-3">
+                                                    <p className="text-[11px] text-zinc-500 mb-1">Phone</p>
+                                                    <p className="text-sm text-white">{selected.phone}</p>
+                                                </div>
+                                            )}
+                                            {selected.totalInvestmentVolume && selected.totalInvestmentVolume !== '0' && (
+                                                <div className="bg-white/[0.03] rounded-lg p-3">
+                                                    <p className="text-[11px] text-zinc-500 mb-1">Investment Volume</p>
+                                                    <p className="text-sm font-mono text-emerald-400">${Number(selected.totalInvestmentVolume).toLocaleString()}</p>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Wallet section */}
@@ -481,11 +539,27 @@ export function Companies() {
                                                 </h4>
                                                 <div className="space-y-1">
                                                     {selected.offers.map((offer) => (
-                                                        <div key={offer.id} className="flex items-center justify-between p-2 bg-white/[0.03] rounded text-xs">
-                                                            <span className="text-white">{offer.name}</span>
-                                                            <span className="text-emerald-400">${offer.totalAmount?.toLocaleString()}</span>
-                                                            <Badge variant="outline" className="text-[10px] h-5">{offer.status}</Badge>
-                                                        </div>
+                                                        <button
+                                                            key={offer.id}
+                                                            onClick={() => navigateTo('offers', offer.id)}
+                                                            className="w-full text-left flex items-center justify-between p-2 bg-white/[0.03] rounded text-xs hover:bg-white/[0.06] transition-colors group"
+                                                        >
+                                                            <div className="min-w-0 flex-1">
+                                                                <span className="text-white group-hover:text-blue-300 transition-colors">{offer.offerName || offer.name}</span>
+                                                                {offer.assetCode && (
+                                                                    <span className="text-zinc-500 ml-1.5 font-mono text-[10px]">{offer.assetCode}</span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                {offer._count?.investments != null && (
+                                                                    <span className="text-zinc-500 text-[10px]">{offer._count.investments} inv</span>
+                                                                )}
+                                                                <span className="text-emerald-400">
+                                                                    {offer.totalSupply ? `$${Number(offer.totalSupply).toLocaleString()}` : offer.totalAmount ? `$${offer.totalAmount.toLocaleString()}` : ''}
+                                                                </span>
+                                                                <Badge variant="outline" className="text-[10px] h-5">{offer.status}</Badge>
+                                                            </div>
+                                                        </button>
                                                     ))}
                                                 </div>
                                             </div>
