@@ -15,10 +15,16 @@ const log = logger.scope('ContractCtrl');
 // ─── Helpers ───
 
 /** Resolve offerId → offer with sorobanContractId or throw 404 */
-async function resolveContract(offerId) {
+async function resolveContract(offerId, { rich = false } = {}) {
+    const include = rich ? {
+        tokens: true,
+        company: { select: { id: true, name: true, cnpj: true, stellarContractId: true } },
+        _count: { select: { investments: true } },
+    } : { tokens: true };
+
     const offer = await prisma.offer.findUnique({
         where: { id: parseInt(offerId) },
-        include: { tokens: true },
+        include,
     });
     if (!offer) {
         const err = new Error('Offer not found');
@@ -97,7 +103,7 @@ export class ContractController {
     /** GET /api/admin/contracts/:offerId */
     static async detail(req, res, next) {
         try {
-            const offer = await resolveContract(req.params.offerId);
+            const offer = await resolveContract(req.params.offerId, { rich: true });
             const contractId = offer.sorobanContractId;
 
             // Parallel on-chain queries
@@ -107,20 +113,40 @@ export class ContractController {
                 SorobanSaleService.getVersion(contractId).catch(() => null),
             ]);
 
+            const token = offer.tokens?.[0] || null;
+
             // BigInt-safe serialization (Soroban RPC returns BigInts)
             const payload = {
                 offer: {
                     id: offer.id,
-                    name: offer.offerName,
+                    offerName: offer.offerName,
                     assetCode: offer.assetCode,
                     sorobanContractId: contractId,
                     sorobanInitStatus: offer.sorobanInitStatus,
                     sorobanInitError: offer.sorobanInitError,
                     status: offer.status,
                     unitPrice: offer.unitPrice,
-                    totalTokens: offer.totalSupply,
-                    sacContractId: offer.tokens?.[0]?.sacContractId || null,
+                    totalSupply: offer.totalSupply,
+                    sacContractId: token?.sacContractId || null,
+                    // Enriched fields
+                    offerType: offer.offerType,
+                    paymentType: offer.paymentType,
+                    annualInterestRate: offer.annualInterestRate,
+                    maturityDate: offer.maturityDate,
+                    description: offer.description,
+                    isTokenLocked: offer.isTokenLocked,
+                    createdAt: offer.createdAt,
+                    investmentCount: offer._count?.investments || 0,
                 },
+                company: offer.company || null,
+                token: token ? {
+                    id: token.id,
+                    assetCode: token.assetCode,
+                    sacContractId: token.sacContractId,
+                    issuerPublicKey: token.issuerPublicKey,
+                    totalSupply: token.totalSupply,
+                    issuanceTransactionHash: token.issuanceTransactionHash,
+                } : null,
                 onChain: {
                     offer: onChainOffer,
                     balance: balance?.toString() || '0',

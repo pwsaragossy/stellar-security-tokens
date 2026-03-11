@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
     Users,
     Search,
@@ -28,6 +28,7 @@ import {
 import { toast } from 'sonner';
 import api from '@/api/client';
 import { platformAdminsApi } from '@/api/platformAdmins';
+import { useAutoSelect, useAdminNavigation } from '@/hooks/useAdminNavigation';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -43,8 +44,26 @@ interface Investor {
 
 interface InvestorDetails extends Investor {
     stellarContractId?: string;
+    emailVerified?: boolean;
+    lastLogin?: string;
     balances?: { xlm: string; usdc: string };
     transactions?: Array<{ hash: string; type: string; amount: string; date: string }>;
+    investments?: Array<{
+        id: number;
+        usdcAmount: string;
+        tokenAmount?: string;
+        assetCode?: string;
+        status: string;
+        createdAt: string;
+        offer?: {
+            id: number;
+            offerName: string;
+            assetCode?: string;
+            company?: { id: number; name: string };
+        };
+    }>;
+    totalInvestedAmount?: string;
+    investmentCount?: number;
 }
 
 type FilterStatus = 'all' | 'pending' | 'approved' | 'rejected';
@@ -159,6 +178,15 @@ export function UserManagement() {
             if (!updated) setSelected(null);
         }
     }, [investors]);
+
+    // Auto-select from URL ?id= param (for cross-navigation)
+    const handleAutoSelect = useCallback((id: number) => {
+        const investor = investors.find(i => i.id === id);
+        if (investor) loadDetails(investor);
+    }, [investors]);
+    useAutoSelect(handleAutoSelect);
+
+    const { navigateTo } = useAdminNavigation();
 
     // ─── Actions ──────────────────────────────────────────────────────────
 
@@ -452,6 +480,30 @@ export function UserManagement() {
                                                         {formatDate(selected.createdAt)}
                                                     </dd>
                                                 </div>
+                                                {selected.emailVerified != null && (
+                                                    <div>
+                                                        <dt className="text-[11px] text-zinc-500">Email Verified</dt>
+                                                        <dd className="text-sm mt-0.5">{selected.emailVerified ? '✅ Yes' : '❌ No'}</dd>
+                                                    </div>
+                                                )}
+                                                {selected.lastLogin && (
+                                                    <div>
+                                                        <dt className="text-[11px] text-zinc-500">Last Login</dt>
+                                                        <dd className="text-sm text-white mt-0.5">{formatDate(selected.lastLogin)}</dd>
+                                                    </div>
+                                                )}
+                                                {selected.totalInvestedAmount && selected.totalInvestedAmount !== '0' && (
+                                                    <div>
+                                                        <dt className="text-[11px] text-zinc-500">Total Invested</dt>
+                                                        <dd className="text-sm font-mono text-emerald-400 mt-0.5">${Number(selected.totalInvestedAmount).toLocaleString()}</dd>
+                                                    </div>
+                                                )}
+                                                {selected.investmentCount != null && selected.investmentCount > 0 && (
+                                                    <div>
+                                                        <dt className="text-[11px] text-zinc-500">Investments</dt>
+                                                        <dd className="text-sm text-white mt-0.5">{selected.investmentCount}</dd>
+                                                    </div>
+                                                )}
                                             </div>
                                         </section>
 
@@ -501,8 +553,41 @@ export function UserManagement() {
                                             )}
                                         </section>
 
-                                        {/* Transactions section */}
-                                        {selected.transactions && selected.transactions.length > 0 && (
+                                        {/* Investments section — enriched with cross-links */}
+                                        {selected.investments && selected.investments.length > 0 && (
+                                            <section>
+                                                <h4 className="text-[11px] text-zinc-500 uppercase tracking-wider font-medium mb-3 flex items-center gap-1.5">
+                                                    <History className="w-3 h-3" />
+                                                    Investments ({selected.investments.length})
+                                                </h4>
+                                                <div className="space-y-1 max-h-64 overflow-y-auto">
+                                                    {selected.investments.map((inv) => (
+                                                        <button
+                                                            key={inv.id}
+                                                            onClick={() => inv.offer?.id && navigateTo('offers', inv.offer.id)}
+                                                            className="w-full text-left grid grid-cols-[1fr_80px_60px] gap-2 items-center px-2 py-1.5 text-xs rounded hover:bg-white/[0.06] transition-colors group"
+                                                        >
+                                                            <div className="min-w-0">
+                                                                <span className="text-white group-hover:text-blue-300 transition-colors">
+                                                                    {inv.offer?.offerName || 'Investment'}
+                                                                </span>
+                                                                {inv.offer?.company?.name && (
+                                                                    <span className="text-zinc-500 text-[10px] ml-1">· {inv.offer.company.name}</span>
+                                                                )}
+                                                                {inv.assetCode && (
+                                                                    <span className="text-zinc-600 text-[10px] ml-1 font-mono">{inv.assetCode}</span>
+                                                                )}
+                                                            </div>
+                                                            <span className="text-emerald-400 text-right font-mono">${Number(inv.usdcAmount).toLocaleString()}</span>
+                                                            <span className="text-zinc-600 text-right">{new Date(inv.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </section>
+                                        )}
+
+                                        {/* Legacy transactions section (backward compat) */}
+                                        {(!selected.investments || selected.investments.length === 0) && selected.transactions && selected.transactions.length > 0 && (
                                             <section>
                                                 <h4 className="text-[11px] text-zinc-500 uppercase tracking-wider font-medium mb-3 flex items-center gap-1.5">
                                                     <History className="w-3 h-3" />
