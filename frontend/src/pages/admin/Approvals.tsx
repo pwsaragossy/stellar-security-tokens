@@ -851,7 +851,7 @@ export function Approvals() {
                     }
                 }}
             >
-                <DialogContent className="bg-slate-900 border-white/10 max-w-lg overflow-hidden">
+                <DialogContent className="bg-slate-900 border-white/10 max-w-2xl overflow-hidden">
                     {signingResult && (
                         <>
                             <DialogHeader className="items-center text-center">
