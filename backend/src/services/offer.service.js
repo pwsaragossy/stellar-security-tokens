@@ -319,6 +319,11 @@ export class OfferService {
       throw new Error('Token must be issued before activating offer');
     }
 
+    // SAC must be deployed before sale contract can reference it
+    if (!token.sacContractId) {
+      throw new Error('Token SAC not deployed — issue the token first (SAC deploy must be signed)');
+    }
+
     if (offer.status !== 'approved') {
       throw new Error('Offer must be approved before activation');
     }

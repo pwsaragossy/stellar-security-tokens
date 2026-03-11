@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import {
     Search,
     Loader2,
@@ -7,14 +6,12 @@ import {
     Building2,
     DollarSign,
     Check,
-    X,
     Copy,
     Clock,
     RefreshCw,
     Inbox,
     AlertTriangle,
     Rocket,
-    Play,
     ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -28,7 +25,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { TransactionLink } from '@/components/ui/TransactionLink';
+
 import { toast } from 'sonner';
 import api from '@/api/client';
 import { offersApi } from '@/api/offers';
@@ -36,14 +33,12 @@ import type { Offer } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
-type ActionType = 'approve' | 'reject' | 'issue' | 'activate' | 'verify' | null;
-type StatusFilter = 'all' | 'pending_review' | 'approved' | 'active' | 'rejected' | 'closed';
+type ActionType = 'issue' | 'activate' | 'verify' | null;
+type StatusFilter = 'all' | 'approved' | 'active' | 'rejected' | 'closed';
 
 // ─── Design tokens ────────────────────────────────────────────────────────
 
 const STATUS_DOT: Record<string, string> = {
-    pending_review: 'bg-amber-400',
-    under_review: 'bg-amber-400',
     approved: 'bg-blue-400',
     active: 'bg-emerald-400',
     rejected: 'bg-red-400',
@@ -53,8 +48,6 @@ const STATUS_DOT: Record<string, string> = {
 };
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
-    pending_review: { label: 'Under Review', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
-    under_review: { label: 'Under Review', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
     approved: { label: 'Approved', className: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
     active: { label: 'Active', className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
     rejected: { label: 'Declined', className: 'bg-red-500/15 text-red-400 border-red-500/30' },
@@ -65,7 +58,6 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
 
 const FILTER_CONFIG: { key: StatusFilter; label: string }[] = [
     { key: 'all', label: 'All' },
-    { key: 'pending_review', label: 'Pending' },
     { key: 'approved', label: 'Approved' },
     { key: 'active', label: 'Active' },
     { key: 'rejected', label: 'Declined' },
@@ -90,7 +82,6 @@ export function AdminOffers() {
     const [offers, setOffers] = useState<Offer[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState<React.ReactNode | string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
@@ -99,7 +90,6 @@ export function AdminOffers() {
 
     // Action dialog state
     const [actionDialog, setActionDialog] = useState<{ type: ActionType; offer: Offer | null }>({ type: null, offer: null });
-    const [rejectionReason, setRejectionReason] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // ─── Data loading ─────────────────────────────────────────────────────
@@ -113,14 +103,18 @@ export function AdminOffers() {
             ]);
 
             if (offersResponse.success && offersResponse.data) {
-                setOffers(offersResponse.data);
+                // Exclude pending offers — those are handled in the Approvals tab
+                const nonPendingOffers = offersResponse.data.filter(
+                    (o: Offer) => !['pending_review', 'under_review'].includes(o.status)
+                );
+                setOffers(nonPendingOffers);
             } else {
                 setError(offersResponse.error || 'Failed to load offers');
             }
 
             if (pendingResponse.data.success) {
                 const issuingOfferIds = pendingResponse.data.data.transactions
-                    .filter((tx: any) => tx.operationType === 'token_issue')
+                    .filter((tx: any) => ['token_issue', 'sac_deploy', 'sale_deploy', 'sale_create', 'contract_deposit_auth', 'contract_deposit_transfer', 'contract_resume'].includes(tx.operationType))
                     .map((tx: any) => tx.metadata?.offerId)
                     .filter(Boolean);
                 setPendingIssuances(issuingOfferIds);
@@ -149,14 +143,10 @@ export function AdminOffers() {
 
     // ─── Actions ──────────────────────────────────────────────────────────
 
-    const openAction = (offer: Offer, type: ActionType) => {
-        setActionDialog({ type, offer });
-        setRejectionReason('');
-    };
+
 
     const closeAction = () => {
         setActionDialog({ type: null, offer: null });
-        setRejectionReason('');
     };
 
     const handleAction = async () => {
@@ -164,15 +154,10 @@ export function AdminOffers() {
         if (!offer || !type) return;
         setIsSubmitting(true);
         setError(null);
-        setSuccess(null);
 
         try {
             let response;
-            if (type === 'approve') {
-                response = await offersApi.review(offer.id, { status: 'approved' });
-            } else if (type === 'reject') {
-                response = await offersApi.review(offer.id, { status: 'rejected', rejection_reason: rejectionReason });
-            } else if (type === 'issue') {
+            if (type === 'issue') {
                 response = await offersApi.issueToken(offer.id);
             } else if (type === 'activate') {
                 response = await offersApi.activate(offer.id);
@@ -181,35 +166,7 @@ export function AdminOffers() {
             }
 
             if (response && response.success) {
-                if (type === 'issue' && (response.data?.status === 'pending_multisig' || (response as any).status === 'pending_multisig')) {
-                    setSuccess(
-                        <div className="flex flex-col gap-1 text-left">
-                            <span>Token issuance request queued for MultiSig approval</span>
-                            <Link to="/admin/approvals" className="text-emerald-400 underline font-bold hover:text-emerald-300">
-                                Go to Transaction Queue →
-                            </Link>
-                        </div>
-                    );
-                    setPendingIssuances((prev) => [...prev, offer.id]);
-                } else if (type === 'issue') {
-                    const txHash =
-                        (response.data as any)?.stellar_transaction?.transactionHash ||
-                        response.data?.transactionHash ||
-                        (response as any).transactionHash;
-                    setSuccess(
-                        <div className="flex flex-col gap-1 text-left">
-                            <span>Token issued successfully</span>
-                            {txHash && (
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-xs text-emerald-300">View transaction:</span>
-                                    <TransactionLink hash={txHash} label="Stellar Expert" variant="link" className="text-emerald-400 underline h-auto p-0 font-bold hover:text-emerald-300 text-xs" />
-                                </div>
-                            )}
-                        </div>
-                    );
-                } else {
-                    toast.success(`Offer ${type}d successfully`);
-                }
+                toast.success(`Offer ${type}d successfully`);
                 await loadOffers();
                 closeAction();
             } else {
@@ -226,13 +183,12 @@ export function AdminOffers() {
 
     const filteredOffers = offers.filter((offer) => {
         const matchesSearch = offer.offer_name?.toLowerCase().includes(searchTerm.toLowerCase()) || offer.asset_code?.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesStatus = statusFilter === 'all' || offer.status === statusFilter || (statusFilter === 'pending_review' && offer.status === 'under_review');
+        const matchesStatus = statusFilter === 'all' || offer.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
 
     const counts: Record<StatusFilter, number> = {
         all: offers.length,
-        pending_review: offers.filter((o) => o.status === 'pending_review' || o.status === 'under_review').length,
         approved: offers.filter((o) => o.status === 'approved').length,
         active: offers.filter((o) => o.status === 'active').length,
         rejected: offers.filter((o) => o.status === 'rejected').length,
@@ -288,13 +244,7 @@ export function AdminOffers() {
                     <Button variant="ghost" size="sm" onClick={() => setError(null)} className="h-6 px-2 text-xs hover:bg-white/10">Dismiss</Button>
                 </div>
             )}
-            {success && (
-                <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 text-sm flex items-center gap-2">
-                    <Check className="w-4 h-4 shrink-0" />
-                    <span className="flex-1">{success}</span>
-                    <Button variant="ghost" size="sm" onClick={() => setSuccess(null)} className="h-6 px-2 text-xs hover:bg-white/10">Dismiss</Button>
-                </div>
-            )}
+
 
             {/* Split pane */}
             <div className="grid grid-cols-[minmax(420px,2fr)_3fr] gap-4 min-h-[calc(100vh-220px)]">
@@ -484,36 +434,6 @@ export function AdminOffers() {
 
                             {/* Action footer */}
                             <div className="border-t border-white/[0.06] px-5 py-3 flex items-center gap-2">
-                                {(selected.status === 'pending_review' || selected.status === 'under_review') && (
-                                    <>
-                                        <Button size="sm" onClick={() => openAction(selected, 'approve')} disabled={isSubmitting} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
-                                            <Check className="w-3.5 h-3.5" /> Approve
-                                        </Button>
-                                        <Button size="sm" variant="outline" onClick={() => openAction(selected, 'reject')} disabled={isSubmitting} className="gap-1.5 border-red-500/30 text-red-400 hover:bg-red-500/10">
-                                            <X className="w-3.5 h-3.5" /> Decline
-                                        </Button>
-                                    </>
-                                )}
-                                {selected.status === 'approved' && !pendingIssuances.includes(selected.id) && !selected.token && (
-                                    <Button size="sm" onClick={() => openAction(selected, 'issue')} disabled={isSubmitting} className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white">
-                                        <DollarSign className="w-3.5 h-3.5" /> Issue Token
-                                    </Button>
-                                )}
-                                {selected.token && !(selected.offer_rules as any)?.admin_verified && selected.status !== 'active' && (
-                                    <Button size="sm" onClick={() => openAction(selected, 'verify')} disabled={isSubmitting} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
-                                        <Check className="w-3.5 h-3.5" /> Verify & Enable
-                                    </Button>
-                                )}
-                                {selected.token && (selected.offer_rules as any)?.admin_verified && selected.status !== 'active' && (
-                                    <Button size="sm" onClick={() => openAction(selected, 'activate')} disabled={isSubmitting} className="gap-1.5 bg-primary hover:bg-primary/90 text-white">
-                                        <Play className="w-3.5 h-3.5" /> Activate
-                                    </Button>
-                                )}
-                                {selected.token && selected.status !== 'active' && (
-                                    <Button size="sm" variant="outline" onClick={() => openAction(selected, 'reject')} disabled={isSubmitting} className="gap-1.5 border-red-500/30 text-red-400 hover:bg-red-500/10">
-                                        <X className="w-3.5 h-3.5" /> Revoke
-                                    </Button>
-                                )}
                                 {pendingIssuances.includes(selected.id) && (
                                     <Badge variant="outline" className="bg-blue-500/15 text-blue-400 border-blue-500/30 flex items-center gap-1">
                                         <Clock className="w-3 h-3 animate-pulse" /> Awaiting MultiSig
@@ -537,45 +457,6 @@ export function AdminOffers() {
                 </div>
             </div>
 
-            {/* ── Approve Dialog ── */}
-            <Dialog open={actionDialog.type === 'approve' && !!actionDialog.offer} onOpenChange={() => closeAction()}>
-                <DialogContent className="bg-slate-900 border-white/10 text-white">
-                    <DialogHeader>
-                        <DialogTitle className="text-emerald-400">Approve Offer</DialogTitle>
-                        <DialogDescription>Are you sure you want to approve "{actionDialog.offer?.offer_name}"?</DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={closeAction} className="border-white/10">Cancel</Button>
-                        <Button onClick={handleAction} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700">
-                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
-                            Approve
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* ── Reject Dialog ── */}
-            <Dialog open={actionDialog.type === 'reject' && !!actionDialog.offer} onOpenChange={() => closeAction()}>
-                <DialogContent className="bg-slate-900 border-white/10 text-white">
-                    <DialogHeader>
-                        <DialogTitle className="text-red-400">Decline Offer</DialogTitle>
-                        <DialogDescription>Please provide a reason for declining "{actionDialog.offer?.offer_name}".</DialogDescription>
-                    </DialogHeader>
-                    <Input
-                        placeholder="Reason for rejection..."
-                        value={rejectionReason}
-                        onChange={(e) => setRejectionReason(e.target.value)}
-                        className="bg-black/20 border-white/10"
-                    />
-                    <DialogFooter>
-                        <Button variant="outline" onClick={closeAction} className="border-white/10">Cancel</Button>
-                        <Button onClick={handleAction} disabled={isSubmitting || !rejectionReason} className="bg-red-600 hover:bg-red-700">
-                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <X className="w-4 h-4 mr-2" />}
-                            Decline
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
 
             {/* ── Issue Token Dialog ── */}
             <Dialog open={actionDialog.type === 'issue' && !!actionDialog.offer} onOpenChange={() => closeAction()}>

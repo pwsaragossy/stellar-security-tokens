@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import {
     ArrowLeft,
     FileText,
-    Edit,
     ExternalLink,
     Clock,
     CheckCircle2,
@@ -136,7 +135,7 @@ export function OfferDetails() {
         }
     };
 
-    const canEdit = ['pending_review', 'rejected'].includes(offer.status);
+
     const canLaunch = offer.status === 'approved' && !!offer.token && (offer.offer_rules as any)?.admin_verified;
 
     return (
@@ -176,15 +175,7 @@ export function OfferDetails() {
                             {offer.status === 'matured' ? 'Pay Now - Matured!' : 'Pay Investors'}
                         </Button>
                     )}
-                    {canEdit && (
-                        <Button
-                            onClick={() => navigate(`/company/offers/edit/${offer.id}`)}
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 btn-glow rounded-full"
-                        >
-                            <Edit className="w-4 h-4 mr-2" />
-                            Edit Offer
-                        </Button>
-                    )}
+
                 </div>
             </div>
 

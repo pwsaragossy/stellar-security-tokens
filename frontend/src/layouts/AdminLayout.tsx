@@ -69,9 +69,9 @@ const PAGE_DESCRIPTIONS: Record<string, { title: string, description: string, ke
     },
     '/admin/offers': {
         title: 'Offer Management',
-        description: 'Manage primary market offerings (STOs) and fundraising campaigns.',
+        description: 'Manage approved offerings (STOs) and fundraising campaigns. New offer approvals are in the Approvals tab.',
         keyFeatures: [
-            'Review and approve new token offers',
+            'Track approved, active, and completed offers',
             'Monitor fundraising progress in real-time',
             'Pause or resume offerings if necessary',
             'Finalize or cancel completed campaigns'

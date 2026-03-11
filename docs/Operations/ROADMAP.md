@@ -88,6 +88,9 @@
 ### Multisig Badge
 - [ ] Badge in menu showing pending signature operations
 
+### Edge Cases
+- [ ] **SAC reuse on re-issued asset codes** — When an offer uses an asset code whose SAC already exists on-chain (e.g. re-issuing after a failed/cancelled offer), `deploySACForAsset` throws `Error(Storage, ExistingValue)`. Fix: swap to `ensureSACDeployed` in `reviewOffer()` auto-issue, which checks on-chain first and skips deploy if SAC exists, then chains sale_deploy directly.
+
 ---
 
 ## Phase 6 — Bible as MCP Server (Week 3+)
