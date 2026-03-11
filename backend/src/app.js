@@ -105,7 +105,7 @@ app.use(cors({
 app.use(hpp()); // HTTP Parameter Pollution protection
 app.use(cookieParser());
 app.use(morgan('combined'));
-app.use(express.json({ limit: '100kb' })); // Limit body size to prevent large payload attacks
+app.use(express.json({ limit: '2mb' })); // Soroban passkey-signed XDRs can be 200-500kb
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
 // Strip error.message / details from 5xx responses in production (H-1)
