@@ -30,6 +30,7 @@ export function CompanyLayout() {
     }, [location.pathname]);
 
     useEffect(() => {
+        if (!isAuthenticated) return;
         const fetchCompany = async () => {
             try {
                 const response = await companiesApi.getProfile();
@@ -41,7 +42,7 @@ export function CompanyLayout() {
             }
         };
         fetchCompany();
-    }, []);
+    }, [isAuthenticated]);
 
     // Show loading while restoring session
     if (isLoading) {
