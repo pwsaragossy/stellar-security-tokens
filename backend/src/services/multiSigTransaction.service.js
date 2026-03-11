@@ -529,6 +529,33 @@ export class MultiSigTransactionService {
                     metadata.sacContractId, metadata.from, metadata.contractId, BigInt(metadata.amount)
                 );
                 break;
+            case 'sale_deploy': {
+                const { createHash } = await import('crypto');
+                const { keyManager: km2 } = await import('./KeyManager.js');
+                const { getSaleWasmHash } = await import('../config/stellar.js');
+                const salt = createHash('sha256')
+                    .update(`radox:sale:${metadata.offerId}`)
+                    .digest();
+                result = await SorobanSaleService.buildDeployXdr(
+                    km2.getIssuerPublicKey(),
+                    getSaleWasmHash(),
+                    salt,
+                );
+                break;
+            }
+            case 'sac_deploy': {
+                const { StellarService: StellarSvc } = await import('./stellar.service.js');
+                const { keyManager: km3 } = await import('./KeyManager.js');
+                const issuerPk = km3.getIssuerPublicKey();
+                const { Asset, Operation } = await import('@stellar/stellar-sdk');
+                const { buildTransactionWithAccount } = await import('../utils/stellar.js');
+                const asset = new Asset(metadata.assetCode, issuerPk);
+                const op = Operation.createStellarAssetContract({ asset, source: issuerPk });
+                const account = await StellarSvc.getAccountRPC(issuerPk);
+                let sacTx = buildTransactionWithAccount(account, [op]);
+                sacTx = await StellarSvc.prepareSorobanTransaction(sacTx);
+                return sacTx.toXDR('base64');
+            }
             default:
                 log.warn(`[rebuildSorobanXdr] No rebuild handler for ${tx.operationType}`);
                 return null;
@@ -611,7 +638,47 @@ export class MultiSigTransactionService {
                     break;
 
                 case 'sac_deploy':
-                    // If this SAC deploy is chained to a distribution, queue it now
+                    // ─── Sale flow: update Token, auto-verify offer, auto-chain sale_deploy ───
+                    if (metadata.autoVerifyOffer && metadata.offerId) {
+                        try {
+                            // Update token with SAC contract ID
+                            if (metadata.sacContractId && metadata.tokenId) {
+                                await prisma.token.update({
+                                    where: { id: parseInt(metadata.tokenId) },
+                                    data: { sacContractId: metadata.sacContractId },
+                                });
+                                log.info(`[sac_deploy] Updated token #${metadata.tokenId} with SAC ${metadata.sacContractId}`);
+                            }
+
+                            // Auto-verify the offer
+                            const offer = await prisma.offer.findUnique({
+                                where: { id: parseInt(metadata.offerId) },
+                            });
+                            const currentRules = typeof offer?.offerRules === 'string'
+                                ? JSON.parse(offer.offerRules)
+                                : offer?.offerRules || {};
+                            await prisma.offer.update({
+                                where: { id: parseInt(metadata.offerId) },
+                                data: {
+                                    offerRules: {
+                                        ...currentRules,
+                                        admin_verified: true,
+                                        verified_at: new Date().toISOString(),
+                                    },
+                                },
+                            });
+                            log.info(`[sac_deploy] Offer #${metadata.offerId} auto-verified after SAC deploy`);
+
+                            // Auto-chain sale_deploy → eliminates the manual "Activate" click
+                            const { OfferService } = await import('./offer.service.js');
+                            const activateResult = await OfferService.activateOffer(parseInt(metadata.offerId));
+                            log.info(`[sac_deploy] Auto-chained sale_deploy for offer #${metadata.offerId}`);
+                        } catch (verifyErr) {
+                            log.error(`[sac_deploy] Auto-chain failed: ${verifyErr.message}`);
+                        }
+                    }
+
+                    // ─── Legacy: chain distribution if requested ───
                     if (metadata.chainAction === 'token_distribute' && metadata.investorPublicKey) {
                         try {
                             const { StellarService } = await import('./stellar.service.js');
@@ -635,7 +702,6 @@ export class MultiSigTransactionService {
 
                             if (distResult.status === 'pending_multisig') {
                                 log.info(`Chained distribution queued for multisig (TX #${distResult.multiSigTransactionId})`);
-                                // Update investment to pending_distribution
                                 if (metadata.investmentId) {
                                     const { Investment } = await import('../models/Investment.js');
                                     await Investment.updateStatus(parseInt(metadata.investmentId), {
@@ -648,7 +714,6 @@ export class MultiSigTransactionService {
                                 }
                             } else if (distResult.success) {
                                 log.info(`Chained distribution completed directly: ${distResult.transactionHash}`);
-                                // Direct sign mode — complete the investment
                                 if (metadata.investmentId) {
                                     const { Investment } = await import('../models/Investment.js');
                                     await prisma.tokenDistribution.create({
@@ -1059,7 +1124,33 @@ export class MultiSigTransactionService {
                     break;
 
                 case 'sac_deploy':
-                    // If this SAC deploy was chained to a distribution, fail the linked investment
+                    // Sale flow: clean up orphan Token record + reset offer verification
+                    if (metadata?.autoVerifyOffer && metadata?.offerId) {
+                        // Delete orphan Token record created before SAC deploy
+                        if (metadata.tokenId) {
+                            await prisma.token.delete({
+                                where: { id: parseInt(metadata.tokenId) },
+                            }).catch(() => {}); // Ignore if already deleted
+                            log.info(`[sac_deploy rejection] Deleted orphan token #${metadata.tokenId}`);
+                        }
+
+                        // Reset offer admin_verified flag
+                        const offer = await prisma.offer.findUnique({
+                            where: { id: parseInt(metadata.offerId) },
+                        });
+                        const currentRules = typeof offer?.offerRules === 'string'
+                            ? JSON.parse(offer.offerRules)
+                            : offer?.offerRules || {};
+                        delete currentRules.admin_verified;
+                        delete currentRules.verified_at;
+                        await prisma.offer.update({
+                            where: { id: parseInt(metadata.offerId) },
+                            data: { offerRules: currentRules },
+                        });
+                        log.info(`[sac_deploy rejection] Offer #${metadata.offerId} admin_verified reset`);
+                    }
+
+                    // Legacy: fail linked investment if this was chained to a distribution
                     if (metadata?.investmentId) {
                         const { Investment } = await import('../models/Investment.js');
                         await Investment.updateStatus(parseInt(metadata.investmentId), {
@@ -1072,16 +1163,19 @@ export class MultiSigTransactionService {
 
                 case 'sale_deploy':
                 case 'sale_create':
-                    // Set sorobanInitStatus to 'failed' so admin can retry
+                case 'contract_deposit_auth':
+                case 'contract_deposit_transfer':
+                case 'contract_resume':
+                    // Any rejection in the activation chain → mark Soroban init as failed so admin can retry
                     if (metadata?.offerId) {
                         await prisma.offer.update({
                             where: { id: parseInt(metadata.offerId) },
                             data: {
                                 sorobanInitStatus: 'failed',
-                                sorobanInitError: reason,
+                                sorobanInitError: `${operationType} rejected: ${reason}`,
                             },
                         });
-                        log.info(`Offer #${metadata.offerId} Soroban init → failed (TX #${tx.id})`);
+                        log.info(`Offer #${metadata.offerId} Soroban init → failed (${operationType} TX #${tx.id})`);
                     }
                     break;
 

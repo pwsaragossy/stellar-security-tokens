@@ -748,9 +748,52 @@ export class OfferController {
         );
       }
 
+      // ─── Auto-issue on approval: create Token DB + queue SAC deploy ───
+      let autoIssueResult = null;
+      if (status === 'approved') {
+        try {
+          const issuerPublicKey = process.env.STELLAR_ISSUER_PUBLIC_KEY || process.env.ISSUER_PUBLIC_KEY;
+          if (issuerPublicKey) {
+            const { StellarService } = await import('../services/stellar.service.js');
+
+            // Create Token DB record
+            const token = await OfferService.issueTokenFromOffer(
+              parseInt(id),
+              req.user.userId,
+              issuerPublicKey
+            );
+            log.info(`[reviewOffer] Auto-issued token for ${updatedOffer.assetCode} (id=${token.id})`);
+
+            // Deploy SAC via multisig (chains the entire pipeline)
+            const sacResult = await StellarService.deploySACForAsset(
+              updatedOffer.assetCode,
+              issuerPublicKey,
+              {
+                offerId: parseInt(id),
+                tokenId: token.id,
+                assetCode: updatedOffer.assetCode,
+                autoVerifyOffer: true,
+              }
+            );
+
+            autoIssueResult = {
+              tokenId: token.id,
+              sacContractId: sacResult.sacContractId,
+              multiSigTransactionId: sacResult.multiSigTransactionId,
+              status: sacResult.status,
+            };
+            log.info(`[reviewOffer] SAC deploy queued for ${updatedOffer.assetCode}`);
+          }
+        } catch (issueErr) {
+          log.warn(`[reviewOffer] Auto-issue failed: ${issueErr.message}. Admin can issue manually.`);
+          autoIssueResult = { error: issueErr.message };
+        }
+      }
+
       res.json({
         success: true,
         data: OfferController.formatOfferForResponse(updatedOffer),
+        autoIssueResult,
       });
     } catch (error) {
       log.error('Error reviewing offer:', error);
@@ -836,7 +879,7 @@ export class OfferController {
       // PHASE 2.4: Prevent duplicate proposals in queue
       const pendingTx = await prisma.multiSigTransaction.findFirst({
         where: {
-          operationType: 'token_issue',
+          operationType: { in: ['token_issue', 'sac_deploy'] },
           status: 'pending',
           metadata: {
             path: ['assetCode'],
@@ -852,80 +895,83 @@ export class OfferController {
         });
       }
 
-      // Emitir token usando o serviço
       const issuerPublicKey = process.env.STELLAR_ISSUER_PUBLIC_KEY || process.env.ISSUER_PUBLIC_KEY;
       if (!issuerPublicKey) {
         return res.status(500).json({
           success: false,
-          error: 'Stellar issuer public key not configured (STELLAR_ISSUER_PUBLIC_KEY or ISSUER_PUBLIC_KEY)',
+          error: 'Stellar issuer public key not configured',
         });
       }
 
-      // Verificar documentos IPFS
-      const legalDocuments = offer.legalDocuments || {};
-      // Skip IPFS validation for now, focus on upload functionality
+      // ─── Sale-bound offers: skip useless token_issue TX ───
+      // With forSaleContract, the classic TX only re-asserts flags (no-op).
+      // Instead: create Token DB record directly → deploy SAC via multisig.
+      // This eliminates 1 Freighter sign from the pipeline.
 
-      // Configurar home domain se disponível
-      const homeDomain = process.env.STELLAR_HOME_DOMAIN || null;
-
-      // Emitir token no Stellar com home domain
-      const tokenResult = await StellarService.issueSecurityToken(
-        offer.assetCode,
-        offer.totalSupply.toString(),
-        {
-          homeDomain,
-          offerId: offer.id,
-          description: offer.description,
-          forSaleContract: true,
-        }
-      );
-
-      // PHASE 2.3: Defer DB update if MultiSig is required
-      if (tokenResult.status === 'pending_multisig') {
-        return res.status(202).json({
-          success: true,
-          status: 'pending_multisig',
-          message: 'Token issuance queued for MultiSig approval',
-          data: tokenResult
-        });
-      }
-
-      // Criar registro no banco usando o serviço (Immediate execution path)
+      // 1. Create Token DB record directly
       const token = await OfferService.issueTokenFromOffer(
         offer.id,
         req.user.userId,
+        issuerPublicKey
+      );
+      log.info(`[issueToken] Token DB record created for ${offer.assetCode} (id=${token.id})`);
+
+      // 2. Deploy SAC via multisig (still requires Freighter sign)
+      const sacResult = await StellarService.deploySACForAsset(
+        offer.assetCode,
         issuerPublicKey,
-        tokenResult.transactionHash
+        {
+          offerId: offer.id,
+          tokenId: token.id,
+          assetCode: offer.assetCode,
+          autoVerifyOffer: true,
+        }
       );
 
-      // Generate stellar.toml content for this asset (served dynamically via TomlService)
-      if (homeDomain && Object.keys(legalDocuments).length > 0) {
-        try {
-          // This generates the TOML content for logging/debugging purposes.
-          // The actual stellar.toml is served dynamically at /.well-known/stellar.toml
-          // by TomlService.generateToml() which reads all tokens from the database.
-          const tomlContent = StellarTomlService.generateToml({
-            code: offer.assetCode,
-            issuer: issuerPublicKey,
-            name: offer.offerName,
-            description: offer.description,
-            ipfsDocuments: legalDocuments,
-            conditions: {
-              annual_interest_rate: offer.annualInterestRate,
-              ...offer.offerRules,
-            },
-          });
-          log.debug(`Generated stellar.toml content for ${offer.assetCode}`, { tomlLength: tomlContent.length });
-        } catch (error) {
-          log.warn('Failed to generate stellar.toml preview:', error.message);
-        }
+      if (sacResult.status === 'pending_multisig') {
+        return res.status(202).json({
+          success: true,
+          status: 'pending_multisig',
+          message: 'SAC deployment queued for approval — sign to continue the issuance pipeline',
+          data: {
+            multiSigTransactionId: sacResult.multiSigTransactionId,
+            sacContractId: sacResult.sacContractId,
+            tokenId: token.id,
+            assetCode: offer.assetCode,
+          },
+        });
       }
+
+      // Env mode (direct signing): SAC deployed immediately, update token record
+      if (sacResult.sacContractId) {
+        const prisma = (await import('../config/prisma.js')).default;
+        await prisma.token.update({
+          where: { id: token.id },
+          data: { sacContractId: sacResult.sacContractId },
+        });
+      }
+
+      // Auto-verify the offer
+      const prismaClient = (await import('../config/prisma.js')).default;
+      const currentRules = typeof offer.offerRules === 'string'
+        ? JSON.parse(offer.offerRules)
+        : offer.offerRules || {};
+      await prismaClient.offer.update({
+        where: { id: offer.id },
+        data: {
+          offerRules: {
+            ...currentRules,
+            admin_verified: true,
+            verified_at: new Date().toISOString(),
+          },
+        },
+      });
 
       res.status(201).json({
         success: true,
         data: {
           token,
-          stellar_transaction: tokenResult,
+          sacContractId: sacResult.sacContractId,
         },
       });
     } catch (error) {

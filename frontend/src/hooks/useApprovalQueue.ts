@@ -107,61 +107,6 @@ function normalizeOffers(offers: Offer[]): ApprovalItem[] {
         }));
 }
 
-function normalizeIssuances(offers: Offer[], pendingIssuanceIds: number[]): ApprovalItem[] {
-    const items: ApprovalItem[] = [];
-
-    for (const offer of offers) {
-        if (offer.status !== 'approved') continue;
-
-        const hasToken = !!(offer as any).token;
-        const isVerified = !!(offer as any).offer_rules?.admin_verified;
-        const isIssuing = pendingIssuanceIds.includes(offer.id);
-
-        if (!hasToken && !isIssuing) {
-            // Step 2: Approved, needs token issuance
-            items.push({
-                id: `issuance-${offer.id}`,
-                originalId: offer.id,
-                type: 'issuance',
-                label: offer.offer_name,
-                subtitle: `${offer.asset_code} · Ready to Issue`,
-                status: 'needs_issue',
-                normalizedStatus: normalizeStatus('issuance', 'needs_issue'),
-                createdAt: offer.created_at,
-                raw: { ...offer, issuanceStep: 'issue' },
-            });
-        } else if (isIssuing) {
-            // Step 2b: Issuance in-flight (multisig pending)
-            items.push({
-                id: `issuance-${offer.id}`,
-                originalId: offer.id,
-                type: 'issuance',
-                label: offer.offer_name,
-                subtitle: `${offer.asset_code} · Issuing (MultiSig)`,
-                status: 'issuing',
-                normalizedStatus: normalizeStatus('issuance', 'issuing'),
-                createdAt: offer.created_at,
-                raw: { ...offer, issuanceStep: 'issuing' },
-            });
-        } else if (hasToken && !isVerified) {
-            // Step 3: Token exists, needs admin verification
-            items.push({
-                id: `issuance-${offer.id}`,
-                originalId: offer.id,
-                type: 'issuance',
-                label: offer.offer_name,
-                subtitle: `${offer.asset_code} · Needs Verification`,
-                status: 'needs_verify',
-                normalizedStatus: normalizeStatus('issuance', 'needs_verify'),
-                createdAt: offer.created_at,
-                raw: { ...offer, issuanceStep: 'verify' },
-            });
-        }
-    }
-
-    return items;
-}
-
 function normalizeTokens(offers: Offer[]): ApprovalItem[] {
     return offers
         .filter((o) => o.isTokenLocked === true && o.status === 'active')
@@ -233,22 +178,16 @@ export function useApprovalQueue() {
                 merged.push(...normalizeCompanies(data || []));
             }
 
-            // Pending multisig issuance IDs (for cross-ref)
-            let pendingIssuanceIds: number[] = [];
+            // Pending multisig TXs
             if (txRes.status === 'fulfilled') {
                 const txData = txRes.value?.data?.transactions || txRes.value?.transactions || [];
-                pendingIssuanceIds = txData
-                    .filter((tx: any) => tx.operationType === 'token_issue' && tx.status !== 'executed')
-                    .map((tx: any) => tx.metadata?.offerId)
-                    .filter(Boolean);
                 merged.push(...normalizeMultisig(txData));
             }
 
-            // Offers (pending review)
+            // Offers: pending review + token locks
             if (offersRes.status === 'fulfilled' && offersRes.value?.data) {
                 const allOffers = offersRes.value.data;
                 merged.push(...normalizeOffers(allOffers));
-                merged.push(...normalizeIssuances(allOffers, pendingIssuanceIds));
                 merged.push(...normalizeTokens(allOffers));
             }
 

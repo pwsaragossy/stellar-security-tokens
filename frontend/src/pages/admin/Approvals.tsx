@@ -283,8 +283,12 @@ export function Approvals() {
         }
         setActionLoading(true);
         try {
-            await offersApi.review(item.originalId, { status });
-            toast.success(`${item.label} ${status}`);
+            const result = await offersApi.review(item.originalId, { status });
+            if ((result as any)?.autoIssueResult?.status === 'pending_multisig') {
+                toast.success(`${item.label} approved — issuance pipeline started. Sign in the queue below.`);
+            } else {
+                toast.success(`${item.label} ${status}`);
+            }
             await refresh();
         } catch (err: any) {
             toast.error(err.response?.data?.error || 'Failed to review offer');
@@ -1236,8 +1240,8 @@ function DetailPanel({
                             disabled={actionLoading}
                             onClick={onApproveOffer}
                         >
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Approve
+                            <Rocket className="w-4 h-4 mr-2" />
+                            Approve & Issue
                         </Button>
                         <Button
                             variant="destructive"
