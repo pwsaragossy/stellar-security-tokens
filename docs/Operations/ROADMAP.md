@@ -25,6 +25,7 @@
   - Reference: `routes_layer.md`
 - [ ] **Fix validator ordering in `investmentRoutes.js`** — validators must run before auth, not after
   - Reference: `routes_layer.md`
+- [ ] **Improve passkey registration UX** — simplify the onboarding flow, reduce information overload on the passkey creation step
 
 ---
 
