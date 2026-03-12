@@ -24,7 +24,9 @@ const INITIAL_LOOKBACK_LEDGERS = 60;
 // Max events per getEvents call
 const MAX_EVENTS = 100;
 // SystemConfig key prefix for cursor persistence
-const CURSOR_PREFIX = 'event_indexer_cursor_';
+// key column is varchar(50); contract IDs are 56 chars → use prefix + last 44 chars
+const CURSOR_PREFIX = 'eidx_';
+const cursorKey = (contractId) => `${CURSOR_PREFIX}${contractId.slice(-44)}`;
 
 // ─── Event Severity Classification ───
 const EVENT_CONFIG = {
@@ -69,7 +71,7 @@ export class SorobanEventIndexer {
      * @returns {Promise<number|null>}
      */
     static async getCursor(contractId) {
-        const key = `${CURSOR_PREFIX}${contractId}`;
+        const key = cursorKey(contractId);
         const config = await prisma.systemConfig.findUnique({ where: { key } });
         return config ? parseInt(config.value, 10) : null;
     }
@@ -80,10 +82,10 @@ export class SorobanEventIndexer {
      * @param {number} ledger
      */
     static async setCursor(contractId, ledger) {
-        const key = `${CURSOR_PREFIX}${contractId}`;
+        const key = cursorKey(contractId);
         await prisma.systemConfig.upsert({
             where: { key },
-            create: { key, value: ledger.toString(), description: `Event indexer cursor for contract ${contractId}` },
+            create: { key, value: ledger.toString(), description: `Event cursor: …${contractId.slice(-12)}` },
             update: { value: ledger.toString() },
         });
     }
@@ -132,6 +134,8 @@ export class SorobanEventIndexer {
         }
 
         if (!events?.events?.length) {
+            // Persist cursor even with zero events so next poll isn't a "first run"
+            await this.setCursor(contractId, startLedger);
             return 0;
         }
 
