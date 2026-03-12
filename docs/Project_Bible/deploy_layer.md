@@ -1,7 +1,7 @@
 # Deploy Layer — Full Deep Read
 
-> Read date: 2026-03-10
-> Files: `Dockerfile` (34L), `docker-compose.yml` (147L), `docker-compose.prod.yml` (261L), `deploy/Caddyfile` (32L)
+> Read date: 2026-03-12
+> Files: `Dockerfile` (34L), `docker-compose.yml` (147L), `docker-compose.prod.yml` (268L), `deploy/Caddyfile` (32L), `.env.production.template`
 
 ---
 
@@ -36,14 +36,24 @@ Internal:  backend → postgres:5432
 
 ## Security (Production)
 
-- **No wallet secret keys in env** — admin signing via Freighter/Ledger multisig
-- **Docker Secrets**: operations_key at `/root/.secrets/operations_key` (chmod 600) → `/run/secrets/operations_key` (tmpfs)
+### Secrets Architecture
+
+| Secret | Location | Protection |
+|--------|----------|------------|
+| `.env.production` | `/root/radox/.env.production` | `chmod 600` + `.gitignore` blocks commit (`.env*` glob) |
+| Operations key | `/root/.secrets/operations_key` | `chmod 600` → Docker Secrets → tmpfs at `/run/secrets/operations_key` |
+| Issuer/Treasury/Distributor keys | **Not on server** | Client-side only (Freighter/Ledger multisig) |
+
+### Infrastructure Hardening
+
+- `KEY_MANAGEMENT_MODE=multisig` — blocks all server-side signing except Operations hot wallet
 - DB: no external port exposure, required password (`?` guard)
 - Redis: internal only, optional password
-- JWT_SECRET: required, no default
-- WebAuthn: RP_ID + ORIGIN required
-- Localhost-only DB bind in dev (`127.0.0.1:5432`)
-- `ports: !override []` prevents frontend external exposure (only Caddy)
+- JWT_SECRET: required, no insecure default
+- WebAuthn: RP_ID + ORIGIN required (must match domain)
+- `ports: !override []` prevents frontend external exposure (only Caddy exposes 80/443)
+- Caddy DNS: `8.8.8.8` + `1.1.1.1` (avoids Ubuntu systemd-resolved loopback trap)
+- Log rotation: `json-file` driver — 50M/5 files (backend), 10M/3 files (all others)
 
 ## Startup Sequence (Backend)
 
@@ -57,26 +67,73 @@ Internal:  backend → postgres:5432
 
 ## Environment Variables (Key Groups)
 
-| Group | Variables | Dev Default |
-|-------|-----------|-------------|
-| Database | DATABASE_URL, DB_HOST/PORT/NAME/USER/PASSWORD | postgres/postgres |
+| Group | Variables | Prod Default |
+|-------|-----------|--------------|
+| Database | DATABASE_URL, DB_HOST/PORT/NAME/USER/PASSWORD | stellar_prod |
 | Stellar | STELLAR_NETWORK, HORIZON_URL, SOROBAN_RPC_URL | testnet |
-| Accounts | ISSUER/DISTRIBUTOR/OPERATIONS/TREASURY_PUBLIC_KEY | — |
-| Secrets | ISSUER/DISTRIBUTOR/TREASURY_SECRET_KEY | env mode only |
-| Auth | JWT_SECRET, API_KEY | change_this_in_production |
-| WebAuthn | WEBAUTHN_RP_ID, WEBAUTHN_ORIGIN | localhost |
-| Passkey Kit | LAUNCHTUBE_URL/JWT, FACTORY_CONTRACT_ID | testnet URLs |
-| Soroban | ENABLE_SOROBAN_SALE, SALE_WASM_HASH, XLM/USDC_SAC_CONTRACT_ID | false |
+| Accounts | ISSUER/DISTRIBUTOR/OPERATIONS/TREASURY_PUBLIC_KEY | required |
+| Key Mgmt | KEY_MANAGEMENT_MODE | `multisig` |
+| Auth | JWT_SECRET, API_KEY | required, no default |
+| WebAuthn | WEBAUTHN_RP_ID, WEBAUTHN_ORIGIN | required |
+| Passkey Kit | LAUNCHTUBE_URL/JWT, FACTORY_CONTRACT_ID | required |
+| Soroban | ENABLE_SOROBAN_SALE, SALE_WASM_HASH, XLM/USDC_SAC_CONTRACT_ID | `false` (kill switch) |
+| SEP-1 | STELLAR_HOME_DOMAIN | `radox.net` |
 | Email | RESEND_API_KEY, EMAIL_FROM | Radox noreply |
-| Monitoring | SENTRY_DSN, VITE_SENTRY_DSN | — |
+
+> **Template**: `.env.production.template` is the single source of truth for all production variables. Copy to `.env.production`, fill secrets, `chmod 600`.
 
 ## Key Difference: Dev vs Prod
 
-| Aspect | Dev | Prod |
+| Aspect | Dev (`docker-compose.dev.yml`) | Prod (`docker-compose.prod.yml`) |
 |--------|-----|------|
-| Network | testnet | public (mainnet) |
-| Signing | env keys | Freighter/Ledger multisig |
+| Network | testnet | testnet (override to `public` for mainnet) |
+| Signing | env keys (server-side) | Freighter/Ledger multisig |
 | HTTPS | none | Caddy + Let's Encrypt auto |
 | Port exposure | 3000, 80, 5432 | 80, 443 only (via Caddy) |
-| Secrets | .env file | Docker Secrets (tmpfs) |
-| Soroban RPC | soroban-testnet.stellar.org | mainnet.sorobanrpc.com |
+| Secrets | `.env` file | Docker Secrets (tmpfs) + `chmod 600` |
+| Frontend build | hot-reload (Vite dev server) | nginx static (baked bundle) |
+
+## Deployment Commands
+
+```bash
+# Start
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  --env-file .env.production up -d --build
+
+# View status (MUST include --env-file due to ? guards)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  --env-file .env.production ps
+
+# Logs
+docker logs stellar_backend --tail 50 -f
+
+# Update code
+git pull && docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  --env-file .env.production up -d --build
+
+# Manual backup
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  --env-file .env.production exec postgres \
+  pg_dump -U stellar_prod stellar_tokens > backup_$(date +%Y%m%d).sql
+```
+
+## First Deploy Checklist
+
+```
+[ ] VM provisioned (4GB RAM, SSH key, Ubuntu 24.04)
+[ ] DNS records: radox.net, app.radox.net, api.radox.net → VM IP (Cloudflare DNS Only)
+[ ] Docker installed (deploy/setup-vm.sh)
+[ ] Repo cloned (private PAT)
+[ ] .env.production created from template (chmod 600)
+[ ] /root/.secrets/operations_key created (chmod 600)
+[ ] docker compose up -d --build
+[ ] deploy/bootstrap-admin.sh (seed platform_admins + Freighter key)
+[ ] Verify: api.radox.net/health, app.radox.net, radox.net/.well-known/stellar.toml
+```
+
+## Verified Deployment (2026-03-12)
+
+All 5 containers healthy on `Radox-Prod`. Endpoints verified:
+- `https://api.radox.net/health` → `{"status":"ok"}`
+- `https://app.radox.net` → HTTP/2 200
+- `https://radox.net/.well-known/stellar.toml` → `NETWORK_PASSPHRASE="Test SDF Network"`
