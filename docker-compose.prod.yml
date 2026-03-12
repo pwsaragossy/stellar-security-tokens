@@ -106,11 +106,11 @@ services:
       DB_USER: ${POSTGRES_USER:-stellar_prod}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       DATABASE_URL: postgresql://${POSTGRES_USER:-stellar_prod}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-stellar_tokens}
-      # Stellar Network - MAINNET DEFAULTS
-      STELLAR_NETWORK: ${STELLAR_NETWORK:-public}
-      STELLAR_HORIZON_URL: ${STELLAR_HORIZON_URL:-https://horizon.stellar.org}
-      HORIZON_URL: ${HORIZON_URL:-https://horizon.stellar.org}
-      SOROBAN_RPC_URL: ${SOROBAN_RPC_URL:-https://mainnet.sorobanrpc.com}
+      # Stellar Network — override in .env.production when moving to mainnet
+      STELLAR_NETWORK: ${STELLAR_NETWORK:-testnet}
+      STELLAR_HORIZON_URL: ${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
+      HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
+      SOROBAN_RPC_URL: ${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
       # Stellar Accounts - PUBLIC KEYS ONLY (signing via Freighter/Ledger multisig)
       ISSUER_PUBLIC_KEY: ${ISSUER_PUBLIC_KEY:?ISSUER_PUBLIC_KEY is required}
       DISTRIBUTOR_PUBLIC_KEY: ${DISTRIBUTOR_PUBLIC_KEY:?DISTRIBUTOR_PUBLIC_KEY is required}
@@ -185,9 +185,9 @@ services:
       dockerfile: frontend/Dockerfile
       args:
         VITE_API_URL: /api
-        VITE_STELLAR_NETWORK: ${STELLAR_NETWORK:-public}
-        VITE_SOROBAN_RPC_URL: ${SOROBAN_RPC_URL:-https://mainnet.sorobanrpc.com}
-        VITE_STELLAR_NETWORK_PASSPHRASE: "${VITE_STELLAR_NETWORK_PASSPHRASE:-Public Global Stellar Network ; September 2015}"
+        VITE_STELLAR_NETWORK: ${STELLAR_NETWORK:-testnet}
+        VITE_SOROBAN_RPC_URL: ${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
+        VITE_STELLAR_NETWORK_PASSPHRASE: "${VITE_STELLAR_NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
         VITE_FACTORY_CONTRACT_ID: ${FACTORY_CONTRACT_ID}
     # Override base compose port 80 — only Caddy exposes ports externally
     ports: !override []
