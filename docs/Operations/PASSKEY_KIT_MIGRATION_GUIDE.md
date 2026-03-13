@@ -437,26 +437,84 @@ const result = await kit.createWallet('AppName', username, {
 
 ### 4.3 Transaction Signing
 
-**Before:**
+**Before (passkey-kit):**
 
 ```ts
-const signedTx = await kit.sign(transaction);
-// Manual re-simulation + submission needed
+// passkey-kit had a single-step sign() that handled everything:
+const signedXdr = await kit.sign(xdrString);
 ```
 
-**After:**
+**After (smart-account-kit):**
+
+`kit.sign()` and `kit.signAndSubmit()` require an `AssembledTransaction`, not raw XDR. This is a fundamental difference from passkey-kit.
+
+If your backend builds raw XDR via `TransactionBuilder` + `prepareSorobanTransaction`, you **cannot** use `fromJSON.execute()` or `AssembledTransaction` directly (see Gotcha below). Instead, parse the XDR, iterate auth entries, and sign each one individually:
 
 ```ts
-// For sign-only (backend handles submission):
-const signedTx = await kit.sign(transaction);
+async signTransaction(xdr: string): Promise<string> {
+    await this.init();
+    
+    // Ensure credential ID is set (see "Cache credentialId" gotcha)
+    if (!this.kit.credentialId) {
+        if (this.lastCredentialId) {
+            await this.kit.connectWallet({ credentialId: this.lastCredentialId });
+        } else {
+            await this.kit.connectWallet({ prompt: true }); // fallback
+        }
+    }
 
-// Or for full flow (SDK handles everything):
-const result = await kit.signAndSubmit(transaction);
+    const { TransactionBuilder } = await import('@stellar/stellar-sdk');
+    const tx = TransactionBuilder.fromXDR(xdr, this.kit.networkPassphrase);
+    const op = tx.operations[0] as any;
+
+    // Sign each auth entry belonging to our smart wallet
+    const signedAuth = [];
+    for (const entry of op.auth) {
+        const creds = entry.credentials();
+        if (creds.switch().name === 'sorobanCredentialsAddress') {
+            // Match by contract address
+            const addr = creds.address().address();
+            if (addr.switch().name === 'scAddressTypeContract') {
+                const id = StrKey.encodeContract(addr.contractId());
+                if (id === this.kit.contractId) {
+                    signedAuth.push(await this.kit.signAuthEntry(entry));
+                    continue;
+                }
+            }
+        }
+        signedAuth.push(entry); // keep non-matching entries
+    }
+
+    // Rebuild transaction with signed auth
+    const newTx = TransactionBuilder.cloneFrom(tx, { fee: tx.fee })
+        .clearOperations()
+        .addOperation(Operation.invokeHostFunction({ func: op.func, auth: signedAuth }))
+        .build();
+
+    return newTx.toXDR();
+}
 ```
+
+> **Key insight:** The old `PasskeyKit.sign(xdr)` was a single atomic operation that handled both WebAuthn authentication and signing in one ceremony. With `smart-account-kit`, `connectWallet()` (credential discovery) and `signAuthEntry()` (signing) are separate steps — each triggers its own WebAuthn prompt unless you cache the credential ID.
 
 ### 4.4 Discover Login
 
 **No changes needed.** The `discoverLogin()` flow uses raw WebAuthn browser APIs (`navigator.credentials.get()`), not the SDK. Passkeys are browser-native — switching SDKs doesn't affect them.
+
+**However**, you **must** cache the `credentialId` from login for later use in signing (see Gotcha below):
+
+```ts
+async discoverLogin(): Promise<AuthResponse> {
+    const credential = await navigator.credentials.get({ publicKey: { ... } });
+    const credentialIdBase64 = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
+    // ✅ Cache for signTransaction — avoids double WebAuthn prompt
+    this.lastCredentialId = credentialIdBase64;
+
+    // Send to backend for user lookup...
+}
+```
 
 ### 4.5 Dead Files
 
@@ -610,7 +668,6 @@ When using `SmartAccountKit.createWallet({ autoSubmit: true })`, the SDK POSTs t
 // walletRoutes.js — BEFORE router.use(authenticateToken)
 router.post('/relay', strictLimiter, async (req, res) => {
   const { xdr, func, auth } = req.body;
-  // Forward to Channels or fee-sponsored submission
   const result = xdr
     ? await PasskeyWalletService.sendTransaction(xdr)
     : await PasskeyWalletService.sendSorobanTransaction(func, auth);
@@ -623,6 +680,55 @@ router.post('/relay', strictLimiter, async (req, res) => {
 Classic Stellar accounts (`G...`) need `changeTrust` + `setTrustLineFlags` to hold non-XLM assets. Smart wallets (`C...`) use SAC (Stellar Asset Contract) — token balances are stored as Soroban contract data entries, not classic trustlines. Calling `server.loadAccount()` with a `C...` address returns "Bad Request" from Horizon.
 
 **Impact:** Any function that calls Horizon's `loadAccount()` (e.g., `authorizeAllUserTrustlines`, `freezeAccount`, `clawbackTokens`) must detect `C...` addresses and skip or use SAC-equivalent operations.
+
+### 🚨 `fromJSON.execute(xdr)` expects JSON, not raw XDR
+
+The `Client.fromJSON.execute(json)` method calls `JSON.parse(json)` internally. If you pass raw XDR base64 (e.g., `"AAAAAgAAAACZw3Hy0veulN..."`), it throws:
+
+```
+JSON Parse error: Unexpected identifier "AAAAAgAAAACZw3Hy0veulNqI5vLYIb"
+```
+
+**Root cause:** The backend's `buildTradeXdr` uses `TransactionBuilder` + `prepareSorobanTransaction`, which returns a raw `Transaction` — not an `AssembledTransaction`. The frontend receives `tx.toXDR('base64')`, but `fromJSON` expects the output of `AssembledTransaction.toJSON()` (a JSON object with `{ tx, simulationResult, simulationTransactionData }`).
+
+**Fix:** Don't use `fromJSON`. Parse the XDR with `TransactionBuilder.fromXDR()`, iterate auth entries, and sign each one with `kit.signAuthEntry()`. See Section 4.3 for the full pattern.
+
+### 🚨 `connectWallet({ contractId })` silently skips passkey auth
+
+The SDK's `connectWallet` short-circuits when `contractId` or `credentialId` is provided:
+
+```js
+// wallet-ops.js L63-64
+if (credentialId || contractId) {
+    return deps.connectWithCredentials(credentialId, contractId);
+}
+```
+
+If you call `connectWallet({ contractId: 'C...', prompt: true })`, the SDK **ignores** `prompt` and goes straight to `connectWithCredentials(undefined, contractId)`. Since `credentialId` is `undefined`, it throws:
+
+```
+Error: Could not determine credential ID
+```
+
+**Fix:** Never pass `contractId` when you need the passkey prompt. Use either:
+- `connectWallet({ credentialId: '...' })` — silent connect with known credential
+- `connectWallet({ prompt: true })` — triggers passkey auth, derives contractId
+
+### 🚨 Cache `credentialId` from login to avoid double WebAuthn prompts
+
+With passkey-kit, `sign(xdr)` was one WebAuthn ceremony. With smart-account-kit, there are two separate ceremonies:
+1. `connectWallet({ prompt: true })` → WebAuthn `get` to discover credential ID
+2. `signAuthEntry(entry)` → WebAuthn `get` to actually sign
+
+If the user already authenticated during login (`discoverLogin`), the `credentialId` is known — but it's only sent to the backend, never stored for the SDK. The result: the user sees **two** Touch ID / Face ID prompts on first purchase.
+
+**Fix:** Cache `credentialId` on the `PasskeyClient` class during `discoverLogin()`, then use it for silent `connectWallet({ credentialId })` during `signTransaction()`. See Section 4.4 for the pattern.
+
+### ⚠️ OS WebAuthn dialog cannot be customized
+
+The browser/OS-level WebAuthn dialog ("Use Touch ID to sign in?") is **not** customizable via the WebAuthn API. The title "Sign In", body text, and "Passkey From" UI are hardcoded by the OS (macOS, iOS, etc.). The only controllable element is the **credential display name**, which is set during `kit.createWallet(appName, userName)` and persists in the user's OS keychain.
+
+**Mitigation:** Show a custom UI message (e.g., "Authorize with biometric") in your app **before** the OS dialog appears, so users understand the context.
 
 ---
 
@@ -637,7 +743,8 @@ Our migration took one session (~3 hours of active work):
 | Frontend | 20 min | Rewrite passkey.ts, delete dead code |
 | Dead code sweep | 20 min | .env files, 6 docs, config maps |
 | Verification | 15 min | Module load, tsc, vite build, grep |
+| **Signing fix** | **60 min** | **XDR parsing, credentialId caching, connectWallet SDK behavior** |
 
 ---
 
-*Last updated: 2026-03-12*
+*Last updated: 2026-03-13*
