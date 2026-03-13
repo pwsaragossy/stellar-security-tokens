@@ -25,7 +25,7 @@ interface UsePendingInvestmentsOptions {
 }
 
 export function usePendingInvestments(options: UsePendingInvestmentsOptions = {}) {
-    const { pollInterval = 10000, autoStart = true } = options;
+    const { pollInterval = 30_000, autoStart = true } = options;
 
     const [pendingInvestments, setPendingInvestments] = useState<PendingInvestment[]>([]);
     const [processingInvestments, setProcessingInvestments] = useState<PendingInvestment[]>([]);
@@ -112,13 +112,12 @@ export function usePendingInvestments(options: UsePendingInvestmentsOptions = {}
         };
     }, [autoStart, fetchInvestments, pollInterval, stopPolling]);
 
-    // Stop polling when no pending investments
+    // Stop polling when no active investments
     useEffect(() => {
         if (pendingInvestments.length === 0 && processingInvestments.length === 0 && !loading) {
-            // Keep polling for a bit in case a new investment is created
-            // but reduce frequency
+            stopPolling();
         }
-    }, [pendingInvestments.length, processingInvestments.length, loading]);
+    }, [pendingInvestments.length, processingInvestments.length, loading, stopPolling]);
 
     return {
         pendingInvestments,

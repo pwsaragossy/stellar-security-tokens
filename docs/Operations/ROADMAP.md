@@ -1,7 +1,7 @@
 # Radox — Production Roadmap
 
-> Last updated: 2026-03-10
-> Status: Pre-production hardening + PR3 admin UI
+> Last updated: 2026-03-13
+> Status: Pre-production hardening
 
 ---
 
@@ -53,43 +53,22 @@
 
 ---
 
-## Phase 5 — PR3: Admin UI (Week 3-4)
+## ~~Phase 5 — PR3: Admin UI~~ ✅ Resolved (2026-03-13)
 
-> The admin portal needs a proper operations interface. These are the features that were scoped for PR3 but never landed.
+> PR #3 was analyzed against the current codebase. Most items were built organically or superseded.
 
-### Offer Pipeline
-- [ ] Kanban board: `pending → approved → issued → verified → active`
-- [ ] Visual status for each offer with transition actions
+### ✅ Completed / Superseded
+- ~~Offer Pipeline~~ → `Approvals.tsx` unified queue with filter chips + `AdminOffers.tsx` pipeline
+- ~~Pre-flight Checklist~~ → `reviewOffer()` auto-issue chain validates SAC/tokens/contract
+- ~~One-Click Activation~~ → Inline signing flow in Approvals Hub with stepped progress
+- ~~Contract Health Dashboard~~ → `Contracts` page with per-contract cards + on-chain data
+- ~~Multisig Badge~~ → **Superseded by Approvals Hub** (993L unified approval queue with real-time counts, Freighter signing, filter chips across 5 domains)
+- ~~TTL expiring alert~~ → `MaintenanceService` auto-extends at startup + daily 3 AM cron
 
-### Pre-flight Checklist
-- [ ] Before activation, verify: SAC deployed, tokens deposited, sale contract linked
-- [ ] Activate button only enables when all checks are ✅
+### Edge Cases (still open)
+- [ ] **SAC reuse on re-issued asset codes** — `deploySACForAsset` throws `Error(Storage, ExistingValue)` when SAC already exists. Fix: swap to `ensureSACDeployed` in `reviewOffer()`.
 
-### One-Click Activation
-- [ ] Single click → 4 automatic steps with progress bar
-- [ ] Retry from any failed step
-
-### Contract Health Dashboard
-- [ ] Card per contract: balance, sold, revenue, buyers, TTL countdown, version
-- [ ] Real-time data from Soroban RPC
-
-### Alerts
-- [ ] TTL expiring soon
-- [ ] Sell tokens running low
-- [ ] Large trade detected
-- [ ] Contract paused > 24h
-
-### Batch Operations
-- [ ] Select multiple contracts → extend TTL in one action
-
-### Audit Trail
-- [ ] Who did what, when (admin action log)
-
-### Multisig Badge
-- [ ] Badge in menu showing pending signature operations
-
-### Edge Cases
-- [ ] **SAC reuse on re-issued asset codes** — When an offer uses an asset code whose SAC already exists on-chain (e.g. re-issuing after a failed/cancelled offer), `deploySACForAsset` throws `Error(Storage, ExistingValue)`. Fix: swap to `ensureSACDeployed` in `reviewOffer()` auto-issue, which checks on-chain first and skips deploy if SAC exists, then chains sale_deploy directly.
+### Deferred → moved to Post-Launch below
 
 ---
 
@@ -114,6 +93,39 @@
 - [ ] **Withdraw** — withdraw unsold tokens from contract
 - [ ] **Freeze** — freeze investor account (compliance)
 - [ ] **Emergency Drain** — drain all funds from contract (emergency)
+
+---
+
+## Post-Launch — Deferred from PR #3
+
+> These items were scoped in PR #3 but are not needed for MVP. Each has a clear trigger for when to build.
+
+### Domain Alert Triggers
+> **Build when:** Active sales with real trade volume exist.
+
+The alert plumbing is complete (`AlertService`, `AlertRouter` → Slack/PagerDuty/DB), but no domain events fire alerts yet.
+
+- [ ] **Sell tokens low** — fire when contract sell-token balance < 10% of total supply
+  - Wire into `SorobanEventIndexer` trade event handler
+- [ ] **Large trade detected** — flag single trades > 5% of token supply
+  - Wire into `SorobanEventIndexer` trade event handler
+- [ ] **Contract paused > 24h** — cron check in `MaintenanceService`
+  - Add status check alongside TTL sweep
+
+### Batch TTL UI
+> **Build when:** 20+ contracts make auto-maintenance insufficient.
+
+Backend route exists (`POST /contracts/batch/ttl` → `ContractController.batchExtendTtl`). Frontend missing.
+
+- [ ] Checkbox column in Contracts list
+- [ ] Floating action bar: "Extend TTL (N selected)"
+
+### Audit Trail
+> **Build when:** Second admin is added, or regulatory audit requires action history.
+
+- [ ] `contract_audit_log` table in Prisma schema: `{ offerId, action, actor, details, timestamp }`
+- [ ] `AuditService.log()` called on every contract route (pause, resume, drain, price update, etc.)
+- [ ] Scrollable log section in `ContractDetail.tsx`
 
 ---
 

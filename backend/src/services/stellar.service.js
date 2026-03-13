@@ -1766,6 +1766,13 @@ export class StellarService {
   static async authorizeAllUserTrustlines(investorPublicKey) {
     if (!investorPublicKey) throw new Error('investorPublicKey is required');
 
+    // Smart wallets (C... contract addresses) use SAC for token balances,
+    // not classic trustlines. Authorization is handled at the SAC level.
+    if (investorPublicKey.startsWith('C')) {
+      log.info(`[Whitelisting] Skipping classic trustline auth for smart wallet ${investorPublicKey} — uses SAC`);
+      return { success: true, authorizedCount: 0, message: 'Smart wallet — uses SAC, no classic trustlines needed' };
+    }
+
     try {
       const issuerPublicKey = keyManager.getIssuerPublicKey();
       const account = await stellarServer.loadAccount(investorPublicKey);

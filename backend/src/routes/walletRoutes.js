@@ -81,6 +81,95 @@ router.post('/submit-tx',
     }
 );
 
+/**
+ * @swagger
+ * /api/wallets/relay:
+ *   post:
+ *     summary: Relay endpoint for SmartAccountKit (fee-sponsored submission)
+ *     description: |
+ *       Public endpoint used by the frontend SmartAccountKit SDK.
+ *       The SDK posts deploy/invoke transactions here for fee-sponsored submission.
+ *       Supports both XDR envelope and Soroban func+auth formats.
+ *     tags: [Wallets]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               xdr:
+ *                 type: string
+ *                 description: Signed transaction XDR envelope
+ *               func:
+ *                 type: string
+ *                 description: Soroban host function XDR (alternative to xdr)
+ *               auth:
+ *                 type: array
+ *                 items: { type: string }
+ *                 description: Authorization entry XDRs (used with func)
+ *     responses:
+ *       200:
+ *         description: Transaction submitted successfully
+ *       400:
+ *         description: Invalid transaction or missing parameters
+ *       429:
+ *         description: Rate limit exceeded
+ *       500:
+ *         description: Submission failed
+ */
+router.post('/relay',
+    strictLimiter,
+    async (req, res) => {
+        try {
+            const { xdr, func, auth } = req.body;
+
+            if (!xdr && !func) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Either xdr or func is required',
+                });
+            }
+
+            let result;
+
+            if (xdr) {
+                // Standard XDR envelope submission (deploy transactions)
+                log.info('[Relay] Submitting XDR transaction (length:', xdr.length, ')');
+                result = await PasskeyWalletService.sendTransaction(xdr);
+            } else {
+                // Soroban func + auth submission (invoke transactions)
+                log.info('[Relay] Submitting Soroban func+auth transaction');
+                result = await PasskeyWalletService.sendSorobanTransaction(func, auth || []);
+            }
+
+            log.info('[Relay] Result:', JSON.stringify(result));
+
+            if (result && (result.status === 'ERROR' || result.status === 'FAILED' || !result.hash)) {
+                log.error('[Relay] Transaction failed:', result);
+                return res.status(400).json({
+                    success: false,
+                    error: result.error || result.message || 'Transaction failed',
+                    details: result,
+                });
+            }
+
+            res.json({
+                success: true,
+                hash: result.hash,
+                status: result.status,
+                message: 'Transaction submitted successfully',
+            });
+        } catch (error) {
+            log.error('[Relay] Submission error:', error.message);
+            res.status(500).json({
+                success: false,
+                error: error.message || 'Failed to submit transaction',
+            });
+        }
+    }
+);
+
 // All routes below require Platform Admin access
 router.use(authenticateToken, requirePlatformAdmin);
 

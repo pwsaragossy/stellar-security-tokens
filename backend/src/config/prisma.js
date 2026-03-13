@@ -11,7 +11,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
  */
 let prisma;
 
-const logOptions = process.env.NODE_ENV === 'test' ? ['error', 'warn'] : ['query', 'error', 'warn'];
+const logOptions = ['error', 'warn'];
 
 if (process.env.NODE_ENV === 'production') {
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });

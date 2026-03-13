@@ -262,7 +262,7 @@ export function Wallet() {
 
             {/* ═══ BALANCE STATS ═══ */}
             {walletStatus?.walletAddress && (
-                <div className="grid grid-cols-2 gap-4 animate-fade-in-up">
+            <div className="animate-fade-in-up">
                     <div className="rounded-xl bg-white/[0.03] border border-white/8 p-5">
                         <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
                             <Coins className="h-3 w-3" /> USDC Balance
@@ -280,24 +280,6 @@ export function Wallet() {
                             )}
                         </p>
                         <p className="text-[10px] text-muted-foreground mt-1">Available for investment</p>
-                    </div>
-                    <div className="rounded-xl bg-white/[0.03] border border-white/8 p-5">
-                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
-                            XLM Balance
-                            {balanceError && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 ml-1">
-                                    cached
-                                </span>
-                            )}
-                        </p>
-                        <p className="text-2xl font-bold">
-                            {renderBalance(
-                                walletStatus.balances?.xlm !== undefined ? Number(walletStatus.balances.xlm).toFixed(4) : undefined,
-                                balanceLoading,
-                                !!walletStatus.balances
-                            )}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground mt-1">Network fees</p>
                     </div>
                 </div>
             )}
@@ -342,18 +324,10 @@ export function Wallet() {
                                         <Label>Asset</Label>
                                         <div className="flex gap-2">
                                             <Button
-                                                variant={withdrawData.asset === 'USDC' ? 'default' : 'outline'}
-                                                onClick={() => setWithdrawData({ ...withdrawData, asset: 'USDC' })}
-                                                className={withdrawData.asset === 'USDC' ? 'bg-[hsl(217_91%_60%)]' : 'border-white/10'}
+                                                variant="default"
+                                                className="bg-[hsl(217_91%_60%)]"
                                             >
                                                 USDC
-                                            </Button>
-                                            <Button
-                                                variant={withdrawData.asset === 'XLM' ? 'default' : 'outline'}
-                                                onClick={() => setWithdrawData({ ...withdrawData, asset: 'XLM' })}
-                                                className={withdrawData.asset === 'XLM' ? 'bg-[hsl(217_91%_60%)]' : 'border-white/10'}
-                                            >
-                                                XLM
                                             </Button>
                                         </div>
                                     </div>

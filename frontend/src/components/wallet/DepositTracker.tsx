@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowDownLeft, Check, Loader2, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowDownLeft, Check, Loader2, X, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { investorsApi } from '@/api/investors';
 import { authStorage } from '@/utils/authStorage';
@@ -98,11 +98,9 @@ export function DepositTracker() {
         }
     }, [dismissed]);
 
-    // Poll every 5s
+    // Fetch once on mount — user can refresh manually
     useEffect(() => {
         fetchDeposits();
-        const interval = setInterval(fetchDeposits, 5000);
-        return () => clearInterval(interval);
     }, [fetchDeposits]);
 
     const visibleDeposits = deposits.filter(d => !dismissed.has(d.id));
@@ -113,6 +111,7 @@ export function DepositTracker() {
         <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
             {/* Minimize/expand toggle */}
             {visibleDeposits.length > 0 && (
+                <>
                 <button
                     onClick={() => setMinimized(!minimized)}
                     className="self-end flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-800/90 border border-white/10 text-[10px] text-gray-400 hover:text-white transition-colors backdrop-blur-xl"
@@ -129,6 +128,14 @@ export function DepositTracker() {
                         </>
                     )}
                 </button>
+                <button
+                    onClick={fetchDeposits}
+                    className="self-end flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-800/90 border border-white/10 text-[10px] text-gray-400 hover:text-white transition-colors backdrop-blur-xl"
+                >
+                    <RefreshCw className="w-3 h-3" />
+                    Refresh
+                </button>
+                </>
             )}
 
             {/* Deposit cards */}
