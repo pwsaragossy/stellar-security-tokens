@@ -1,3 +1,7 @@
+---
+description: 
+---
+
 # Migration Guide: passkey-kit → smart-account-kit (OpenZeppelin)
 
 > **Context:** `passkey-kit` by SDF is deprecated. This guide documents the complete migration to OpenZeppelin's `smart-account-kit` + Stellar Channels, as executed on our production codebase (Mar 2026).
