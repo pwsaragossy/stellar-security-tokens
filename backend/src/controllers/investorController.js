@@ -499,7 +499,7 @@ export const resendVerificationCode = async (req, res, next) => {
  */
 export const registerInvestorWithPasskey = async (req, res, next) => {
   try {
-    const { name, document, credentialId, publicKey, contractId, registrationToken } = req.body;
+    const { name, document, credentialId, publicKey, contractId, registrationToken, passkeyEcosystem } = req.body;
 
     // Debug logging
     log.info('[Registration] Received registration request:', {
@@ -592,6 +592,7 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
         stellarContractId: contractId, // Use the contract ID from frontend
         passkeyCredentialId: credentialId,
         passkeyPublicKey: null, // No longer tracked separately - embedded in wallet contract
+        passkeyEcosystem: passkeyEcosystem || null, // apple, google, windows_local, other
         kycStatus: 'pending',
         emailVerified: true, // Email was verified before passkey creation!
         emailVerificationToken: null,

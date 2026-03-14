@@ -120,6 +120,7 @@ model Investor {
   stellarContractId       String    @map("stellar_contract_id") @db.VarChar(56)
   passkeyCredentialId     String    @map("passkey_credential_id") @db.Text
   passkeyPublicKey        Bytes?    @map("passkey_public_key")
+  passkeyEcosystem        String?   @map("passkey_ecosystem") @db.VarChar(20) // apple, google, windows_local, other
 
   // Email verification fields
   emailVerified           Boolean   @default(false) @map("email_verified")
