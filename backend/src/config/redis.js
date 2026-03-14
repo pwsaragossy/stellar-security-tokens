@@ -201,6 +201,123 @@ export async function isTokenBlocklisted(token) {
     return exists === 1;
 }
 
+// ====================
+// WebAuthn / Auth Challenge Storage
+// ====================
+// Stores short-lived auth challenges (WebAuthn, Freighter SEP-10).
+// Redis-first with in-memory fallback when Redis is unavailable.
+//
+//   storeChallenge(key, data)
+//           │
+//           ▼
+//   ┌─ Redis available? ─┐
+//   │ YES                 │ NO
+//   ▼                     ▼
+//   redis.setEx        Map.set (with expiry)
+//   (key, 300, JSON)   Log warning
+//
+
+const CHALLENGE_PREFIX = 'auth_challenge:';
+const CHALLENGE_TTL_SECONDS = 300; // 5 minutes
+const CHALLENGE_FALLBACK_MAX = 1000;
+
+// In-memory fallback when Redis is unavailable
+const challengeFallbackMap = new Map();
+
+/**
+ * Store an auth challenge (WebAuthn or Freighter)
+ * @param {string} key - Unique challenge key (e.g. 'webauthn:{challenge}' or 'freighter:{publicKey}')
+ * @param {object} data - Challenge data to store
+ * @returns {Promise<boolean>} Success
+ */
+export async function storeChallenge(key, data) {
+    const redisKey = `${CHALLENGE_PREFIX}${key}`;
+    const client = await getRedisClient();
+
+    if (client) {
+        try {
+            await client.setEx(redisKey, CHALLENGE_TTL_SECONDS, JSON.stringify(data));
+            return true;
+        } catch (err) {
+            console.warn('[Redis] Challenge store failed, using fallback:', err.message);
+        }
+    }
+
+    // Fallback: in-memory with expiry
+    if (challengeFallbackMap.size >= CHALLENGE_FALLBACK_MAX) {
+        // Evict oldest entry
+        const firstKey = challengeFallbackMap.keys().next().value;
+        challengeFallbackMap.delete(firstKey);
+    }
+
+    challengeFallbackMap.set(key, {
+        ...data,
+        _expiresAt: Date.now() + CHALLENGE_TTL_SECONDS * 1000,
+    });
+    console.warn('[Redis] Not available, using memory fallback for challenge storage');
+    return true;
+}
+
+/**
+ * Retrieve an auth challenge
+ * @param {string} key - Challenge key
+ * @returns {Promise<object|null>} Challenge data or null if not found/expired
+ */
+export async function getChallenge(key) {
+    const redisKey = `${CHALLENGE_PREFIX}${key}`;
+    const client = await getRedisClient();
+
+    if (client) {
+        try {
+            const raw = await client.get(redisKey);
+            if (!raw) return null;
+            try {
+                return JSON.parse(raw);
+            } catch {
+                console.error('[Redis] Corrupted challenge data for key:', key);
+                await client.del(redisKey);
+                return null;
+            }
+        } catch (err) {
+            console.warn('[Redis] Challenge get failed, trying fallback:', err.message);
+        }
+    }
+
+    // Fallback: in-memory
+    const entry = challengeFallbackMap.get(key);
+    if (!entry) return null;
+
+    if (Date.now() > entry._expiresAt) {
+        challengeFallbackMap.delete(key);
+        return null;
+    }
+
+    // Return data without internal _expiresAt field
+    const { _expiresAt, ...data } = entry;
+    return data;
+}
+
+/**
+ * Delete an auth challenge
+ * @param {string} key - Challenge key
+ * @returns {Promise<void>}
+ */
+export async function deleteChallenge(key) {
+    const redisKey = `${CHALLENGE_PREFIX}${key}`;
+    const client = await getRedisClient();
+
+    if (client) {
+        try {
+            await client.del(redisKey);
+        } catch (err) {
+            console.warn('[Redis] Challenge delete failed:', err.message);
+        }
+    }
+
+    // Always clean fallback too (might have entries from a Redis blip)
+    challengeFallbackMap.delete(key);
+}
+
 export default {
     getRedisClient,
     isRedisAvailable,
@@ -210,4 +327,7 @@ export default {
     generate6DigitCode,
     blocklistToken,
     isTokenBlocklisted,
+    storeChallenge,
+    getChallenge,
+    deleteChallenge,
 };

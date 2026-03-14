@@ -69,10 +69,10 @@ const purchaseValidation = [
  */
 router.get('/fee-schedule', getFeeSchedule);
 
-router.post('/purchase', purchaseValidation, authenticateToken, purchaseInvestment);
+router.post('/purchase', authenticateToken, purchaseValidation, purchaseInvestment);
 
 // Submit signed investment SAC transfer (smart wallet passkey flow)
-router.post('/submit-tx', [
+router.post('/submit-tx', authenticateToken, [
   body('signedXdr').isString().notEmpty().withMessage('Signed XDR is required'),
   body('investmentContext').isObject().withMessage('investmentContext object is required'),
   body('investmentContext.investorId').isInt({ min: 1 }).withMessage('Valid investor ID is required'),
@@ -80,7 +80,7 @@ router.post('/submit-tx', [
   body('investmentContext.assetCode').isString().notEmpty().withMessage('Asset code is required'),
   body('investmentContext.totalDeduction').isFloat({ gt: 0 }).withMessage('totalDeduction must be positive'),
   validate,
-], authenticateToken, submitInvestmentTx);
+], submitInvestmentTx);
 
 /**
  * @swagger

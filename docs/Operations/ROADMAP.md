@@ -7,13 +7,6 @@
 
 ## Phase 1 — Fix the Money (Week 1)
 
-> [!CAUTION]
-> All investor USDC goes to platform wallet — company gets $0. Custody violation.
-
-- [x] ~~**Fix custody: USDC must go to company wallet**~~ — `treasury` now set to `company.stellarContractId` in offer approval flow
-- [x] ~~**Add `platform` + `fee_bps` fields to Soroban Offer struct**~~ — contract upgraded, `buildCreateSaleXdr` accepts `company` + `feeBps`, per-offer `platformFeeBps` stored in DB
-- [x] ~~**Wire `buildCreateSaleXdr`**~~ — 3 callsites updated, mock validates `company`/`feeBps` params
-- [x] ~~**Clean dead `INVESTMENT_FEE_PERCENT`**~~ — removed from FeeConfig, useInvestmentFees, help-content. Fee log category preserved as `INVESTMENT_FEE`.
 - [ ] **Contract upgrade: on-chain `fixed_fee` routing** — upgrade `trade()` to deduct a fixed blockchain fee (100% → treasury) before splitting remainder by `fee_bps`. ~20 lines Rust. Enables `BLOCKCHAIN_OPERATION_FEE_FIXED` to work end-to-end. Currently set to 0.
 - [ ] **Contract upgrade: on-chain dividend fee** — add dividend fee deduction to dividend distribution contract. Enables `DIVIDEND_FEE_PERCENT` to work on-chain. Currently functional off-chain.
 - [ ] When fees are enabled: log on-chain fee events to `FeeLog` via `SorobanEventIndexer` for dashboard reporting
@@ -57,25 +50,6 @@
 
 ---
 
-## ~~Phase 5 — PR3: Admin UI~~ ✅ Resolved (2026-03-13)
-
-> PR #3 was analyzed against the current codebase. Most items were built organically or superseded.
-
-### ✅ Completed / Superseded
-- ~~Offer Pipeline~~ → `Approvals.tsx` unified queue with filter chips + `AdminOffers.tsx` pipeline
-- ~~Pre-flight Checklist~~ → `reviewOffer()` auto-issue chain validates SAC/tokens/contract
-- ~~One-Click Activation~~ → Inline signing flow in Approvals Hub with stepped progress
-- ~~Contract Health Dashboard~~ → `Contracts` page with per-contract cards + on-chain data
-- ~~Multisig Badge~~ → **Superseded by Approvals Hub** (993L unified approval queue with real-time counts, Freighter signing, filter chips across 5 domains)
-- ~~TTL expiring alert~~ → `MaintenanceService` auto-extends at startup + daily 3 AM cron
-
-### Edge Cases (still open)
-- [ ] **SAC reuse on re-issued asset codes** — `deploySACForAsset` throws `Error(Storage, ExistingValue)` when SAC already exists. Fix: swap to `ensureSACDeployed` in `reviewOffer()`.
-
-### Deferred → moved to Post-Launch below
-
----
-
 ## Phase 6 — Bible as MCP Server (Week 3+)
 
 - [ ] Expose Project Bible as MCP context source
@@ -85,6 +59,9 @@
 ---
 
 ## Backlog — Untested / Unverified
+
+### SAC Edge Case
+- [ ] **SAC reuse on re-issued asset codes** — `deploySACForAsset` throws `Error(Storage, ExistingValue)` when SAC already exists. Fix: swap to `ensureSACDeployed` in `reviewOffer()`.
 
 ### Contract Management Actions (Admin → Contracts)
 > These buttons exist in the UI but have **never been end-to-end tested** with real contract state.
@@ -136,9 +113,8 @@ Backend route exists (`POST /contracts/batch/ttl` → `ContractController.batchE
 ## Strategic Principle
 
 > The platform is **feature-complete**. The gap isn't features — it's:
-> 1. **Revenue collection** (fees)
-> 2. **Operational resilience** (Redis challenges, TX retry queue)
-> 3. **Code hygiene** (dead code, mega-files)
+> 1. **Operational resilience** (Redis challenges, TX retry queue)
+> 2. **Code hygiene** (dead code, mega-files)
 >
 > These separate "works in demo" from "works in production with real money."
 > **No new features until the foundation is solid.**

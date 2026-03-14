@@ -5,8 +5,7 @@ import { CompanyUser } from '../models/CompanyUser.js';
 import { PlatformAdmin } from '../models/PlatformAdmin.js';
 import { generateToken, generateRefreshToken, setRefreshCookie } from '../middleware/auth.js';
 
-// Armazenar challenges temporariamente (em produção, usar Redis)
-const challenges = new Map();
+import { storeChallenge, getChallenge, deleteChallenge } from '../config/redis.js';
 
 /**
  * Controller para autenticação WebAuthn (passkeys)
@@ -91,13 +90,12 @@ export class WebAuthnController {
         userEmail
       );
 
-      // Armazenar challenge temporariamente (expira em 5 minutos)
-      const challengeKey = `${userType}:${user.id}:${options.challenge}`;
-      challenges.set(challengeKey, {
+      // Store challenge in Redis (keyed by challenge value — already unique, 32-byte random)
+      const challengeKey = `webauthn:${userType}:${options.challenge}`;
+      await storeChallenge(challengeKey, {
         challenge: options.challenge,
         userId: user.id,
         userType,
-        expiresAt: Date.now() + 5 * 60 * 1000,
       });
 
       res.json({
@@ -125,26 +123,14 @@ export class WebAuthnController {
         });
       }
 
-      // Buscar challenge armazenado
-      const challengeKey = Object.keys(challenges).find(key => {
-        const stored = challenges.get(key);
-        return stored && stored.challenge === challenge && stored.userType === userType;
-      });
+      // Look up challenge from Redis (O(1) by challenge value)
+      const challengeKey = `webauthn:${userType}:${challenge}`;
+      const stored = await getChallenge(challengeKey);
 
-      if (!challengeKey) {
+      if (!stored) {
         return res.status(400).json({
           success: false,
           error: 'Invalid or expired challenge',
-        });
-      }
-
-      const stored = challenges.get(challengeKey);
-
-      if (Date.now() > stored.expiresAt) {
-        challenges.delete(challengeKey);
-        return res.status(400).json({
-          success: false,
-          error: 'Challenge expired',
         });
       }
 
@@ -173,7 +159,7 @@ export class WebAuthnController {
         deviceName
       );
 
-      challenges.delete(challengeKey);
+      await deleteChallenge(challengeKey);
 
       if (!verification.verified) {
         return res.status(400).json({
@@ -235,14 +221,13 @@ export class WebAuthnController {
 
       const options = await WebAuthnService.generateAuthenticationOptions(userType, user.id);
 
-      // Armazenar challenge temporariamente
-      const challengeKey = `${userType}:${user.id}:${options.challenge}`;
-      challenges.set(challengeKey, {
+      // Store challenge in Redis
+      const challengeKey = `webauthn:${userType}:${options.challenge}`;
+      await storeChallenge(challengeKey, {
         challenge: options.challenge,
         userId: user.id,
         userType,
         email: user.email,
-        expiresAt: Date.now() + 5 * 60 * 1000,
       });
 
       res.json({
@@ -270,26 +255,14 @@ export class WebAuthnController {
         });
       }
 
-      // Buscar challenge armazenado
-      const challengeKey = Object.keys(challenges).find(key => {
-        const stored = challenges.get(key);
-        return stored && stored.challenge === challenge && stored.userType === userType;
-      });
+      // Look up challenge from Redis (O(1) by challenge value)
+      const challengeKey = `webauthn:${userType}:${challenge}`;
+      const stored = await getChallenge(challengeKey);
 
-      if (!challengeKey) {
+      if (!stored) {
         return res.status(400).json({
           success: false,
           error: 'Invalid or expired challenge',
-        });
-      }
-
-      const stored = challenges.get(challengeKey);
-
-      if (Date.now() > stored.expiresAt) {
-        challenges.delete(challengeKey);
-        return res.status(400).json({
-          success: false,
-          error: 'Challenge expired',
         });
       }
 
@@ -319,7 +292,7 @@ export class WebAuthnController {
         challenge
       );
 
-      challenges.delete(challengeKey);
+      await deleteChallenge(challengeKey);
 
       if (!verification.verified) {
         return res.status(401).json({

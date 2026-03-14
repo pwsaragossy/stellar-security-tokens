@@ -10,6 +10,11 @@ import prisma from '../config/prisma.js';
 import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
 import { WebAuthnService } from '../services/webauthn.service.js';
 import { EmailService } from '../services/email.service.js';
+import { CollateralDistributionService } from '../services/collateralDistribution.service.js';
+import logger from '../utils/logger.js';
+import { storeChallenge, getChallenge, deleteChallenge } from '../config/redis.js';
+
+const log = logger.scope('AdminRoutes');
 
 const router = express.Router();
 
@@ -28,17 +33,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 // ============ Freighter Challenge-Response Login (Public) ============
 // Uses signTransaction for authentication (SEP-10 style challenge).
-
-// In-memory challenge store: { publicKey -> { nonce, txHash, adminId, networkPassphrase, expiresAt } }
-const freighterChallenges = new Map();
-
-// Cleanup expired challenges every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, val] of freighterChallenges) {
-    if (now > val.expiresAt) freighterChallenges.delete(key);
-  }
-}, 5 * 60 * 1000);
+// Challenges stored in Redis with 5-minute TTL (key: freighter:{publicKey})
 
 /**
  * POST /api/platform-admins/freighter/challenge
@@ -90,13 +85,13 @@ router.post('/freighter/challenge', async (req, res) => {
     const challengeXdr = tx.toXDR();
     const txHash = tx.hash();
 
-    // Store challenge data
-    freighterChallenges.set(publicKey, {
+    // Store challenge data in Redis (txHash as hex for JSON serialization)
+    const challengeRedisKey = `freighter:${publicKey}`;
+    await storeChallenge(challengeRedisKey, {
       nonce,
-      txHash,
+      txHash: tx.hash().toString('hex'),
       adminId: admin.id,
       networkPassphrase,
-      expiresAt: Date.now() + 5 * 60 * 1000,
     });
 
     log.info(`[Freighter Auth] Challenge TX issued for admin ${admin.email} (${publicKey.slice(0, 8)}...)`);
@@ -127,14 +122,10 @@ router.post('/freighter/verify', async (req, res) => {
     }
 
     // Retrieve and validate the stored challenge
-    const stored = freighterChallenges.get(publicKey);
+    const challengeRedisKey = `freighter:${publicKey}`;
+    const stored = await getChallenge(challengeRedisKey);
     if (!stored) {
       return res.status(401).json({ success: false, error: 'No pending challenge. Please request a new one.' });
-    }
-
-    if (Date.now() > stored.expiresAt) {
-      freighterChallenges.delete(publicKey);
-      return res.status(401).json({ success: false, error: 'Challenge expired. Please request a new one.' });
     }
 
     // Parse the signed transaction and verify signature
@@ -145,14 +136,15 @@ router.post('/freighter/verify', async (req, res) => {
     try {
       signedTx = TransactionBuilder.fromXDR(signedXdr, stored.networkPassphrase);
     } catch (e) {
-      freighterChallenges.delete(publicKey);
+      await deleteChallenge(challengeRedisKey);
       return res.status(400).json({ success: false, error: 'Invalid signed transaction XDR.' });
     }
 
     // Verify that this is our challenge tx by checking the hash matches
     const signedTxHash = signedTx.hash();
-    if (!stored.txHash.equals(signedTxHash)) {
-      freighterChallenges.delete(publicKey);
+    const storedTxHash = Buffer.from(stored.txHash, 'hex');
+    if (!storedTxHash.equals(signedTxHash)) {
+      await deleteChallenge(challengeRedisKey);
       return res.status(401).json({ success: false, error: 'Transaction hash mismatch. Please request a new challenge.' });
     }
 
@@ -173,7 +165,7 @@ router.post('/freighter/verify', async (req, res) => {
     }
 
     // Consume the challenge regardless of result
-    freighterChallenges.delete(publicKey);
+    await deleteChallenge(challengeRedisKey);
 
     if (!verified) {
       log.info(`[Freighter Auth] Signature verification failed for ${publicKey.slice(0, 8)}... (${signatures.length} signatures on TX)`);
@@ -1592,9 +1584,6 @@ router.post('/investors/:id/sponsor', authenticateToken, requirePlatformAdmin, a
 });
 
 // ============ Default Management Routes ============
-import { CollateralDistributionService } from '../services/collateralDistribution.service.js';
-import logger from '../utils/logger.js';
-const log = logger.scope('AdminRoutes');
 
 /**
  * GET /api/platform-admins/defaults
