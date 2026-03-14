@@ -16,7 +16,7 @@ fn create_token_contract<'a>(
     )
 }
 
-/// Standard setup: admin == seller, no deadline, no min, no cap.
+/// Standard setup: admin == seller, fee_bps=10000 (all to treasury), no deadline, no min, no cap.
 fn setup_sale<'a>(
     e: &Env,
 ) -> (
@@ -33,6 +33,7 @@ fn setup_sale<'a>(
     let admin = Address::generate(e);
     let buyer = Address::generate(e);
     let treasury = Address::generate(e);
+    let company = Address::generate(e);
 
     let (sell_token, sell_token_admin) = create_token_contract(e, &admin);
     let (buy_token, buy_token_admin) = create_token_contract(e, &buyer);
@@ -43,6 +44,7 @@ fn setup_sale<'a>(
     sale.create(
         &admin, &admin,
         &sell_token.address, &buy_token.address, &treasury,
+        &company, &10000,  // fee_bps=10000: all to treasury (current behavior)
         &1, &1,
         &0, &0, &0, // no deadline, no min, no cap
     );
@@ -74,7 +76,7 @@ fn test_create_happy_path() {
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
 
-    sale.create(&admin, &seller, &sell_token.address, &buy_token.address, &treasury, &1, &1, &1000, &(10*10_000_000), &(100*10_000_000));
+    sale.create(&admin, &seller, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &1000, &(10*10_000_000), &(100*10_000_000));
 
     let offer = sale.get_offer();
     assert_eq!(offer.admin, admin);
@@ -98,8 +100,8 @@ fn test_create_double_create_fails() {
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
 
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &0, &0, &0);
-    let result = sale.try_create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &0, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &0, &0, &0);
+    let result = sale.try_create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &0, &0, &0);
     assert_eq!(result, Err(Ok(SaleError::AlreadyCreated)));
 }
 
@@ -112,7 +114,7 @@ fn test_create_zero_sell_price() {
     let (buy_token, _) = create_token_contract(&e, &admin);
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
-    let result = sale.try_create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &0, &1, &0, &0, &0);
+    let result = sale.try_create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &Address::generate(&e), &10000, &0, &1, &0, &0, &0);
     assert_eq!(result, Err(Ok(SaleError::ZeroPrice)));
 }
 
@@ -125,7 +127,7 @@ fn test_create_zero_buy_price() {
     let (buy_token, _) = create_token_contract(&e, &admin);
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
-    let result = sale.try_create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &1, &0, &0, &0, &0);
+    let result = sale.try_create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &Address::generate(&e), &10000, &1, &0, &0, &0, &0);
     assert_eq!(result, Err(Ok(SaleError::ZeroPrice)));
 }
 
@@ -138,7 +140,7 @@ fn test_create_both_prices_zero() {
     let (buy_token, _) = create_token_contract(&e, &admin);
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
-    let result = sale.try_create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &0, &0, &0, &0, &0);
+    let result = sale.try_create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &Address::generate(&e), &10000, &0, &0, &0, &0, &0);
     assert_eq!(result, Err(Ok(SaleError::ZeroPrice)));
 }
 
@@ -151,7 +153,7 @@ fn test_create_max_u32_prices() {
     let (buy_token, _) = create_token_contract(&e, &admin);
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &u32::MAX, &u32::MAX, &0, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &Address::generate(&e), &10000, &u32::MAX, &u32::MAX, &0, &0, &0);
     let offer = sale.get_offer();
     assert_eq!(offer.sell_price, u32::MAX);
     assert_eq!(offer.buy_price, u32::MAX);
@@ -168,7 +170,7 @@ fn test_create_with_compliance_fields() {
     let sale = TokenSaleClient::new(&e, &sale_id);
 
     // deadline=500, min=1000 stroops, cap=5000 stroops
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &1, &1, &500, &1000, &5000);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &Address::generate(&e), &10000, &1, &1, &500, &1000, &5000);
     let offer = sale.get_offer();
     assert_eq!(offer.deadline_ledger, 500);
     assert_eq!(offer.min_buy_amount, 1000);
@@ -212,7 +214,7 @@ fn test_trade_exact_exhaustion() {
     let (buy_token, buy_token_admin) = create_token_contract(&e, &buyer);
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &0, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &0, &0, &0);
     let supply: i128 = 100 * 10_000_000;
     sell_token_admin.mint(&admin, &supply);
     sell_token.transfer(&admin, &sale_id, &supply);
@@ -235,7 +237,7 @@ fn test_trade_multiple_buyers() {
     let (buy_token, buy_token_admin) = create_token_contract(&e, &admin);
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &0, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &0, &0, &0);
     sell_token_admin.mint(&admin, &(200 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(200 * 10_000_000i128));
     buy_token_admin.mint(&buyer_a, &(100 * 10_000_000i128));
@@ -259,7 +261,7 @@ fn test_trade_non_1to1_pricing() {
     let (buy_token, buy_token_admin) = create_token_contract(&e, &admin);
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &3, &2, &0, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &3, &2, &0, &0, &0);
     sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
     buy_token_admin.mint(&buyer, &(100 * 10_000_000i128));
@@ -279,7 +281,7 @@ fn test_trade_rounding_truncation() {
     let (buy_token, buy_token_admin) = create_token_contract(&e, &admin);
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &3, &0, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &3, &0, &0, &0);
     sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
     buy_token_admin.mint(&buyer, &(100 * 10_000_000i128));
@@ -341,7 +343,7 @@ fn test_trade_before_activation() {
     let (buy_token, _) = create_token_contract(&e, &buyer);
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &1, &1, &0, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &Address::generate(&e), &10000, &1, &1, &0, &0, &0);
     assert_eq!(sale.try_trade(&buyer, &(10 * 10_000_000i128)), Err(Ok(SaleError::NotActive)));
 }
 
@@ -365,7 +367,7 @@ fn test_trade_exceeds_contract_supply() {
     let (buy_token, buy_token_admin) = create_token_contract(&e, &admin);
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &1, &1, &0, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &Address::generate(&e), &10000, &1, &1, &0, &0, &0);
     sell_token_admin.mint(&admin, &(5 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(5 * 10_000_000i128));
     buy_token_admin.mint(&buyer, &(100 * 10_000_000i128));
@@ -404,7 +406,7 @@ fn test_deadline_trade_before_deadline() {
     let sale = TokenSaleClient::new(&e, &sale_id);
 
     // Deadline at ledger 1000
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &1000, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &1000, &0, &0);
     sell_token_admin.mint(&admin, &(100 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(100 * 10_000_000i128));
     buy_token_admin.mint(&buyer, &(100 * 10_000_000i128));
@@ -429,7 +431,7 @@ fn test_deadline_trade_at_exact_deadline() {
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
 
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &1000, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &1000, &0, &0);
     sell_token_admin.mint(&admin, &(100 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(100 * 10_000_000i128));
     buy_token_admin.mint(&buyer, &(100 * 10_000_000i128));
@@ -453,7 +455,7 @@ fn test_deadline_trade_after_deadline() {
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
 
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &1, &1, &1000, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &Address::generate(&e), &10000, &1, &1, &1000, &0, &0);
     sale.set_active(&true);
 
     // Ledger 1001 — AFTER deadline → Expired
@@ -492,7 +494,7 @@ fn test_min_investment_above_minimum() {
     let sale = TokenSaleClient::new(&e, &sale_id);
 
     let min: i128 = 100 * 10_000_000; // min 100 USDC
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &0, &min, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &0, &min, &0);
     sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
     buy_token_admin.mint(&buyer, &(500 * 10_000_000i128));
@@ -517,7 +519,7 @@ fn test_min_investment_exact_minimum() {
     let sale = TokenSaleClient::new(&e, &sale_id);
 
     let min: i128 = 100 * 10_000_000;
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &0, &min, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &0, &min, &0);
     sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
     buy_token_admin.mint(&buyer, &(500 * 10_000_000i128));
@@ -541,7 +543,7 @@ fn test_min_investment_below_minimum() {
     let sale = TokenSaleClient::new(&e, &sale_id);
 
     let min: i128 = 100 * 10_000_000;
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &1, &1, &0, &min, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &Address::generate(&e), &10000, &1, &1, &0, &min, &0);
     sale.set_active(&true);
 
     // 50 USDC < 100 min → BelowMinimum
@@ -567,7 +569,7 @@ fn test_buyer_cap_within_limit() {
     let sale = TokenSaleClient::new(&e, &sale_id);
 
     let cap: i128 = 200 * 10_000_000;
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &0, &0, &cap);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &0, &0, &cap);
     sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
     buy_token_admin.mint(&buyer, &(500 * 10_000_000i128));
@@ -594,7 +596,7 @@ fn test_buyer_cap_exceeded() {
     let sale = TokenSaleClient::new(&e, &sale_id);
 
     let cap: i128 = 100 * 10_000_000;
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &0, &0, &cap);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &0, &0, &cap);
     sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
     buy_token_admin.mint(&buyer, &(500 * 10_000_000i128));
@@ -621,7 +623,7 @@ fn test_buyer_cap_exact_limit() {
     let sale = TokenSaleClient::new(&e, &sale_id);
 
     let cap: i128 = 100 * 10_000_000;
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &0, &0, &cap);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &0, &0, &cap);
     sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
     buy_token_admin.mint(&buyer, &(500 * 10_000_000i128));
@@ -651,7 +653,7 @@ fn test_buyer_cap_independent_per_buyer() {
     let sale = TokenSaleClient::new(&e, &sale_id);
 
     let cap: i128 = 100 * 10_000_000;
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &0, &0, &cap);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &0, &0, &cap);
     sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
     buy_token_admin.mint(&buyer_a, &(200 * 10_000_000i128));
@@ -907,7 +909,7 @@ fn test_freeze_only_affects_target() {
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
 
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &0, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &0, &0, &0);
     sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
     buy_token_admin.mint(&buyer_a, &(100 * 10_000_000i128));
@@ -1042,15 +1044,141 @@ fn test_trade_after_pause_resume() {
 }
 
 // ═══════════════════════════════════════════════════════
-//  10. Read-only + extend_ttl + overflow — 5 tests
+//  10. FEE SPLIT — 5 tests
 // ═══════════════════════════════════════════════════════
 
 #[test]
-fn test_version_returns_3() {
+fn test_trade_fee_10000_all_to_treasury() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let buyer = Address::generate(&e);
+    let treasury = Address::generate(&e);
+    let company = Address::generate(&e);
+    let (sell_token, sell_token_admin) = create_token_contract(&e, &admin);
+    let (buy_token, buy_token_admin) = create_token_contract(&e, &admin);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+
+    // fee_bps=10000 → 100% to treasury, 0% to company
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &company, &10000, &1, &1, &0, &0, &0);
+    sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
+    sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
+    buy_token_admin.mint(&buyer, &(100 * 10_000_000i128));
+    sale.set_active(&true);
+
+    sale.trade(&buyer, &(100 * 10_000_000i128));
+    assert_eq!(buy_token.balance(&treasury), 100 * 10_000_000);
+    assert_eq!(buy_token.balance(&company), 0);
+}
+
+#[test]
+fn test_trade_fee_0_all_to_company() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let buyer = Address::generate(&e);
+    let treasury = Address::generate(&e);
+    let company = Address::generate(&e);
+    let (sell_token, sell_token_admin) = create_token_contract(&e, &admin);
+    let (buy_token, buy_token_admin) = create_token_contract(&e, &admin);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+
+    // fee_bps=0 → 0% to treasury, 100% to company
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &company, &0, &1, &1, &0, &0, &0);
+    sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
+    sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
+    buy_token_admin.mint(&buyer, &(100 * 10_000_000i128));
+    sale.set_active(&true);
+
+    sale.trade(&buyer, &(100 * 10_000_000i128));
+    assert_eq!(buy_token.balance(&treasury), 0);
+    assert_eq!(buy_token.balance(&company), 100 * 10_000_000);
+}
+
+#[test]
+fn test_trade_fee_200_split() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let buyer = Address::generate(&e);
+    let treasury = Address::generate(&e);
+    let company = Address::generate(&e);
+    let (sell_token, sell_token_admin) = create_token_contract(&e, &admin);
+    let (buy_token, buy_token_admin) = create_token_contract(&e, &admin);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+
+    // fee_bps=200 → 2% to treasury, 98% to company
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &company, &200, &1, &1, &0, &0, &0);
+    sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
+    sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
+    buy_token_admin.mint(&buyer, &(100 * 10_000_000i128));
+    sale.set_active(&true);
+
+    let amount: i128 = 100 * 10_000_000; // 100 USDC
+    sale.trade(&buyer, &amount);
+    // fee = 100_000_000_0 * 200 / 10000 = 20_000_000 (0.2 USDC... wait: 100*10M = 1B stroops)
+    // fee = 1_000_000_000 * 200 / 10000 = 20_000_000
+    // company = 1_000_000_000 - 20_000_000 = 980_000_000
+    assert_eq!(buy_token.balance(&treasury), 20_000_000);       // 2% = 2 USDC
+    assert_eq!(buy_token.balance(&company), 980_000_000);       // 98% = 98 USDC
+}
+
+#[test]
+fn test_trade_fee_rounding_small_amount() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let buyer = Address::generate(&e);
+    let treasury = Address::generate(&e);
+    let company = Address::generate(&e);
+    let (sell_token, sell_token_admin) = create_token_contract(&e, &admin);
+    let (buy_token, buy_token_admin) = create_token_contract(&e, &admin);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+
+    // fee_bps=200 on a 1 stroop trade → fee = 1 * 200 / 10000 = 0 (truncated)
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &company, &200, &1, &1, &0, &0, &0);
+    sell_token_admin.mint(&admin, &(100 * 10_000_000i128));
+    sell_token.transfer(&admin, &sale_id, &(100 * 10_000_000i128));
+    buy_token_admin.mint(&buyer, &(100 * 10_000_000i128));
+    sale.set_active(&true);
+
+    // 1 stroop → fee rounds to 0, all goes to company
+    sale.trade(&buyer, &1i128);
+    assert_eq!(buy_token.balance(&treasury), 0);
+    assert_eq!(buy_token.balance(&company), 1);
+}
+
+#[test]
+fn test_create_invalid_fee_bps() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let admin = Address::generate(&e);
+    let (sell_token, _) = create_token_contract(&e, &admin);
+    let (buy_token, _) = create_token_contract(&e, &admin);
+    let sale_id = e.register(TokenSale, ());
+    let sale = TokenSaleClient::new(&e, &sale_id);
+    let result = sale.try_create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &Address::generate(&e), &10001, &1, &1, &0, &0, &0);
+    assert_eq!(result, Err(Ok(SaleError::InvalidFeeBps)));
+}
+
+// ═══════════════════════════════════════════════════════
+//  11. Read-only + extend_ttl + overflow — 5 tests
+// ═══════════════════════════════════════════════════════
+
+#[test]
+fn test_version_returns_4() {
     let e = Env::default();
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
-    assert_eq!(sale.version(), 3);
+    assert_eq!(sale.version(), 4);
 }
 
 #[test]
@@ -1081,7 +1209,7 @@ fn test_overflow_i128_max() {
     let (buy_token, _) = create_token_contract(&e, &buyer);
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &2, &1, &0, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &Address::generate(&e), &Address::generate(&e), &10000, &2, &1, &0, &0, &0);
     sale.set_active(&true);
     assert_eq!(sale.try_trade(&buyer, &i128::MAX), Err(Ok(SaleError::Overflow)));
 }
@@ -1097,7 +1225,7 @@ fn test_atomicity_failed_trade_reverts() {
     let (buy_token, buy_token_admin) = create_token_contract(&e, &admin);
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
-    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &1, &1, &0, &0, &0);
+    sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &Address::generate(&e), &10000, &1, &1, &0, &0, &0);
     sell_token_admin.mint(&admin, &(5 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(5 * 10_000_000i128));
     buy_token_admin.mint(&buyer, &(100 * 10_000_000i128));
@@ -1136,6 +1264,8 @@ fn seed_offer(e: &Env, contract: &Address, admin: &Address, seller: &Address) {
                 sell_token: Address::generate(e),
                 buy_token: Address::generate(e),
                 treasury: Address::generate(e),
+                company: Address::generate(e),
+                fee_bps: 10000,
                 sell_price: 1,
                 buy_price: 1,
                 is_active: true,
@@ -1160,6 +1290,7 @@ fn test_auth_create_requires_admin_auth() {
     sale.create(
         &admin, &admin,
         &Address::generate(&e), &Address::generate(&e), &Address::generate(&e),
+        &Address::generate(&e), &10000,
         &1, &1, &0, &0, &0,
     );
 }

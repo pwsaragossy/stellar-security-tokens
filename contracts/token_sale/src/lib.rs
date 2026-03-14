@@ -3,7 +3,7 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
 };
 
-const CONTRACT_VERSION: u32 = 3;
+const CONTRACT_VERSION: u32 = 4;
 // ~30 days at 5s per ledger
 const TTL_THRESHOLD: u32 = 518_400;
 const TTL_EXTEND: u32 = 518_400;
@@ -24,6 +24,7 @@ pub enum SaleError {
     BuyerBlocked = 10,
     NoPendingAdmin = 11,
     NotPendingAdmin = 12,
+    InvalidFeeBps = 13,
 }
 
 #[contracttype]
@@ -38,8 +39,20 @@ pub enum DataKey {
 /// Represents a single token sale offer.
 ///
 /// Two-role access control:
-/// - `admin`: cold key / multisig — controls upgrade, withdraw, drain, freeze, admin transfer
+/// - `admin`: cold key / multisig — controls upgrade, withdraw, drain, freeze, admin transfer, fee updates
 /// - `seller`: hot key — controls pause, price updates (day-to-day operations)
+///
+/// Fee split model ("payout slider"):
+/// ```text
+///   Investor ──$100──▶ trade()
+///                        ├── company_amount = amount × (10000 - fee_bps) / 10000
+///                        └── fee_amount    = amount - company_amount
+///                        ├── if company_amount > 0: send to offer.company
+///                        └── if fee_amount > 0:     send to offer.treasury (platform)
+/// ```
+/// - `fee_bps = 10000`: 100% to treasury (platform keeps all — current default)
+/// - `fee_bps = 0`:     100% to company (sponsored — platform fee waived)
+/// - `fee_bps = 200`:   2% to treasury, 98% to company
 ///
 /// Compliance fields:
 /// - `deadline_ledger`: sale closes after this ledger (0 = no deadline)
@@ -53,6 +66,8 @@ pub struct Offer {
     pub sell_token: Address,
     pub buy_token: Address,
     pub treasury: Address,
+    pub company: Address,
+    pub fee_bps: u32,
     pub sell_price: u32,
     pub buy_price: u32,
     pub is_active: bool,
@@ -92,6 +107,8 @@ impl TokenSale {
         sell_token: Address,
         buy_token: Address,
         treasury: Address,
+        company: Address,
+        fee_bps: u32,
         sell_price: u32,
         buy_price: u32,
         deadline_ledger: u32,
@@ -104,6 +121,9 @@ impl TokenSale {
         if buy_price == 0 || sell_price == 0 {
             return Err(SaleError::ZeroPrice);
         }
+        if fee_bps > 10_000 {
+            return Err(SaleError::InvalidFeeBps);
+        }
         admin.require_auth();
         write_offer(
             &e,
@@ -113,6 +133,8 @@ impl TokenSale {
                 sell_token,
                 buy_token,
                 treasury,
+                company,
+                fee_bps,
                 sell_price,
                 buy_price,
                 is_active: false,
@@ -183,12 +205,34 @@ impl TokenSale {
         // Atomic: if any transfer fails, all revert (Soroban guarantee)
         buy_token_client.transfer(&buyer, &contract, &buy_token_amount);
         sell_token_client.transfer(&contract, &buyer, &sell_token_amount);
-        buy_token_client.transfer(&contract, &offer.treasury, &buy_token_amount);
+
+        // Fee split: company gets (100% - fee), treasury (platform) gets fee
+        let fee = if offer.fee_bps == 0 {
+            0i128
+        } else if offer.fee_bps >= 10_000 {
+            buy_token_amount
+        } else {
+            buy_token_amount
+                .checked_mul(offer.fee_bps as i128)
+                .ok_or(SaleError::Overflow)?
+                .checked_div(10_000)
+                .ok_or(SaleError::Overflow)?
+        };
+        let company_amount = buy_token_amount
+            .checked_sub(fee)
+            .ok_or(SaleError::Overflow)?;
+
+        if company_amount > 0 {
+            buy_token_client.transfer(&contract, &offer.company, &company_amount);
+        }
+        if fee > 0 {
+            buy_token_client.transfer(&contract, &offer.treasury, &fee);
+        }
 
         emit(
             &e,
             symbol_short!("trade"),
-            (buyer, buy_token_amount, sell_token_amount, e.ledger().sequence(), CONTRACT_VERSION),
+            (buyer, buy_token_amount, sell_token_amount, fee, e.ledger().sequence(), CONTRACT_VERSION),
         );
 
         e.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND);

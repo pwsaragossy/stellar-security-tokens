@@ -383,6 +383,10 @@ model Offer {
   sorobanInitStatus   String?   @map("soroban_init_status") @db.VarChar(20)
   sorobanInitError    String?   @map("soroban_init_error") @db.Text
 
+  // Platform fee in basis points. Set at offer approval time, immutable on-chain after deploy.
+  // 0 = no platform fee (all to company), 200 = 2%, 10000 = 100%.
+  platformFeeBps      Int       @default(0) @map("platform_fee_bps")
+
   createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamp
   updatedAt           DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamp
 

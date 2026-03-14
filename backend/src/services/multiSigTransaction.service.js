@@ -467,12 +467,14 @@ export class MultiSigTransactionService {
                 const { keyManager: km } = await import('./KeyManager.js');
                 const offer = await prisma.offer.findUnique({
                     where: { id: parseInt(metadata.offerId) },
-                    include: { tokens: true },
+                    include: { tokens: true, company: true },
                 });
                 if (!offer) return null;
                 const sellToken = offer.tokens?.[0]?.sacContractId;
                 const buyToken = process.env.USDC_SAC_CONTRACT_ID;
                 if (!sellToken || !buyToken) return null;
+                const companyWallet = offer.company?.stellarContractId || offer.company?.stellarPublicKey;
+                if (!companyWallet) return null;
                 const rules = typeof offer.offerRules === 'string' ? JSON.parse(offer.offerRules) : offer.offerRules || {};
                 result = await SorobanSaleService.buildCreateSaleXdr(
                     metadata.contractId,
@@ -483,6 +485,8 @@ export class MultiSigTransactionService {
                         sellToken,
                         buyToken,
                         treasury: km.getTreasuryPublicKey(),
+                        company: companyWallet,
+                        feeBps: offer.platformFeeBps ?? 0,
                         sellPrice: parseInt(offer.unitPrice * 10000000) || 1,
                         buyPrice: 10000000,
                         deadlineLedger: 0,
@@ -850,11 +854,15 @@ export class MultiSigTransactionService {
 
                         const offer = await prisma.offer.findUnique({
                             where: { id: deployOfferId },
-                            include: { tokens: true },
+                            include: { tokens: true, company: true },
                         });
 
                         const issuerPub = km.getIssuerPublicKey();
                         const treasuryPub = km.getTreasuryPublicKey();
+                        const companyWallet = offer.company?.stellarContractId || offer.company?.stellarPublicKey;
+                        if (!companyWallet) {
+                            throw new Error(`Company wallet not found for offer #${deployOfferId}`);
+                        }
                         const rules = typeof offer.offerRules === 'string'
                             ? JSON.parse(offer.offerRules)
                             : offer.offerRules || {};
@@ -878,6 +886,8 @@ export class MultiSigTransactionService {
                                 sellToken: sellToken,
                                 buyToken: buyToken,
                                 treasury: treasuryPub,
+                                company: companyWallet,
+                                feeBps: offer.platformFeeBps ?? 0,
                                 sellPrice: parseInt(offer.unitPrice * 10000000) || 1,
                                 buyPrice: 10000000,
                                 deadlineLedger: 0,

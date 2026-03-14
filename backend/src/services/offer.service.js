@@ -405,13 +405,18 @@ export class OfferService {
 
       const deployedOffer = await prisma.offer.findUnique({
         where: { id: offer.id },
-        include: { tokens: true },
+        include: { tokens: true, company: true },
       });
 
       const sellToken = deployedOffer.tokens?.[0]?.sacContractId;
       if (!sellToken) throw new Error(`Token SAC not deployed for offer #${offer.id}`);
       const buyToken = process.env.USDC_SAC_CONTRACT_ID;
       if (!buyToken) throw new Error('USDC_SAC_CONTRACT_ID env var is required');
+
+      const companyWallet = deployedOffer.company?.stellarContractId || deployedOffer.company?.stellarPublicKey;
+      if (!companyWallet) throw new Error(`Company wallet not found for offer #${offer.id}`);
+
+      const feeBps = deployedOffer.platformFeeBps ?? 0;
 
       const rules = typeof deployedOffer.offerRules === 'string'
         ? JSON.parse(deployedOffer.offerRules)
@@ -426,6 +431,8 @@ export class OfferService {
           sellToken,
           buyToken,
           treasury: km.getTreasuryPublicKey(),
+          company: companyWallet,
+          feeBps,
           sellPrice: parseInt(deployedOffer.unitPrice * 10000000) || 1,
           buyPrice: 10000000,
           deadlineLedger: 0,
