@@ -256,8 +256,8 @@ export const HELP_CONTENT = {
             content: `All fees below are automatically deducted during their respective events (issuance, distribution, trading). Changes take effect immediately for new transactions but don't affect past ones.`,
         },
         investmentFee: {
-            title: "Investment Fee",
-            content: `Percentage deducted from the capital raised on each successful investment. Charged to the company, not the investor. Revenue goes to the Fee Collector wallet.`,
+            title: "Investment Fee (Legacy)",
+            content: `Platform fees are now set per-offer during offer approval and enforced on-chain by the Soroban sale contract. This config key is no longer used.`,
         },
         dividendFee: {
             title: "Dividend Fee",

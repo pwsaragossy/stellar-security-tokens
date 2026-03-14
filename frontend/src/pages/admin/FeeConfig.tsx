@@ -10,12 +10,6 @@ import { HELP_CONTENT } from '@/constants/help-content';
 
 const FEE_KEYS = [
     {
-        key: 'INVESTMENT_FEE_PERCENT',
-        label: 'Investment Fee (%)',
-        description: 'Percentage fee deducted from investment purchases',
-        type: 'percent',
-    },
-    {
         key: 'DIVIDEND_FEE_PERCENT',
         label: 'Dividend Fee (%)',
         description: 'Percentage fee deducted from dividend distributions',
@@ -24,7 +18,7 @@ const FEE_KEYS = [
     {
         key: 'BLOCKCHAIN_OPERATION_FEE_FIXED',
         label: 'Blockchain Operation Fee (USDC)',
-        description: 'Fixed fee per transaction to cover network costs',
+        description: 'Fixed fee per transaction to cover network costs (set to 0 until routing is active)',
         type: 'fixed',
     },
 ];
@@ -127,9 +121,8 @@ export function FeeConfig() {
                                 {fee.label}
                                 <InfoTooltip
                                     content={
-                                        fee.key === 'INVESTMENT_FEE_PERCENT' ? HELP_CONTENT.feeConfigAdditions.investmentFee.content :
-                                            fee.key === 'DIVIDEND_FEE_PERCENT' ? HELP_CONTENT.feeConfigAdditions.dividendFee.content :
-                                                HELP_CONTENT.feeConfigAdditions.blockchainFee.content
+                                        fee.key === 'DIVIDEND_FEE_PERCENT' ? HELP_CONTENT.feeConfigAdditions.dividendFee.content :
+                                            HELP_CONTENT.feeConfigAdditions.blockchainFee.content
                                     }
                                     side="right"
                                 />
@@ -191,24 +184,16 @@ export function FeeConfig() {
                             <span className="text-white">$100.00</span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-muted-foreground">- Blockchain Fee (Investor pays)</span>
-                            <span className="text-red-400">-${parseFloat(config['BLOCKCHAIN_OPERATION_FEE_FIXED'] || '0').toFixed(2)}</span>
+                            <span className="text-muted-foreground">+ Blockchain Fee (Investor pays)</span>
+                            <span className="text-red-400">+${parseFloat(config['BLOCKCHAIN_OPERATION_FEE_FIXED'] || '0').toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-muted-foreground">- Investment Fee (Company pays) ({config['INVESTMENT_FEE_PERCENT'] || '0'}%)</span>
-                            <span className="text-red-400">
-                                -${(100 * parseFloat(config['INVESTMENT_FEE_PERCENT'] || '0') / 100).toFixed(2)}
-                            </span>
+                            <span className="text-muted-foreground">Platform Fee</span>
+                            <span className="text-slate-400">Per-offer (set at approval)</span>
                         </div>
                         <div className="flex justify-between pt-2 border-t border-white/10 font-medium">
-                            <span className="text-white">Tokens to Investor</span>
-                            <span className="text-emerald-400">${(100 - parseFloat(config['BLOCKCHAIN_OPERATION_FEE_FIXED'] || '0')).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between pt-1 font-medium text-xs">
-                            <span className="text-muted-foreground">Net to Company</span>
-                            <span className="text-white">
-                                ${(100 - (100 * parseFloat(config['INVESTMENT_FEE_PERCENT'] || '0') / 100)).toFixed(2)}
-                            </span>
+                            <span className="text-white">Total from Investor</span>
+                            <span className="text-emerald-400">${(100 + parseFloat(config['BLOCKCHAIN_OPERATION_FEE_FIXED'] || '0')).toFixed(2)}</span>
                         </div>
                     </div>
                 </CardContent>

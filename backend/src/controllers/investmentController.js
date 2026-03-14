@@ -182,7 +182,7 @@ export const purchaseInvestment = async (req, res, next) => {
       await ConfigService.logFee({
         amount: investmentFeeAmount,
         assetCode: 'USDC',
-        category: 'PLATFORM_FEE',
+        category: 'INVESTMENT_FEE',
         sourceId: offerId || null,
         description: `Platform Fee: ${platformFeeBps}bps (${investmentFeeAmount.toFixed(2)} USDC) - Enforced on-chain`,
       });
