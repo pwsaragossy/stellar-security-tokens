@@ -90,6 +90,13 @@ export class MockSorobanSaleService {
     }
 
     static async buildCreateSaleXdr(contractId, issuerPublicKey, params) {
+        // Validate required params to catch missing fields in tests
+        if (params.company === undefined) {
+            throw new Error('[MockSorobanSaleService] Missing required param: company');
+        }
+        if (params.feeBps === undefined) {
+            throw new Error('[MockSorobanSaleService] Missing required param: feeBps');
+        }
         return { xdr: 'mock_create_sale_xdr' };
     }
 

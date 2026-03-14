@@ -123,6 +123,9 @@ export class OfferController {
       // Supply tracking (computed, attached by controller)
       tokensSold: offer._tokensSold ?? null,
       tokens_sold: offer._tokensSold ?? null,
+      // Platform fee (basis points, set at approval, immutable on-chain)
+      platformFeeBps: offer.platformFeeBps ?? 0,
+      platform_fee_bps: offer.platformFeeBps ?? 0,
       // Maturity cutoff (computed from maturityDate - cutoffDays)
       investmentCutoffDate: offer.maturityDate
         ? new Date(new Date(offer.maturityDate).getTime() - cutoffDays * 24 * 60 * 60 * 1000).toISOString()
@@ -704,7 +707,7 @@ export class OfferController {
   static async reviewOffer(req, res) {
     try {
       const { id } = req.params;
-      const { status, rejection_reason } = req.body;
+      const { status, rejection_reason, platform_fee_bps } = req.body;
 
       if (!status || !['approved', 'rejected', 'under_review'].includes(status)) {
         return res.status(400).json({
@@ -725,7 +728,8 @@ export class OfferController {
         parseInt(id),
         status,
         reviewedBy,
-        rejection_reason
+        rejection_reason,
+        status === 'approved' ? platform_fee_bps : undefined
       );
 
       if (!updatedOffer) {

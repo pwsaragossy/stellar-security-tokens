@@ -149,10 +149,12 @@ export const purchaseInvestment = async (req, res, next) => {
       }
     }
 
-    // Fee Logic
+    // Fee Logic — platform fee is enforced on-chain via contract fee_bps.
+    // Here we log it for audit trail only.
     const grossAmount = parseFloat(usdcAmount);
-    const feePercent = await ConfigService.getFloat('INVESTMENT_FEE_PERCENT', 0);
     const fixedFee = await ConfigService.getFloat('BLOCKCHAIN_OPERATION_FEE_FIXED', 0);
+    const platformFeeBps = offer.platformFeeBps ?? 0;
+    const feePercent = platformFeeBps / 100; // bps → percent
 
     if (grossAmount <= 0) {
       return res.status(400).json({
@@ -180,9 +182,9 @@ export const purchaseInvestment = async (req, res, next) => {
       await ConfigService.logFee({
         amount: investmentFeeAmount,
         assetCode: 'USDC',
-        category: 'INVESTMENT_FEE',
+        category: 'PLATFORM_FEE',
         sourceId: offerId || null,
-        description: `Investment Fee: ${feePercent}% (${investmentFeeAmount} USDC) - Charge to Company`,
+        description: `Platform Fee: ${platformFeeBps}bps (${investmentFeeAmount.toFixed(2)} USDC) - Enforced on-chain`,
       });
     }
 
@@ -300,14 +302,13 @@ export const getInvestmentStatus = async (req, res, next) => {
 export const getFeeSchedule = async (req, res, next) => {
   try {
     const blockchainFee = await ConfigService.getFloat('BLOCKCHAIN_OPERATION_FEE_FIXED', 0);
-    const investmentFeePercent = await ConfigService.getFloat('INVESTMENT_FEE_PERCENT', 0);
 
     res.json({
       success: true,
       data: {
         blockchainFee,
-        investmentFeePercent,
-        description: 'Blockchain fee is added on top of the investment amount.',
+        platformFee: 'Per-offer (set at approval, enforced on-chain)',
+        description: 'Blockchain fee is added on top of the investment amount. Platform fee is set per-offer and enforced by the smart contract.',
       },
     });
   } catch (error) {

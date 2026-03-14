@@ -11,6 +11,7 @@ import {
     ArrowRight,
     Circle,
     Clock,
+    DollarSign,
 } from 'lucide-react';
 import { getStellarExplorerTxUrl } from '@/utils/stellar';
 import { Button } from '@/components/ui/button';
@@ -79,6 +80,13 @@ export function Approvals() {
         item: null,
     });
     const [rejectReason, setRejectReason] = useState('');
+
+    // Fee dialog state (for offer approval)
+    const [feeDialog, setFeeDialog] = useState<{ open: boolean; item: ApprovalItem | null }>({
+        open: false,
+        item: null,
+    });
+    const [feePercent, setFeePercent] = useState('2');
 
     // Sponsor dialog state
     const [sponsorDialog, setSponsorDialog] = useState<{ open: boolean; item: ApprovalItem | null }>({
@@ -210,14 +218,28 @@ export function Approvals() {
             setRejectDialog({ open: true, item });
             return;
         }
+        // Open fee dialog before approving
+        setFeeDialog({ open: true, item });
+    };
+
+    const handleApproveOfferWithFee = async () => {
+        if (!feeDialog.item) return;
+        const item = feeDialog.item;
+        const bps = Math.round(parseFloat(feePercent || '0') * 100);
+        if (bps < 0 || bps > 10000 || isNaN(bps)) {
+            toast.error('Fee must be between 0% and 100%');
+            return;
+        }
+        setFeeDialog({ open: false, item: null });
         setActionLoading(true);
         try {
-            const result = await offersApi.review(item.originalId, { status });
+            const result = await offersApi.review(item.originalId, { status: 'approved', platform_fee_bps: bps });
             if ((result as any)?.autoIssueResult?.status === 'pending_multisig') {
-                toast.success(`${item.label} approved — issuance pipeline started. Sign in the queue below.`);
+                toast.success(`${item.label} approved (${feePercent}% fee) — issuance pipeline started. Sign in the queue below.`);
             } else {
-                toast.success(`${item.label} ${status}`);
+                toast.success(`${item.label} approved (${feePercent}% platform fee)`);
             }
+            setFeePercent('2');
             await refresh();
         } catch (err: any) {
             toast.error(err.response?.data?.error || 'Failed to review offer');
@@ -794,6 +816,55 @@ export function Approvals() {
                                 <Wallet className="w-4 h-4 mr-2" />
                             )}
                             Send XLM
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Fee dialog (offer approval) ── */}
+            <Dialog
+                open={feeDialog.open}
+                onOpenChange={(open) => { setFeeDialog({ open, item: feeDialog.item }); if (!open) setFeePercent('2'); }}
+            >
+                <DialogContent className="bg-slate-900 border-white/10">
+                    <DialogHeader>
+                        <DialogTitle>Set Platform Fee</DialogTitle>
+                        <DialogDescription>
+                            Set the platform fee for {feeDialog.item?.label}. This fee is locked on-chain once the contract deploys and cannot be changed.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-3">
+                        <Label htmlFor="platform-fee">Platform Fee (%)</Label>
+                        <div className="flex items-center gap-3">
+                            <Input
+                                id="platform-fee"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                value={feePercent}
+                                onChange={(e) => setFeePercent(e.target.value)}
+                                className="bg-white/5 border-white/10 w-32"
+                            />
+                            <span className="text-sm text-zinc-400">
+                                = {Math.round(parseFloat(feePercent || '0') * 100)} bps
+                            </span>
+                        </div>
+                        <p className="text-xs text-zinc-500">
+                            0% = all USDC goes to company · 2% = platform keeps 2¢ per $1 · 100% = all to platform
+                        </p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setFeeDialog({ open: false, item: null }); setFeePercent('2'); }}>
+                            Cancel
+                        </Button>
+                        <Button
+                            className="bg-emerald-600 hover:bg-emerald-500"
+                            disabled={actionLoading || isNaN(parseFloat(feePercent)) || parseFloat(feePercent) < 0 || parseFloat(feePercent) > 100}
+                            onClick={handleApproveOfferWithFee}
+                        >
+                            <DollarSign className="w-4 h-4 mr-2" />
+                            Approve with {feePercent}% Fee
                         </Button>
                     </DialogFooter>
                 </DialogContent>
