@@ -164,7 +164,7 @@ export const purchaseInvestment = async (req, res, next) => {
     }
 
     const tokenAmount = grossAmount;
-    const totalDeduction = grossAmount + fixedFee;
+    const totalDeduction = grossAmount; // Fixed fee NOT routed on-chain — keep at $0 until contract upgrade
     const investmentFeeAmount = grossAmount * (feePercent / 100);
 
     // Log Fees
@@ -200,11 +200,11 @@ export const purchaseInvestment = async (req, res, next) => {
         throw new Error(`Offer #${offerId} does not have a Soroban sale contract. Activate the offer first to trigger auto-deployment.`);
       }
 
-      log.info(`[Investment] Building XDR via Soroban contract ${offer.sorobanContractId} for trade (${totalDeduction} USDC)`);
+      log.info(`[Investment] Building XDR via Soroban contract ${offer.sorobanContractId} for trade (${grossAmount} USDC)`);
       const txData = await SorobanSaleService.buildTradeXdr(
         offer.sorobanContractId,
         investorWallet,
-        totalDeduction
+        grossAmount
       );
 
       // Return XDR + context (NO DB record created)

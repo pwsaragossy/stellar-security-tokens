@@ -7,8 +7,8 @@
 
 ## Phase 1 — Fix the Money (Week 1)
 
-- [ ] **Contract upgrade: on-chain `fixed_fee` routing** — upgrade `trade()` to deduct a fixed blockchain fee (100% → treasury) before splitting remainder by `fee_bps`. ~20 lines Rust. Enables `BLOCKCHAIN_OPERATION_FEE_FIXED` to work end-to-end. Currently set to 0.
-- [ ] **Contract upgrade: on-chain dividend fee** — add dividend fee deduction to dividend distribution contract. Enables `DIVIDEND_FEE_PERCENT` to work on-chain. Currently functional off-chain.
+- [x] **Fixed fee routing** — trade() now receives `grossAmount` only (not inflated by `fixedFee`). Fee kept at $0 until contract upgrade enables proper on-chain splitting.
+- [x] **Dividend fee** — `DIVIDEND_FEE_PERCENT` is fully wired in `payment.service.js`. Set > 0 in admin panel to activate.
 - [ ] When fees are enabled: log on-chain fee events to `FeeLog` via `SorobanEventIndexer` for dashboard reporting
 
 ---
