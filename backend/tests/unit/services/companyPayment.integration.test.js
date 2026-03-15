@@ -19,8 +19,14 @@ const calls = {
     interestPaymentCreate: [],
     feeLogCreate: [],
     stellarSubmit: [],
+    stellarClawback: [],
+    stellarListHolders: [],
     alertError: [],
     configGetFloat: [],
+    multiSigCreate: [],
+    multiSigUpdateMany: [],
+    multiSigServiceCreate: [],
+    pusherBroadcast: [],
 };
 
 function resetCalls() {
@@ -78,6 +84,23 @@ mock.module('../../../src/config/prisma.js', {
         feeLog: {
             create: async (args) => { calls.feeLogCreate.push(args); return { id: calls.feeLogCreate.length }; },
         },
+        multiSigTransaction: {
+            findFirst: async () => null,  // No pre-existing admin-visible TXs
+            findMany: async () => [],     // No pre-existing batch_pending TXs
+            create: async (args) => { calls.multiSigCreate.push(args); return { id: calls.multiSigCreate.length, ...args.data }; },
+            updateMany: async (args) => { calls.multiSigUpdateMany.push(args); return { count: 1 }; },
+            count: async () => 1,
+        },
+        $transaction: async (fn) => {
+            // Execute the callback with the same prisma mock (simulate Prisma interactive transaction)
+            const txProxy = {
+                multiSigTransaction: {
+                    create: async (args) => { calls.multiSigCreate.push(args); return { id: calls.multiSigCreate.length, ...args.data }; },
+                    updateMany: async (args) => { calls.multiSigUpdateMany.push(args); return { count: 1 }; },
+                },
+            };
+            return fn(txProxy);
+        },
     },
 });
 
@@ -89,6 +112,17 @@ mock.module('../../../src/services/stellar.service.js', {
                 return { success: true, transactionHash: 'txhash_mock_123' };
             },
             buildUnsignedTransaction: async () => ({ toXDR: () => 'mock_xdr' }),
+            listAssetHolders: async (assetCode) => {
+                calls.stellarListHolders.push(assetCode);
+                return [
+                    { publicKey: 'GINV1_56CHARS_PADDED_TO_56_CHARACTERS_AAAAAAAAAAAAAAAA', balance: '5000.0000000' },
+                    { publicKey: 'GINV2_56CHARS_PADDED_TO_56_CHARACTERS_BBBBBBBBBBBBBBBB', balance: '5000.0000000' },
+                ];
+            },
+            clawbackTokens: async (wallet, amount, assetCode) => {
+                calls.stellarClawback.push({ wallet, amount, assetCode });
+                return { success: true, transactionHash: 'clawback_tx_mock' };
+            },
         },
     },
 });
@@ -136,6 +170,21 @@ mock.module('../../../src/services/config.service.js', {
 mock.module('../../../src/config/stellar.js', {
     namedExports: {
         getUsdcIssuer: () => 'GUSDC...',
+        getNetworkPassphrase: () => 'Test SDF Network ; September 2015',
+    },
+});
+
+mock.module('../../../src/config/pusher.js', {
+    namedExports: {
+        broadcast: (...args) => { calls.pusherBroadcast.push(args); },
+    },
+});
+
+mock.module('../../../src/services/multiSigTransaction.service.js', {
+    namedExports: {
+        MultiSigTransactionService: {
+            create: async (args) => { calls.multiSigServiceCreate.push(args); return { id: calls.multiSigServiceCreate.length }; },
+        },
     },
 });
 
@@ -445,3 +494,177 @@ describe('processSignedPayment – AlertService', () => {
         }
     });
 });
+
+// ═══════════════════════════════════════════════════════
+// ATOMIC BULLET MATURITY TESTS
+// ═══════════════════════════════════════════════════════
+//
+//  These test the new atomic flow replacing the broken auto-clawback:
+//
+//  Company signs batches → batch_pending → last batch flips to pending
+//       → admin signs → processEffects records payments → closes offer
+//
+
+describe('processSignedPayment – Atomic Bullet Maturity', () => {
+    beforeEach(() => resetCalls());
+
+    // ── Helper: stub bullet payment calculation ──
+    function stubBulletCalc(breakdown = BULLET_BREAKDOWN) {
+        const original = CompanyPaymentService.calculateBulletPayment;
+        CompanyPaymentService.calculateBulletPayment = async () => ({
+            totalPrincipal: 10000,
+            totalInterest: 2000,
+            totalPayout: 12000,
+            breakdown,
+        });
+        return () => { CompanyPaymentService.calculateBulletPayment = original; };
+    }
+
+    test('bullet submit: returns pending_admin_approval (not transactionHash)', async () => {
+        const restore = stubBulletCalc();
+        try {
+            const result = await CompanyPaymentService.processSignedPayment('signed_xdr', 2, {
+                batchGroupId: 'test-group-1',
+                batchInfo: { breakdown: BULLET_BREAKDOWN, remaining: 0 },
+            });
+
+            assert.strictEqual(result.success, true);
+            assert.strictEqual(result.status, 'pending_admin_approval');
+            assert.strictEqual(result.hasMore, false);
+            assert.strictEqual(result.transactionHash, undefined, 'No direct TX hash for bullet');
+        } finally {
+            restore();
+        }
+    });
+
+    test('bullet submit: batch_queued when more investors remain', async () => {
+        const restore = stubBulletCalc();
+        try {
+            const result = await CompanyPaymentService.processSignedPayment('signed_xdr', 2, {
+                batchGroupId: 'test-group-2',
+                batchInfo: { breakdown: BULLET_BREAKDOWN, remaining: 49 },
+            });
+
+            assert.strictEqual(result.success, true);
+            assert.strictEqual(result.status, 'batch_queued');
+            assert.strictEqual(result.hasMore, true);
+        } finally {
+            restore();
+        }
+    });
+
+    test('bullet submit: NO Stellar submit, NO InterestPayments created inline', async () => {
+        const restore = stubBulletCalc();
+        try {
+            await CompanyPaymentService.processSignedPayment('signed_xdr', 2, {
+                batchGroupId: 'test-group-3',
+                batchInfo: { breakdown: BULLET_BREAKDOWN, remaining: 0 },
+            });
+
+            // No direct Stellar submission — goes through multisig queue
+            assert.strictEqual(calls.stellarSubmit.length, 0, 'Should NOT submit to Stellar directly');
+
+            // InterestPayments are recorded in processEffects, NOT here
+            assert.strictEqual(calls.interestPaymentCreate.length, 0, 'Should NOT create InterestPayments inline');
+        } finally {
+            restore();
+        }
+    });
+
+    test('periodic: still submits directly and records payments', async () => {
+        const originalCalc = CompanyPaymentService.calculateOwedAmount;
+        CompanyPaymentService.calculateOwedAmount = async () => ({
+            totalOwed: 1000,
+            breakdown: PERIODIC_BREAKDOWN,
+        });
+
+        try {
+            const result = await CompanyPaymentService.processSignedPayment('signed_xdr', 1);
+
+            // Direct Stellar submission for periodic
+            assert.strictEqual(calls.stellarSubmit.length, 1);
+            assert.strictEqual(result.status, 'completed');
+            assert.strictEqual(result.success, true);
+
+            // InterestPayments recorded inline for periodic
+            assert.strictEqual(calls.interestPaymentCreate.length, 2);
+
+            // No clawback for periodic
+            assert.strictEqual(calls.stellarClawback.length, 0);
+
+            // Offer not closed for periodic
+            const closeCall = calls.offerUpdate.find(c => c.data.status === 'closed');
+            assert.strictEqual(closeCall, undefined);
+        } finally {
+            CompanyPaymentService.calculateOwedAmount = originalCalc;
+        }
+    });
+});
+
+describe('_recordPayments – DRY helper', () => {
+    beforeEach(() => resetCalls());
+
+    test('bullet: records InterestPayments with fee on INTEREST only', async () => {
+        const offer = { id: 2, assetCode: 'BULLET1', annualInterestRate: 10, paymentType: 'bullet' };
+        const breakdown = [
+            { investorId: 1, principal: 5000, interest: 1000, totalPayout: 6000 },
+        ];
+
+        const { records, totalFee } = await CompanyPaymentService._recordPayments(
+            offer, breakdown, 'tx_hash_test', 2, true
+        );
+
+        assert.strictEqual(records.length, 1);
+        assert.strictEqual(calls.interestPaymentCreate.length, 1);
+
+        const created = calls.interestPaymentCreate[0].data;
+        assert.strictEqual(created.grossAmount, 6000);       // principal + interest
+        assert.strictEqual(created.tokenBalance, 5000);       // principal as token balance
+        assert.strictEqual(created.platformFeeAmount, 20);    // 2% of 1000 interest = 20
+        assert.strictEqual(created.netAmount, 5000 + 980);    // principal + (interest - fee)
+        assert.strictEqual(created.status, 'completed');
+    });
+
+    test('periodic: records InterestPayments with fee on everything', async () => {
+        const offer = { id: 1, assetCode: 'REALT1', annualInterestRate: 12, paymentType: 'monthly' };
+        const breakdown = [
+            { investorId: 1, tokenBalance: 500, interestOwed: 500 },
+        ];
+
+        const { records, totalFee } = await CompanyPaymentService._recordPayments(
+            offer, breakdown, 'tx_hash_periodic', 2, false
+        );
+
+        assert.strictEqual(records.length, 1);
+        const created = calls.interestPaymentCreate[0].data;
+        assert.strictEqual(created.grossAmount, 500);
+        assert.strictEqual(created.platformFeeAmount, 10);    // 2% of 500 = 10
+        assert.strictEqual(created.netAmount, 490);            // 500 - 10
+    });
+
+    test('writes FeeLog when totalFee > 0', async () => {
+        const offer = { id: 2, assetCode: 'BULLET1', annualInterestRate: 10, paymentType: 'bullet' };
+        const breakdown = [
+            { investorId: 1, principal: 5000, interest: 1000, totalPayout: 6000 },
+        ];
+
+        await CompanyPaymentService._recordPayments(offer, breakdown, 'tx_hash_fee', 2, true);
+
+        assert.strictEqual(calls.feeLogCreate.length, 1);
+        assert.strictEqual(calls.feeLogCreate[0].data.category, 'DIVIDEND');
+        assert.strictEqual(calls.feeLogCreate[0].data.amount, 20); // 2% of 1000
+        assert.ok(calls.feeLogCreate[0].data.description.includes('Bullet maturity'));
+    });
+
+    test('skips FeeLog when fee is 0', async () => {
+        const offer = { id: 1, assetCode: 'REALT1', annualInterestRate: 12, paymentType: 'monthly' };
+        const breakdown = [
+            { investorId: 1, tokenBalance: 500, interestOwed: 500 },
+        ];
+
+        await CompanyPaymentService._recordPayments(offer, breakdown, 'tx_hash_nofee', 0, false);
+
+        assert.strictEqual(calls.feeLogCreate.length, 0, 'No FeeLog when fee is 0%');
+    });
+});
+

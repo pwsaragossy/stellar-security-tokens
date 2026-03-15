@@ -453,5 +453,77 @@ router.post('/admin/offers/:id/retry-soroban', requirePlatformAdmin, OfferContro
  */
 router.post('/admin/offers/:id/verify', requirePlatformAdmin, OfferController.verifyOfferIssuance);
 
+/**
+ * @swagger
+ * /api/admin/offers/{id}/reconcile-chain:
+ *   post:
+ *     summary: "[Admin] Reconcile on-chain state with DB"
+ *     description: Reads on-chain token holder balances and compares with DB records. Use after maturity batch signing to verify all payments and clawbacks were applied correctly.
+ *     tags: [Offers]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Reconciliation results
+ */
+router.post('/admin/offers/:id/reconcile-chain', requirePlatformAdmin, async (req, res) => {
+    try {
+        const offerId = parseInt(req.params.id);
+        const { default: prisma } = await import('../config/prisma.js');
+        const { StellarService } = await import('../services/stellar.service.js');
+        const offer = await prisma.offer.findUnique({ where: { id: offerId } });
+        if (!offer) return res.status(404).json({ success: false, error: 'Offer not found' });
+
+        // Fetch on-chain token holders
+        const holders = await StellarService.listTokenHolders(offer.asset_code, offer.issuer_public_key);
+
+        // Fetch DB investments
+        const investments = await prisma.investment.findMany({
+            where: { offerId, status: { in: ['active', 'completed'] } },
+            include: { investor: true },
+        });
+
+        const discrepancies = [];
+        for (const inv of investments) {
+            const wallet = inv.investor?.stellarPublicKey || inv.investor?.sorobanContractId;
+            const onChain = holders.find(h => h.account === wallet);
+            const dbTokens = parseFloat(inv.tokenAmount || '0');
+            const chainTokens = onChain ? parseFloat(onChain.balance) : 0;
+
+            if (Math.abs(dbTokens - chainTokens) > 0.0001) {
+                discrepancies.push({
+                    investorId: inv.investorId,
+                    investorName: inv.investor?.name,
+                    wallet,
+                    dbTokens,
+                    chainTokens,
+                    diff: chainTokens - dbTokens,
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            message: discrepancies.length === 0
+                ? 'On-chain state matches DB — all good'
+                : `Found ${discrepancies.length} discrepancies`,
+            data: {
+                holdersOnChain: holders.length,
+                investmentsInDb: investments.length,
+                discrepancies,
+            },
+        });
+    } catch (err) {
+        console.error('[reconcile-chain] Error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 export default router;
 

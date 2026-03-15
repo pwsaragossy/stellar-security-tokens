@@ -1,20 +1,41 @@
 /**
  * Pay Investors Page
  * Company dashboard for paying investors their yield
+ *
+ * For bullet maturity: auto-loops prepare→sign→submit in batches of 49,
+ * shows timeline progress, and displays "DO NOT INTERACT" popup when done.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, AlertTriangle, Clock, CheckCircle, DollarSign, Users, Calendar, Loader2 } from "lucide-react";
+import {
+    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    ArrowLeft, AlertTriangle, Clock, CheckCircle, DollarSign, Users, Calendar,
+    Loader2, ShieldAlert, Package, CircleDot, Circle,
+} from "lucide-react";
 import { companyPaymentsApi, type PaymentDetails, type BulletPaymentDetails } from "@/api/companyPayments";
 import { usePasskey } from "@/hooks/usePasskey";
+
+// ─── Types ────────────────────────────────────────────────────────────────
+
+interface BatchStep {
+    batch: number;
+    investorCount: number;
+    status: 'pending' | 'signing' | 'submitting' | 'done' | 'error';
+    error?: string;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────
 
 export function PayInvestors() {
     const { offerId } = useParams<{ offerId: string }>();
     const navigate = useNavigate();
     const { signTransaction } = usePasskey();
 
+    // Core state
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -22,10 +43,14 @@ export function PayInvestors() {
     const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | BulletPaymentDetails | null>(null);
     const [preparedTx, setPreparedTx] = useState<{ transactionXDR: string; expiresAt: string } | null>(null);
 
+    // Batch signing state (bullet maturity)
+    const [batchSteps, setBatchSteps] = useState<BatchStep[]>([]);
+    const [isBatchSigning, setIsBatchSigning] = useState(false);
+    const [showPendingAdminDialog, setShowPendingAdminDialog] = useState(false);
+    const abortRef = useRef(false);
+
     useEffect(() => {
-        if (offerId) {
-            loadPaymentDetails();
-        }
+        if (offerId) loadPaymentDetails();
     }, [offerId]);
 
     const loadPaymentDetails = async () => {
@@ -44,6 +69,8 @@ export function PayInvestors() {
             setLoading(false);
         }
     };
+
+    // ─── Periodic Payment (unchanged flow) ────────────────────────────────
 
     const handlePreparePayment = async () => {
         try {
@@ -64,17 +91,11 @@ export function PayInvestors() {
 
     const handleSignAndSubmit = async () => {
         if (!preparedTx) return;
-
         try {
             setSubmitting(true);
             setError(null);
-
-            // Sign with passkey
             const signedXDR = await signTransaction(preparedTx.transactionXDR);
-
-            // Submit signed transaction
             const response = await companyPaymentsApi.submitPayment(parseInt(offerId!), signedXDR);
-
             if (response.success) {
                 setSuccess(true);
                 setPreparedTx(null);
@@ -87,6 +108,95 @@ export function PayInvestors() {
             setSubmitting(false);
         }
     };
+
+    // ─── Bullet Maturity: Batch Signing Loop ──────────────────────────────
+
+    const handleBulletMaturity = useCallback(async () => {
+        abortRef.current = false;
+        setIsBatchSigning(true);
+        setError(null);
+        setBatchSteps([]);
+
+        const groupId = crypto.randomUUID();
+
+        let batchNum = 0;
+        let remaining = Infinity;
+
+        try {
+            while (remaining > 0 && !abortRef.current) {
+                batchNum++;
+
+                // Update timeline: add new batch step
+                setBatchSteps(prev => [...prev, {
+                    batch: batchNum,
+                    investorCount: 0,
+                    status: 'signing',
+                }]);
+
+                // 1. Prepare
+                const prepRes = await companyPaymentsApi.preparePayment(parseInt(offerId!), groupId);
+                if (!prepRes.success) throw new Error('Failed to prepare batch');
+
+                const { transactionXDR, batchInfo } = prepRes.data;
+                const thisCount = batchInfo?.thisCount || prepRes.data.investorCount;
+                remaining = batchInfo?.remaining ?? 0;
+
+                setBatchSteps(prev => prev.map(s =>
+                    s.batch === batchNum ? { ...s, investorCount: thisCount } : s
+                ));
+
+                // 2. Sign with passkey
+                const signedXDR = await signTransaction(transactionXDR);
+                if (abortRef.current) break;
+
+                // 3. Submit
+                setBatchSteps(prev => prev.map(s =>
+                    s.batch === batchNum ? { ...s, status: 'submitting' } : s
+                ));
+
+                const submitRes = await companyPaymentsApi.submitPayment(
+                    parseInt(offerId!),
+                    signedXDR,
+                    groupId,
+                    batchInfo
+                );
+
+                if (!submitRes.success) throw new Error('Failed to submit batch');
+
+                setBatchSteps(prev => prev.map(s =>
+                    s.batch === batchNum ? { ...s, status: 'done' } : s
+                ));
+
+                const status = submitRes.data?.status;
+                if (status === 'pending_admin_approval') {
+                    remaining = 0;
+                } else if (status === 'batch_queued') {
+                    remaining = batchInfo?.remaining ?? 1;
+                } else if (status === 'completed') {
+                    remaining = 0;
+                }
+            }
+
+            // All batches signed — show DO NOT INTERACT popup
+            setShowPendingAdminDialog(true);
+        } catch (err: any) {
+            setBatchSteps(prev => prev.map((s, i) =>
+                i === prev.length - 1 && s.status !== 'done'
+                    ? { ...s, status: 'error', error: err.message }
+                    : s
+            ));
+            setError(err.message || 'Batch signing failed');
+        } finally {
+            setIsBatchSigning(false);
+        }
+    }, [offerId, signTransaction]);
+
+    const handleCancelBatch = () => {
+        abortRef.current = true;
+        setIsBatchSigning(false);
+    };
+
+    // ─── Computed Values ──────────────────────────────────────────────────
 
     const isBulletPayment = paymentDetails && 'totalPayout' in paymentDetails;
     const totalOwed = isBulletPayment
@@ -111,6 +221,8 @@ export function PayInvestors() {
         }
     };
 
+    // ─── Render ───────────────────────────────────────────────────────────
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
@@ -119,6 +231,7 @@ export function PayInvestors() {
         );
     }
 
+    // ── Periodic success (direct on-chain) ──
     if (success) {
         return (
             <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
@@ -164,7 +277,7 @@ export function PayInvestors() {
                 <CardHeader>
                     <CardTitle className="font-heading">Payment Summary</CardTitle>
                     <CardDescription>
-                        {isBulletPayment ? 'Bullet payment at maturity' : `${paymentDetails?.paymentType} yield payment`}
+                        {isBulletPayment ? 'Bullet payment at maturity — principal + interest returned, tokens burned' : `${paymentDetails?.paymentType} yield payment`}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -245,6 +358,100 @@ export function PayInvestors() {
                 </CardContent>
             </Card>
 
+            {/* ── Batch Signing Timeline (bullet maturity) ── */}
+            {batchSteps.length > 0 && (
+                <Card className="glass-panel border-purple-500/20 bg-purple-500/5 animate-fade-in-up">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="font-heading text-lg flex items-center gap-2">
+                            <Package className="w-5 h-5 text-purple-400" />
+                            Batch Signing Progress
+                        </CardTitle>
+                        <CardDescription>
+                            Each batch covers up to 49 investors. Sign each batch with your passkey.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-3">
+                            {batchSteps.map((step) => (
+                                <div
+                                    key={step.batch}
+                                    className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-all duration-300 ${
+                                        step.status === 'done'
+                                            ? 'bg-emerald-500/10 border-emerald-500/20'
+                                            : step.status === 'error'
+                                                ? 'bg-red-500/10 border-red-500/20'
+                                                : step.status === 'signing' || step.status === 'submitting'
+                                                    ? 'bg-purple-500/10 border-purple-500/30 shadow-lg shadow-purple-500/5'
+                                                    : 'bg-white/5 border-white/10'
+                                    }`}
+                                >
+                                    {/* Step icon */}
+                                    {step.status === 'done' ? (
+                                        <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+                                    ) : step.status === 'error' ? (
+                                        <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+                                    ) : step.status === 'signing' || step.status === 'submitting' ? (
+                                        <Loader2 className="w-5 h-5 text-purple-400 animate-spin shrink-0" />
+                                    ) : (
+                                        <Circle className="w-5 h-5 text-zinc-600 shrink-0" />
+                                    )}
+
+                                    {/* Content */}
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-sm font-medium ${
+                                            step.status === 'done' ? 'text-emerald-300'
+                                                : step.status === 'error' ? 'text-red-300'
+                                                : step.status === 'signing' || step.status === 'submitting' ? 'text-purple-300'
+                                                : 'text-zinc-400'
+                                        }`}>
+                                            Batch {step.batch}
+                                            {step.investorCount > 0 && (
+                                                <span className="text-xs ml-2 text-zinc-500">
+                                                    ({step.investorCount} investors)
+                                                </span>
+                                            )}
+                                        </p>
+                                        {step.status === 'signing' && (
+                                            <p className="text-xs text-purple-400/80 mt-0.5">Waiting for passkey signature...</p>
+                                        )}
+                                        {step.status === 'submitting' && (
+                                            <p className="text-xs text-purple-400/80 mt-0.5">Submitting to queue...</p>
+                                        )}
+                                        {step.error && (
+                                            <p className="text-xs text-red-400 mt-0.5">{step.error}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Status badge */}
+                                    <span className={`text-[10px] uppercase tracking-wider font-medium shrink-0 ${
+                                        step.status === 'done' ? 'text-emerald-500'
+                                            : step.status === 'error' ? 'text-red-500'
+                                            : step.status === 'signing' || step.status === 'submitting' ? 'text-purple-400'
+                                            : 'text-zinc-600'
+                                    }`}>
+                                        {step.status === 'signing' ? 'Sign Now' : step.status}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Cancel button during batch signing */}
+                        {isBatchSigning && (
+                            <div className="mt-4 flex justify-end">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleCancelBatch}
+                                    className="text-red-400 border-red-500/30 hover:bg-red-500/10"
+                                >
+                                    Cancel Remaining Batches
+                                </Button>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Consequences Warning */}
             {(paymentDetails as PaymentDetails)?.paymentDueStatus === 'overdue' && (
                 <Card className="glass-panel border-destructive/20 bg-destructive/5 animate-fade-in-up animate-delay-2">
@@ -266,7 +473,32 @@ export function PayInvestors() {
 
             {/* Action Buttons */}
             <div className="flex gap-4 animate-fade-in-up animate-delay-3">
-                {!preparedTx ? (
+                {isBulletPayment ? (
+                    /* ── Bullet Maturity: single "Pay Maturity" button ── */
+                    <Button
+                        onClick={handleBulletMaturity}
+                        disabled={isBatchSigning || showPendingAdminDialog}
+                        className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-6 text-lg shadow-lg shadow-purple-500/20 transition-all"
+                    >
+                        {isBatchSigning ? (
+                            <>
+                                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                                Signing Batches...
+                            </>
+                        ) : showPendingAdminDialog ? (
+                            <>
+                                <Clock className="w-5 h-5 mr-2" />
+                                Awaiting Admin Approval
+                            </>
+                        ) : (
+                            <>
+                                <Package className="w-5 h-5 mr-2" />
+                                Pay Maturity (${totalOwed.toLocaleString('en-US', { minimumFractionDigits: 2 })})
+                            </>
+                        )}
+                    </Button>
+                ) : !preparedTx ? (
+                    /* ── Periodic: prepare button ── */
                     <Button
                         onClick={handlePreparePayment}
                         disabled={submitting || totalOwed === 0}
@@ -285,6 +517,7 @@ export function PayInvestors() {
                         )}
                     </Button>
                 ) : (
+                    /* ── Periodic: sign & submit ── */
                     <div className="flex-1 space-y-3">
                         <div className="p-4 bg-warning/10 border border-warning/20 rounded-lg">
                             <p className="text-warning text-sm">
@@ -317,6 +550,79 @@ export function PayInvestors() {
                     </div>
                 )}
             </div>
+
+            {/* ══════════════════════════════════════════════════════════════════
+                DO NOT INTERACT POPUP — Bullet Maturity Pending Admin Approval
+               ══════════════════════════════════════════════════════════════════ */}
+            <Dialog open={showPendingAdminDialog} onOpenChange={() => { /* Prevent closing */ }}>
+                <DialogContent
+                    className="bg-slate-950 border-amber-500/30 max-w-lg [&>button]:hidden"
+                    onInteractOutside={(e) => e.preventDefault()}
+                    onEscapeKeyDown={(e) => e.preventDefault()}
+                >
+                    <DialogHeader className="text-center space-y-4">
+                        <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center">
+                            <ShieldAlert className="w-8 h-8 text-amber-400 animate-pulse" />
+                        </div>
+                        <DialogTitle className="text-2xl font-bold text-amber-400">
+                            ⚠️ AWAITING ADMIN APPROVAL
+                        </DialogTitle>
+                        <DialogDescription className="text-base text-zinc-300 leading-relaxed">
+                            All {batchSteps.length} batch{batchSteps.length > 1 ? 'es have' : ' has'} been signed and submitted
+                            to the platform admin for multisig approval.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        {/* Big warning box */}
+                        <div className="p-5 bg-red-500/10 border-2 border-red-500/30 rounded-xl text-center">
+                            <p className="text-red-400 font-bold text-lg mb-2">
+                                DO NOT INTERACT WITH THE PLATFORM
+                            </p>
+                            <p className="text-red-300/80 text-sm">
+                                Any blockchain transaction from your company wallet before admin approval
+                                will invalidate the sequence number and cause all maturity batches to fail.
+                            </p>
+                        </div>
+
+                        {/* Timeline of what happens next */}
+                        <div className="space-y-3 pt-2">
+                            <h4 className="text-xs text-zinc-500 uppercase tracking-wider font-medium">What happens next</h4>
+                            <div className="space-y-2">
+                                {[
+                                    { icon: CheckCircle, text: 'Your batches are signed', color: 'text-emerald-400', done: true },
+                                    { icon: CircleDot, text: 'Admin reviews and signs with Freighter', color: 'text-amber-400', done: false },
+                                    { icon: Circle, text: 'Transaction submitted to Stellar', color: 'text-zinc-600', done: false },
+                                    { icon: Circle, text: 'Investors paid, tokens burned, offer closed', color: 'text-zinc-600', done: false },
+                                ].map((step, i) => (
+                                    <div key={i} className="flex items-center gap-3 text-sm">
+                                        <step.icon className={`w-4 h-4 shrink-0 ${step.color}`} />
+                                        <span className={step.done ? 'text-emerald-300' : 'text-zinc-400'}>
+                                            {step.text}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="flex-col sm:flex-col gap-2">
+                        <p className="text-xs text-zinc-600 text-center">
+                            You can safely close this dialog — the batches are queued server-side.
+                        </p>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setShowPendingAdminDialog(false);
+                                navigate('/company/offers');
+                            }}
+                            className="w-full border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                        >
+                            I Understand — Return to Offers
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -48,8 +48,11 @@ export class MultiSigTransactionService {
         initiatorId = null,
         initiatorType = 'platform_admin',
     }) {
-        // Calculate expiration time
-        const expiresAt = new Date(Date.now() + this.DEFAULT_EXPIRATION_MINUTES * 60 * 1000);
+        // Calculate expiration time (8h for maturity, 72h for others)
+        const minutes = operationType === 'maturity_clawback'
+            ? 8 * 60   // 8h — match Stellar TX timebounds
+            : this.DEFAULT_EXPIRATION_MINUTES;
+        const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
 
         const tx = await prisma.multiSigTransaction.create({
             data: {
@@ -70,14 +73,17 @@ export class MultiSigTransactionService {
 
         log.info(`Created pending TX #${tx.id} (${operationType}) - requires ${thresholdRequired} of ${requiredSigners.length} signatures`);
 
-        // Broadcast new transaction to Pusher
-        const { broadcast } = await import('../config/pusher.js');
-        broadcast('admin-governance', 'new-proposal', {
-            id: tx.id,
-            operationType,
-            description,
-            initiatorId
-        });
+        // Skip Pusher broadcast for batch_pending TXs (company still signing batches)
+        // The broadcast happens in CompanyPaymentService.processSignedPayment() when all batches are ready.
+        if (tx.status !== 'batch_pending') {
+            const { broadcast } = await import('../config/pusher.js');
+            broadcast('admin-governance', 'new-proposal', {
+                id: tx.id,
+                operationType,
+                description,
+                initiatorId
+            });
+        }
 
         return tx;
     }
@@ -831,6 +837,36 @@ export class MultiSigTransactionService {
                     log.debug(`Clawback disabled on-chain for ${metadata.investorPublicKey} / ${metadata.assetCode}`);
                     break;
 
+                case 'maturity_clawback': {
+                    // Atomic bullet maturity: payment + token burn executed on-chain.
+                    // Now record InterestPayments + FeeLog + close offer if all holders burned.
+                    const { offerId, breakdown, feePercent, assetCode } = metadata;
+                    const { CompanyPaymentService } = await import('./companyPayment.service.js');
+                    const clawbackOffer = await prisma.offer.findUnique({ where: { id: parseInt(offerId) } });
+
+                    if (clawbackOffer && breakdown) {
+                        await CompanyPaymentService._recordPayments(
+                            clawbackOffer, breakdown, txHash, feePercent, true
+                        );
+                    }
+
+                    // Close offer if ALL holders have zero balance (all batches executed)
+                    const { StellarService: StellarSvc } = await import('./stellar.service.js');
+                    const remaining = await StellarSvc.listAssetHolders(assetCode);
+                    const activeHolders = remaining.filter(h => parseFloat(h.balance) > 0);
+
+                    if (activeHolders.length === 0) {
+                        await prisma.offer.update({
+                            where: { id: parseInt(offerId) },
+                            data: { status: 'closed' },
+                        });
+                        log.info(`Offer #${offerId} CLOSED — all tokens burned (${txHash})`);
+                    } else {
+                        log.info(`Maturity batch complete: offer #${offerId}, ${activeHolders.length} holders remain`);
+                    }
+                    break;
+                }
+
                 case 'sale_deploy': {
                     // Step 1 complete: contract deployed on-chain.
                     // Update DB and chain the create() TX.
@@ -1187,6 +1223,13 @@ export class MultiSigTransactionService {
                         });
                         log.info(`Offer #${metadata.offerId} Soroban init → failed (${operationType} TX #${tx.id})`);
                     }
+                    break;
+
+                case 'maturity_clawback':
+                    // Maturity clawback rejected. Company can re-initiate the entire batch.
+                    // Payment was never sent; tokens were never burned. No DB cleanup needed.
+                    log.warn(`Maturity clawback rejected for offer #${metadata?.offerId} (TX #${tx.id}). ` +
+                        `Company must re-initiate. Reason: ${reason}`);
                     break;
 
                 default:

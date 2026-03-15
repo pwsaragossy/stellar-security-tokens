@@ -55,6 +55,26 @@ export interface PreparedTransaction {
     investorCount: number;
     breakdown: PaymentBreakdown[];
     expiresAt: string;
+    /** Bullet maturity batch info — only present for bullet payments */
+    isBullet?: boolean;
+    batchInfo?: {
+        batch: number;
+        totalInvestors: number;
+        thisCount: number;
+        remaining: number;
+        batchGroupId: string;
+        breakdown: any[];
+    };
+}
+
+export interface SubmitResult {
+    success: boolean;
+    status: 'completed' | 'batch_queued' | 'pending_admin_approval';
+    hasMore?: boolean;
+    multiSigTxId?: number;
+    transactionHash?: string;
+    investorsPaid?: number;
+    totalPaid?: number;
 }
 
 export interface CompanyPenalty {
@@ -88,17 +108,28 @@ export const companyPaymentsApi = {
 
     /**
      * Prepare a payment transaction (returns unsigned XDR for signing)
+     * For bullet payments, pass batchGroupId to coordinate multi-batch signing
      */
-    preparePayment: async (offerId: number): Promise<{ success: boolean; data: PreparedTransaction; message: string }> => {
-        const response = await api.post(`/company/payments/${offerId}/prepare`);
+    preparePayment: async (offerId: number, batchGroupId?: string): Promise<{ success: boolean; data: PreparedTransaction; message: string }> => {
+        const response = await api.post(`/company/payments/${offerId}/prepare`, { batchGroupId });
         return response.data;
     },
 
     /**
      * Submit a signed payment transaction
+     * For bullet payments, pass batchGroupId and batchInfo to track batch progress
      */
-    submitPayment: async (offerId: number, signedXDR: string): Promise<{ success: boolean; data: { transactionHash: string; investorsPaid: number; totalPaid: number }; message: string }> => {
-        const response = await api.post(`/company/payments/${offerId}/submit`, { signedXDR });
+    submitPayment: async (
+        offerId: number,
+        signedXDR: string,
+        batchGroupId?: string,
+        batchInfo?: any
+    ): Promise<{ success: boolean; data: SubmitResult; message: string }> => {
+        const response = await api.post(`/company/payments/${offerId}/submit`, {
+            signedXDR,
+            batchGroupId,
+            batchInfo,
+        });
         return response.data;
     },
 
@@ -120,3 +151,4 @@ export const companyPaymentsApi = {
 };
 
 export default companyPaymentsApi;
+
