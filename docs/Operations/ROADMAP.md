@@ -1,24 +1,18 @@
 # Radox — Production Roadmap
 
-> Last updated: 2026-03-14
+> Last updated: 2026-03-15
 > Status: Pre-production hardening
 
 ---
 
 ## Phase 1 — Fix the Money (Week 1)
 
-- [x] **Fixed fee routing** — trade() now receives `grossAmount` only (not inflated by `fixedFee`). Fee kept at $0 until contract upgrade enables proper on-chain splitting.
-- [x] **Dividend fee** — `DIVIDEND_FEE_PERCENT` is fully wired in `payment.service.js`. Set > 0 in admin panel to activate.
 - [ ] When fees are enabled: log on-chain fee events to `FeeLog` via `SorobanEventIndexer` for dashboard reporting
 
 ---
 
-## Phase 1.5 — Bullet Maturity (Week 1) ✅
+## Phase 1.5 — Bullet Maturity (Week 1)
 
-- [x] **Atomic maturity clawback** — batch prepare (49 investors/TX, guard + clawback ops), multisig queue with `$transaction` atomic flip
-- [x] **Company batch signing UI** — auto-loop prepare→sign→submit, timeline progress, "DO NOT INTERACT" popup
-- [x] **Admin grouped batch view** — maturity batches grouped by `batchGroupId` in approval queue
-- [x] **On-chain reconciliation** — `POST /admin/offers/:id/reconcile-chain` compares chain vs DB
 - [ ] **Reconciliation results UI** — display discrepancies table in admin detail panel
 - [ ] **Persistent batch_pending status** — show "waiting for admin" on PayInvestors if batches exist in pending state
 
@@ -30,13 +24,6 @@
 > time, not the original investment amounts.
 
 ---
-
-## Phase 2 — Kill Ticking Time Bombs (Week 1) ✅
-
-- [x] **WebAuthn challenges → Redis** — migrated to Redis-backed store with in-memory fallback
-- [x] **Fix `log` redeclaration in `platformAdminRoutes.js`** — moved declaration to top, resolved TDZ crash
-- [x] **Fix validator ordering in `investmentRoutes.js`** — reordered: `authenticateToken` now runs before validators
-- [x] **Improve passkey registration UX** — split Step 3 into profile + passkey steps, added browser ecosystem detection, Windows Hello warning, contextual sync reassurance
 
 ---
 

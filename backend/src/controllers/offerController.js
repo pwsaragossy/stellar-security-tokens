@@ -222,7 +222,7 @@ export class OfferController {
       if (existingOffer) {
         return res.status(409).json({
           success: false,
-          error: 'Asset code already exists',
+          error: `Asset code "${asset_code}" is not available. Each asset code can only be used once.`,
         });
       }
 
