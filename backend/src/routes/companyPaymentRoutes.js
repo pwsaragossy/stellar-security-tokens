@@ -75,6 +75,49 @@ router.get('/:offerId', authenticateToken, requireCompanyUser, async (req, res) 
 });
 
 /**
+ * GET /api/company/payments/:offerId/batch-status
+ * Check if there are pending maturity batches for this offer
+ */
+router.get('/:offerId/batch-status', authenticateToken, requireCompanyUser, async (req, res) => {
+    try {
+        const { offerId } = req.params;
+        const { companyId } = req.user;
+
+        const offer = await prisma.offer.findFirst({
+            where: { id: parseInt(offerId), companyId }
+        });
+        if (!offer) return res.status(404).json({ success: false, error: 'Offer not found' });
+
+        const pendingBatches = await prisma.multiSigTransaction.findMany({
+            where: {
+                operationType: 'maturity_clawback',
+                metadata: { path: ['offerId'], equals: parseInt(offerId) },
+                status: { in: ['pending', 'batch_pending', 'partially_signed'] },
+            },
+            select: { id: true, status: true, metadata: true, createdAt: true },
+            orderBy: { createdAt: 'asc' },
+        });
+
+        const batchGroupId = pendingBatches.length > 0
+            ? pendingBatches[0].metadata?.batchGroupId || null
+            : null;
+
+        res.json({
+            success: true,
+            data: {
+                hasPending: pendingBatches.length > 0,
+                batchCount: pendingBatches.length,
+                batchGroupId,
+                statuses: pendingBatches.map(b => ({ id: b.id, status: b.status })),
+            },
+        });
+    } catch (error) {
+        log.error('[CompanyPayments] Error getting batch status:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * POST /api/company/payments/:offerId/prepare
  * Prepare a payment transaction for company signature
  * Returns unsigned XDR for the company to sign

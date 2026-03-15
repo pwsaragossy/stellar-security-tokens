@@ -134,6 +134,17 @@ export const companyPaymentsApi = {
     },
 
     /**
+     * Check if there are pending maturity batches for an offer
+     */
+    getBatchStatus: async (offerId: number): Promise<{
+        success: boolean;
+        data: { hasPending: boolean; batchCount: number; batchGroupId: string | null };
+    }> => {
+        const response = await api.get(`/company/payments/${offerId}/batch-status`);
+        return response.data;
+    },
+
+    /**
      * Get payment history for an offer
      */
     getPaymentHistory: async (offerId: number): Promise<{ success: boolean; data: any[] }> => {

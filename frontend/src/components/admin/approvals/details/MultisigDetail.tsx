@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Loader2, CheckCircle, Circle } from 'lucide-react';
+import { RefreshCw, Loader2, CheckCircle, Circle, AlertTriangle } from 'lucide-react';
 import { DetailRow, DetailSection } from '../shared';
 import { timeRemaining } from '../constants';
 import { api } from '@/lib/api';
@@ -8,6 +8,11 @@ import { toast } from 'sonner';
 
 export function MultisigDetail({ raw }: { raw: any }) {
     const [reconciling, setReconciling] = useState(false);
+    const [reconcileResult, setReconcileResult] = useState<{
+        holdersOnChain: number;
+        investmentsInDb: number;
+        discrepancies: { investorId: number; investorName: string; wallet: string; dbTokens: number; chainTokens: number; diff: number }[];
+    } | null>(null);
 
     const OP_LABELS: Record<string, string> = {
         token_issue: 'Token Issuance',
@@ -26,11 +31,13 @@ export function MultisigDetail({ raw }: { raw: any }) {
 
     const handleReconcile = async () => {
         setReconciling(true);
+        setReconcileResult(null);
         try {
             const offerId = raw.metadata?.offerId;
             if (!offerId) { toast.error('No offer ID found'); return; }
             const res = await api.post(`/admin/offers/${offerId}/reconcile-chain`, {});
             if (res.success) {
+                setReconcileResult(res.data);
                 toast.success(res.message || 'On-chain data reconciled');
             } else {
                 toast.error(res.error || 'Reconciliation failed');
@@ -348,11 +355,11 @@ export function MultisigDetail({ raw }: { raw: any }) {
                 );
             })()}
 
-            {/* On-chain reconciliation button (maturity operations) */}
+            {/* On-chain reconciliation (maturity operations) */}
             {(raw.operationType === 'maturity_clawback' || raw.isMaturityGroup) && raw.metadata?.offerId && (
                 <DetailSection title="On-Chain Reconciliation">
                     <p className="text-xs text-zinc-500 mb-3">
-                        Sync the database with on-chain state. Use this after admin signing to verify all payments and clawbacks were applied correctly.
+                        Sync the database with on-chain state. Use after admin signing to verify all payments and clawbacks applied correctly.
                     </p>
                     <Button
                         variant="outline"
@@ -368,6 +375,64 @@ export function MultisigDetail({ raw }: { raw: any }) {
                         )}
                         {reconciling ? 'Reconciling...' : 'Reconcile On-Chain Data'}
                     </Button>
+
+                    {/* Reconciliation Results */}
+                    {reconcileResult && (
+                        <div className="mt-4 space-y-3">
+                            {/* Stats row */}
+                            <div className="flex items-center gap-4 text-xs text-zinc-400">
+                                <span>{reconcileResult.holdersOnChain} holders on-chain</span>
+                                <span className="text-zinc-700">·</span>
+                                <span>{reconcileResult.investmentsInDb} investments in DB</span>
+                            </div>
+
+                            {reconcileResult.discrepancies.length === 0 ? (
+                                <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                                    <span className="text-sm text-emerald-300">On-chain state matches DB — all good</span>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                                        <span className="text-sm text-amber-300">
+                                            {reconcileResult.discrepancies.length} discrepanc{reconcileResult.discrepancies.length === 1 ? 'y' : 'ies'} found
+                                        </span>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs">
+                                            <thead>
+                                                <tr className="text-zinc-500 border-b border-zinc-800">
+                                                    <th className="text-left py-2 pr-3">Investor</th>
+                                                    <th className="text-left py-2 pr-3">Wallet</th>
+                                                    <th className="text-right py-2 pr-3">DB</th>
+                                                    <th className="text-right py-2 pr-3">Chain</th>
+                                                    <th className="text-right py-2">Diff</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {reconcileResult.discrepancies.map((d) => (
+                                                    <tr key={d.investorId} className="border-b border-zinc-800/50">
+                                                        <td className="py-2 pr-3 text-zinc-300">{d.investorName || `#${d.investorId}`}</td>
+                                                        <td className="py-2 pr-3 font-mono text-zinc-500">
+                                                            {d.wallet ? `${d.wallet.slice(0, 8)}…${d.wallet.slice(-4)}` : '—'}
+                                                        </td>
+                                                        <td className="py-2 pr-3 text-right text-zinc-400">{d.dbTokens}</td>
+                                                        <td className="py-2 pr-3 text-right text-zinc-400">{d.chainTokens}</td>
+                                                        <td className={`py-2 text-right font-medium ${
+                                                            d.diff > 0 ? 'text-emerald-400' : 'text-red-400'
+                                                        }`}>
+                                                            {d.diff > 0 ? '+' : ''}{d.diff}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </DetailSection>
             )}
         </>

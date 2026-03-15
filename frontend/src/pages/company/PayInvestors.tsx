@@ -47,6 +47,7 @@ export function PayInvestors() {
     const [batchSteps, setBatchSteps] = useState<BatchStep[]>([]);
     const [isBatchSigning, setIsBatchSigning] = useState(false);
     const [showPendingAdminDialog, setShowPendingAdminDialog] = useState(false);
+    const [pendingBatchInfo, setPendingBatchInfo] = useState<{ batchCount: number; batchGroupId: string | null } | null>(null);
     const abortRef = useRef(false);
 
     useEffect(() => {
@@ -60,6 +61,15 @@ export function PayInvestors() {
             const response = await companyPaymentsApi.getPaymentDetails(parseInt(offerId!));
             if (response.success) {
                 setPaymentDetails(response.data);
+                // Check for pending maturity batches on bullet offers
+                if (response.data && 'totalPayout' in response.data) {
+                    try {
+                        const batchRes = await companyPaymentsApi.getBatchStatus(parseInt(offerId!));
+                        if (batchRes.success && batchRes.data.hasPending) {
+                            setPendingBatchInfo(batchRes.data);
+                        }
+                    } catch { /* silent — batch status is non-critical */ }
+                }
             } else {
                 setError('Failed to load payment details');
             }
@@ -272,6 +282,38 @@ export function PayInvestors() {
                 </div>
             )}
 
+            {/* Persistent pending batch banner (visible on page revisit) */}
+            {pendingBatchInfo && !isBatchSigning && (
+                <Card className="glass-panel border-amber-500/20 bg-amber-500/5 animate-fade-in">
+                    <CardContent className="p-5 space-y-4">
+                        <div className="flex items-start gap-3">
+                            <ShieldAlert className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                            <div>
+                                <h4 className="text-amber-300 font-bold text-sm">
+                                    ⏳ {pendingBatchInfo.batchCount} batch{pendingBatchInfo.batchCount > 1 ? 'es' : ''} awaiting admin approval
+                                </h4>
+                                <p className="text-amber-200/70 text-xs mt-1">
+                                    Do not initiate new blockchain transactions until admin signing is complete.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="space-y-2 pl-8">
+                            {[
+                                { icon: CheckCircle, text: 'Batches signed by company', color: 'text-emerald-400', done: true },
+                                { icon: CircleDot, text: 'Admin reviews and signs with Freighter', color: 'text-amber-400', done: false },
+                                { icon: Circle, text: 'Transactions submitted to Stellar', color: 'text-zinc-600', done: false },
+                                { icon: Circle, text: 'Investors paid, tokens burned', color: 'text-zinc-600', done: false },
+                            ].map((step, i) => (
+                                <div key={i} className="flex items-center gap-2 text-xs">
+                                    <step.icon className={`w-3.5 h-3.5 shrink-0 ${step.color}`} />
+                                    <span className={step.done ? 'text-emerald-300' : 'text-zinc-400'}>{step.text}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Payment Summary Card */}
             <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in-up animate-delay-1">
                 <CardHeader>
@@ -477,7 +519,7 @@ export function PayInvestors() {
                     /* ── Bullet Maturity: single "Pay Maturity" button ── */
                     <Button
                         onClick={handleBulletMaturity}
-                        disabled={isBatchSigning || showPendingAdminDialog}
+                        disabled={isBatchSigning || showPendingAdminDialog || !!pendingBatchInfo}
                         className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-6 text-lg shadow-lg shadow-purple-500/20 transition-all"
                     >
                         {isBatchSigning ? (

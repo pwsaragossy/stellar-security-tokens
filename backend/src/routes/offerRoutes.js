@@ -481,7 +481,7 @@ router.post('/admin/offers/:id/reconcile-chain', requirePlatformAdmin, async (re
         if (!offer) return res.status(404).json({ success: false, error: 'Offer not found' });
 
         // Fetch on-chain token holders
-        const holders = await StellarService.listTokenHolders(offer.asset_code, offer.issuer_public_key);
+        const holders = await StellarService.listAssetHolders(offer.asset_code);
 
         // Fetch DB investments
         const investments = await prisma.investment.findMany({
@@ -492,7 +492,7 @@ router.post('/admin/offers/:id/reconcile-chain', requirePlatformAdmin, async (re
         const discrepancies = [];
         for (const inv of investments) {
             const wallet = inv.investor?.stellarPublicKey || inv.investor?.sorobanContractId;
-            const onChain = holders.find(h => h.account === wallet);
+            const onChain = holders.find(h => h.publicKey === wallet);
             const dbTokens = parseFloat(inv.tokenAmount || '0');
             const chainTokens = onChain ? parseFloat(onChain.balance) : 0;
 
