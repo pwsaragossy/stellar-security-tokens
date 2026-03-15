@@ -575,6 +575,7 @@ enum MultiSigTxStatus {
   rejected
   failed
   expired
+  batch_pending         // Company still signing batches — hidden from admin listPending
 }
 
 enum MultiSigOperationType {
@@ -603,6 +604,8 @@ enum MultiSigOperationType {
   contract_propose_admin
   contract_accept_admin
   contract_upgrade
+  // Maturity lifecycle
+  maturity_clawback     // Atomic pay + burn at bullet maturity
   other
 }
 

@@ -8,6 +8,7 @@ import { PaymentService } from './payment.service.js';
 import { EmailService } from './email.service.js';
 import { AlertService } from './alert.service.js';
 import { ConfigService } from './config.service.js';
+import { MultiSigTransactionService } from './multiSigTransaction.service.js';
 import { Keypair, Asset, Operation, TransactionBuilder, Networks } from '@stellar/stellar-sdk';
 import { getUsdcIssuer } from '../config/stellar.js';
 import { keyManager } from './KeyManager.js';
@@ -388,11 +389,22 @@ export class CompanyPaymentService {
 
     /**
      * Create a payment transaction for company to sign
+     *
+     * ATOMIC BULLET MATURITY FLOW:
+     *   For bullet offers, bundles USDC payments + token clawback ops in one TX.
+     *   Clawback ops use source: issuerPublicKey (needs admin Freighter sig).
+     *   TX capped at 49 investors per batch (Stellar 100-op limit).
+     *
+     *   Company signs all batches in a loop → all go to admin queue together.
+     *
      * @param {number} offerId - Offer ID
      * @param {number} companyUserId - Company user initiating payment
-     * @returns {Promise<Object>} Transaction XDR for signing
+     * @param {Object} [options] - Batch options
+     * @param {string} [options.batchGroupId] - UUID grouping batches for this maturity
+     * @returns {Promise<Object>} Transaction XDR for signing + batchInfo
      */
-    static async createPaymentTransaction(offerId, companyUserId) {
+    static async createPaymentTransaction(offerId, companyUserId, options = {}) {
+        const { batchGroupId } = options;
         const offer = await prisma.offer.findUnique({
             where: { id: offerId },
             include: {
@@ -450,6 +462,71 @@ export class CompanyPaymentService {
         const platformFee = Math.round(feeBase * (feePercent / 100) * 100) / 100;
         const netToInvestors = Math.round((totalAmount - platformFee) * 100) / 100;
 
+        // ─── BULLET: batch guard + clawback ops ──────────────────────────
+        //
+        //  BATCH FLOW (company signs all batches before admin sees any):
+        //
+        //  createPaymentTransaction(batch 1)         ← you are here
+        //       │
+        //  Company signs → processSignedPayment      → batch_pending
+        //       │
+        //  createPaymentTransaction(batch 2)          ← auto-looped by frontend
+        //       │
+        //  Company signs → processSignedPayment      → batch_pending → flip all to 'pending'
+        //       │
+        //  Admin signs all via Freighter              → processEffects per batch
+        //       │
+        //  Last batch → offer 'closed'
+        //
+        const MAX_INVESTORS_PER_BATCH = 49; // Stellar limit: 1 fee + 49 pay + 49 clawback = 99 ops
+
+        if (isBullet) {
+            // Guard: block if batches already submitted to admin
+            const adminVisible = await prisma.multiSigTransaction.findFirst({
+                where: {
+                    operationType: 'maturity_clawback',
+                    status: { in: ['pending', 'partially_signed', 'ready'] },
+                    metadata: { path: ['offerId'], equals: offerId },
+                },
+            });
+            if (adminVisible) {
+                throw new Error('Maturity batches already queued for admin approval. Wait for signing or rejection before re-initiating.');
+            }
+
+            // Exclude investors already covered in batch_pending TXs for this batch group
+            if (batchGroupId) {
+                const pendingBatches = await prisma.multiSigTransaction.findMany({
+                    where: {
+                        operationType: 'maturity_clawback',
+                        status: 'batch_pending',
+                        metadata: { path: ['batchGroupId'], equals: batchGroupId },
+                    },
+                });
+                const coveredWallets = new Set();
+                for (const batch of pendingBatches) {
+                    for (const inv of (batch.metadata?.breakdown || [])) {
+                        coveredWallets.add(inv.investorWallet);
+                    }
+                }
+                breakdown = breakdown.filter(b => !coveredWallets.has(b.investorWallet));
+            }
+
+            // Cap at 49 investors per batch
+            if (breakdown.length > MAX_INVESTORS_PER_BATCH) {
+                breakdown = breakdown.slice(0, MAX_INVESTORS_PER_BATCH);
+            }
+
+            if (breakdown.length === 0) {
+                throw new Error('No remaining investors to pay in this batch');
+            }
+
+            // Recalculate fee for this batch's subset
+            feeBase = breakdown.reduce((sum, b) => sum + b.interest, 0);
+            totalAmount = breakdown.reduce((sum, b) => sum + b.totalPayout, 0);
+            platformFee = Math.round(feeBase * (feePercent / 100) * 100) / 100;
+            netToInvestors = Math.round((totalAmount - platformFee) * 100) / 100;
+        }
+
         // Build transaction with payment operations
         const companyKeypair = Keypair.fromPublicKey(offer.company.stellarPublicKey);
         const usdcAsset = new Asset(USDC_ASSET_CODE, USDC_ISSUER);
@@ -502,6 +579,27 @@ export class CompanyPaymentService {
             throw new Error('No valid investor wallets to pay');
         }
 
+        // ─── BULLET: append clawback ops (source: issuer, needs admin sig) ──
+        let clawbackOps = [];
+        if (isBullet) {
+            const issuerPublicKey = keyManager.getIssuerPublicKey();
+            const tokenAsset = new Asset(offer.assetCode, issuerPublicKey);
+            const holders = await StellarService.listAssetHolders(offer.assetCode);
+
+            // Match only investors in THIS batch
+            const batchWallets = new Set(breakdown.map(b => b.investorWallet));
+            clawbackOps = holders
+                .filter(h => parseFloat(h.balance) > 0 && batchWallets.has(h.publicKey))
+                .map(h => Operation.clawback({
+                    asset: tokenAsset,
+                    from: h.publicKey,
+                    amount: h.balance,
+                    source: issuerPublicKey,
+                }));
+
+            operations.push(...clawbackOps);
+        }
+
         log.info('Payment transaction prepared', {
             offerId,
             paymentType: offer.paymentType,
@@ -509,7 +607,8 @@ export class CompanyPaymentService {
             feeBase,
             platformFee,
             netToInvestors,
-            investorCount: investorOps.length
+            investorCount: investorOps.length,
+            clawbackCount: clawbackOps.length,
         });
 
         // Create unsigned transaction
@@ -520,27 +619,150 @@ export class CompanyPaymentService {
             `${isBullet ? 'Maturity' : 'Yield'} payment for ${offer.assetCode}`
         );
 
+        // Calculate remaining investors for batch info
+        const totalInvestors = isBullet
+            ? (await this.calculateBulletPayment(offerId)).breakdown.length
+            : investorOps.length;
+
         return {
             transactionXDR: transaction.toXDR(),
             offerId,
+            isBullet,
             totalAmount,
             platformFee,
             netToInvestors,
             investorCount: investorOps.length,
             breakdown,
-            expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 min expiry
+            batchInfo: isBullet ? {
+                batchGroupId: batchGroupId || null,
+                thisCount: investorOps.length,
+                remaining: Math.max(0, totalInvestors - investorOps.length),
+            } : null,
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 min frontend display expiry
         };
     }
 
     /**
      * Process a signed payment transaction
+     *
+     * PERIODIC: direct submit to Stellar → record payments inline.
+     * BULLET:   store company-signed XDR in multisig queue → admin signs later.
+     *           Payments recorded in processEffects('maturity_clawback') after on-chain success.
+     *
      * @param {string} signedXDR - Signed transaction XDR
      * @param {number} offerId - Offer ID
+     * @param {Object} [options] - Batch options
+     * @param {string} [options.batchGroupId] - UUID grouping batches for this maturity
+     * @param {Object} [options.batchInfo] - Batch info from createPaymentTransaction
      * @returns {Promise<Object>} Transaction result
      */
-    static async processSignedPayment(signedXDR, offerId) {
+    static async processSignedPayment(signedXDR, offerId, options = {}) {
+        const { batchGroupId, batchInfo } = options;
+
         try {
-            // Submit the signed transaction
+            const offer = await prisma.offer.findUnique({ where: { id: offerId } });
+            const isBullet = offer.paymentType === 'bullet';
+            const feePercent = await ConfigService.getFloat('DIVIDEND_FEE_PERCENT', DIVIDEND_FEE_PERCENT_DEFAULT);
+
+            // ─── BULLET: queue for admin multisig (DO NOT submit to Stellar) ───
+            //
+            //  Company-signed XDR → MultiSigTx(batch_pending) → later: admin signs → submit
+            //                                                         │
+            //                                                         ▼
+            //                                                    processEffects
+            //                                                    records payments
+            //                                                    closes offer
+            //
+            if (isBullet) {
+                const bulletDetails = await this.calculateBulletPayment(offerId);
+                const issuerPublicKey = keyManager.getIssuerPublicKey();
+
+                // Calculate fee breakdown for metadata
+                const totalFee = Math.round(bulletDetails.totalInterest * (feePercent / 100) * 100) / 100;
+
+                const txData = {
+                    operationType: 'maturity_clawback',
+                    xdr: signedXDR,
+                    requiredSigners: [issuerPublicKey],
+                    thresholdRequired: 1,
+                    metadata: {
+                        batchGroupId: batchGroupId || null,
+                        offerId,
+                        assetCode: offer.assetCode,
+                        breakdown: batchInfo?.breakdown || bulletDetails.breakdown,
+                        feePercent,
+                        totalFee,
+                        totalPaid: bulletDetails.totalPayout,
+                    },
+                    description: `Maturity batch: pay + burn ${offer.assetCode}`,
+                };
+
+                const hasMore = batchInfo?.remaining > 0;
+
+                if (!hasMore) {
+                    // LAST BATCH: create TX + flip all batches to 'pending' atomically
+                    await prisma.$transaction(async (tx) => {
+                        await tx.multiSigTransaction.create({ data: {
+                            ...txData,
+                            status: 'batch_pending',
+                            networkPassphrase: (await import('../config/stellar.js')).getNetworkPassphrase(),
+                            expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000), // 8h
+                            collectedSignatures: {},
+                        }});
+
+                        // Flip ALL batch_pending → pending (admin can now see them)
+                        if (batchGroupId) {
+                            await tx.multiSigTransaction.updateMany({
+                                where: {
+                                    operationType: 'maturity_clawback',
+                                    status: 'batch_pending',
+                                    metadata: { path: ['batchGroupId'], equals: batchGroupId },
+                                },
+                                data: { status: 'pending' },
+                            });
+                        }
+                    });
+
+                    // Notify admin via Pusher (outside transaction)
+                    try {
+                        const { broadcast } = await import('../config/pusher.js');
+                        const batchCount = batchGroupId
+                            ? await prisma.multiSigTransaction.count({
+                                where: { metadata: { path: ['batchGroupId'], equals: batchGroupId } },
+                            })
+                            : 1;
+                        broadcast('admin-governance', 'new-proposal', {
+                            type: 'maturity_clawback',
+                            offerId,
+                            batchCount,
+                            description: `${batchCount} maturity batch(es) ready for ${offer.assetCode}`,
+                        });
+                    } catch (pusherErr) {
+                        log.warn('Pusher broadcast failed (non-critical)', { error: pusherErr.message });
+                    }
+
+                    return {
+                        success: true,
+                        status: 'pending_admin_approval',
+                        hasMore: false,
+                        investorsPaid: (batchInfo?.breakdown || bulletDetails.breakdown).length,
+                        totalPaid: bulletDetails.totalPayout,
+                    };
+                } else {
+                    // NOT LAST BATCH: create as batch_pending (hidden from admin)
+                    const pendingTx = await MultiSigTransactionService.create(txData);
+
+                    return {
+                        success: true,
+                        status: 'batch_queued',
+                        hasMore: true,
+                        multiSigTransactionId: pendingTx.id,
+                        investorsPaid: (batchInfo?.breakdown || bulletDetails.breakdown).length,
+                    };
+                }
+            }
+
+            // ─── PERIODIC: direct submit to Stellar (unchanged) ─────────────
             const result = await StellarService.submitTransaction(signedXDR);
 
             if (result.success) {
@@ -550,119 +772,33 @@ export class CompanyPaymentService {
                     data: {
                         lastPaymentDate: new Date(),
                         paymentDueStatus: 'current',
-                        nextPaymentDue: this.calculateNextPaymentDate(
-                            await prisma.offer.findUnique({ where: { id: offerId } })
-                        ),
+                        nextPaymentDue: this.calculateNextPaymentDate(offer),
                     }
                 });
 
-                // Record interest payments (with fee breakdown)
-                const offer = await prisma.offer.findUnique({ where: { id: offerId } });
-                const isBullet = offer.paymentType === 'bullet';
-                const feePercent = await ConfigService.getFloat('DIVIDEND_FEE_PERCENT', DIVIDEND_FEE_PERCENT_DEFAULT);
-                const feeRatio = feePercent > 0 ? (100 - feePercent) / 100 : 1;
+                // Record payments via shared helper
+                const paymentDetails = await this.calculateOwedAmount(offerId);
+                await this._recordPayments(
+                    offer,
+                    paymentDetails.breakdown,
+                    result.transactionHash,
+                    feePercent,
+                    false // isPeriodic
+                );
 
-                let recordedBreakdown;
-                let totalPaid;
-
-                if (isBullet) {
-                    // Bullet: fee on interest only, principal untaxed
-                    const bulletDetails = await this.calculateBulletPayment(offerId);
-                    recordedBreakdown = bulletDetails.breakdown;
-                    totalPaid = bulletDetails.totalPayout;
-
-                    for (const payment of recordedBreakdown) {
-                        const netInterest = Math.round(payment.interest * feeRatio * 100) / 100;
-                        const fee = Math.round((payment.interest - netInterest) * 100) / 100;
-
-                        await prisma.interestPayment.create({
-                            data: {
-                                investorId: payment.investorId,
-                                assetCode: offer.assetCode,
-                                tokenBalance: payment.principal,
-                                interestRate: offer.annualInterestRate,
-                                interestAmount: payment.totalPayout,    // gross (backward compat)
-                                usdcAmount: payment.totalPayout,        // gross (backward compat)
-                                grossAmount: payment.totalPayout,       // principal + interest
-                                netAmount: payment.principal + netInterest,
-                                platformFeeAmount: fee,                 // fee on interest only
-                                transactionHash: result.transactionHash,
-                                paymentDate: new Date(),
-                                paymentType: offer.paymentType,
-                                offerId: offer.id,
-                                status: 'completed',
-                            }
-                        });
-                    }
-                } else {
-                    // Periodic: totalOwed IS interest, fee on everything
-                    const paymentDetails = await this.calculateOwedAmount(offerId);
-                    recordedBreakdown = paymentDetails.breakdown;
-                    totalPaid = paymentDetails.totalOwed;
-
-                    for (const payment of recordedBreakdown) {
-                        const gross = payment.interestOwed;
-                        const net = Math.round(gross * feeRatio * 100) / 100;
-                        const fee = Math.round((gross - net) * 100) / 100;
-
-                        await prisma.interestPayment.create({
-                            data: {
-                                investorId: payment.investorId,
-                                assetCode: offer.assetCode,
-                                tokenBalance: payment.tokenBalance,
-                                interestRate: offer.annualInterestRate,
-                                interestAmount: payment.interestOwed, // gross (backward compat)
-                                usdcAmount: payment.interestOwed,     // gross (backward compat)
-                                grossAmount: gross,
-                                netAmount: net,
-                                platformFeeAmount: fee,
-                                transactionHash: result.transactionHash,
-                                paymentDate: new Date(),
-                                paymentType: offer.paymentType,
-                                offerId: offer.id,
-                                status: 'completed',
-                            }
-                        });
-                    }
-                }
-
-                log.info(`Payment processed successfully`, {
+                log.info(`Periodic payment processed successfully`, {
                     offerId,
-                    paymentType: offer.paymentType,
                     transactionHash: result.transactionHash,
-                    investorsPaid: recordedBreakdown.length,
-                    totalPaid
+                    investorsPaid: paymentDetails.breakdown.length,
+                    totalPaid: paymentDetails.totalOwed,
                 });
-
-                // FeeLog: central receipt for admin fee reporting (fire-and-forget)
-                const totalFee = recordedBreakdown.reduce((sum, p) => {
-                    const pFee = isBullet
-                        ? Math.round((p.interest - Math.round(p.interest * feeRatio * 100) / 100) * 100) / 100
-                        : Math.round((p.interestOwed - Math.round(p.interestOwed * feeRatio * 100) / 100) * 100) / 100;
-                    return sum + pFee;
-                }, 0);
-                if (totalFee > 0) {
-                    try {
-                        await prisma.feeLog.create({
-                            data: {
-                                amount: totalFee,
-                                assetCode: offer.assetCode,
-                                category: 'DIVIDEND',
-                                sourceId: offer.id,
-                                description: `${isBullet ? 'Bullet maturity' : 'Periodic'} payment fee (${feePercent}%)`,
-                                transactionHash: result.transactionHash,
-                            }
-                        });
-                    } catch (feeLogErr) {
-                        log.warn('FeeLog write failed (non-critical)', { offerId, error: feeLogErr.message });
-                    }
-                }
 
                 return {
                     success: true,
+                    status: 'completed',
                     transactionHash: result.transactionHash,
-                    investorsPaid: recordedBreakdown.length,
-                    totalPaid,
+                    investorsPaid: paymentDetails.breakdown.length,
+                    totalPaid: paymentDetails.totalOwed,
                 };
             } else {
                 throw new Error(result.error || 'Transaction failed');
@@ -672,6 +808,84 @@ export class CompanyPaymentService {
             AlertService.error('Payment submission failed', { offerId, error: error.message }).catch(() => {});
             throw error;
         }
+    }
+
+    /**
+     * Record InterestPayments + FeeLog for a completed payment.
+     * DRY: used by processSignedPayment (periodic) AND processEffects (bullet).
+     *
+     * @param {Object} offer - Offer record
+     * @param {Array} breakdown - Per-investor payment breakdown
+     * @param {string} txHash - On-chain transaction hash
+     * @param {number} feePercent - Platform fee percentage
+     * @param {boolean} isBullet - true = bullet, false = periodic
+     * @returns {Promise<{records: Array, totalFee: number}>}
+     */
+    static async _recordPayments(offer, breakdown, txHash, feePercent, isBullet) {
+        const feeRatio = feePercent > 0 ? (100 - feePercent) / 100 : 1;
+        const records = [];
+
+        for (const payment of breakdown) {
+            let gross, base, net, fee, tokenBalance;
+
+            if (isBullet) {
+                // Bullet: fee on interest only, principal untaxed
+                gross = payment.totalPayout;
+                base = payment.interest;
+                const netInterest = Math.round(base * feeRatio * 100) / 100;
+                fee = Math.round((base - netInterest) * 100) / 100;
+                net = payment.principal + netInterest;
+                tokenBalance = payment.principal;
+            } else {
+                // Periodic: totalOwed IS interest, fee on everything
+                gross = payment.interestOwed;
+                base = payment.interestOwed;
+                net = Math.round(gross * feeRatio * 100) / 100;
+                fee = Math.round((gross - net) * 100) / 100;
+                tokenBalance = payment.tokenBalance;
+            }
+
+            await prisma.interestPayment.create({
+                data: {
+                    investorId: payment.investorId,
+                    assetCode: offer.assetCode,
+                    tokenBalance,
+                    interestRate: offer.annualInterestRate,
+                    interestAmount: gross,         // gross (backward compat)
+                    usdcAmount: gross,             // gross (backward compat)
+                    grossAmount: gross,
+                    netAmount: net,
+                    platformFeeAmount: fee,
+                    transactionHash: txHash,
+                    paymentDate: new Date(),
+                    paymentType: offer.paymentType,
+                    offerId: offer.id,
+                    status: 'completed',
+                }
+            });
+            records.push({ ...payment, fee });
+        }
+
+        // FeeLog: central receipt for admin fee reporting (fire-and-forget)
+        const totalFee = records.reduce((sum, r) => sum + r.fee, 0);
+        if (totalFee > 0) {
+            try {
+                await prisma.feeLog.create({
+                    data: {
+                        amount: totalFee,
+                        assetCode: offer.assetCode,
+                        category: 'DIVIDEND',
+                        sourceId: offer.id,
+                        description: `${isBullet ? 'Bullet maturity' : 'Periodic'} payment fee (${feePercent}%)`,
+                        transactionHash: txHash,
+                    }
+                });
+            } catch (feeLogErr) {
+                log.warn('FeeLog write failed (non-critical)', { offerId: offer.id, error: feeLogErr.message });
+            }
+        }
+
+        return { records, totalFee };
     }
 
     /**

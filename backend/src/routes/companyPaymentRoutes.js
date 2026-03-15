@@ -98,13 +98,16 @@ router.post('/:offerId/prepare', authenticateToken, requireCompanyUser, async (r
 
         const transaction = await CompanyPaymentService.createPaymentTransaction(
             parseInt(offerId),
-            userId
+            userId,
+            { batchGroupId: req.body.batchGroupId }
         );
 
         res.json({
             success: true,
             data: transaction,
-            message: 'Transaction prepared. Sign with your passkey to complete payment.'
+            message: transaction.isBullet
+                ? `Batch prepared (${transaction.investorCount} investors). Sign to continue.`
+                : 'Transaction prepared. Sign with your passkey to complete payment.'
         });
     } catch (error) {
         log.error('[CompanyPayments] Error preparing payment:', error);
@@ -146,13 +149,24 @@ router.post('/:offerId/submit', authenticateToken, requireCompanyUser, async (re
 
         const result = await CompanyPaymentService.processSignedPayment(
             signedXDR,
-            parseInt(offerId)
+            parseInt(offerId),
+            {
+                batchGroupId: req.body.batchGroupId,
+                batchInfo: req.body.batchInfo,
+            }
         );
+
+        // Dynamic message based on status
+        const messages = {
+            completed: 'Payment submitted successfully',
+            batch_queued: 'Batch signed. Continue to next batch.',
+            pending_admin_approval: 'All batches submitted. Awaiting platform admin approval.',
+        };
 
         res.json({
             success: true,
             data: result,
-            message: 'Payment submitted successfully'
+            message: messages[result.status] || 'Payment processed'
         });
     } catch (error) {
         log.error('[CompanyPayments] Error submitting payment:', error);
