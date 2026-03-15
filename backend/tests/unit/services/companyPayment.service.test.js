@@ -244,6 +244,44 @@ describe('CompanyPaymentService', () => {
         assert.strictEqual(fee, 8);
         assert.strictEqual(net + fee, investorGross);
     });
+
+    test('Bullet fee: 2% on INTEREST only, NOT on principal + interest', async () => {
+        // Bullet: $10,000 principal + $2,000 interest = $12,000 total
+        // Fee should be 2% × $2,000 = $40 (NOT 2% × $12,000 = $240)
+        const totalPrincipal = 10000;
+        const totalInterest = 2000;
+        const totalPayout = totalPrincipal + totalInterest;
+        const feePercent = 2;
+
+        // feeBase = totalInterest (NOT totalPayout)
+        const feeBase = totalInterest;
+        const platformFee = Math.round(feeBase * (feePercent / 100) * 100) / 100;
+        const netToInvestors = Math.round((totalPayout - platformFee) * 100) / 100;
+
+        assert.strictEqual(platformFee, 40);         // NOT 240
+        assert.strictEqual(netToInvestors, 11960);   // NOT 11760
+        assert.strictEqual(platformFee + netToInvestors, totalPayout);
+    });
+
+    test('Bullet per-investor: principal untaxed, fee only on interest', async () => {
+        // Mirrors createPaymentTransaction() bullet branch:
+        //   interestFeeRatio = (feeBase - platformFee) / feeBase
+        //   payout = principal + (interest × interestFeeRatio)
+        const feePercent = 2;
+        const investorPrincipal = 5000;  // investor's own money
+        const investorInterest = 1000;   // investor's yield
+        const feeRatio = (100 - feePercent) / 100; // 0.98
+
+        const adjustedInterest = Math.round(investorInterest * feeRatio * 100) / 100;
+        const fee = Math.round((investorInterest - adjustedInterest) * 100) / 100;
+        const payout = investorPrincipal + adjustedInterest;
+
+        assert.strictEqual(adjustedInterest, 980);
+        assert.strictEqual(fee, 20);
+        assert.strictEqual(payout, 5980);
+        // Principal is UNTOUCHED
+        assert.strictEqual(payout - investorPrincipal, adjustedInterest);
+    });
 });
 
 describe('CompanyPaymentService - Overdue Status Logic', () => {

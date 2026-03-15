@@ -121,6 +121,24 @@ Backend route exists (`POST /contracts/batch/ttl` → `ContractController.batchE
 - [ ] `AuditService.log()` called on every contract route (pause, resume, drain, price update, etc.)
 - [ ] Scrollable log section in `ContractDetail.tsx`
 
+### Fee UX (Investor-Facing)
+> **Build now:** Hide fee breakdown from investor payment history. Show only net amount received.
+
+- [ ] Remove `platformFeeAmount` column from investor payment history UI
+- [ ] Payment notification shows: "Payment received: R$ 980.00 (net of 2% platform service fee)"
+- [ ] Admin panel retains full fee visibility (grossAmount, netAmount, platformFeeAmount)
+
+### Loyalty Points Program 🎯
+> **Build when:** Post-MVP, when investor retention becomes a priority.
+
+Turn platform fees into loyalty points. Instead of "we took $40," the investor sees "you earned 40 Radox Points." Reframes the fee as a reward mechanism.
+
+- [ ] Points model: 1 point = $1 of platform fees paid
+- [ ] Investor dashboard: points balance + tier (Bronze/Silver/Gold)
+- [ ] Tier benefits: fee discounts, early access to new offers, priority support
+- [ ] Points history: "Earned 40 pts from REALT1 payout (Mar 2026)"
+- [ ] Consider: on-chain points as a Stellar asset (composability, transferability)
+
 ---
 
 ## Strategic Principle

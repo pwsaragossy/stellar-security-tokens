@@ -6,6 +6,7 @@ import prisma from '../config/prisma.js';
 import { StellarService } from './stellar.service.js';
 import { PaymentService } from './payment.service.js';
 import { EmailService } from './email.service.js';
+import { AlertService } from './alert.service.js';
 import { ConfigService } from './config.service.js';
 import { Keypair, Asset, Operation, TransactionBuilder, Networks } from '@stellar/stellar-sdk';
 import { getUsdcIssuer } from '../config/stellar.js';
@@ -17,9 +18,9 @@ const log = logger.scope('CompanyPayment');
 // Configuration
 // Platform fee is handled on-chain in the Soroban trade() contract (fee_bps field)
 const DIVIDEND_FEE_PERCENT_DEFAULT = 0.02; // Fallback if ConfigService has no value
-const LATE_FEE_PERCENT_PER_DAY = 0.001; // 0.1% per day
+const LATE_FEE_PERCENT_PER_DAY = 0;    // Disabled for MVP — no legal framework yet
 const GRACE_PERIOD_DAYS = 10;
-const DEFAULT_FEE_PERCENT = 0.05; // 5% of owed amount
+const DEFAULT_FEE_PERCENT = 0;         // Disabled for MVP — no legal framework yet
 
 const USDC_ASSET_CODE = 'USDC';
 const USDC_ISSUER = getUsdcIssuer();
@@ -392,12 +393,6 @@ export class CompanyPaymentService {
      * @returns {Promise<Object>} Transaction XDR for signing
      */
     static async createPaymentTransaction(offerId, companyUserId) {
-        const paymentDetails = await this.calculateOwedAmount(offerId);
-
-        if (paymentDetails.totalOwed === 0) {
-            throw new Error('No payment owed for this offer');
-        }
-
         const offer = await prisma.offer.findUnique({
             where: { id: offerId },
             include: {
@@ -410,17 +405,50 @@ export class CompanyPaymentService {
             throw new Error('Company does not have a Stellar wallet linked');
         }
 
-        // Calculate platform fee
+        // Fee strategy by payment type:
         //
-        //  Company pays $1000 total:
-        //  ├── $20 → Platform Treasury  (DIVIDEND_FEE_PERCENT = 2%)
-        //  └── $980 → Split among investors (proportional to holdings)
+        //  PERIODIC (monthly/quarterly/annual):
+        //    Company pays: INTEREST ONLY (principal stays as tokens)
+        //    feeBase = totalOwed = interest
+        //    Fee = feePercent × interest
+        //    Per investor: interestOwed × (1 - fee%)
         //
+        //  BULLET (maturity payout):
+        //    Company pays: PRINCIPAL + INTEREST
+        //    feeBase = totalInterest ONLY  ← principal is untaxed
+        //    Fee = feePercent × totalInterest
+        //    Per investor: principal + (interest × (1 - fee%))
+        //
+        //  Example: $10K invested, 10% APY, 2 years, 2% fee
+        //    Periodic: $1000/yr interest, fee = $20/yr
+        //    Bullet:   $12,000 total, fee = 2% × $2,000 = $40
+        //              NOT 2% × $12,000 = $240
+        //
+        const isBullet = offer.paymentType === 'bullet';
+        let totalAmount, feeBase, breakdown;
+
+        if (isBullet) {
+            const bulletDetails = await this.calculateBulletPayment(offerId);
+            if (bulletDetails.totalPayout === 0) {
+                throw new Error('No payment owed for this offer');
+            }
+            totalAmount = bulletDetails.totalPayout;
+            feeBase = bulletDetails.totalInterest;  // Fee on YIELD only
+            breakdown = bulletDetails.breakdown;
+        } else {
+            const paymentDetails = await this.calculateOwedAmount(offerId);
+            if (paymentDetails.totalOwed === 0) {
+                throw new Error('No payment owed for this offer');
+            }
+            totalAmount = paymentDetails.totalOwed;
+            feeBase = paymentDetails.totalOwed;      // periodic totalOwed IS interest
+            breakdown = paymentDetails.breakdown;
+        }
+
         // Read fee from ConfigService (editable via Admin > Fee Config)
         const feePercent = await ConfigService.getFloat('DIVIDEND_FEE_PERCENT', DIVIDEND_FEE_PERCENT_DEFAULT);
-        const platformFee = Math.round(paymentDetails.totalOwed * (feePercent / 100) * 100) / 100;
-        const netToInvestors = Math.round((paymentDetails.totalOwed - platformFee) * 100) / 100;
-        const feeRatio = paymentDetails.totalOwed > 0 ? netToInvestors / paymentDetails.totalOwed : 1;
+        const platformFee = Math.round(feeBase * (feePercent / 100) * 100) / 100;
+        const netToInvestors = Math.round((totalAmount - platformFee) * 100) / 100;
 
         // Build transaction with payment operations
         const companyKeypair = Keypair.fromPublicKey(offer.company.stellarPublicKey);
@@ -437,17 +465,36 @@ export class CompanyPaymentService {
             }));
         }
 
-        // Ops 2+: Investor payments (adjusted for fee deduction)
-        const investorOps = paymentDetails.breakdown
-            .filter(b => b.investorWallet && b.interestOwed > 0)
-            .map(b => {
-                const adjustedAmount = Math.round(b.interestOwed * feeRatio * 100) / 100;
-                return Operation.payment({
-                    destination: b.investorWallet,
-                    asset: usdcAsset,
-                    amount: Math.max(adjustedAmount, 0.0000001).toFixed(7),
+        // Ops 2+: Investor payments
+        let investorOps;
+        if (isBullet) {
+            // Bullet: principal untaxed, fee deducted from interest only
+            const interestFeeRatio = feeBase > 0 ? (feeBase - platformFee) / feeBase : 1;
+            investorOps = breakdown
+                .filter(b => b.investorWallet && b.totalPayout > 0)
+                .map(b => {
+                    const adjustedInterest = Math.round(b.interest * interestFeeRatio * 100) / 100;
+                    const payout = b.principal + adjustedInterest;
+                    return Operation.payment({
+                        destination: b.investorWallet,
+                        asset: usdcAsset,
+                        amount: Math.max(payout, 0.0000001).toFixed(7),
+                    });
                 });
-            });
+        } else {
+            // Periodic: everything is interest, apply feeRatio uniformly
+            const feeRatio = totalAmount > 0 ? netToInvestors / totalAmount : 1;
+            investorOps = breakdown
+                .filter(b => b.investorWallet && b.interestOwed > 0)
+                .map(b => {
+                    const adjustedAmount = Math.round(b.interestOwed * feeRatio * 100) / 100;
+                    return Operation.payment({
+                        destination: b.investorWallet,
+                        asset: usdcAsset,
+                        amount: Math.max(adjustedAmount, 0.0000001).toFixed(7),
+                    });
+                });
+        }
 
         operations.push(...investorOps);
 
@@ -457,7 +504,9 @@ export class CompanyPaymentService {
 
         log.info('Payment transaction prepared', {
             offerId,
-            totalOwed: paymentDetails.totalOwed,
+            paymentType: offer.paymentType,
+            totalAmount,
+            feeBase,
             platformFee,
             netToInvestors,
             investorCount: investorOps.length
@@ -468,17 +517,17 @@ export class CompanyPaymentService {
         const transaction = await StellarService.buildUnsignedTransaction(
             offer.company.stellarPublicKey,
             operations,
-            `Yield payment for ${offer.assetCode}`
+            `${isBullet ? 'Maturity' : 'Yield'} payment for ${offer.assetCode}`
         );
 
         return {
             transactionXDR: transaction.toXDR(),
             offerId,
-            totalAmount: paymentDetails.totalOwed,
+            totalAmount,
             platformFee,
             netToInvestors,
             investorCount: investorOps.length,
-            breakdown: paymentDetails.breakdown,
+            breakdown,
             expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 min expiry
         };
     }
@@ -508,54 +557,119 @@ export class CompanyPaymentService {
                 });
 
                 // Record interest payments (with fee breakdown)
-                const paymentDetails = await this.calculateOwedAmount(offerId);
                 const offer = await prisma.offer.findUnique({ where: { id: offerId } });
+                const isBullet = offer.paymentType === 'bullet';
                 const feePercent = await ConfigService.getFloat('DIVIDEND_FEE_PERCENT', DIVIDEND_FEE_PERCENT_DEFAULT);
                 const feeRatio = feePercent > 0 ? (100 - feePercent) / 100 : 1;
 
-                for (const payment of paymentDetails.breakdown) {
-                    const gross = payment.interestOwed;
-                    const net = Math.round(gross * feeRatio * 100) / 100;
-                    const fee = Math.round((gross - net) * 100) / 100;
+                let recordedBreakdown;
+                let totalPaid;
 
-                    await prisma.interestPayment.create({
-                        data: {
-                            investorId: payment.investorId,
-                            assetCode: offer.assetCode,
-                            tokenBalance: payment.tokenBalance,
-                            interestRate: offer.annualInterestRate,
-                            interestAmount: payment.interestOwed, // gross (backward compat)
-                            usdcAmount: payment.interestOwed,     // gross (backward compat)
-                            grossAmount: gross,
-                            netAmount: net,
-                            platformFeeAmount: fee,
-                            transactionHash: result.transactionHash,
-                            paymentDate: new Date(),
-                            paymentType: offer.paymentType,
-                            offerId: offer.id,
-                            status: 'completed',
-                        }
-                    });
+                if (isBullet) {
+                    // Bullet: fee on interest only, principal untaxed
+                    const bulletDetails = await this.calculateBulletPayment(offerId);
+                    recordedBreakdown = bulletDetails.breakdown;
+                    totalPaid = bulletDetails.totalPayout;
+
+                    for (const payment of recordedBreakdown) {
+                        const netInterest = Math.round(payment.interest * feeRatio * 100) / 100;
+                        const fee = Math.round((payment.interest - netInterest) * 100) / 100;
+
+                        await prisma.interestPayment.create({
+                            data: {
+                                investorId: payment.investorId,
+                                assetCode: offer.assetCode,
+                                tokenBalance: payment.principal,
+                                interestRate: offer.annualInterestRate,
+                                interestAmount: payment.totalPayout,    // gross (backward compat)
+                                usdcAmount: payment.totalPayout,        // gross (backward compat)
+                                grossAmount: payment.totalPayout,       // principal + interest
+                                netAmount: payment.principal + netInterest,
+                                platformFeeAmount: fee,                 // fee on interest only
+                                transactionHash: result.transactionHash,
+                                paymentDate: new Date(),
+                                paymentType: offer.paymentType,
+                                offerId: offer.id,
+                                status: 'completed',
+                            }
+                        });
+                    }
+                } else {
+                    // Periodic: totalOwed IS interest, fee on everything
+                    const paymentDetails = await this.calculateOwedAmount(offerId);
+                    recordedBreakdown = paymentDetails.breakdown;
+                    totalPaid = paymentDetails.totalOwed;
+
+                    for (const payment of recordedBreakdown) {
+                        const gross = payment.interestOwed;
+                        const net = Math.round(gross * feeRatio * 100) / 100;
+                        const fee = Math.round((gross - net) * 100) / 100;
+
+                        await prisma.interestPayment.create({
+                            data: {
+                                investorId: payment.investorId,
+                                assetCode: offer.assetCode,
+                                tokenBalance: payment.tokenBalance,
+                                interestRate: offer.annualInterestRate,
+                                interestAmount: payment.interestOwed, // gross (backward compat)
+                                usdcAmount: payment.interestOwed,     // gross (backward compat)
+                                grossAmount: gross,
+                                netAmount: net,
+                                platformFeeAmount: fee,
+                                transactionHash: result.transactionHash,
+                                paymentDate: new Date(),
+                                paymentType: offer.paymentType,
+                                offerId: offer.id,
+                                status: 'completed',
+                            }
+                        });
+                    }
                 }
 
                 log.info(`Payment processed successfully`, {
                     offerId,
+                    paymentType: offer.paymentType,
                     transactionHash: result.transactionHash,
-                    investorsPaid: paymentDetails.breakdown.length,
-                    totalPaid: paymentDetails.totalOwed
+                    investorsPaid: recordedBreakdown.length,
+                    totalPaid
                 });
+
+                // FeeLog: central receipt for admin fee reporting (fire-and-forget)
+                const totalFee = recordedBreakdown.reduce((sum, p) => {
+                    const pFee = isBullet
+                        ? Math.round((p.interest - Math.round(p.interest * feeRatio * 100) / 100) * 100) / 100
+                        : Math.round((p.interestOwed - Math.round(p.interestOwed * feeRatio * 100) / 100) * 100) / 100;
+                    return sum + pFee;
+                }, 0);
+                if (totalFee > 0) {
+                    try {
+                        await prisma.feeLog.create({
+                            data: {
+                                amount: totalFee,
+                                assetCode: offer.assetCode,
+                                category: 'DIVIDEND',
+                                sourceId: offer.id,
+                                description: `${isBullet ? 'Bullet maturity' : 'Periodic'} payment fee (${feePercent}%)`,
+                                transactionHash: result.transactionHash,
+                            }
+                        });
+                    } catch (feeLogErr) {
+                        log.warn('FeeLog write failed (non-critical)', { offerId, error: feeLogErr.message });
+                    }
+                }
 
                 return {
                     success: true,
                     transactionHash: result.transactionHash,
-                    investorsPaid: paymentDetails.breakdown.length,
-                    totalPaid: paymentDetails.totalOwed,
+                    investorsPaid: recordedBreakdown.length,
+                    totalPaid,
                 };
             } else {
                 throw new Error(result.error || 'Transaction failed');
             }
         } catch (error) {
             log.error(`Payment failed`, { offerId, error: error.message });
+            AlertService.error('Payment submission failed', { offerId, error: error.message }).catch(() => {});
             throw error;
         }
     }
