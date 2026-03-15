@@ -507,19 +507,28 @@ export class CompanyPaymentService {
                     }
                 });
 
-                // Record interest payments
+                // Record interest payments (with fee breakdown)
                 const paymentDetails = await this.calculateOwedAmount(offerId);
                 const offer = await prisma.offer.findUnique({ where: { id: offerId } });
+                const feePercent = await ConfigService.getFloat('DIVIDEND_FEE_PERCENT', DIVIDEND_FEE_PERCENT_DEFAULT);
+                const feeRatio = feePercent > 0 ? (100 - feePercent) / 100 : 1;
 
                 for (const payment of paymentDetails.breakdown) {
+                    const gross = payment.interestOwed;
+                    const net = Math.round(gross * feeRatio * 100) / 100;
+                    const fee = Math.round((gross - net) * 100) / 100;
+
                     await prisma.interestPayment.create({
                         data: {
                             investorId: payment.investorId,
                             assetCode: offer.assetCode,
                             tokenBalance: payment.tokenBalance,
                             interestRate: offer.annualInterestRate,
-                            interestAmount: payment.interestOwed,
-                            usdcAmount: payment.interestOwed,
+                            interestAmount: payment.interestOwed, // gross (backward compat)
+                            usdcAmount: payment.interestOwed,     // gross (backward compat)
+                            grossAmount: gross,
+                            netAmount: net,
+                            platformFeeAmount: fee,
                             transactionHash: result.transactionHash,
                             paymentDate: new Date(),
                             paymentType: offer.paymentType,

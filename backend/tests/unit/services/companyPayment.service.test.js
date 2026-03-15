@@ -189,32 +189,60 @@ describe('CompanyPaymentService', () => {
         }
     });
 
-    test('processTokenSaleFees() - calculates 1% platform fee correctly', async () => {
-        try {
-            if (!CompanyPaymentService) {
-                const module = await import('../../../src/services/companyPayment.service.js');
-                CompanyPaymentService = module.CompanyPaymentService;
-            }
+    test('Dividend fee calculation: 2% on $1000 = $20 platform fee, $980 to investors', async () => {
+        // Mirrors the math in createPaymentTransaction():
+        //   feePercent = 2 (from ConfigService, stored as "2" meaning 2%)
+        //   platformFee = totalOwed × (feePercent / 100)
+        //   netToInvestors = totalOwed - platformFee
+        const totalOwed = 1000;
+        const feePercent = 2; // as stored in DB / returned by ConfigService.getFloat()
+        const platformFee = Math.round(totalOwed * (feePercent / 100) * 100) / 100;
+        const netToInvestors = Math.round((totalOwed - platformFee) * 100) / 100;
 
-            // Note: This test will fail without a real DB/offer, but validates the calculation logic
-            // In a real test, you'd mock prisma.offer.findUnique
-            const usdcAmount = 10000;
-            const expectedPlatformFee = 100; // 1%
-            const expectedCompanyProceeds = 9900; // 99%
+        assert.strictEqual(platformFee, 20);
+        assert.strictEqual(netToInvestors, 980);
+        assert.strictEqual(platformFee + netToInvestors, totalOwed);
+    });
 
-            // Test the calculation logic directly
-            const platformFee = usdcAmount * 0.01;
-            const companyProceeds = usdcAmount - platformFee;
+    test('Dividend fee rounding: handles fractional cents correctly', async () => {
+        // $333.33 × 2% = $6.6666 → rounded to $6.67
+        const totalOwed = 333.33;
+        const feePercent = 2;
+        const platformFee = Math.round(totalOwed * (feePercent / 100) * 100) / 100;
+        const netToInvestors = Math.round((totalOwed - platformFee) * 100) / 100;
 
-            assert.strictEqual(platformFee, expectedPlatformFee);
-            assert.strictEqual(companyProceeds, expectedCompanyProceeds);
-        } catch (error) {
-            if (error.message.includes('Server') || error.message.includes('import')) {
-                assert.ok(true, 'Test skipped due to import issue');
-            } else {
-                throw error;
-            }
-        }
+        assert.strictEqual(platformFee, 6.67);
+        assert.strictEqual(netToInvestors, 326.66);
+        // Allow 1 cent variance from rounding
+        assert.ok(Math.abs((platformFee + netToInvestors) - totalOwed) <= 0.01);
+    });
+
+    test('Dividend fee: zero fee skips treasury operation', async () => {
+        // When admin sets fee to 0%, no treasury payment should be created
+        const totalOwed = 1000;
+        const feePercent = 0;
+        const platformFee = Math.round(totalOwed * (feePercent / 100) * 100) / 100;
+
+        assert.strictEqual(platformFee, 0);
+        // createPaymentTransaction() guards: if (platformFee > 0) — so no treasury op
+        assert.strictEqual(platformFee > 0, false);
+    });
+
+    test('Per-investor fee deduction: feeRatio applied to individual amounts', async () => {
+        // Mirrors processSignedPayment() recording logic:
+        //   feeRatio = (100 - feePercent) / 100
+        //   net = Math.round(gross × feeRatio × 100) / 100
+        const feePercent = 2;
+        const feeRatio = (100 - feePercent) / 100; // 0.98
+        const investorGross = 400; // investor's share before fee
+
+        const net = Math.round(investorGross * feeRatio * 100) / 100;
+        const fee = Math.round((investorGross - net) * 100) / 100;
+
+        assert.strictEqual(feeRatio, 0.98);
+        assert.strictEqual(net, 392);
+        assert.strictEqual(fee, 8);
+        assert.strictEqual(net + fee, investorGross);
     });
 });
 

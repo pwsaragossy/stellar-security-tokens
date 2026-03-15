@@ -223,6 +223,9 @@ model InterestPayment {
   offerId         Int?          @map("offer_id")
   paymentType     PaymentType   @default(monthly) @map("payment_type")
   isBulletPayment Boolean       @default(false) @map("is_bullet_payment")
+  grossAmount     Decimal?      @map("gross_amount") @db.Decimal(20, 7)      // Pre-fee amount owed to investor
+  netAmount       Decimal?      @map("net_amount") @db.Decimal(20, 7)        // Post-fee amount investor received on-chain
+  platformFeeAmount Decimal?    @map("platform_fee_amount") @db.Decimal(20, 7) // Platform's cut (grossAmount - netAmount)
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamp
 
   // Relations
