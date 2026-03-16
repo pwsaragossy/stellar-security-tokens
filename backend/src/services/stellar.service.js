@@ -1908,72 +1908,77 @@ export class StellarService {
 
       log.info(`[StellarService] Extending TTL for contract ${contractId} by ${ledgersToExtend} ledgers`);
 
-      // 1. Create operations for instance and code extension
-      // Note: We use extendFootprintTtl operation which requires specific footprint
+      // 1. Create the extend operation
       const extendOp = Operation.extendFootprintTtl({
         extendTo: ledgersToExtend,
       });
 
-      // 2. Build transaction
-      let transaction = buildTransactionWithAccount(operationsAccount, [extendOp]);
-
-      // 3. Prepare transaction (important: this sets the footprint)
-      // We need to manually set the footprint for the extension
-      const footprint = new xdr.LedgerFootprint({
-        readOnly: [
-          xdr.LedgerKey.contractData(new xdr.LedgerKeyContractData({
-            contract: Address.fromString(contractId).toScAddress(),
-            key: xdr.ScVal.scvLedgerKeyContractInstance(),
-            durability: xdr.ContractDataDurability.persistent(),
-          }))
-        ],
-        readWrite: [],
-      });
-
-      // Fetch the contract instance to get the WASM hash for code extension
+      // 2. Get contract instance and code footprints
+      //    (Following canonical pattern from Stellar docs: extending-wasm-ttl.md)
       const rpcServer = new rpc.Server(getSorobanRpcUrl());
-      const instanceKey = xdr.LedgerKey.contractData(new xdr.LedgerKeyContractData({
-        contract: Address.fromString(contractId).toScAddress(),
-        key: xdr.ScVal.scvLedgerKeyContractInstance(),
-        durability: xdr.ContractDataDurability.persistent(),
-      }));
+      const instance = contract.getFootprint();
 
-      const ledgerEntries = await rpcServer.getLedgerEntries(instanceKey);
+      // Fetch the contract instance to extract the WASM hash
+      const ledgerEntries = await rpcServer.getLedgerEntries(instance);
       if (!ledgerEntries.entries || ledgerEntries.entries.length === 0) {
         throw new Error(`Contract instance not found for ${contractId}`);
       }
 
-      const instanceEntry = xdr.LedgerEntryData.fromXDR(ledgerEntries.entries[0].xdr, 'base64').contractData();
-      const wasmHash = instanceEntry.val().instance().executable().wasmHash();
+      // Build footprint: always include instance, add WASM code only for Wasm-based contracts
+      // SACs (Stellar Asset Contracts) are protocol-native and have no WASM code
+      const instanceEntry = ledgerEntries.entries[0].val.contractData();
+      const executable = instanceEntry.val().instance().executable();
+      const readOnlyKeys = [instance];
 
-      // Add WASM code to footprint
-      footprint.readOnly().push(
-        xdr.LedgerKey.contractCode(new xdr.LedgerKeyContractCode({
-          hash: wasmHash,
-        }))
-      );
+      // Check if this is a Wasm-based contract (not a SAC)
+      const wasmHashRaw = executable.wasmHash?.();
+      if (wasmHashRaw) {
+        const contractCode = xdr.LedgerKey.contractCode(
+          new xdr.LedgerKeyContractCode({
+            hash: Buffer.from(wasmHashRaw.toString('hex'), 'hex'),
+          })
+        );
+        readOnlyKeys.push(contractCode);
+        log.info(`[StellarService] Including WASM code in TTL extension footprint`);
+      } else {
+        log.info(`[StellarService] SAC contract detected — extending instance only`);
+      }
+
+      // 3. Build soroban data footprint and transaction
+      //    (TransactionBuilder.setSorobanData wraps in SorobanDataBuilder internally)
+      const footprint = new xdr.LedgerFootprint({
+        readOnly: readOnlyKeys,
+        readWrite: [],
+      });
 
       const sorobanData = new xdr.SorobanTransactionData({
         resources: new xdr.SorobanResources({
           footprint,
           instructions: 0,
-          readBytes: 0,
+          diskReadBytes: 0,
           writeBytes: 0,
         }),
+        ext: new xdr.SorobanTransactionDataExt(0),
         resourceFee: new xdr.Int64(0),
-        ext: new xdr.ExtensionPoint(0),
       });
 
-      transaction.setSorobanData(sorobanData);
+      let transaction = new TransactionBuilder(operationsAccount, {
+        fee: BASE_FEE,
+        networkPassphrase: getNetworkPassphrase(),
+      })
+        .setSorobanData(sorobanData)
+        .addOperation(extendOp)
+        .setTimeout(300)
+        .build();
 
-      // 4. Prepare (sets proper fees/resources)
+      // 4. Prepare via RPC simulation (sets proper fees/resources)
       transaction = await this.prepareSorobanTransaction(transaction);
 
       // 5. Submit
       const result = await TransactionManager.submit({
         transaction,
         signingRole: 'OPERATIONS',
-        operationType: 'extend_ttl',
+        operationType: 'other',
         description: `Extend TTL for contract ${contractId}`,
         metadata: { contractId, ledgersToExtend }
       });
