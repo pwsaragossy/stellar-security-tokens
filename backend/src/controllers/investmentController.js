@@ -10,6 +10,41 @@ import crypto from 'crypto';
 import logger from '../utils/logger.js';
 const log = logger.scope('InvestmentController');
 
+// ── SECURITY: HMAC integrity for investmentContext ──
+// Signs context server-side in purchaseInvestment, verifies in submitInvestmentTx.
+// Prevents client-side tampering of tokenAmount, totalDeduction, etc.
+//
+//   purchaseInvestment              submitInvestmentTx
+//   ┌────────────────┐              ┌──────────────────┐
+//   │ Build context   │              │ Receive context   │
+//   │ Sign with HMAC  │──→ client ──→│ Verify HMAC       │
+//   │ Return to client│              │ Re-derive amounts │
+//   └────────────────┘              │ Create DB records │
+//                                   └──────────────────┘
+
+const HMAC_SECRET = process.env.JWT_SECRET || 'fallback-dev-secret';
+
+/**
+ * Create HMAC signature for investmentContext
+ * @param {object} ctx - investmentContext fields
+ * @returns {string} hex HMAC signature
+ */
+function signInvestmentContext(ctx) {
+  const payload = `${ctx.investorId}:${ctx.offerId}:${ctx.usdcAmount}:${ctx.assetCode}`;
+  return crypto.createHmac('sha256', HMAC_SECRET).update(payload).digest('hex');
+}
+
+/**
+ * Verify HMAC signature on investmentContext
+ * @param {object} ctx - investmentContext with hmac field
+ * @returns {boolean} true if valid
+ */
+function verifyInvestmentContext(ctx) {
+  if (!ctx.hmac) return false;
+  const expected = signInvestmentContext(ctx);
+  return crypto.timingSafeEqual(Buffer.from(ctx.hmac, 'hex'), Buffer.from(expected, 'hex'));
+}
+
 
 const USDC_PAYMENT_WINDOW_MINUTES = parseInt(process.env.USDC_PAYMENT_WINDOW_MINUTES || '2', 10);
 
@@ -208,20 +243,24 @@ export const purchaseInvestment = async (req, res, next) => {
       );
 
       // Return XDR + context (NO DB record created)
+      // SECURITY: HMAC-sign the context so submitInvestmentTx can verify integrity
+      const ctx = {
+        investorId: parseInt(investorId, 10),
+        offerId: parseInt(offerId),
+        usdcAmount: grossAmount,
+        feeAmount: fixedFee,
+        totalDeduction: totalDeduction,
+        tokenAmount: tokenAmount,
+        assetCode: assetCode,
+      };
+      ctx.hmac = signInvestmentContext(ctx);
+
       return res.status(200).json({
         success: true,
         message: 'Transaction prepared. Sign with your passkey to complete.',
         data: {
           // Context needed by submitInvestmentTx after signing
-          investmentContext: {
-            investorId: parseInt(investorId, 10),
-            offerId: parseInt(offerId),
-            usdcAmount: grossAmount,
-            feeAmount: fixedFee,
-            totalDeduction: totalDeduction,
-            tokenAmount: tokenAmount,
-            assetCode: assetCode,
-          },
+          investmentContext: ctx,
           // Smart wallet transaction for passkey signing
           transaction: {
             xdr: txData.xdr,
@@ -344,6 +383,40 @@ export const submitInvestmentTx = async (req, res, next) => {
       });
     }
 
+    // ── SECURITY: Verify HMAC integrity of investmentContext ──
+    if (!verifyInvestmentContext(investmentContext)) {
+      log.warn(`[Investment] HMAC verification failed for investor #${investorId}, offer #${offerId}`);
+      return res.status(403).json({
+        success: false,
+        error: 'Investment context integrity check failed. Please restart the purchase flow.',
+      });
+    }
+
+    // ── SECURITY: Re-derive critical values server-side ──
+    // Never trust tokenAmount or totalDeduction from the client.
+    const { Offer } = await import('../models/Offer.js');
+    const offer = await Offer.findById(parseInt(offerId));
+    if (!offer || offer.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        error: 'Offer is not available for investment',
+      });
+    }
+
+    const serverUsdcAmount = parseFloat(usdcAmount);
+    const serverUnitPrice = parseFloat(offer.unitPrice) || 1;
+    const serverTokenAmount = serverUsdcAmount / serverUnitPrice;
+    const serverTotalDeduction = serverUsdcAmount;
+
+    // Verify the authenticated user matches the investorId in context
+    if (req.user && req.user.userId !== investorId) {
+      log.warn(`[Investment] User mismatch: token userId=${req.user.userId}, context investorId=${investorId}`);
+      return res.status(403).json({
+        success: false,
+        error: 'Investment context does not match authenticated user',
+      });
+    }
+
     // ─── RATE LIMIT: prevent fee bump drain via spam ───
     const investorKey = `submit_tx:${investorId}`;
     if (!submitInvestmentTx._rateLimiter) submitInvestmentTx._rateLimiter = new Map();
@@ -420,12 +493,13 @@ export const submitInvestmentTx = async (req, res, next) => {
     log.info(`[Investment] Transaction confirmed by Horizon: ${innerTxHash}`);
 
     // Create the Investment record directly as 'distributed'
+    // SECURITY: Use server-derived amounts, not client-supplied values
     const investment = await Investment.create({
       investor_id: investorId,
       offer_id: offerId,
       asset_code: assetCode,
-      usdc_amount: totalDeduction,
-      token_amount: tokenAmount,
+      usdc_amount: serverTotalDeduction,
+      token_amount: serverTokenAmount,
       memo: null,
     });
 
@@ -438,12 +512,13 @@ export const submitInvestmentTx = async (req, res, next) => {
     log.info(`[Investment] Created investment #${investment.id} as distributed (atomic swap).`);
 
     // Create token_distributions record for portfolio
+    // SECURITY: Use server-derived tokenAmount
     try {
       await prisma.tokenDistribution.create({
         data: {
           investorId: investorId,
           assetCode: assetCode,
-          amount: tokenAmount,
+          amount: serverTokenAmount,
           transactionHash: innerTxHash,
           usdcPaymentHash: innerTxHash,
           offerId: offerId,
