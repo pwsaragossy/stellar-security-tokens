@@ -113,7 +113,7 @@ router.get('/:offerId/batch-status', authenticateToken, requireCompanyUser, asyn
         });
     } catch (error) {
         log.error('[CompanyPayments] Error getting batch status:', error);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
 

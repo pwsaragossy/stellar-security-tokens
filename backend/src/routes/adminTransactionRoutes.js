@@ -584,7 +584,7 @@ router.post('/deposits/retry-all', authenticatePlatformAdmin, async (req, res) =
         });
     } catch (error) {
         log.error('Error in retry-all:', error);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
 

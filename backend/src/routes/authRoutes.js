@@ -55,7 +55,7 @@ router.get('/config', (req, res) => {
     const config = PasskeyWalletService.getClientConfig();
     res.json(config);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
