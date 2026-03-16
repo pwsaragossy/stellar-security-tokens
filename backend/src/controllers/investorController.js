@@ -600,6 +600,51 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
       },
     });
 
+    // ─── TESTNET AUTO-FUND: Send 1000 USDC to new wallet ───
+    // Fire-and-forget so registration response isn't delayed
+    if ((process.env.STELLAR_NETWORK || 'testnet') === 'testnet' && contractId) {
+      (async () => {
+        try {
+          const { Contract, Address, nativeToScVal, TransactionBuilder, BASE_FEE } = await import('@stellar/stellar-sdk');
+          const rpcMod = await import('@stellar/stellar-sdk/rpc');
+          const { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl } = await import('../config/stellar.js');
+
+          const sacContractId = process.env.USDC_SAC_CONTRACT_ID;
+          if (!sacContractId) return;
+
+          const opsKeypair = getOperationsKeypair();
+          const rpcServer = new rpcMod.Server(getSorobanRpcUrl());
+          const AMOUNT = 1000_0000000n; // 1000 USDC (7 decimals)
+
+          const sac = new Contract(sacContractId);
+          const op = sac.call('transfer',
+            new Address(opsKeypair.publicKey()).toScVal(),
+            new Address(contractId).toScVal(),
+            nativeToScVal(AMOUNT, { type: 'i128' }),
+          );
+
+          const account = await rpcServer.getAccount(opsKeypair.publicKey());
+          let tx = new TransactionBuilder(account, {
+            fee: BASE_FEE,
+            networkPassphrase: getNetworkPassphrase(),
+          }).addOperation(op).setTimeout(30).build();
+
+          const sim = await rpcServer.simulateTransaction(tx);
+          if (rpcMod.Api.isSimulationError(sim)) {
+            log.warn(`[Registration] Testnet auto-fund sim failed: ${sim.error}`);
+            return;
+          }
+
+          tx = rpcMod.assembleTransaction(tx, sim).build();
+          tx.sign(opsKeypair);
+          const result = await rpcServer.sendTransaction(tx);
+          log.info(`[Registration] ✅ Auto-funded 1000 USDC to ${contractId} — tx: ${result.hash}`);
+        } catch (err) {
+          log.warn(`[Registration] Testnet auto-fund failed (non-fatal): ${err.message}`);
+        }
+      })();
+    }
+
     // Send welcome email (async, don't wait)
     EmailService.sendWelcomeEmail(verifiedEmail, name, contractId)
       .catch(error => {
