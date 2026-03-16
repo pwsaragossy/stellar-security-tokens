@@ -56,7 +56,11 @@ router.put('/:id', requireCompanyUser, CompanyUserController.updateCompanyUser);
  *         description: Email de verificação enviado
  */
 // Step 1: Register with email verification (no password required)
-router.post('/register-passkey', [
+// SECURITY: Locked behind requirePlatformAdmin (Fix #4 — Mar 2026)
+// Previously accepted company_id from body with no auth — anyone could register as any company.
+// FUTURE: To enable multi-user companies, replace requirePlatformAdmin with invitation token
+// validation (JWT signed with { companyId, email, role }). See implementation_plan.md Option B.
+router.post('/register-passkey', authenticateToken, requirePlatformAdmin, [
   body('company_id').isInt({ min: 1 }).withMessage('Valid company ID is required'),
   body('email').isEmail().withMessage('Valid email is required'),
   body('name').trim().notEmpty().withMessage('Name is required'),

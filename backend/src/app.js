@@ -87,8 +87,11 @@ app.use(cors({
 
         // Check if origin matches any allowed origin (including wildcard subdomains for tunnels)
         const isAllowed = allowedOrigins.some(allowed => {
-            if (allowed.includes('trycloudflare.com') && origin.includes('trycloudflare.com')) {
-                return true; // Allow any cloudflare tunnel
+            // Allow any Cloudflare tunnel in development only (H2 security fix)
+            if (process.env.NODE_ENV !== 'production'
+                && allowed.includes('trycloudflare.com')
+                && origin.includes('trycloudflare.com')) {
+                return true;
             }
             return allowed === origin;
         });
