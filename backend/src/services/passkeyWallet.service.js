@@ -282,66 +282,8 @@ export class PasskeyWalletService {
       log.debug(`Inner TX operations count: ${innerTx.operations?.length}`);
       log.debug(`Channel account: ${channelKeypair.publicKey()}`);
 
+
       const innerFee = parseInt(innerTx.fee);
-
-      // DIAGNOSTIC: Log inner TX structure before fee-bump
-      try {
-        log.info(`[DIAG] Inner TX fee: ${innerFee} stroops`);
-        log.info(`[DIAG] Inner TX type: ${innerTx.constructor.name}`);
-        log.info(`[DIAG] Inner TX source: ${innerTx.source}`);
-        log.info(`[DIAG] Inner TX sequence: ${innerTx.sequence}`);
-
-        const envXdr = innerTx.toEnvelope();
-        const envType = envXdr.switch().name;
-        log.info(`[DIAG] Envelope type: ${envType}`);
-
-        // Try to get sorobanData from the TX object directly
-        if (innerTx.toXDR) {
-          const xdrBase64 = innerTx.toXDR('base64');
-          log.info(`[DIAG] Inner TX XDR length: ${xdrBase64.length} chars`);
-        }
-
-        // Check if sorobanData exists on the transaction
-        const hasSorobanData = !!innerTx.sorobanData;
-        log.info(`[DIAG] Has tx.sorobanData: ${hasSorobanData}`);
-        if (hasSorobanData) {
-          log.info(`[DIAG] tx.sorobanData type: ${typeof innerTx.sorobanData}`);
-        }
-
-        // Try to access via XDR path
-        let txBody;
-        if (envType === 'envelopeTypeTxV0') {
-          log.info(`[DIAG] V0 envelope — no sorobanData support`);
-        } else if (envType === 'envelopeTypeTx') {
-          txBody = envXdr.v1().tx();
-          const extSwitch = txBody.ext().switch();
-          // ext().switch() returns an integer (0 or 1), not an object
-          const extValue = typeof extSwitch === 'object' ? extSwitch.value : extSwitch;
-          log.info(`[DIAG] TX ext switch value: ${extValue} (raw: ${extSwitch})`);
-          if (extValue === 1) {
-            const sorobanData = txBody.ext().sorobanData();
-            const resources = sorobanData.resources();
-            log.info(`[DIAG] SorobanData — instructions: ${resources.instructions()}, readBytes: ${resources.diskReadBytes()}, writeBytes: ${resources.writeBytes()}`);
-            log.info(`[DIAG] SorobanData — resourceFee: ${sorobanData.resourceFee().toString()}`);
-            log.info(`[DIAG] Footprint readOnly: ${resources.footprint().readOnly().length}, readWrite: ${resources.footprint().readWrite().length}`);
-          } else {
-            log.warn(`[DIAG] NO sorobanData on TX (ext switch = ${extValue})`);
-          }
-          const ops = txBody.operations();
-          if (ops.length > 0) {
-            const opType = ops[0].body().switch().name;
-            log.info(`[DIAG] Operation type: ${opType}`);
-            if (opType === 'invokeHostFunction') {
-              const authCount = ops[0].body().invokeHostFunctionOp().auth().length;
-              log.info(`[DIAG] Auth entries in op: ${authCount}`);
-            }
-          }
-          log.info(`[DIAG] Signatures: ${envXdr.v1().signatures().length}`);
-        }
-      } catch (diagErr) {
-        log.warn(`[DIAG] Could not inspect inner TX: ${diagErr.message}`);
-        log.warn(`[DIAG] Stack: ${diagErr.stack?.split('\n').slice(0,3).join(' | ')}`);
-      }
 
       // SECURITY: Cap sponsored fees to prevent XLM drain via inflated resource fees
       const MAX_SPONSORED_FEE_STROOPS = 10_000_000; // 1 XLM
@@ -358,29 +300,6 @@ export class PasskeyWalletService {
         innerTx,
         networkPassphrase
       );
-
-      // DIAGNOSTIC: Verify inner TX inside fee-bump still has sorobanData
-      try {
-        const fbEnv = feeBumpTx.toEnvelope();
-        const fbInnerTx = fbEnv.feeBump().tx().innerTx().v1().tx();
-        const fbExtSwitch = fbInnerTx.ext().switch();
-        const fbExtVal = typeof fbExtSwitch === 'object' ? fbExtSwitch.value : fbExtSwitch;
-        log.info(`[DIAG-FB] Fee-bump inner TX ext switch: ${fbExtVal}`);
-        if (fbExtVal === 1) {
-          const fbSorobanData = fbInnerTx.ext().sorobanData();
-          log.info(`[DIAG-FB] ✅ Fee-bump inner TX has sorobanData (instructions: ${fbSorobanData.resources().instructions()})`);
-        } else {
-          log.error(`[DIAG-FB] ❌ Fee-bump inner TX LOST sorobanData!`);
-        }
-        // Compare signatures
-        const fbInnerSigs = fbEnv.feeBump().tx().innerTx().v1().signatures();
-        log.info(`[DIAG-FB] Fee-bump inner TX signatures: ${fbInnerSigs.length}`);
-        // Compare inner TX hash
-        const standaloneHash = innerTx.hash().toString('hex');
-        log.info(`[DIAG-FB] Standalone inner TX hash: ${standaloneHash}`);
-      } catch (fbDiagErr) {
-        log.warn(`[DIAG-FB] Could not inspect fee-bump envelope: ${fbDiagErr.message}`);
-      }
 
       // 3. Sign the outer Fee Bump Transaction with channel account
       feeBumpTx.sign(channelKeypair);
