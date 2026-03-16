@@ -3,6 +3,7 @@ import {
   createFreshServer,
   createAsset,
   buildTransactionWithAccount,
+  signAndSubmitTransaction,
   getNetworkPassphrase,
   getOperationsKeypair,
   getSorobanRpcUrl,
@@ -1974,14 +1975,9 @@ export class StellarService {
       // 4. Prepare via RPC simulation (sets proper fees/resources)
       transaction = await this.prepareSorobanTransaction(transaction);
 
-      // 5. Submit
-      const result = await TransactionManager.submit({
-        transaction,
-        signingRole: 'OPERATIONS',
-        operationType: 'other',
-        description: `Extend TTL for contract ${contractId}`,
-        metadata: { contractId, ledgersToExtend }
-      });
+      // 5. Sign directly with Operations hot wallet and submit
+      //    (TTL extensions are automated maintenance — skip multi-sig queue)
+      const result = await signAndSubmitTransaction(transaction, operationsKeypair);
 
       return result;
     } catch (error) {

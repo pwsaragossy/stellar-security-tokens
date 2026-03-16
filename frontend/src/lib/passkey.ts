@@ -38,6 +38,18 @@ export class PasskeyClient {
 
             const config = await response.json();
 
+            // CRITICAL: Override startAuthentication to force userVerification: "required".
+            // The OZ smart-account-kit hardcodes "preferred" in signAuthEntry(),
+            // which lets Safari skip biometric → UV bit = 0 → on-chain verifier
+            // rejects with Error(Contract, #3117) = VerifiedBitNotSet.
+            const { startRegistration, startAuthentication } = await import('@simplewebauthn/browser');
+            const wrappedStartAuthentication: typeof startAuthentication = (opts) => {
+                if (opts.optionsJSON) {
+                    opts.optionsJSON.userVerification = 'required';
+                }
+                return startAuthentication(opts);
+            };
+
             this.kit = new SmartAccountKit({
                 rpcUrl: config.rpcUrl,
                 networkPassphrase: config.networkPassphrase,
@@ -47,6 +59,8 @@ export class PasskeyClient {
                 relayerUrl: `${this.baseUrl}/wallets/relay`,
                 // Give 5 minutes for the passkey signing flow.
                 timeoutInSeconds: 300,
+                // Custom WebAuthn adapter forces UV=required
+                webAuthn: { startRegistration, startAuthentication: wrappedStartAuthentication },
             });
         } catch (error) {
             console.error('Failed to initialize SmartAccountKit:', error);
@@ -217,10 +231,24 @@ export class PasskeyClient {
                 signedAuth.push(entry);
             }
 
-            // Rebuild the transaction with signed auth entries
+            // Rebuild the transaction with signed auth entries.
+            // CRITICAL: Preserve sorobanData from the original TX — cloneFrom drops it
+            // if not explicitly passed, causing tx_malformed on submission.
             const { TransactionBuilder: TB, Operation } = await import('@stellar/stellar-sdk');
+
+            // Extract sorobanData from the original transaction's XDR
+            let sorobanData: any;
+            try {
+                const envXdr = tx.toEnvelope();
+                const txBody = envXdr.v1().tx();
+                sorobanData = txBody.ext().sorobanData();
+            } catch {
+                // Non-Soroban TX or sorobanData not present — proceed without
+            }
+
             const newTx = TB.cloneFrom(tx as any, {
                 fee: tx.fee,
+                sorobanData,
             }).clearOperations().addOperation(
                 Operation.invokeHostFunction({
                     func: op.func,

@@ -50,18 +50,17 @@ class KeyManager {
      * @private
      */
     #initializeChannels() {
-        // In multisig mode, skip loading numbered channels but still use Operations as fallback
-
-        // Load specific channels if defined (ENV mode only)
-        if (!this.isMultisigMode()) {
-            for (let i = 1; i <= 10; i++) {
-                const secret = process.env[`CHANNEL_${i}_SECRET_KEY`];
-                if (secret) {
-                    try {
-                        this.channels.push(Keypair.fromSecret(secret));
-                    } catch (e) {
-                        log.error(`Invalid secret for CHANNEL_${i}`);
-                    }
+        // Load channel accounts in ALL modes.
+        // Channels are the "hot wallet pool" for fee-bump sponsorship — they prevent
+        // tx_bad_seq errors under concurrent load and are distinct from the privileged
+        // ISSUER/DISTRIBUTOR/TREASURY keys that multisig mode protects.
+        for (let i = 1; i <= 10; i++) {
+            const secret = process.env[`CHANNEL_${i}_SECRET_KEY`];
+            if (secret) {
+                try {
+                    this.channels.push(Keypair.fromSecret(secret));
+                } catch (e) {
+                    log.error(`Invalid secret for CHANNEL_${i}`);
                 }
             }
         }

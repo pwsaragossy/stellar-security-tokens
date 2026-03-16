@@ -252,6 +252,10 @@ export const purchaseInvestment = async (req, res, next) => {
         totalDeduction: totalDeduction,
         tokenAmount: tokenAmount,
         assetCode: assetCode,
+        // Original unsigned XDR with sorobanData (resources/footprint).
+        // Frontend's cloneFrom() drops sorobanData when rebuilding the TX
+        // with signed auth entries, so we restore it in submitInvestmentTx.
+        originalXdr: txData.xdr,
       };
       ctx.hmac = signInvestmentContext(ctx);
 
@@ -436,38 +440,99 @@ export const submitInvestmentTx = async (req, res, next) => {
     recent.push(now);
     limiter.set(investorKey, recent);
 
-    // ─── RE-SIMULATE WITH SIGNED AUTH ENTRIES ───
-    const { TransactionBuilder, xdr, rpc: rpcMod } = await import('@stellar/stellar-sdk');
+    // ─── ENFORCING MODE RE-SIMULATION (per Stellar docs) ───
+    // Recording Mode simulation doesn't execute __check_auth, so its footprint
+    // and resource estimates are INCOMPLETE. The official fee-payer pattern is:
+    //   1. Client signs auth entries
+    //   2. Fee-payer re-simulates in Enforcing Mode (executes __check_auth)
+    //   3. Fee-payer uses assembleTransaction to get correct footprint + resources
+    //   4. Fee-payer signs and submits
+    //
+    // Auth entry signatures use ENVELOPE_TYPE_SOROBAN_AUTHORIZATION preimage
+    // (independent of TX body hash), so re-simulation + assemble won't
+    // invalidate them.
+    const { TransactionBuilder, xdr: stellarXdr, Operation } = await import('@stellar/stellar-sdk');
+    const rpc = await import('@stellar/stellar-sdk/rpc');
     const { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl } = await import('../config/stellar.js');
 
     const networkPassphrase = getNetworkPassphrase();
     const opsKeypair = getOperationsKeypair();
-    let tx = TransactionBuilder.fromXDR(signedXdr, networkPassphrase);
+    const rpcServer = new rpc.Server(getSorobanRpcUrl());
 
-    try {
-      const sorobanRpc = new rpcMod.Server(getSorobanRpcUrl());
-      log.info(`[Investment] Re-simulating signed TX to include __check_auth costs...`);
-      const simResult = await sorobanRpc.simulateTransaction(tx);
+    // Parse the signed TX from frontend to extract the operation + signed auth entries
+    const signedTx = TransactionBuilder.fromXDR(signedXdr, networkPassphrase);
+    const invokeOp = signedTx.operations[0];
 
-      if (simResult.error) {
-        log.error(`[Investment] Re-simulation error: ${simResult.error}`);
-      } else if (simResult.transactionData) {
-        const newSorobanData = simResult.transactionData.build();
-        const newFee = Math.ceil(parseInt(simResult.minResourceFee) * 1.15).toString();
-
-        tx = TransactionBuilder.cloneFrom(tx, {
-          fee: newFee,
-          sorobanData: newSorobanData,
-        }).build();
-
-        const resources = newSorobanData.resources();
-        log.info(`[Investment] Re-simulated: instructions=${resources.instructions()}, readBytes=${resources.diskReadBytes()}, writeBytes=${resources.writeBytes()}, fee=${newFee}`);
-      }
-    } catch (resimErr) {
-      log.warn(`[Investment] Re-simulation failed (non-fatal): ${resimErr.message}`);
+    if (!invokeOp || invokeOp.type !== 'invokeHostFunction') {
+      throw new Error('Expected invokeHostFunction operation');
     }
 
-    // Add the source account signature
+    log.info(`[Investment] Received signed TX with ${invokeOp.auth?.length || 0} auth entries`);
+
+    // Rebuild TX with opsKeypair as source (fee-payer pattern from Stellar docs)
+    // We need a fresh source account with current sequence number
+    const opsAccount = await rpcServer.getAccount(opsKeypair.publicKey());
+
+    const rebuiltTx = new TransactionBuilder(opsAccount, {
+      fee: signedTx.fee,
+      networkPassphrase,
+    })
+      .setTimeout(30)
+      .addOperation(
+        Operation.invokeHostFunction({
+          func: invokeOp.func,
+          auth: invokeOp.auth || [],
+        })
+      )
+      .build();
+
+    // Re-simulate in Enforcing Mode — this executes __check_auth and returns
+    // the COMPLETE footprint (including WebAuthn verifier entries) and
+    // accurate resource estimates.
+    log.info(`[Investment] Re-simulating in Enforcing Mode...`);
+    const simResult = await rpcServer.simulateTransaction(rebuiltTx);
+
+    if (rpc.Api.isSimulationError(simResult)) {
+      log.error(`[Investment] Enforcing Mode simulation FAILED: ${simResult.error}`);
+      if (simResult.events?.length) {
+        for (const evt of simResult.events) {
+          try {
+            const diagEvt = evt.event();
+            const body = diagEvt.body().v0();
+            const topics = body.topics().map(t => {
+              if (t.switch().name === 'scvSymbol') return t.sym().toString();
+              if (t.switch().name === 'scvString') return t.str().toString();
+              return `[${t.switch().name}]`;
+            });
+            log.error(`[Investment] SimEvent: topics=[${topics.join(', ')}]`);
+          } catch (_) {}
+        }
+      }
+      throw new Error(`Enforcing Mode simulation failed: ${simResult.error}`);
+    }
+
+    log.info(`[Investment] ✅ Enforcing Mode simulation succeeded`);
+    if (simResult.cost) {
+      log.info(`[Investment] Sim cost — cpuInsns: ${simResult.cost.cpuInsns}, memBytes: ${simResult.cost.memBytes}`);
+    }
+
+    // Assemble the TX — applies the correct footprint, resources, and fees
+    // from the Enforcing Mode simulation result
+    const { assembleTransaction } = await import('@stellar/stellar-sdk/rpc');
+    let tx = assembleTransaction(rebuiltTx, simResult).build();
+
+    // Log the assembled TX's resources for verification
+    try {
+      const asmEnv = tx.toEnvelope();
+      const asmTxBody = asmEnv.v1().tx();
+      if (asmTxBody.ext().switch() === 1) {
+        const asmRes = asmTxBody.ext().sorobanData().resources();
+        log.info(`[Investment] Assembled TX — instructions: ${asmRes.instructions()}, readBytes: ${asmRes.diskReadBytes()}, writeBytes: ${asmRes.writeBytes()}`);
+        log.info(`[Investment] Assembled TX — footprint: readOnly=${asmRes.footprint().readOnly().length}, readWrite=${asmRes.footprint().readWrite().length}`);
+      }
+    } catch (_) {}
+
+    // Sign with operations account (TX source)
     tx.sign(opsKeypair);
 
     log.info(`[Investment] Submitting passkey-signed TX for investor #${investorId}, offer #${offerId}...`);
@@ -484,7 +549,6 @@ export const submitInvestmentTx = async (req, res, next) => {
       feeBumpHash = sponsorResult.hash;
       log.info(`[Investment] Fee-bumped TX submitted: ${feeBumpHash} (inner: ${innerTxHash})`);
     } catch (sponsorErr) {
-      // No DB record to revert — just throw
       log.error(`[Investment] Fee bump sponsorship failed: ${sponsorErr.message}`);
       throw new Error(`Fee-bump sponsorship failed: ${sponsorErr.message}`);
     }

@@ -256,10 +256,15 @@ export class SorobanSaleService {
             .setTimeout(180)
             .build();
 
-        // Simulate and prepare
+        // Simulate and prepare (Recording Mode — no __check_auth execution)
         log.info(`[buildTradeXdr] Simulating trade: ${parsedAmount} USDC via contract ${contractId}`);
         tx = await StellarService.prepareSorobanTransaction(tx);
 
+        // Boost resources for smart wallet passkey auth.
+        // Recording Mode doesn't run __check_auth (WebAuthn secp256r1 verify),
+        // so CPU/read/write estimates are far too low — especially for v4's
+        // 4 cross-contract SAC transfers. Without this boost, the TX traps.
+        tx = this.#boostResourcesForPasskey(tx);
 
         return {
             xdr: tx.toXDR('base64'),
@@ -268,6 +273,43 @@ export class SorobanSaleService {
             buyerAddress,
             amount: parsedAmount,
         };
+    }
+
+    /**
+     * Boost Soroban resource budget for smart wallet passkey auth.
+     * This provides rough fee estimates for the frontend UI only.
+     * The backend re-simulates in Enforcing Mode to get accurate resources.
+     *
+     * @private
+     * @param {Transaction} tx - Prepared transaction from Recording Mode sim
+     * @returns {Transaction} Transaction with boosted resources
+     */
+    static #boostResourcesForPasskey(tx) {
+        try {
+            const envelope = xdr.TransactionEnvelope.fromXDR(tx.toXDR('base64'), 'base64');
+            const txBody = envelope.value().tx();
+            const sorobanExt = txBody.ext();
+
+            if (sorobanExt?.switch() === 1) {
+                const sorobanData = sorobanExt.sorobanData();
+                const resources = sorobanData.resources();
+
+                const simInstructions = resources.instructions();
+                const boostedInstructions = Math.max(Math.ceil(simInstructions * 3), 10_000_000);
+                resources.instructions(boostedInstructions);
+
+                log.info(`[boostResources] instructions ${simInstructions}→${boostedInstructions} (rough estimate for frontend)`);
+
+                const boostedFee = Math.max(Math.ceil(parseInt(tx.fee) * 5), 1_000_000).toString();
+                tx = TransactionBuilder.cloneFrom(tx, {
+                    fee: boostedFee,
+                    sorobanData,
+                }).build();
+            }
+        } catch (err) {
+            log.warn(`[boostResources] Non-fatal: ${err.message}`);
+        }
+        return tx;
     }
 
 
