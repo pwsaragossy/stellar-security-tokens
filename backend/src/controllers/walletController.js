@@ -380,6 +380,20 @@ export const WalletController = {
     /**
      * Submit a signed transaction (Simulation/Execution)
      */
+    // SECURITY: Verify submitted XDR matches the approved proposal.
+    //
+    //   signAndSubmitProposal(id, signedXDR)
+    //           │
+    //           ▼
+    //   Fetch proposal.xdr from DB
+    //           │
+    //           ▼
+    //   ┌─ TX hash match? ─┐
+    //   │ YES               │ NO
+    //   ▼                   ▼
+    //   Verify sigs      403 "Transaction mismatch"
+    //   Submit to net     (blocks arbitrary TX injection)
+    //
     signAndSubmitProposal: async (req, res) => {
         try {
             const { id } = req.params;
@@ -391,7 +405,29 @@ export const WalletController = {
                 return res.status(404).json({ error: 'Proposal not found' });
             }
 
-            const transaction = new Transaction(signedXDR, process.env.STELLAR_NETWORK === 'public' ? StellarNetworks.PUBLIC : StellarNetworks.TESTNET);
+            // ── SECURITY: Verify the signed XDR is the same transaction ──
+            // Parse both the stored proposal XDR and the submitted signed XDR,
+            // then compare the transaction hash (which excludes signatures).
+            // This prevents an attacker from submitting a rogue transaction
+            // (e.g., "drain treasury") under the guise of an approved proposal.
+            const networkPassphrase = process.env.STELLAR_NETWORK === 'public'
+                ? StellarNetworks.PUBLIC
+                : StellarNetworks.TESTNET;
+
+            const submittedTx = new Transaction(signedXDR, networkPassphrase);
+            const proposalTx = new Transaction(proposal.xdr, networkPassphrase);
+
+            // Compare transaction hashes (hash of the TX body, excludes signatures)
+            if (submittedTx.hash().toString('hex') !== proposalTx.hash().toString('hex')) {
+                log.warn(`[WalletController] TX mismatch on proposal #${id}. ` +
+                    `Expected hash: ${proposalTx.hash().toString('hex').slice(0, 16)}..., ` +
+                    `Got: ${submittedTx.hash().toString('hex').slice(0, 16)}...`);
+                return res.status(403).json({
+                    error: 'Transaction mismatch: submitted XDR does not match the approved proposal'
+                });
+            }
+
+            const transaction = submittedTx;
 
             // Verify thresholds if it's a known multisig transaction
             if (proposal.requiredSigners && proposal.requiredSigners.length > 0) {

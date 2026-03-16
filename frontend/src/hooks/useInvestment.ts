@@ -38,9 +38,11 @@ export function useInvestment() {
         investorId: number;
         offerId: number;
         usdcAmount: number;
+        feeAmount?: number;
         totalDeduction: number;
         tokenAmount: number;
         assetCode: string;
+        hmac: string;
     }) => {
         setLoading(true);
         setError(null);

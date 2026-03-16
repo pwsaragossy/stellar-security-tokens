@@ -2,6 +2,7 @@ import express from 'express';
 import { body, param } from 'express-validator';
 import { validate } from '../middleware/validator.js';
 import { requireCompanyUser, requirePlatformAdmin } from '../middleware/authorize.js';
+import { authenticateToken } from '../middleware/auth.js';
 import { CompanyUserController } from '../controllers/companyUserController.js';
 
 const router = express.Router();
@@ -146,12 +147,22 @@ router.post('/resend-verification', [
  *         description: Wallet criada
  */
 // Step 3: Create smart wallet after passkey registration
-router.post('/create-wallet', [
+// SECURITY: Requires auth + ownership verification to prevent wallet replacement attacks (CWE-306)
+router.post('/create-wallet', authenticateToken, [
   body('userId').isInt({ min: 1 }).withMessage('Valid user ID is required'),
   body('credentialId').notEmpty().withMessage('Credential ID is required'),
   body('publicKey').notEmpty().withMessage('Public key is required'),
   validate,
-], CompanyUserController.createSmartWallet);
+], (req, res, next) => {
+  // Ownership check: authenticated user must match the userId in the request
+  if (req.user.userId !== req.body.userId) {
+    return res.status(403).json({
+      success: false,
+      error: 'Cannot create wallet for a different user',
+    });
+  }
+  next();
+}, CompanyUserController.createSmartWallet);
 
 /**
  * @swagger
@@ -170,7 +181,8 @@ router.post('/create-wallet', [
  *         description: Status da wallet
  */
 // Get wallet creation status
-router.get('/:userId/wallet-status', CompanyUserController.getWalletStatus);
+// SECURITY: Requires auth to prevent wallet enumeration (CWE-200)
+router.get('/:userId/wallet-status', authenticateToken, CompanyUserController.getWalletStatus);
 
 /**
  * @swagger
@@ -183,7 +195,8 @@ router.get('/:userId/wallet-status', CompanyUserController.getWalletStatus);
  *         description: Configuração retornada
  */
 // Get passkey kit configuration for frontend
-router.get('/passkey/config', CompanyUserController.getPasskeyConfig);
+// SECURITY: Requires auth to prevent config leakage
+router.get('/passkey/config', authenticateToken, CompanyUserController.getPasskeyConfig);
 
 // ============================================================================
 // WITHDRAWAL ROUTES (Wallet Operations)

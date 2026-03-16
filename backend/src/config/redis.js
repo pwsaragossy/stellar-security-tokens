@@ -4,6 +4,7 @@
  */
 
 import { createClient } from 'redis';
+import crypto from 'crypto';
 
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379', 10);
@@ -145,19 +146,53 @@ export async function deleteEmailCode(email) {
 }
 
 /**
- * Generate a 6-digit numeric code
+ * Generate a 6-digit numeric code (cryptographically secure)
  * @returns {string} 6-digit code
  */
 export function generate6DigitCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return crypto.randomInt(100000, 999999).toString();
 }
 
 // ====================
 // Token Blocklist (for proper logout)
 // ====================
+//
+//   SECURITY: Fail-closed design with bounded in-memory LRU fallback.
+//
+//   blocklistToken(token)
+//           │
+//           ▼
+//   ┌─ Redis available? ─┐
+//   │ YES                 │ NO
+//   ▼                     ▼
+//   redis.setEx        Also stores in memory LRU
+//   + memory LRU       (bounded to 10K entries)
+//
+//   isTokenBlocklisted(token)
+//           │
+//           ▼
+//   ┌─ Redis available? ─┐
+//   │ YES                 │ NO
+//   ▼                     ▼
+//   Check redis key    Check memory LRU
+//   Return result      If not found → BLOCK (fail closed)
+//
 
 const TOKEN_BLOCKLIST_PREFIX = 'token_blocklist:';
 const TOKEN_BLOCKLIST_TTL = 86400; // 24 hours (matches JWT expiry)
+const BLOCKLIST_FALLBACK_MAX = 10000;
+
+// In-memory fallback for blocklisted tokens when Redis is unavailable
+const blocklistFallbackMap = new Map();
+
+/**
+ * Compute SHA-256 hash of a token for storage keys
+ * @param {string} token
+ * @returns {string} hex hash
+ */
+function hashToken(token) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 /**
  * Add a token to the blocklist (invalidate it)
@@ -166,16 +201,22 @@ const TOKEN_BLOCKLIST_TTL = 86400; // 24 hours (matches JWT expiry)
  * @returns {Promise<boolean>} Success
  */
 export async function blocklistToken(token, ttlSeconds = TOKEN_BLOCKLIST_TTL) {
+    const tokenHash = hashToken(token);
+    const key = `${TOKEN_BLOCKLIST_PREFIX}${tokenHash}`;
+
+    // Always store in memory fallback (defense in depth)
+    if (blocklistFallbackMap.size >= BLOCKLIST_FALLBACK_MAX) {
+        // Evict oldest entry
+        const firstKey = blocklistFallbackMap.keys().next().value;
+        blocklistFallbackMap.delete(firstKey);
+    }
+    blocklistFallbackMap.set(tokenHash, Date.now() + ttlSeconds * 1000);
+
     const client = await getRedisClient();
     if (!client) {
-        console.warn('[Redis] Not available, token blocklist disabled');
-        return false;
+        console.warn('[Redis] Not available, token blocklisted in memory only');
+        return true; // Still blocklisted in memory
     }
-
-    // Use token hash as key (more efficient than storing full token)
-    const crypto = await import('crypto');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const key = `${TOKEN_BLOCKLIST_PREFIX}${tokenHash}`;
 
     await client.setEx(key, ttlSeconds, '1');
     return true;
@@ -183,22 +224,41 @@ export async function blocklistToken(token, ttlSeconds = TOKEN_BLOCKLIST_TTL) {
 
 /**
  * Check if a token is blocklisted
+ * Fails CLOSED: if Redis is unavailable and token is not in memory fallback,
+ * returns true (blocklisted) to prevent revoked tokens from being accepted.
  * @param {string} token - JWT token to check
  * @returns {Promise<boolean>} True if token is blocklisted (invalid)
  */
 export async function isTokenBlocklisted(token) {
-    const client = await getRedisClient();
-    if (!client) {
-        // If Redis unavailable, allow token (fail open for availability)
-        return false;
-    }
-
-    const crypto = await import('crypto');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const tokenHash = hashToken(token);
     const key = `${TOKEN_BLOCKLIST_PREFIX}${tokenHash}`;
 
-    const exists = await client.exists(key);
-    return exists === 1;
+    const client = await getRedisClient();
+    if (client) {
+        try {
+            const exists = await client.exists(key);
+            return exists === 1;
+        } catch (err) {
+            console.warn('[Redis] Blocklist check failed, falling back to memory:', err.message);
+        }
+    }
+
+    // Redis unavailable — check in-memory fallback
+    const expiresAt = blocklistFallbackMap.get(tokenHash);
+    if (expiresAt) {
+        if (Date.now() > expiresAt) {
+            blocklistFallbackMap.delete(tokenHash);
+            // Expired from fallback, but Redis is down — fail closed
+            return true;
+        }
+        return true; // Found in fallback, definitely blocklisted
+    }
+
+    // Not in fallback AND Redis is down → fail CLOSED
+    // This blocks all tokens during Redis outage, which is safer than
+    // allowing potentially-revoked tokens through.
+    console.warn('[Redis] Unavailable and token not in memory fallback — fail closed (blocking token)');
+    return true;
 }
 
 // ====================
