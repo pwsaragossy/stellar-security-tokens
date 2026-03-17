@@ -588,5 +588,62 @@ router.post('/deposits/retry-all', authenticatePlatformAdmin, async (req, res) =
     }
 });
 
+/**
+ * @swagger
+ * /api/admin/transactions/setup-thresholds:
+ *   post:
+ *     summary: Queue a setOptions TX to add operations key as signer on issuer
+ *     tags: [Admin Transactions]
+ *     description: |
+ *       One-time setup per issuer. Adds the operations key as a weight=2 signer
+ *       on the issuer account and sets thresholds (low=1, med=2, high=10).
+ *       This allows the backend to auto-authorize buyer balances on SACs.
+ *       Soroban require_auth() uses medium threshold for admin operations.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Threshold setup TX queued for signing
+ */
+router.post('/setup-thresholds', authenticatePlatformAdmin, async (req, res) => {
+    try {
+        const { SorobanSaleService } = await import('../services/sorobanSale.service.js');
+        const { keyManager: km } = await import('../services/KeyManager.js');
+        const issuerPublicKey = km.getIssuerPublicKey();
+
+        const result = await SorobanSaleService.buildIssuerThresholdSetupXdr();
+
+        // Queue as multisig TX for Freighter signing
+        const tx = await MultiSigTransactionService.create({
+            operationType: 'issuer_setup_thresholds',
+            xdr: result.xdr,
+            requiredSigners: [issuerPublicKey],
+            thresholdRequired: 1,
+            metadata: {
+                issuerPublicKey,
+                operationsPublicKey: km.getOperationsPublicKey(),
+                thresholds: { masterWeight: 10, opsWeight: 2, low: 1, med: 2, high: 10 },
+            },
+            description: 'One-time setup: Add operations key as weight=2 signer for auto-authorization (med=2, high=10)',
+            initiatorId: req.user?.userId || null,
+            initiatorType: 'platform_admin',
+        });
+
+        log.info(`[AdminTx] Queued issuer threshold setup TX #${tx.id}`);
+
+        res.json({
+            success: true,
+            data: { transactionId: tx.id },
+            message: 'Issuer threshold setup TX queued. Sign with Freighter to activate auto-authorization.',
+        });
+    } catch (error) {
+        log.error('Error creating threshold setup TX:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+
 export default router;
 

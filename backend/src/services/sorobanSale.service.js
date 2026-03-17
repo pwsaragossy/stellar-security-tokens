@@ -553,12 +553,20 @@ export class SorobanSaleService {
     }
 
     /**
-     * Auto-authorize an address's balance on a SAC using the issuer key.
+     * Auto-authorize an address's balance on a SAC using the operations key.
      *
-     * The issuer is the SAC admin. SAC's set_authorized() calls
-     * admin.require_auth(), which uses the issuer account's **medium threshold**
-     * (Soroban spec). Using the issuer key as TX source means the auth entry
-     * uses SorobanCredentials::SourceAccount, satisfied by signing the envelope.
+     * In multisig mode, the issuer secret key is NOT available (cold storage).
+     * The operations key is a signer on the issuer account with weight >= medium
+     * threshold, allowing it to satisfy admin.require_auth() for set_authorized.
+     *
+     * TX source = issuer public key (SAC admin).
+     * When source = issuer, Soroban uses SorobanCredentials::SourceAccount for
+     * admin.require_auth(). Signing the TX envelope with ops key (as signer on
+     * issuer with sufficient weight) satisfies the medium threshold.
+     *
+     * Prerequisites:
+     *   - Operations key must be a signer on the issuer account (weight >= med threshold)
+     *   - Run /api/admin/transactions/setup-thresholds once to configure this
      *
      * Pre-flight: calls authorized(address) read-only first. If already
      * authorized, returns immediately (zero TX cost, bulletproof idempotency).
@@ -569,7 +577,8 @@ export class SorobanSaleService {
      */
     static async authorizeBuyerOnSac(sacContractId, targetAddress) {
         const { keyManager: km } = await import('./KeyManager.js');
-        const issuerKeypair = km.getIssuerKeypair();
+        const opsKeypair = km.getOperationsKeypair();
+        const issuerPublicKey = km.getIssuerPublicKey();
         const networkPassphrase = getNetworkPassphrase();
         const sacContract = new Contract(sacContractId);
 
@@ -580,7 +589,7 @@ export class SorobanSaleService {
                 new Address(targetAddress).toScVal(),
             );
             const checkTx = new TransactionBuilder(
-                await StellarService.getAccountRPC(issuerKeypair.publicKey()),
+                await StellarService.getAccountRPC(issuerPublicKey),
                 { fee: BASE_FEE, networkPassphrase }
             )
                 .addOperation(checkOp)
@@ -610,10 +619,12 @@ export class SorobanSaleService {
         );
 
         // TX source = issuer (SAC admin). This is critical:
-        // The Soroban runtime uses SorobanCredentials::SourceAccount for admin.require_auth()
-        // which is satisfied by signing the TX envelope with the issuer key.
+        // Soroban uses SorobanCredentials::SourceAccount for admin.require_auth()
+        // when the invoking TX source IS the admin account.
+        // The operations key (as signer on issuer with weight >= medium threshold)
+        // can sign the TX envelope and satisfy the threshold check.
         let tx = new TransactionBuilder(
-            await StellarService.getAccountRPC(issuerKeypair.publicKey()),
+            await StellarService.getAccountRPC(issuerPublicKey),
             { fee: BASE_FEE, networkPassphrase }
         )
             .addOperation(op)
@@ -633,8 +644,9 @@ export class SorobanSaleService {
             throw simErr;
         }
 
-        // Sign with issuer key — satisfies admin.require_auth() via SourceAccount
-        tx.sign(issuerKeypair);
+        // Sign with operations key — satisfies issuer's medium threshold
+        // because ops is a signer on the issuer account with sufficient weight
+        tx.sign(opsKeypair);
 
         // Submit and poll
         try {
@@ -669,6 +681,51 @@ export class SorobanSaleService {
             log.error(`[authorizeBuyerOnSac] Submit failed: ${submitErr.message}`);
             throw new Error(`Failed to authorize on SAC: ${submitErr.message}`);
         }
+    }
+
+    /**
+     * Build a setOptions TX that adds the operations key as a signer on the issuer
+     * account with weight sufficient to satisfy medium threshold for Soroban auth.
+     *
+     * One-time setup per issuer account. After this:
+     *   - Operations key (weight=2) can sign set_authorized (medium threshold=2)
+     *   - Issuer master key (weight=10) required for mint/clawback/set_admin (high=10)
+     *
+     * Soroban require_auth() for G... accounts uses MEDIUM threshold.
+     * Classic setOptions/setTrustlineFlags use their respective threshold levels.
+     *
+     * @returns {Promise<{xdr: string, networkPassphrase: string}>}
+     */
+    static async buildIssuerThresholdSetupXdr() {
+        const { keyManager: km } = await import('./KeyManager.js');
+        const issuerPublicKey = km.getIssuerPublicKey();
+        const opsPublicKey = km.getOperationsPublicKey();
+        const networkPassphrase = getNetworkPassphrase();
+
+        const issuerAccount = await StellarService.getAccountRPC(issuerPublicKey);
+
+        const tx = new TransactionBuilder(issuerAccount, {
+            fee: BASE_FEE,
+            networkPassphrase,
+        })
+            .addOperation(Operation.setOptions({
+                signer: {
+                    ed25519PublicKey: opsPublicKey,
+                    weight: 2,
+                },
+                masterWeight: 10,
+                lowThreshold: 1,
+                medThreshold: 2,
+                highThreshold: 10,
+            }))
+            .setTimeout(300)
+            .build();
+
+        log.info(`[buildIssuerThresholdSetupXdr] Built setOptions TX: ops ${opsPublicKey.slice(0, 8)}… → weight=2 on issuer ${issuerPublicKey.slice(0, 8)}… (low=1, med=2, high=10)`);
+        return {
+            xdr: tx.toXDR('base64'),
+            networkPassphrase,
+        };
     }
 
     /**
