@@ -122,6 +122,9 @@ A change in domain structure or network config triggers failures across the enti
 ## Deployment Commands
 
 ```bash
+# === SSH Access ===
+ssh root@134.209.73.154    # Key: ~/.ssh/id_ed25519
+
 # === Production (always use the double-file + env-file pattern) ===
 
 # Start / rebuild
@@ -177,3 +180,45 @@ All 5 containers healthy on `Radox-Prod`. Endpoints verified:
 - `https://api.radox.net/health` → `{"status":"ok"}`
 - `https://app.radox.net` → HTTP/2 200
 - `https://radox.net/.well-known/stellar.toml` → `NETWORK_PASSPHRASE="Test SDF Network"`
+
+## Production Issuer (Testnet)
+
+| Setting | Value |
+|---------|-------|
+| **Key** | `GAA7F6YI4BCMJKMWASGGW5A644RXPONHIHISQESR3YHKPB6MGBCXAY2U` |
+| **home_domain** | `radox.net` (set via Laboratory `setOptions`) |
+| **Flags** | `auth_required + auth_revocable + auth_clawback_enabled` |
+| **Droplet IP** | `134.209.73.154` |
+
+## Deployment Gotchas
+
+### `restart` ≠ `recreate`
+
+`docker compose restart` does NOT reload `.env` files — it only restarts the process inside the existing container. Env vars are baked at container creation time. After changing `.env.production`, always use:
+
+```bash
+# ✅ CORRECT — recreates container with new env
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  --env-file .env.production up -d --build backend
+
+# ❌ WRONG — does NOT pick up env changes
+docker compose ... restart backend
+```
+
+### Never blind-SCP `.env.production`
+
+Local `.env.production` may have empty values for secrets that only exist on the droplet. Always diff before SCP:
+
+```bash
+diff <(grep -v '^#\|^$' .env.production | sort) \
+     <(ssh root@134.209.73.154 "grep -v '^#\|^$' ~/radox/.env.production" | sort)
+```
+
+Protected production-only vars: `ACCOUNT_WASM_HASH`, `WEBAUTHN_VERIFIER_ADDRESS`, `ED25519_VERIFIER_ADDRESS`, `POSTGRES_PASSWORD`, `JWT_SECRET`, `REDIS_PASSWORD`, `API_KEY`.
+
+### DB Truncation — Protected Tables
+
+When cleaning the DB, **NEVER truncate these**:
+- `platform_admins` — admin accounts
+- `platform_admin_webauthn_credentials` — admin login credentials
+- `_prisma_migrations` — migration history
