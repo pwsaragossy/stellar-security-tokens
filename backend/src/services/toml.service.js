@@ -88,8 +88,8 @@ display_decimals=7
 name="${token.assetCode} Token"
 desc="${token.description || 'Tokenized Fixed Income Asset'}"
 conditions="${conditionsParts.join(' ')}"
-is_asset_withheld=false
-is_stackable=false
+is_asset_anchored=true
+anchor_asset_type="other"
 `;
 
             // If we have an offer related, add structured IPFS fields for programmatic consumers

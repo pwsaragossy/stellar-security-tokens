@@ -293,9 +293,6 @@ submit(opts) → KeyManager mode === 'multisig'
 ### toml.service.js (123L)
 **Role:** Dynamic `stellar.toml` from DB — all tokens + offers with IPFS legal doc links (SEP-1)
 
-### stellarToml.service.js (269L)
-**Role:** Per-asset TOML generator + external TOML resolver/parser + IPFS document verification
-
 ### ipfs.service.js (146L)
 **Role:** Pinata SDK wrapper — upload, fetch, validate CID. Mock mode if no `PINATA_JWT`
 

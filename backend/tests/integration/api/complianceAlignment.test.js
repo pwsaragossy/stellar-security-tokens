@@ -65,5 +65,11 @@ describe('Compliance Alignment Integration Tests', () => {
         // but seedTestData creates 'TEST01'
         assert.ok(res.text.includes('[[CURRENCIES]]'));
         assert.ok(res.text.includes('code="TEST01"'));
+        // SEP-1 required fields
+        assert.ok(res.text.includes('is_asset_anchored=true'), 'SEP-1 required: is_asset_anchored');
+        assert.ok(res.text.includes('conditions='), 'SEP-1 suggested: conditions');
+        // Non-standard fields must not be present
+        assert.ok(!res.text.includes('is_asset_withheld'), 'Non-standard field removed: is_asset_withheld');
+        assert.ok(!res.text.includes('is_stackable'), 'Non-standard field removed: is_stackable');
     });
 });

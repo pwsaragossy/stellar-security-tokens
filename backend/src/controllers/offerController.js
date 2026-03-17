@@ -6,7 +6,6 @@ import { StellarService } from '../services/stellar.service.js';
 import { OfferService } from '../services/offer.service.js';
 import { ConfigService } from '../services/config.service.js';
 import { ipfsService } from '../services/ipfs.service.js';
-import { StellarTomlService } from '../services/stellarToml.service.js';
 import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
 const log = logger.scope('OfferController');

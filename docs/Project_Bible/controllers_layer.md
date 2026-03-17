@@ -106,7 +106,7 @@
 
 **Lifecycle FSM:** `pending_review` → `approved` → (token issued) → `admin_verified` → `active`
 
-**Service dependencies:** `Offer`, `OfferService`, `Token`, `Investment`, `StellarService`, `StellarTomlService`, `IPFSService`, `prisma`
+**Service dependencies:** `Offer`, `OfferService`, `Token`, `Investment`, `StellarService`, `IPFSService`, `prisma`
 
 ---
 
@@ -324,7 +324,7 @@ investorController            → Investor, Investment, Token, EmailService,
 investmentController          → SorobanSaleService, PasskeyWalletService,
                                 ConfigService, Investment, Investor, Offer, Token
 offerController               → Offer, OfferService, Token, Investment,
-                                StellarService, StellarTomlService, IPFSService
+                                StellarService, IPFSService
 companyController             → Company, CompanyUser, EmailService,
                                 PasskeyWalletService, prisma
 companyUserController         → CompanyUser, Company, EmailService,
