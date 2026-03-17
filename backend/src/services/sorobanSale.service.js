@@ -553,6 +553,125 @@ export class SorobanSaleService {
     }
 
     /**
+     * Auto-authorize an address's balance on a SAC using the issuer key.
+     *
+     * The issuer is the SAC admin. SAC's set_authorized() calls
+     * admin.require_auth(), which uses the issuer account's **medium threshold**
+     * (Soroban spec). Using the issuer key as TX source means the auth entry
+     * uses SorobanCredentials::SourceAccount, satisfied by signing the envelope.
+     *
+     * Pre-flight: calls authorized(address) read-only first. If already
+     * authorized, returns immediately (zero TX cost, bulletproof idempotency).
+     *
+     * @param {string} sacContractId - Stellar Asset Contract ID for the token
+     * @param {string} targetAddress - Address to authorize (G... or C...)
+     * @returns {Promise<{success: boolean, alreadyAuthorized?: boolean, txHash?: string}>}
+     */
+    static async authorizeBuyerOnSac(sacContractId, targetAddress) {
+        const { keyManager: km } = await import('./KeyManager.js');
+        const issuerKeypair = km.getIssuerKeypair();
+        const networkPassphrase = getNetworkPassphrase();
+        const sacContract = new Contract(sacContractId);
+
+        // ── Pre-flight: check if already authorized (read-only, no TX cost) ──
+        try {
+            const checkOp = sacContract.call(
+                'authorized',
+                new Address(targetAddress).toScVal(),
+            );
+            const checkTx = new TransactionBuilder(
+                await StellarService.getAccountRPC(issuerKeypair.publicKey()),
+                { fee: BASE_FEE, networkPassphrase }
+            )
+                .addOperation(checkOp)
+                .setTimeout(30)
+                .build();
+
+            const rpcServer = new rpc.Server(getSorobanRpcUrl());
+            const sim = await rpcServer.simulateTransaction(checkTx);
+
+            if (sim.result?.retval) {
+                const isAuthorized = sim.result.retval.value();
+                if (isAuthorized === true) {
+                    log.info(`[authorizeBuyerOnSac] ${targetAddress.slice(0, 8)}… already authorized on SAC ${sacContractId.slice(0, 8)}…`);
+                    return { success: true, alreadyAuthorized: true };
+                }
+            }
+        } catch (checkErr) {
+            // Pre-flight check failed — proceed to authorize anyway
+            log.warn(`[authorizeBuyerOnSac] Pre-flight check failed for ${targetAddress.slice(0, 8)}…: ${checkErr.message}. Proceeding with authorization.`);
+        }
+
+        // ── Build set_authorized(targetAddress, true) ──
+        const op = sacContract.call(
+            'set_authorized',
+            new Address(targetAddress).toScVal(),
+            nativeToScVal(true, { type: 'bool' }),
+        );
+
+        // TX source = issuer (SAC admin). This is critical:
+        // The Soroban runtime uses SorobanCredentials::SourceAccount for admin.require_auth()
+        // which is satisfied by signing the TX envelope with the issuer key.
+        let tx = new TransactionBuilder(
+            await StellarService.getAccountRPC(issuerKeypair.publicKey()),
+            { fee: BASE_FEE, networkPassphrase }
+        )
+            .addOperation(op)
+            .setTimeout(120)
+            .build();
+
+        // Simulate and assemble
+        try {
+            tx = await StellarService.prepareSorobanTransaction(tx);
+        } catch (simErr) {
+            // Catch-all idempotency: if simulation fails on already-authorized
+            const msg = simErr.message || '';
+            if (msg.includes('already') || msg.includes('AlreadyInitialized')) {
+                log.info(`[authorizeBuyerOnSac] ${targetAddress.slice(0, 8)}… already authorized (sim fallback)`);
+                return { success: true, alreadyAuthorized: true };
+            }
+            throw simErr;
+        }
+
+        // Sign with issuer key — satisfies admin.require_auth() via SourceAccount
+        tx.sign(issuerKeypair);
+
+        // Submit and poll
+        try {
+            const rpcServer = new rpc.Server(getSorobanRpcUrl());
+            const result = await rpcServer.sendTransaction(tx);
+
+            let status = result.status;
+            let txResult = result;
+            if (status === 'PENDING') {
+                const maxWait = 30_000;
+                const interval = 2_000;
+                let waited = 0;
+                while (waited < maxWait) {
+                    await new Promise(r => setTimeout(r, interval));
+                    waited += interval;
+                    txResult = await rpcServer.getTransaction(result.hash);
+                    if (txResult.status !== 'NOT_FOUND') {
+                        status = txResult.status;
+                        break;
+                    }
+                }
+            }
+
+            if (status === 'SUCCESS') {
+                log.info(`[authorizeBuyerOnSac] ✅ Authorized ${targetAddress.slice(0, 8)}… on SAC ${sacContractId.slice(0, 8)}… (tx: ${result.hash})`);
+                return { success: true, txHash: result.hash };
+            } else {
+                log.error(`[authorizeBuyerOnSac] TX status: ${status} for ${targetAddress.slice(0, 8)}…`);
+                throw new Error(`SAC authorization TX failed with status: ${status}`);
+            }
+        } catch (submitErr) {
+            log.error(`[authorizeBuyerOnSac] Submit failed: ${submitErr.message}`);
+            throw new Error(`Failed to authorize on SAC: ${submitErr.message}`);
+        }
+    }
+
+    /**
      * Build SAC transfer() XDR — transfer tokens via SAC (Soroban invocation).
      * Used for depositing sell tokens from issuer to sale contract.
      *

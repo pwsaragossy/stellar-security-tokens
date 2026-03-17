@@ -236,6 +236,42 @@ export const purchaseInvestment = async (req, res, next) => {
       }
 
       log.info(`[Investment] Building XDR via Soroban contract ${offer.sorobanContractId} for trade (${grossAmount} USDC)`);
+
+      // ─── SAC AUTHORIZATION (auth_required compliance) ───
+      // For issuers with AUTH_REQUIRED, both the sale contract (sender)
+      // and the buyer (receiver) must have authorized balances on the SAC.
+      // The issuer key (SAC admin) signs and submits set_authorized() calls
+      // automatically. Pre-flight check avoids redundant TXs.
+      if (token.sacContractId) {
+        try {
+          // Authorize sale contract first, then buyer (sequential — same TX source account)
+          const saleAuthResult = await SorobanSaleService.authorizeBuyerOnSac(
+            token.sacContractId, offer.sorobanContractId
+          );
+          const buyerAuthResult = await SorobanSaleService.authorizeBuyerOnSac(
+            token.sacContractId, investorWallet
+          );
+
+          if (saleAuthResult.alreadyAuthorized) {
+            log.info(`[Investment] Sale contract ${offer.sorobanContractId.slice(0, 8)}… already authorized`);
+          } else {
+            log.info(`[Investment] Sale contract authorized on SAC (tx: ${saleAuthResult.txHash})`);
+          }
+
+          if (buyerAuthResult.alreadyAuthorized) {
+            log.info(`[Investment] Buyer ${investorWallet.slice(0, 8)}… already authorized on SAC`);
+          } else {
+            log.info(`[Investment] Buyer ${investorWallet.slice(0, 8)}… authorized on SAC (tx: ${buyerAuthResult.txHash})`);
+          }
+        } catch (authErr) {
+          log.error(`[Investment] SAC authorization failed: ${authErr.message}`);
+          return res.status(500).json({
+            success: false,
+            error: 'Failed to authorize your wallet for this token. Please try again or contact support.',
+          });
+        }
+      }
+
       const txData = await SorobanSaleService.buildTradeXdr(
         offer.sorobanContractId,
         investorWallet,
