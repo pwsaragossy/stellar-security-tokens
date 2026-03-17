@@ -10,17 +10,17 @@ ARG VITE_STELLAR_NETWORK=testnet
 ARG VITE_SOROBAN_RPC_URL
 ARG VITE_STELLAR_NETWORK_PASSPHRASE
 
-# Copiar arquivos de dependências
+# Copy dependency files
 COPY package*.json ./
 COPY frontend/package*.json ./frontend/
 
-# Instalar dependências
+# Install dependencies
 RUN cd frontend && npm ci
 
-# Copiar código do frontend
+# Copy frontend source code
 COPY frontend/ ./frontend/
 
-# Build da aplicação
+# Build the application
 WORKDIR /app/frontend
 ENV VITE_API_URL=${VITE_API_URL}
 ENV VITE_ENABLE_TEST_LOGIN=${VITE_ENABLE_TEST_LOGIN}
@@ -29,17 +29,16 @@ ENV VITE_SOROBAN_RPC_URL=${VITE_SOROBAN_RPC_URL}
 ENV VITE_STELLAR_NETWORK_PASSPHRASE=${VITE_STELLAR_NETWORK_PASSPHRASE}
 RUN npm run build
 
-# Stage 2: Nginx para servir arquivos estáticos
+# Stage 2: Nginx to serve static files
 FROM nginx:alpine
 
-# Copiar arquivos buildados
+# Copy built assets
 COPY --from=builder /app/frontend/dist /usr/share/nginx/html
 
-# Copiar configuração customizada do nginx
+# Copy custom nginx configuration
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expor porta
+# Expose port
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
-

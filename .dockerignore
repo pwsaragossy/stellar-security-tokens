@@ -17,3 +17,9 @@ frontend/dist
 frontend/node_modules
 backend/node_modules
 
+# Documentation and deploy scripts (not needed in container)
+docs/
+deploy/
+docker-compose*.yml
+*.md
+!README.md

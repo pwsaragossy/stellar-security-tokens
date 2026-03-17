@@ -5,29 +5,28 @@ RUN apk add --no-cache postgresql-client
 
 WORKDIR /app
 
-# Copiar arquivos de dependências do backend
+# Copy backend dependency files
 COPY backend/package*.json ./backend/
 
-# Instalar dependências do backend (incluindo devDependencies para build)
+# Install backend dependencies (including devDependencies for build)
 WORKDIR /app/backend
 RUN npm ci
 
-# Voltar para o diretório raiz e copiar código
+# Return to root and copy source code
 WORKDIR /app
 COPY backend/ ./backend/
 COPY scripts/ ./scripts/
 
-# Gerar Prisma Client
+# Generate Prisma Client
 WORKDIR /app/backend
 RUN npx prisma generate
 WORKDIR /app
 
-# Criar diretório para logs
+# Create logs directory
 RUN mkdir -p /app/logs
 
-# Expor porta
+# Expose port
 EXPOSE 3000
 
-# Comando para iniciar o servidor
+# Start the server
 CMD ["node", "--import", "tsx", "backend/src/index.js"]
-
