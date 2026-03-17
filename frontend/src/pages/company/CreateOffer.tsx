@@ -202,13 +202,25 @@ export function CreateOffer() {
             }
         } catch (err: any) {
             console.error('Failed to create offer:', err);
-            // Extract the real validation error from the API response
+            // Extract field-level validation errors from the API response
             let apiError = 'Failed to create offer';
             if (err.response?.data) {
                 const d = typeof err.response.data === 'string'
                     ? (() => { try { return JSON.parse(err.response.data); } catch { return null; } })()
                     : err.response.data;
-                apiError = d?.error || d?.details || d?.message || apiError;
+
+                // If backend returns validation details array, format them as readable messages
+                if (Array.isArray(d?.details) && d.details.length > 0) {
+                    apiError = d.details
+                        .map((e: any) => {
+                            const field = e.path || e.param || '';
+                            const msg = e.msg || e.message || 'invalid';
+                            return field ? `${field.replace(/_/g, ' ')}: ${msg}` : msg;
+                        })
+                        .join('. ');
+                } else {
+                    apiError = d?.error || d?.message || apiError;
+                }
             }
             setError(apiError);
         } finally {
@@ -310,7 +322,7 @@ export function CreateOffer() {
                                 <Input
                                     placeholder="e.g. PRFUND (3-12 characters)"
                                     value={formData.asset_code}
-                                    onChange={(e) => updateFormData({ asset_code: e.target.value.toUpperCase().slice(0, 12) })}
+                                    onChange={(e) => updateFormData({ asset_code: e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 12) })}
                                     className="glass-panel bg-black/20 border-white/10 focus:border-primary/50 uppercase text-foreground"
                                     maxLength={12}
                                 />
