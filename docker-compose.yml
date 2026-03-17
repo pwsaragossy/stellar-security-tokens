@@ -83,8 +83,6 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-Radox <noreply@mail.radox.net>}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
-      # Payment Scheduler
-      ENABLE_AUTO_PAYMENTS: ${ENABLE_AUTO_PAYMENTS:-true}
       # Redis Configuration
       REDIS_HOST: redis
       REDIS_PORT: 6379

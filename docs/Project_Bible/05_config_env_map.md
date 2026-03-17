@@ -13,7 +13,6 @@
 | `KEY_MANAGEMENT_MODE` | `env` / `multisig` | `env`: server signs with secret keys. `multisig`: Freighter/Ledger signing |
 | `ENABLE_SOROBAN_SALE` | `true` / `false` | Enables event indexer, reconciler, metrics, Soroban dashboard |
 | `ENABLE_PAYMENT_MONITORING` | `true` / `false` | Enables deposit relay (PaymentMonitor streaming) |
-| `ENABLE_AUTO_PAYMENTS` | `true` / `false` | Enables payment reminder scheduler |
 
 ---
 
