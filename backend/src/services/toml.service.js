@@ -33,15 +33,14 @@ export class TomlService {
 
 VERSION="2.0.0"
 NETWORK_PASSPHRASE="${networkPassphrase}"
+ACCOUNTS=[
+  "${issuerKey}"
+]
 
 [DOCUMENTATION]
 ORG_NAME="${configMap.org_name || 'Radox'}"
 ORG_URL="${process.env.FRONTEND_URL || 'http://localhost:5173'}"
 ORG_DESCRIPTION="${configMap.org_description || 'Fixed Income Tokenization Platform'}"
-
-ACCOUNTS=[
-  "${issuerKey}"
-]
 
 `;
 
