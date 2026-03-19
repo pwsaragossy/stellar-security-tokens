@@ -286,10 +286,10 @@ export class PasskeyWalletService {
       const innerFee = parseInt(innerTx.fee);
 
       // SECURITY: Cap sponsored fees to prevent XLM drain via inflated resource fees
-      const MAX_SPONSORED_FEE_STROOPS = 10_000_000; // 1 XLM
+      const MAX_SPONSORED_FEE_STROOPS = 50_000_000; // 5 XLM — OZ smart account deploy costs 3-5 XLM
       if (innerFee > MAX_SPONSORED_FEE_STROOPS) {
         log.warn(`REJECTED sponsorship: inner fee ${innerFee} stroops exceeds cap of ${MAX_SPONSORED_FEE_STROOPS}`);
-        throw new Error(`Transaction fee too high for sponsorship (${(innerFee / 10_000_000).toFixed(2)} XLM). Max: 1 XLM`);
+        throw new Error(`Transaction fee too high for sponsorship (${(innerFee / 10_000_000).toFixed(2)} XLM). Max: 5 XLM`);
       }
 
       const feeBumpFee = Math.max(parseInt(BASE_FEE) * 2, innerFee + parseInt(BASE_FEE));

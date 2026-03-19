@@ -581,6 +581,21 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
       });
     }
 
+    // Verify contract exists on-chain — prevents ghost wallets from fake/failed deploys
+    try {
+      const { xdr: sdkXdr } = await import('@stellar/stellar-sdk');
+      const sdkRpc = await import('@stellar/stellar-sdk/rpc');
+      const { getSorobanRpcUrl } = await import('../config/stellar.js');
+      const rpcServer = new sdkRpc.Server(getSorobanRpcUrl());
+      await rpcServer.getContractData(contractId, sdkXdr.ScVal.scvLedgerKeyContractInstance());
+    } catch (verifyErr) {
+      log.warn(`[Registration] Contract ${contractId} not found on-chain:`, verifyErr.message);
+      return res.status(400).json({
+        success: false,
+        error: 'Smart wallet contract not found on-chain. The deployment may have failed. Please try again.',
+      });
+    }
+
     log.info(`[Registration] Creating investor for ${verifiedEmail} with wallet ${contractId}`);
 
     // Create investor with wallet contract ID from frontend - wallet already deployed!

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { passkeyClient } from '@/lib/passkey';
 import { api } from '@/lib/api';
-import { Cloud, Smartphone, Key, Mail, ArrowLeft, Loader2, CheckCircle2, AlertTriangle, Monitor, Fingerprint } from 'lucide-react';
+import { Mail, ArrowLeft, Loader2, CheckCircle2, Fingerprint } from 'lucide-react';
 import { authStorage } from '@/utils/authStorage';
 
 // ============ Ecosystem Detection ============
@@ -27,14 +27,6 @@ import { authStorage } from '@/utils/authStorage';
 type Ecosystem = 'apple' | 'google' | 'windows_local' | 'other';
 type Step = 'email' | 'code' | 'details' | 'passkey';
 
-interface EcosystemInfo {
-    id: Ecosystem;
-    label: string;
-    icon: typeof Cloud;
-    syncMessage: string;
-    isRisky: boolean;
-}
-
 function detectEcosystem(): Ecosystem {
     const ua = navigator.userAgent;
     const isApple = /Macintosh|iPhone|iPad|iPod/.test(ua) || /Safari/.test(ua) && !/Chrome/.test(ua);
@@ -49,37 +41,6 @@ function detectEcosystem(): Ecosystem {
     return 'other';
 }
 
-const ECOSYSTEM_INFO: Record<Ecosystem, EcosystemInfo> = {
-    apple: {
-        id: 'apple',
-        label: 'iCloud Keychain',
-        icon: Cloud,
-        syncMessage: 'Your passkey syncs automatically across all your Apple devices via iCloud.',
-        isRisky: false,
-    },
-    google: {
-        id: 'google',
-        label: 'Google Password Manager',
-        icon: Smartphone,
-        syncMessage: 'Your passkey syncs across all devices where you\'re signed into Chrome or your Google account.',
-        isRisky: false,
-    },
-    windows_local: {
-        id: 'windows_local',
-        label: 'Windows Hello (Local)',
-        icon: Monitor,
-        syncMessage: '',
-        isRisky: true,
-    },
-    other: {
-        id: 'other',
-        label: 'Other / Hardware Key',
-        icon: Key,
-        syncMessage: 'Make sure your passkey manager syncs across your devices (e.g. 1Password, Bitwarden).',
-        isRisky: false,
-    },
-};
-
 export function Register() {
     const [step, setStep] = useState<Step>('email');
     const [email, setEmail] = useState('');
@@ -88,7 +49,7 @@ export function Register() {
     const [formData, setFormData] = useState({ name: '', document: '' });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    const [ecosystem, setEcosystem] = useState<Ecosystem | null>(null);
+
     const [resendCooldown, setResendCooldown] = useState(0);
     const navigate = useNavigate();
     const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -103,6 +64,18 @@ export function Register() {
             return () => clearTimeout(timer);
         }
     }, [resendCooldown]);
+
+    // Pre-initialize SmartAccountKit when entering passkey step.
+    // Moves the async config fetch BEFORE the user gesture so
+    // createWallet() fires navigator.credentials.create() immediately
+    // within Chrome's transient activation window.
+    useEffect(() => {
+        if (step === 'passkey') {
+            passkeyClient.init().catch(err => {
+                console.error('Failed to pre-init passkey client:', err);
+            });
+        }
+    }, [step]);
 
     // Step 1: Send verification code
     const handleSendCode = async (e: React.FormEvent) => {
@@ -214,8 +187,6 @@ export function Register() {
             return;
         }
         setError('');
-        // Pre-select detected ecosystem
-        if (!ecosystem) setEcosystem(detectedEcosystem);
         setStep('passkey');
     };
 
@@ -232,7 +203,7 @@ export function Register() {
                 registrationToken,
                 credentialId,
                 contractId,
-                passkeyEcosystem: ecosystem || detectedEcosystem,
+                passkeyEcosystem: detectedEcosystem,
             });
 
             if (!response.success) {
@@ -488,9 +459,7 @@ export function Register() {
         );
     }
 
-    // ============ STEP 4: Passkey Creation (NEW — dedicated screen) ============
-    const activeEcosystem = ecosystem || detectedEcosystem;
-    const ecoInfo = ECOSYSTEM_INFO[activeEcosystem];
+    // ============ STEP 4: Passkey Creation ============
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
@@ -518,68 +487,6 @@ export function Register() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        {/* Device type selector */}
-                        <div className="space-y-3">
-                            <Label className="text-slate-200">What devices do you use?</Label>
-                            <div className="grid grid-cols-1 gap-2">
-                                {([
-                                    { id: 'apple' as const, icon: Cloud, label: 'iPhone / Mac', sub: 'Passkey syncs via iCloud' },
-                                    { id: 'google' as const, icon: Smartphone, label: 'Android / Chrome', sub: 'Passkey syncs via Google' },
-                                    { id: 'other' as const, icon: Key, label: '1Password / Hardware Key', sub: 'Passkey syncs via your vault' },
-                                ]).map(({ id, icon: Icon, label, sub }) => (
-                                    <button
-                                        key={id}
-                                        type="button"
-                                        onClick={() => setEcosystem(id)}
-                                        className={`p-3 rounded-lg border flex items-center gap-3 transition-all text-left ${activeEcosystem === id
-                                            ? 'bg-blue-500/20 border-blue-500 text-white'
-                                            : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
-                                            }`}
-                                    >
-                                        <Icon className="w-5 h-5" />
-                                        <div>
-                                            <p className="text-sm font-medium">{label}</p>
-                                            <p className="text-xs opacity-70">{sub}</p>
-                                        </div>
-                                        {activeEcosystem === id && detectedEcosystem === id && (
-                                            <span className="ml-auto text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">Detected</span>
-                                        )}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Windows Hello WARNING — only shows for windows_local detection or if no ecosystem selected on Windows */}
-                        {detectedEcosystem === 'windows_local' && activeEcosystem !== 'google' && activeEcosystem !== 'other' && (
-                            <div className="p-4 bg-red-500/10 border border-red-500/40 rounded-lg space-y-2">
-                                <div className="flex items-start gap-3">
-                                    <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                                    <div className="text-sm">
-                                        <p className="font-semibold text-red-300">Windows stores passkeys locally</p>
-                                        <p className="text-red-200/70 text-xs leading-relaxed mt-1">
-                                            Windows Hello saves your passkey only on this computer. If this computer is lost or
-                                            reset, <strong>your wallet will be permanently inaccessible</strong>.
-                                        </p>
-                                        <p className="text-red-200/80 text-xs mt-2 font-medium">
-                                            → We strongly recommend using <strong>Google Chrome</strong> (signed into your Google account)
-                                            or a password manager like <strong>1Password</strong>.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Ecosystem-specific reassurance (for safe ecosystems) */}
-                        {!ecoInfo.isRisky && ecoInfo.syncMessage && (
-                            <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg flex items-start gap-3">
-                                <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                                <p className="text-xs text-green-200/80 leading-relaxed">
-                                    {ecoInfo.syncMessage}
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Simplified disclaimer */}
                         <p className="text-xs text-slate-500 text-center leading-relaxed">
                             Your passkey uses biometrics (Face ID, Touch ID, or fingerprint) to secure your wallet.
                             Make sure it's saved in a cloud-synced service so you don't lose access.

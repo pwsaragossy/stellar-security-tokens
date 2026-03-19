@@ -39,6 +39,18 @@ export function CompanyRegister() {
         }
     }, [resendCooldown]);
 
+    // Pre-initialize SmartAccountKit when entering details step.
+    // CompanyRegister triggers passkey creation on form submit,
+    // so pre-warm here to keep navigator.credentials.create()
+    // within Chrome's transient activation window.
+    useEffect(() => {
+        if (step === 'details') {
+            passkeyClient.init().catch(err => {
+                console.error('Failed to pre-init passkey client:', err);
+            });
+        }
+    }, [step]);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({ ...formData, [e.target.id]: e.target.value });
     };

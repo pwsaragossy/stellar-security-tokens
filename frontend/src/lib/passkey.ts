@@ -20,6 +20,8 @@ export class PasskeyClient {
     private baseUrl: string;
     /** Cached from the most recent login WebAuthn ceremony */
     private lastCredentialId: string | null = null;
+    /** Deduplicates concurrent init() calls — critical for Chrome activation window */
+    private initPromise: Promise<void> | null = null;
 
     constructor() {
         this.baseUrl = API_URL;
@@ -27,11 +29,18 @@ export class PasskeyClient {
 
     /**
      * Initialize the SmartAccountKit with config from backend.
-     * Replaces the deprecated PasskeyKit initialization.
+     * Uses promise deduplication so pre-warming via useEffect and
+     * the button-click call share one fetch — preserving Chrome's
+     * transient activation window for navigator.credentials.create().
      */
     async init(): Promise<void> {
         if (this.kit) return;
+        if (this.initPromise) return this.initPromise;
+        this.initPromise = this._doInit();
+        return this.initPromise;
+    }
 
+    private async _doInit(): Promise<void> {
         try {
             const response = await fetch(`${this.baseUrl}/auth/config`);
             if (!response.ok) throw new Error('Failed to fetch auth config');
@@ -64,6 +73,7 @@ export class PasskeyClient {
             });
         } catch (error) {
             console.error('Failed to initialize SmartAccountKit:', error);
+            this.initPromise = null; // Reset on failure so retry works
             throw error;
         }
     }
@@ -151,6 +161,14 @@ export class PasskeyClient {
 
             if (!result || !result.credentialId || !result.contractId) {
                 throw new Error('Failed to create wallet - missing required data');
+            }
+
+            // Verify deployment actually succeeded — SDK returns { success: false } silently
+            if (result.submitResult && !result.submitResult.success) {
+                console.error('[SmartAccount] Deploy failed:', result.submitResult.error);
+                throw new Error(
+                    `Wallet deployment failed: ${result.submitResult.error || 'Transaction was not confirmed on-chain'}. Please try again.`
+                );
             }
 
             console.log('[SmartAccount] Wallet created successfully');
