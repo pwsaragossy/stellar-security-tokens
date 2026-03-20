@@ -1,31 +1,279 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Radox — Digital Securities Platform</title>
-    <style>
-        body {
-            margin: 0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #0A1628;
-            color: #C9A962;
-            font-family: Georgia, 'Times New Roman', serif;
-            text-align: center;
-        }
-        h1 { font-size: 3rem; letter-spacing: 2px; }
-        p { color: rgba(255,255,255,0.6); font-family: sans-serif; }
-        a { color: #C9A962; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Radox — Digital Securities Platform</title>
+  <meta name="description" content="Fractional ownership of real-world assets, powered by blockchain. Fast, transparent, and open 24/7.">
+  <meta name="theme-color" content="#0a0a14">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Radox — Accessible Assets to Everyone, Everywhere">
+  <meta property="og:description" content="Fractional ownership of real-world assets, powered by blockchain. Fast, transparent, and open 24/7.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://radox.net">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div>
-        <h1>✦ RADOX</h1>
-        <p>Digital Securities Platform</p>
-        <p><a href="https://app.radox.net">Go to App →</a></p>
+
+  <!-- ============================================================= -->
+  <!-- PARTICLE CANVAS (fixed background)                             -->
+  <!-- ============================================================= -->
+  <canvas id="particle-canvas"></canvas>
+
+  <!-- ============================================================= -->
+  <!-- NAVBAR                                                         -->
+  <!-- ============================================================= -->
+  <nav id="navbar" class="navbar">
+    <div class="navbar-inner">
+      <button id="logo-btn" class="navbar-logo">RADOX</button>
+
+      <div class="navbar-links">
+        <button class="navbar-link" data-scroll="how-it-works" data-i18n="nav.howItWorks">How It Works</button>
+        <button class="navbar-link" data-scroll="for-users" data-i18n="nav.forUsers">For Users</button>
+        <button class="navbar-link" data-scroll="for-companies" data-i18n="nav.forCompanies">For Companies</button>
+        <button class="navbar-link" data-scroll="for-investors" data-i18n="nav.forInvestors">For Partners &amp; VCs</button>
+        <button class="navbar-link" data-scroll="security" data-i18n="nav.security">Security</button>
+      </div>
+
+      <div class="navbar-right">
+        <button id="lang-btn" class="lang-toggle">EN | PT</button>
+        <a href="https://app.radox.net" target="_blank" rel="noopener noreferrer" class="btn-gold" style="font-size:.875rem;padding:.5rem 1.25rem">Launch the App</a>
+      </div>
+
+      <button id="hamburger" class="navbar-hamburger">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+      </button>
     </div>
+
+    <div id="mobile-menu" class="mobile-menu navbar-glass">
+      <button class="mobile-menu-link" data-scroll="how-it-works" data-i18n="nav.howItWorks">How It Works</button>
+      <button class="mobile-menu-link" data-scroll="for-users" data-i18n="nav.forUsers">For Users</button>
+      <button class="mobile-menu-link" data-scroll="for-companies" data-i18n="nav.forCompanies">For Companies</button>
+      <button class="mobile-menu-link" data-scroll="for-investors" data-i18n="nav.forInvestors">For Partners &amp; VCs</button>
+      <button class="mobile-menu-link" data-scroll="security" data-i18n="nav.security">Security</button>
+      <div class="mobile-menu-bottom">
+        <button id="mobile-lang-btn" class="lang-toggle">EN | PT</button>
+        <a href="https://app.radox.net" target="_blank" rel="noopener noreferrer" class="btn-gold" style="font-size:.875rem;padding:.5rem 1.25rem">Launch the App</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- ============================================================= -->
+    <!-- HERO                                                           -->
+    <!-- ============================================================= -->
+    <section class="hero">
+      <div class="hero-glow"></div>
+      <div class="hero-content">
+        <h1 data-i18n="hero.headline">Accessible Assets to Everyone, Everywhere</h1>
+        <p data-i18n="hero.sub">Fractional ownership of real-world assets, powered by blockchain.
+Fast, transparent, and open 24/7.</p>
+        <div class="hero-ctas">
+          <button class="btn-gold" data-scroll="waitlist" data-i18n="hero.cta1">Get Early Access</button>
+          <button class="btn-outline" data-scroll="contact" data-i18n="hero.cta2">Schedule a Meeting</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- TRUST BAR                                                      -->
+    <!-- ============================================================= -->
+    <section class="trust-bar section-light">
+      <div class="container text-center reveal">
+        <p class="trust-label" data-i18n="trust.label">Built on</p>
+        <div class="trust-logos">
+          <img src="stellar-logo.webp" alt="Stellar" loading="lazy">
+          <img src="soroban-logo.jpg" alt="Soroban" loading="lazy">
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- HOW IT WORKS                                                   -->
+    <!-- ============================================================= -->
+    <section id="how-it-works" class="how-it-works section-light">
+      <div class="container">
+        <h2 class="text-center" data-i18n="howItWorks.title">How It Works</h2>
+        <div id="steps-grid" class="steps-grid">
+          <!-- JS-built -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- FOR USERS                                                      -->
+    <!-- ============================================================= -->
+    <section id="for-users" class="for-users section-dark">
+      <div class="container" style="position:relative;z-index:10">
+        <h2 class="text-center" data-i18n="forUsers.title">Built for the Modern User</h2>
+        <div id="user-grid" class="user-grid">
+          <!-- JS-built -->
+        </div>
+        <div class="text-center" style="margin-top:3rem">
+          <button class="btn-gold" data-scroll="waitlist" data-i18n="forUsers.cta">Join the Whitelist</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- LIVE TICKER                                                    -->
+    <!-- ============================================================= -->
+    <section class="live-ticker section-dark">
+      <div class="container reveal">
+        <div id="ticker-container">
+          <!-- JS-built -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- FOR COMPANIES                                                  -->
+    <!-- ============================================================= -->
+    <section id="for-companies" class="for-companies section-light">
+      <div class="container">
+        <h2 class="text-center" data-i18n="forCompanies.title">Bring Your Assets to the Digital World</h2>
+        <div id="company-grid" class="company-grid">
+          <!-- JS-built -->
+        </div>
+        <div class="text-center" style="margin-top:3rem">
+          <a href="#contact" class="btn-outline-dark" data-i18n="forCompanies.cta">Schedule a Conversation</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- FOR INVESTORS                                                  -->
+    <!-- ============================================================= -->
+    <section id="for-investors" class="for-investors section-dark">
+      <div class="container" style="position:relative;z-index:10">
+        <h2 class="text-center" data-i18n="forInvestors.title">For Partners &amp; VCs</h2>
+        <div id="investor-grid" class="investor-grid">
+          <!-- JS-built -->
+        </div>
+        <div class="text-center" style="margin-top:3rem">
+          <button class="btn-gold" data-scroll="waitlist" data-i18n="forInvestors.cta">Talk to Our Team</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- USE CASES                                                      -->
+    <!-- ============================================================= -->
+    <section class="use-cases section-dark">
+      <div class="container" style="position:relative;z-index:10">
+        <h2 class="text-center" data-i18n="useCases.title">What Can Be Tokenized?</h2>
+        <div id="use-grid" class="use-grid">
+          <!-- JS-built -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- SECURITY                                                       -->
+    <!-- ============================================================= -->
+    <section id="security" class="security-section section-light">
+      <div class="container">
+        <h2 class="text-center" data-i18n="security.title">Institutional-Grade Security</h2>
+        <div id="security-grid" class="security-grid">
+          <!-- JS-built -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- WAITLIST FORM                                                  -->
+    <!-- ============================================================= -->
+    <section id="waitlist" class="waitlist section-dark">
+      <div class="waitlist-inner">
+        <h2 id="wl-title">Join the Whitelist</h2>
+        <p class="sub" id="wl-sub">Be among the first to access the platform.</p>
+
+        <form id="waitlist-form">
+          <!-- Honeypot -->
+          <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off">
+
+          <div>
+            <label id="wl-name-label" for="wl-name">Name</label>
+            <input type="text" id="wl-name" name="name" required>
+          </div>
+          <div>
+            <label for="wl-email">Email</label>
+            <input type="email" id="wl-email" name="email" required placeholder="you@example.com">
+          </div>
+          <div>
+            <label for="wl-whatsapp">WhatsApp</label>
+            <input type="tel" id="wl-whatsapp" name="whatsapp" required placeholder="+55 11 99999-9999">
+          </div>
+          <div>
+            <label id="wl-role-label" for="wl-role">I am a...</label>
+            <select id="wl-role" name="role" required>
+              <option value="">—</option>
+              <option value="Investor">Investor</option>
+              <option value="Company">Company</option>
+              <option value="Partner / VC">Partner / VC</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <button type="submit" id="wl-submit" class="btn-gold">Join the Whitelist</button>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============================================================= -->
+  <!-- FOOTER                                                         -->
+  <!-- ============================================================= -->
+  <footer id="contact" class="footer section-dark">
+    <div class="container">
+      <div class="footer-grid">
+        <!-- Brand -->
+        <div>
+          <p class="footer-brand-name">RADOX</p>
+          <p class="footer-brand-tagline" id="ft-tagline">Tokenization infrastructure for real-world assets</p>
+          <p class="footer-copyright">© 2025 Radox Tecnologia</p>
+        </div>
+
+        <!-- Platform -->
+        <div>
+          <h4 id="ft-platform">Platform</h4>
+          <div>
+            <button class="footer-link" data-scroll="how-it-works" id="ft-how">How It Works</button>
+            <button class="footer-link" data-scroll="for-investors" id="ft-investors">For Partners &amp; VCs</button>
+            <button class="footer-link" data-scroll="for-companies" id="ft-companies">For Companies</button>
+          </div>
+        </div>
+
+        <!-- Legal -->
+        <div>
+          <h4 id="ft-legal">Legal</h4>
+          <div>
+            <a href="#" class="footer-link" id="ft-terms">Terms of Service</a>
+            <a href="#" class="footer-link" id="ft-privacy">Privacy Policy</a>
+            <a href="#" class="footer-link" id="ft-risk">Risk Disclaimer</a>
+          </div>
+        </div>
+
+        <!-- Connect -->
+        <div>
+          <h4 id="ft-connect">Connect</h4>
+          <a href="mailto:contact@radox.net" class="footer-link">pedro@radox.net — Founder</a>
+        </div>
+      </div>
+
+      <hr class="footer-divider">
+      <p class="footer-disclaimer" id="ft-disclaimer">Radox is not a broker-dealer or investment advisor. Securities offered through the platform are subject to applicable regulatory requirements. Past performance does not guarantee future results.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
 </body>
 </html>
