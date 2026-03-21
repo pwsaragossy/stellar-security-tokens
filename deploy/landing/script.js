@@ -153,7 +153,8 @@
     buildForInvestors();
     buildUseCases();
     buildSecurity();
-    buildTicker();
+
+
     buildWaitlistLabels();
     buildFooter();
   }
@@ -301,41 +302,8 @@
     observeReveals(g);
   }
 
-  function buildTicker() {
-    const container = document.getElementById('ticker-container');
-    if (!container) return;
-    const tr = TR[currentLang];
-    const ASSETS = [
-      { name: 'São Paulo Prime Office', type: 'Real Estate', yield: 12.4, change: 0.3, volume: 'R$ 2.4M', status: 'Active' },
-      { name: 'CRI Mezzanine Fund', type: 'Credit', yield: 14.8, change: -0.1, volume: 'R$ 890K', status: 'Active' },
-      { name: 'Agro Receivables Pool', type: 'Receivables', yield: 11.2, change: 0.5, volume: 'R$ 1.6M', status: 'New' },
-      { name: 'Rio Residential REIT', type: 'Real Estate', yield: 9.7, change: 0.2, volume: 'R$ 3.1M', status: 'Active' },
-      { name: 'Private Credit Note', type: 'Credit', yield: 16.3, change: -0.2, volume: 'R$ 520K', status: 'Filling' }
-    ];
-    container.innerHTML = `
-      <div class="ticker-table glass-card">
-        <div class="ticker-header">
-          <div>${tr.ticker.asset}</div>
-          <div class="ticker-col-desktop">${tr.ticker.type}</div>
-          <div class="text-right">${tr.ticker.yield}</div>
-          <div class="text-right ticker-col-desktop">24h</div>
-          <div class="text-right">${tr.ticker.volume}</div>
-          <div class="text-right">Status</div>
-        </div>
-        ${ASSETS.map(a => `
-          <div class="ticker-row">
-            <div><span class="ticker-name">${a.name}</span></div>
-            <div class="ticker-col-desktop"><span class="ticker-type">${a.type}</span></div>
-            <div class="text-right"><span class="ticker-yield">${a.yield.toFixed(1)}%</span></div>
-            <div class="text-right ticker-col-desktop"><span class="ticker-change ${a.change >= 0 ? 'positive' : 'negative'}">${a.change >= 0 ? '+' : ''}${a.change.toFixed(1)}%</span></div>
-            <div class="text-right"><span class="ticker-volume">${a.volume}</span></div>
-            <div class="text-right"><span class="ticker-status ${a.status.toLowerCase()}">${a.status}</span></div>
-          </div>
-        `).join('')}
-      </div>
-      <p class="ticker-disclaimer">${tr.ticker.disclaimer}</p>
-    `;
-  }
+
+
 
   function buildWaitlistLabels() {
     const tr = TR[currentLang];
@@ -488,7 +456,7 @@
     window.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; }, { passive: true });
 
     const count = Math.min(110, Math.floor(window.innerWidth / 12));
-    const gold = { r: 201, g: 168, b: 76 };
+    const gold = { r: 253, g: 218, b: 36 };
     const particles = [];
 
     for (let i = 0; i < count; i++) {
@@ -606,7 +574,7 @@
         if (p.layer === 2) {
           const hs = p.size * 0.25;
           ctx.beginPath(); ctx.moveTo(p.x, p.y - hs); ctx.lineTo(p.x + hs, p.y); ctx.lineTo(p.x, p.y + hs); ctx.lineTo(p.x - hs, p.y); ctx.closePath();
-          ctx.fillStyle = `rgba(255,235,180,${fa * 0.6})`;
+          ctx.fillStyle = `rgba(255,245,180,${fa * 0.6})`;
           ctx.fill();
         }
       }
