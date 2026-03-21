@@ -1,5 +1,6 @@
 import { Investor } from '../models/Investor.js';
 import { StellarService } from '../services/stellar.service.js';
+import { isTestnet } from '../config/stellar.js';
 
 import { DepositRelayService } from '../services/depositRelay.service.js';
 import { PasskeyWalletService, UserType } from '../services/passkeyWallet.service.js';
@@ -608,7 +609,7 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
         passkeyCredentialId: credentialId,
         passkeyPublicKey: null, // No longer tracked separately - embedded in wallet contract
         passkeyEcosystem: passkeyEcosystem || null, // apple, google, windows_local, other
-        kycStatus: 'pending',
+        kycStatus: isTestnet() ? 'approved' : 'pending',
         emailVerified: true, // Email was verified before passkey creation!
         emailVerificationToken: null,
         emailVerificationExpiry: null,
