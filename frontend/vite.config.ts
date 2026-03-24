@@ -20,15 +20,16 @@ export default defineConfig({
     }
   },
   build: {
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          // Split vendor libraries into separate chunks for better caching
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-charts': ['recharts'],
-          'vendor-ui': ['lucide-react', 'date-fns'],
-          // Bundle Ledger packages together for optional loading
-          'vendor-ledger': ['@ledgerhq/hw-transport-webusb', '@ledgerhq/hw-app-str'],
+        codeSplitting: {
+          groups: [
+            { name: 'vendor-react',  test: /[\\/]node_modules[\\/](react|react-dom|react-router-dom)[\\/]/, priority: 20 },
+            { name: 'vendor-charts', test: /[\\/]node_modules[\\/]recharts[\\/]/,                          priority: 15 },
+            { name: 'vendor-ui',     test: /[\\/]node_modules[\\/](lucide-react|date-fns)[\\/]/,            priority: 10 },
+            { name: 'vendor-ledger', test: /[\\/]node_modules[\\/]@ledgerhq[\\/]/,                          priority: 5  },
+            { name: 'vendor',        test: /[\\/]node_modules[\\/]/,                                       priority: 1  },
+          ],
         },
       },
     },
