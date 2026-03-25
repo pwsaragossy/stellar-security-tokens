@@ -12,7 +12,7 @@ export const errorHandler = (err, req, res, next) => {
   const errorId = crypto.randomUUID();
 
   // Always log full error server-side
-  log.error(`[Error ${errorId}]`, err);
+  log.error(`[Error ${errorId}] ${req.method} ${req.originalUrl}`, err);
 
   if (err.name === 'ValidationError') {
     return res.status(400).json({

@@ -16,21 +16,13 @@ const router = express.Router();
  * Get all upcoming payments for the company
  */
 router.get('/', authenticateToken, requireCompanyUser, async (req, res) => {
-    try {
-        const { companyId } = req.user;
-        const payments = await CompanyPaymentService.getUpcomingPayments(companyId);
+    const { companyId } = req.user;
+    const payments = await CompanyPaymentService.getUpcomingPayments(companyId);
 
-        res.json({
-            success: true,
-            data: payments
-        });
-    } catch (error) {
-        log.error('[CompanyPayments] Error getting payments:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
+    res.json({
+        success: true,
+        data: payments
+    });
 });
 
 /**
@@ -38,40 +30,32 @@ router.get('/', authenticateToken, requireCompanyUser, async (req, res) => {
  * Get payment details for a specific offer
  */
 router.get('/:offerId', authenticateToken, requireCompanyUser, async (req, res) => {
-    try {
-        const { offerId } = req.params;
-        const { companyId } = req.user;
+    const { offerId } = req.params;
+    const { companyId } = req.user;
 
-        // Verify offer belongs to company
-        const offer = await prisma.offer.findFirst({
-            where: { id: parseInt(offerId), companyId }
-        });
+    // Verify offer belongs to company
+    const offer = await prisma.offer.findFirst({
+        where: { id: parseInt(offerId), companyId }
+    });
 
-        if (!offer) {
-            return res.status(404).json({
-                success: false,
-                error: 'Offer not found'
-            });
-        }
-
-        let paymentDetails;
-        if (offer.paymentType === 'bullet') {
-            paymentDetails = await CompanyPaymentService.calculateBulletPayment(parseInt(offerId));
-        } else {
-            paymentDetails = await CompanyPaymentService.calculateOwedAmount(parseInt(offerId));
-        }
-
-        res.json({
-            success: true,
-            data: paymentDetails
-        });
-    } catch (error) {
-        log.error('[CompanyPayments] Error getting payment details:', error);
-        res.status(500).json({
+    if (!offer) {
+        return res.status(404).json({
             success: false,
-            error: error.message
+            error: 'Offer not found'
         });
     }
+
+    let paymentDetails;
+    if (offer.paymentType === 'bullet') {
+        paymentDetails = await CompanyPaymentService.calculateBulletPayment(parseInt(offerId));
+    } else {
+        paymentDetails = await CompanyPaymentService.calculateOwedAmount(parseInt(offerId));
+    }
+
+    res.json({
+        success: true,
+        data: paymentDetails
+    });
 });
 
 /**
@@ -79,42 +63,37 @@ router.get('/:offerId', authenticateToken, requireCompanyUser, async (req, res) 
  * Check if there are pending maturity batches for this offer
  */
 router.get('/:offerId/batch-status', authenticateToken, requireCompanyUser, async (req, res) => {
-    try {
-        const { offerId } = req.params;
-        const { companyId } = req.user;
+    const { offerId } = req.params;
+    const { companyId } = req.user;
 
-        const offer = await prisma.offer.findFirst({
-            where: { id: parseInt(offerId), companyId }
-        });
-        if (!offer) return res.status(404).json({ success: false, error: 'Offer not found' });
+    const offer = await prisma.offer.findFirst({
+        where: { id: parseInt(offerId), companyId }
+    });
+    if (!offer) return res.status(404).json({ success: false, error: 'Offer not found' });
 
-        const pendingBatches = await prisma.multiSigTransaction.findMany({
-            where: {
-                operationType: 'maturity_clawback',
-                metadata: { path: ['offerId'], equals: parseInt(offerId) },
-                status: { in: ['pending', 'batch_pending', 'partially_signed'] },
-            },
-            select: { id: true, status: true, metadata: true, createdAt: true },
-            orderBy: { createdAt: 'asc' },
-        });
+    const pendingBatches = await prisma.multiSigTransaction.findMany({
+        where: {
+            operationType: 'maturity_clawback',
+            metadata: { path: ['offerId'], equals: parseInt(offerId) },
+            status: { in: ['pending', 'batch_pending', 'partially_signed'] },
+        },
+        select: { id: true, status: true, metadata: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+    });
 
-        const batchGroupId = pendingBatches.length > 0
-            ? pendingBatches[0].metadata?.batchGroupId || null
-            : null;
+    const batchGroupId = pendingBatches.length > 0
+        ? pendingBatches[0].metadata?.batchGroupId || null
+        : null;
 
-        res.json({
-            success: true,
-            data: {
-                hasPending: pendingBatches.length > 0,
-                batchCount: pendingBatches.length,
-                batchGroupId,
-                statuses: pendingBatches.map(b => ({ id: b.id, status: b.status })),
-            },
-        });
-    } catch (error) {
-        log.error('[CompanyPayments] Error getting batch status:', error);
-        res.status(500).json({ success: false, error: 'Internal server error' });
-    }
+    res.json({
+        success: true,
+        data: {
+            hasPending: pendingBatches.length > 0,
+            batchCount: pendingBatches.length,
+            batchGroupId,
+            statuses: pendingBatches.map(b => ({ id: b.id, status: b.status })),
+        },
+    });
 });
 
 /**
@@ -123,42 +102,34 @@ router.get('/:offerId/batch-status', authenticateToken, requireCompanyUser, asyn
  * Returns unsigned XDR for the company to sign
  */
 router.post('/:offerId/prepare', authenticateToken, requireCompanyUser, async (req, res) => {
-    try {
-        const { offerId } = req.params;
-        const { companyId, id: userId } = req.user;
+    const { offerId } = req.params;
+    const { companyId, id: userId } = req.user;
 
-        // Verify offer belongs to company
-        const offer = await prisma.offer.findFirst({
-            where: { id: parseInt(offerId), companyId }
-        });
+    // Verify offer belongs to company
+    const offer = await prisma.offer.findFirst({
+        where: { id: parseInt(offerId), companyId }
+    });
 
-        if (!offer) {
-            return res.status(404).json({
-                success: false,
-                error: 'Offer not found'
-            });
-        }
-
-        const transaction = await CompanyPaymentService.createPaymentTransaction(
-            parseInt(offerId),
-            userId,
-            { batchGroupId: req.body.batchGroupId }
-        );
-
-        res.json({
-            success: true,
-            data: transaction,
-            message: transaction.isBullet
-                ? `Batch prepared (${transaction.investorCount} investors). Sign to continue.`
-                : 'Transaction prepared. Sign with your passkey to complete payment.'
-        });
-    } catch (error) {
-        log.error('[CompanyPayments] Error preparing payment:', error);
-        res.status(500).json({
+    if (!offer) {
+        return res.status(404).json({
             success: false,
-            error: error.message
+            error: 'Offer not found'
         });
     }
+
+    const transaction = await CompanyPaymentService.createPaymentTransaction(
+        parseInt(offerId),
+        userId,
+        { batchGroupId: req.body.batchGroupId }
+    );
+
+    res.json({
+        success: true,
+        data: transaction,
+        message: transaction.isBullet
+            ? `Batch prepared (${transaction.investorCount} investors). Sign to continue.`
+            : 'Transaction prepared. Sign with your passkey to complete payment.'
+    });
 });
 
 /**
@@ -166,58 +137,50 @@ router.post('/:offerId/prepare', authenticateToken, requireCompanyUser, async (r
  * Submit a signed payment transaction
  */
 router.post('/:offerId/submit', authenticateToken, requireCompanyUser, async (req, res) => {
-    try {
-        const { offerId } = req.params;
-        const { signedXDR } = req.body;
-        const { companyId } = req.user;
+    const { offerId } = req.params;
+    const { signedXDR } = req.body;
+    const { companyId } = req.user;
 
-        if (!signedXDR) {
-            return res.status(400).json({
-                success: false,
-                error: 'Signed transaction XDR is required'
-            });
-        }
-
-        // Verify offer belongs to company
-        const offer = await prisma.offer.findFirst({
-            where: { id: parseInt(offerId), companyId }
-        });
-
-        if (!offer) {
-            return res.status(404).json({
-                success: false,
-                error: 'Offer not found'
-            });
-        }
-
-        const result = await CompanyPaymentService.processSignedPayment(
-            signedXDR,
-            parseInt(offerId),
-            {
-                batchGroupId: req.body.batchGroupId,
-                batchInfo: req.body.batchInfo,
-            }
-        );
-
-        // Dynamic message based on status
-        const messages = {
-            completed: 'Payment submitted successfully',
-            batch_queued: 'Batch signed. Continue to next batch.',
-            pending_admin_approval: 'All batches submitted. Awaiting platform admin approval.',
-        };
-
-        res.json({
-            success: true,
-            data: result,
-            message: messages[result.status] || 'Payment processed'
-        });
-    } catch (error) {
-        log.error('[CompanyPayments] Error submitting payment:', error);
-        res.status(500).json({
+    if (!signedXDR) {
+        return res.status(400).json({
             success: false,
-            error: error.message
+            error: 'Signed transaction XDR is required'
         });
     }
+
+    // Verify offer belongs to company
+    const offer = await prisma.offer.findFirst({
+        where: { id: parseInt(offerId), companyId }
+    });
+
+    if (!offer) {
+        return res.status(404).json({
+            success: false,
+            error: 'Offer not found'
+        });
+    }
+
+    const result = await CompanyPaymentService.processSignedPayment(
+        signedXDR,
+        parseInt(offerId),
+        {
+            batchGroupId: req.body.batchGroupId,
+            batchInfo: req.body.batchInfo,
+        }
+    );
+
+    // Dynamic message based on status
+    const messages = {
+        completed: 'Payment submitted successfully',
+        batch_queued: 'Batch signed. Continue to next batch.',
+        pending_admin_approval: 'All batches submitted. Awaiting platform admin approval.',
+    };
+
+    res.json({
+        success: true,
+        data: result,
+        message: messages[result.status] || 'Payment processed'
+    });
 });
 
 /**
@@ -225,43 +188,35 @@ router.post('/:offerId/submit', authenticateToken, requireCompanyUser, async (re
  * Get payment history for an offer
  */
 router.get('/:offerId/history', authenticateToken, requireCompanyUser, async (req, res) => {
-    try {
-        const { offerId } = req.params;
-        const { companyId } = req.user;
+    const { offerId } = req.params;
+    const { companyId } = req.user;
 
-        // Verify offer belongs to company
-        const offer = await prisma.offer.findFirst({
-            where: { id: parseInt(offerId), companyId }
-        });
+    // Verify offer belongs to company
+    const offer = await prisma.offer.findFirst({
+        where: { id: parseInt(offerId), companyId }
+    });
 
-        if (!offer) {
-            return res.status(404).json({
-                success: false,
-                error: 'Offer not found'
-            });
-        }
-
-        const payments = await prisma.interestPayment.findMany({
-            where: { offerId: parseInt(offerId) },
-            orderBy: { paymentDate: 'desc' },
-            include: {
-                investor: {
-                    select: { id: true, name: true, email: true }
-                }
-            }
-        });
-
-        res.json({
-            success: true,
-            data: payments
-        });
-    } catch (error) {
-        log.error('[CompanyPayments] Error getting payment history:', error);
-        res.status(500).json({
+    if (!offer) {
+        return res.status(404).json({
             success: false,
-            error: error.message
+            error: 'Offer not found'
         });
     }
+
+    const payments = await prisma.interestPayment.findMany({
+        where: { offerId: parseInt(offerId) },
+        orderBy: { paymentDate: 'desc' },
+        include: {
+            investor: {
+                select: { id: true, name: true, email: true }
+            }
+        }
+    });
+
+    res.json({
+        success: true,
+        data: payments
+    });
 });
 
 /**
@@ -269,25 +224,17 @@ router.get('/:offerId/history', authenticateToken, requireCompanyUser, async (re
  * Get all penalties for the company
  */
 router.get('/penalties/all', authenticateToken, requireCompanyUser, async (req, res) => {
-    try {
-        const { companyId } = req.user;
+    const { companyId } = req.user;
 
-        const penalties = await prisma.companyPenalty.findMany({
-            where: { companyId },
-            orderBy: { createdAt: 'desc' }
-        });
+    const penalties = await prisma.companyPenalty.findMany({
+        where: { companyId },
+        orderBy: { createdAt: 'desc' }
+    });
 
-        res.json({
-            success: true,
-            data: penalties
-        });
-    } catch (error) {
-        log.error('[CompanyPayments] Error getting penalties:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
+    res.json({
+        success: true,
+        data: penalties
+    });
 });
 
 export default router;

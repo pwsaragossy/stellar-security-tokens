@@ -39,10 +39,7 @@ router.get('/pending', authenticatePlatformAdmin, async (req, res) => {
         });
     } catch (error) {
         log.error('Error listing pending transactions:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        throw error;
     }
 });
 
@@ -97,10 +94,7 @@ router.get('/:id', authenticatePlatformAdmin, async (req, res) => {
         });
     } catch (error) {
         log.error('Error getting transaction:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        throw error;
     }
 });
 
@@ -185,10 +179,7 @@ router.get('/:id/xdr', authenticatePlatformAdmin, async (req, res) => {
         });
     } catch (error) {
         log.error('Error getting XDR:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        throw error;
     }
 });
 
@@ -479,10 +470,7 @@ router.get('/stats', authenticatePlatformAdmin, async (req, res) => {
         });
     } catch (error) {
         log.error('Error getting stats:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        throw error;
     }
 });
 /**
@@ -584,7 +572,7 @@ router.post('/deposits/retry-all', authenticatePlatformAdmin, async (req, res) =
         });
     } catch (error) {
         log.error('Error in retry-all:', error);
-        res.status(500).json({ success: false, error: 'Internal server error' });
+        throw error;
     }
 });
 
@@ -638,10 +626,7 @@ router.post('/setup-thresholds', authenticatePlatformAdmin, async (req, res) => 
         });
     } catch (error) {
         log.error('Error creating threshold setup TX:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        throw error;
     }
 });
 

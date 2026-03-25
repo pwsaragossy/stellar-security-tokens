@@ -105,7 +105,7 @@ router.post('/freighter/challenge', async (req, res) => {
     });
   } catch (error) {
     log.error('[Freighter Auth] Challenge error:', error);
-    res.status(500).json({ success: false, error: 'Failed to generate challenge' });
+    throw error;
   }
 });
 
@@ -210,7 +210,7 @@ router.post('/freighter/verify', async (req, res) => {
     });
   } catch (error) {
     log.error('[Freighter Auth] Verify error:', error);
-    res.status(500).json({ success: false, error: 'Authentication failed' });
+    throw error;
   }
 });
 
@@ -228,7 +228,7 @@ router.post('/passkey/login/options', async (req, res) => {
     res.json(options);
   } catch (error) {
     log.error('Passkey Auth Options Error:', error);
-    res.status(500).json({ error: 'Failed to generate auth options' });
+    throw error;
   }
 });
 
@@ -258,7 +258,7 @@ router.post('/passkey/login/verify', async (req, res) => {
     }
   } catch (error) {
     log.error('Passkey Verify Error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -291,7 +291,7 @@ router.post('/passkey/register/options', authenticateToken, requirePlatformAdmin
     res.json({ success: true, options, challenge: options.challenge });
   } catch (error) {
     log.error('[Admin Passkey] Registration options error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -326,7 +326,7 @@ router.post('/passkey/register', authenticateToken, requirePlatformAdmin, async 
     }
   } catch (error) {
     log.error('[Admin Passkey] Registration error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -345,7 +345,7 @@ router.get('/passkey-login', async (req, res) => {
     });
   } catch (error) {
     log.error('[Admin Passkey] Auth options error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -413,7 +413,7 @@ router.post('/passkey-login', async (req, res) => {
     });
   } catch (error) {
     log.error('[Admin Passkey] Login error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -772,7 +772,7 @@ router.get('/companies', authenticateToken, requirePlatformAdmin, async (req, re
     res.json({ success: true, data: result });
   } catch (error) {
     log.error('[Companies List] Error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -873,7 +873,7 @@ router.get('/companies/:id/details', authenticateToken, requirePlatformAdmin, as
     });
   } catch (error) {
     log.error('[Company Details] Error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -940,7 +940,7 @@ router.post('/companies/:id/approve', authenticateToken, requirePlatformAdmin, a
     });
   } catch (error) {
     log.error('[Company Approve] Error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -1026,7 +1026,7 @@ router.post('/companies/:id/reject', authenticateToken, requirePlatformAdmin, as
     });
   } catch (error) {
     log.error('[Company Reject] Error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -1215,7 +1215,7 @@ router.post('/companies/:id/sponsor', authenticateToken, requirePlatformAdmin, a
 
   } catch (error) {
     log.error('[Admin Sponsor Company] Error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -1325,7 +1325,7 @@ router.get('/investors/:id/details', authenticateToken, requirePlatformAdmin, as
     });
   } catch (error) {
     log.error('[Investor Details] Error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -1579,7 +1579,7 @@ router.post('/investors/:id/sponsor', authenticateToken, requirePlatformAdmin, a
 
   } catch (error) {
     log.error('[Admin Sponsor] Error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -1600,7 +1600,7 @@ router.get('/defaults', authenticateToken, requirePlatformAdmin, async (req, res
     });
   } catch (error) {
     log.error('[Admin Defaults] Error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -1620,7 +1620,7 @@ router.get('/defaults/:offerId', authenticateToken, requirePlatformAdmin, async 
     res.json({ success: true, data: details });
   } catch (error) {
     log.error('[Admin Defaults] Error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -1640,7 +1640,7 @@ router.post('/defaults/:offerId/prepare', authenticateToken, requirePlatformAdmi
     });
   } catch (error) {
     log.error('[Admin Defaults] Prepare error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -1670,7 +1670,7 @@ router.post('/defaults/:offerId/distribute', authenticateToken, requirePlatformA
     });
   } catch (error) {
     log.error('[Admin Defaults] Distribute error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -1786,7 +1786,7 @@ router.post('/offers/:offerId/unlock-token', authenticateToken, requirePlatformA
     });
   } catch (error) {
     log.error('[Token Unlock] Error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 
@@ -1894,7 +1894,7 @@ router.get('/soroban/dashboard', authenticateToken, requirePlatformAdmin, async 
     });
   } catch (error) {
     log.error('[Soroban Dashboard] Error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    throw error;
   }
 });
 

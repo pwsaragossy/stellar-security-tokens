@@ -39,10 +39,7 @@ router.get('/passkeys', authenticateToken, async (req, res) => {
         });
     } catch (error) {
         log.error('Error listing passkeys:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        throw error;
     }
 });
 
@@ -89,10 +86,7 @@ router.post('/passkeys/verify/challenge', authenticateToken, async (req, res) =>
         });
     } catch (error) {
         log.error('Error generating verify challenge:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        throw error;
     }
 });
 
@@ -150,10 +144,7 @@ router.post('/passkeys/add/options', authenticateToken, async (req, res) => {
         });
     } catch (error) {
         log.error('Error generating add passkey options:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        throw error;
     }
 });
 
@@ -348,10 +339,7 @@ router.get('/passkey-config', async (req, res) => {
         });
     } catch (error) {
         log.error('Error getting passkey config:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        throw error;
     }
 });
 
@@ -384,10 +372,7 @@ router.get('/recovery-signers', authenticateToken, async (req, res) => {
         });
     } catch (error) {
         log.error('Error listing recovery signers:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        throw error;
     }
 });
 

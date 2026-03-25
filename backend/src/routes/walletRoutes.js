@@ -44,40 +44,32 @@ router.post('/submit-tx',
     body('xdr').isString().notEmpty().withMessage('xdr is required'),
     validate,
     async (req, res, next) => {
-        try {
-            const { xdr } = req.body;
-            log.info('[WalletRoutes] Submitting transaction from frontend (XDR length:', xdr.length, ')');
+        const { xdr } = req.body;
+        log.info('[WalletRoutes] Submitting transaction from frontend (XDR length:', xdr.length, ')');
 
-            // Use the service method which has the sponsorship fallback
-            const result = await PasskeyWalletService.sendTransaction(xdr);
+        // Use the service method which has the sponsorship fallback
+        const result = await PasskeyWalletService.sendTransaction(xdr);
 
-            log.info('[WalletRoutes] Submission result:', JSON.stringify(result));
+        log.info('[WalletRoutes] Submission result:', JSON.stringify(result));
 
-            // Check if submission returned an error or failure
-            if (result && (result.status === 'ERROR' || result.status === 'FAILED' || !result.hash)) {
-                log.error('[WalletRoutes] Transaction failed:', result);
-                return res.status(400).json({
-                    success: false,
-                    error: result.error || result.message || 'Transaction failed',
-                    details: result
-                });
-            }
-
-            log.info('[WalletRoutes] Transaction successful:', result.hash);
-
-            res.json({
-                success: true,
-                hash: result.hash,
-                message: 'Transaction submitted successfully',
-                sponsored: result.sponsored || false
-            });
-        } catch (error) {
-            log.error('[WalletRoutes] Transaction submission error:', error);
-            res.status(500).json({
+        // Check if submission returned an error or failure
+        if (result && (result.status === 'ERROR' || result.status === 'FAILED' || !result.hash)) {
+            log.error('[WalletRoutes] Transaction failed:', result);
+            return res.status(400).json({
                 success: false,
-                error: error.message || 'Failed to submit transaction'
+                error: result.error || result.message || 'Transaction failed',
+                details: result
             });
         }
+
+        log.info('[WalletRoutes] Transaction successful:', result.hash);
+
+        res.json({
+            success: true,
+            hash: result.hash,
+            message: 'Transaction submitted successfully',
+            sponsored: result.sponsored || false
+        });
     }
 );
 
@@ -121,52 +113,44 @@ router.post('/submit-tx',
 router.post('/relay',
     strictLimiter,
     async (req, res) => {
-        try {
-            const { xdr, func, auth } = req.body;
+        const { xdr, func, auth } = req.body;
 
-            if (!xdr && !func) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Either xdr or func is required',
-                });
-            }
-
-            let result;
-
-            if (xdr) {
-                // Standard XDR envelope submission (deploy transactions)
-                log.info('[Relay] Submitting XDR transaction (length:', xdr.length, ')');
-                result = await PasskeyWalletService.sendTransaction(xdr);
-            } else {
-                // Soroban func + auth submission (invoke transactions)
-                log.info('[Relay] Submitting Soroban func+auth transaction');
-                result = await PasskeyWalletService.sendSorobanTransaction(func, auth || []);
-            }
-
-            log.info('[Relay] Result:', JSON.stringify(result));
-
-            if (result && (result.status === 'ERROR' || result.status === 'FAILED' || !result.hash)) {
-                log.error('[Relay] Transaction failed:', result);
-                return res.status(400).json({
-                    success: false,
-                    error: result.error || result.message || 'Transaction failed',
-                    details: result,
-                });
-            }
-
-            res.json({
-                success: true,
-                hash: result.hash,
-                status: result.status,
-                message: 'Transaction submitted successfully',
-            });
-        } catch (error) {
-            log.error('[Relay] Submission error:', error.message);
-            res.status(500).json({
+        if (!xdr && !func) {
+            return res.status(400).json({
                 success: false,
-                error: error.message || 'Failed to submit transaction',
+                error: 'Either xdr or func is required',
             });
         }
+
+        let result;
+
+        if (xdr) {
+            // Standard XDR envelope submission (deploy transactions)
+            log.info('[Relay] Submitting XDR transaction (length:', xdr.length, ')');
+            result = await PasskeyWalletService.sendTransaction(xdr);
+        } else {
+            // Soroban func + auth submission (invoke transactions)
+            log.info('[Relay] Submitting Soroban func+auth transaction');
+            result = await PasskeyWalletService.sendSorobanTransaction(func, auth || []);
+        }
+
+        log.info('[Relay] Result:', JSON.stringify(result));
+
+        if (result && (result.status === 'ERROR' || result.status === 'FAILED' || !result.hash)) {
+            log.error('[Relay] Transaction failed:', result);
+            return res.status(400).json({
+                success: false,
+                error: result.error || result.message || 'Transaction failed',
+                details: result,
+            });
+        }
+
+        res.json({
+            success: true,
+            hash: result.hash,
+            status: result.status,
+            message: 'Transaction submitted successfully',
+        });
     }
 );
 
