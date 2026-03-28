@@ -96,7 +96,7 @@ export class CompanyPaymentService {
             return {
                 investorId: inv.investorId,
                 investorName: inv.investor.name,
-                investorWallet: inv.investor.stellarPublicKey,
+                investorWallet: inv.investor.stellarContractId || inv.investor.stellarPublicKey,
                 tokenBalance: investedAmount, // For locked tokens, invested = balance
                 interestOwed: Math.round(interestOwed * 100) / 100, // Round to cents
             };
@@ -248,7 +248,7 @@ export class CompanyPaymentService {
             return {
                 investorId: inv.investorId,
                 investorName: inv.investor.name,
-                investorWallet: inv.investor.stellarPublicKey,
+                investorWallet: inv.investor.stellarContractId || inv.investor.stellarPublicKey,
                 principal: principalReturn,
                 interest: Math.round(interestEarned * 100) / 100,
                 totalPayout: Math.round((principalReturn + interestEarned) * 100) / 100,
@@ -459,8 +459,8 @@ export class CompanyPaymentService {
 
         // Read fee from ConfigService (editable via Admin > Fee Config)
         const feePercent = await ConfigService.getFloat('DIVIDEND_FEE_PERCENT', DIVIDEND_FEE_PERCENT_DEFAULT);
-        const platformFee = Math.round(feeBase * (feePercent / 100) * 100) / 100;
-        const netToInvestors = Math.round((totalAmount - platformFee) * 100) / 100;
+        let platformFee = Math.round(feeBase * (feePercent / 100) * 100) / 100;
+        let netToInvestors = Math.round((totalAmount - platformFee) * 100) / 100;
 
         // ─── BULLET: batch guard + clawback ops ──────────────────────────
         //
