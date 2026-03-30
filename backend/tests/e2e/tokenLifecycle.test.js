@@ -1170,6 +1170,767 @@ async function main() {
 
     console.log('  ✅ All multi-investor proportional split assertions passed');
 
+    // ═══════════════════════════════════════════════════════════════
+    // PHASE 5.5: MULTI-INVESTOR PERIODIC DIVIDEND (60/40 split)
+    // ═══════════════════════════════════════════════════════════════
+    console.log('\n╔════════════════════════════════════════════╗');
+    console.log('║  PHASE 5.5: MULTI-INVESTOR MONTHLY DIV     ║');
+    console.log('╚════════════════════════════════════════════╝\n');
+
+    // Create a monthly offer for the same multi-investor pair
+    const MULTI_MONTHLY_ASSET = 'P' + MULTI_ASSET_CODE.slice(1); // P for periodic
+    const multiMonthlyOffer = await prisma.offer.create({
+      data: {
+        companyId: company.id,
+        requestedBy: companyUser.id,
+        offerName: `Multi Monthly ${MULTI_MONTHLY_ASSET}`,
+        assetCode: MULTI_MONTHLY_ASSET,
+        description: `Multi-investor monthly E2E test`,
+        totalSupply: 1000,
+        unitPrice: 1.0,
+        annualInterestRate: ANNUAL_RATE,
+        investorRate: INVESTOR_RATE,
+        offerType: 'collateral',
+        paymentType: 'monthly',
+        status: 'active',
+        isTokenLocked: true,
+      },
+    });
+    testIds.multiMonthlyOfferId = multiMonthlyOffer.id;
+
+    // Token record (needed for investments FK: investments_asset_code_fkey)
+    await prisma.token.create({
+      data: {
+        assetCode: MULTI_MONTHLY_ASSET,
+        issuerPublicKey: testIssuer.publicKey(),
+        totalSupply: 1000,
+        annualInterestRate: ANNUAL_RATE,
+        offerId: multiMonthlyOffer.id,
+      },
+    });
+
+    // Investment records — A=60, B=40 (same 60/40 split)
+    await prisma.investment.create({
+      data: {
+        investorId: testIds.investorId,
+        offerId: multiMonthlyOffer.id,
+        assetCode: MULTI_MONTHLY_ASSET,
+        usdcAmount: INVEST_A,
+        tokenAmount: INVEST_A,
+        status: 'distributed',
+      },
+    });
+    await prisma.investment.create({
+      data: {
+        investorId: testIds.investorBId,
+        offerId: multiMonthlyOffer.id,
+        assetCode: MULTI_MONTHLY_ASSET,
+        usdcAmount: INVEST_B,
+        tokenAmount: INVEST_B,
+        status: 'distributed',
+      },
+    });
+    console.log(`  ✅ Multi monthly offer(${multiMonthlyOffer.id}) + 2 investments created`);
+
+    // 5.5a: Independent calculation (monthly period rate)
+    const mPeriodsPerYear = 12;
+    const mInvestorPeriodRate = (INVESTOR_RATE / 100) / mPeriodsPerYear;
+    const mCompanyPeriodRate = (ANNUAL_RATE / 100) / mPeriodsPerYear;
+    const mTotalInvested = INVEST_A + INVEST_B;
+
+    // Per-investor expected interest
+    const mIndInterestA = round7(INVEST_A * mInvestorPeriodRate);
+    const mIndInterestB = round7(INVEST_B * mInvestorPeriodRate);
+    const mIndTotalInvestorInterest = round7(mTotalInvested * mInvestorPeriodRate);
+    const mIndTotalCompanyInterest = round7(mTotalInvested * mCompanyPeriodRate);
+    const mIndSpread = round7(mIndTotalCompanyInterest - mIndTotalInvestorInterest);
+
+    console.log(`  Independent calc: A interest=${mIndInterestA}, B interest=${mIndInterestB}`);
+    console.log(`  Aggregate: investorTotal=${mIndTotalInvestorInterest}, companyTotal=${mIndTotalCompanyInterest}, spread=${mIndSpread}`);
+
+    // 5.5b: Snapshot USDC balances before dividend
+    const mInvABefore = await getUSDCBalance(testInvestor.publicKey());
+    const mInvBBefore = await getUSDCBalance(testInvestorB.publicKey());
+    const mCompBefore = await getUSDCBalance(testCompany.publicKey());
+    const mTreasBefore = await getUSDCBalance(testTreasury.publicKey());
+    console.log(`  Pre-dividend USDC → A: ${mInvABefore}, B: ${mInvBBefore}, Company: ${mCompBefore}, Treasury: ${mTreasBefore}`);
+
+    // 5.5c: Build periodic payment TX
+    console.log('\n--- Building multi-investor monthly dividend TX ---');
+    const mDivResult = await CompanyPaymentService.createPaymentTransaction(
+      multiMonthlyOffer.id, companyUser.id,
+    );
+
+    assert(!!mDivResult.transactionXDR, 'Multi dividend XDR built');
+    assert(mDivResult.isBullet === false, 'Payment type is periodic');
+    assert(mDivResult.investorCount === 2, `Investor count: ${mDivResult.investorCount} === 2`);
+    assert(mDivResult.breakdown.length === 2, `Breakdown length: ${mDivResult.breakdown.length} === 2`);
+
+    console.log(`  Total: ${mDivResult.totalAmount} USDC | Fee: ${mDivResult.platformFee} | Net: ${mDivResult.netToInvestors}`);
+
+    // 5.5d: Per-investor correctness (periodic uses interestOwed field)
+    const mBdA = mDivResult.breakdown.find(b => b.investorWallet === testInvestor.publicKey());
+    const mBdB = mDivResult.breakdown.find(b => b.investorWallet === testInvestorB.publicKey());
+    assert(!!mBdA, 'Investor A found in periodic breakdown');
+    assert(!!mBdB, 'Investor B found in periodic breakdown');
+
+    assert(
+      mBdA.interestOwed === mIndInterestA,
+      `A periodic interest: service(${mBdA.interestOwed}) === independent(${mIndInterestA})`,
+    );
+    assert(
+      mBdB.interestOwed === mIndInterestB,
+      `B periodic interest: service(${mBdB.interestOwed}) === independent(${mIndInterestB})`,
+    );
+
+    // 5.5e: Sum conservation (Σ individual === aggregate)
+    const mSumInterest = round7(mBdA.interestOwed + mBdB.interestOwed);
+    assert(
+      mSumInterest === mIndTotalInvestorInterest,
+      `Sum conservation (interest): Σ(${mBdA.interestOwed} + ${mBdB.interestOwed}) = ${mSumInterest} === ${mIndTotalInvestorInterest}`,
+    );
+    assert(
+      parseFloat(mDivResult.netToInvestors) === mIndTotalInvestorInterest,
+      `Net to investors: ${mDivResult.netToInvestors} === ${mIndTotalInvestorInterest}`,
+    );
+
+    // 5.5f: Platform spread
+    assert(
+      mDivResult.platformFee === mIndSpread,
+      `Platform spread: service(${mDivResult.platformFee}) === independent(${mIndSpread})`,
+    );
+    assert(
+      parseFloat(mDivResult.totalAmount) === round7(mIndTotalInvestorInterest + mIndSpread),
+      `Total amount: ${mDivResult.totalAmount} === ${round7(mIndTotalInvestorInterest + mIndSpread)} (net + fee)`,
+    );
+
+    // 5.5g: Proportional ratio check (A/B interest ratio = 60/40 = 1.5)
+    const interestRatio = mBdA.interestOwed / mBdB.interestOwed;
+    const expectedRatio = INVEST_A / INVEST_B;
+    assert(
+      Math.abs(interestRatio - expectedRatio) < 0.0001,
+      `Interest ratio A/B: ${interestRatio.toFixed(7)} ≈ ${expectedRatio} (60/40 = 1.5)`,
+    );
+
+    console.log('  ✅ All multi-investor periodic assertions passed');
+
+    // 5.5h: Sign and submit the dividend on-chain
+    console.log('\n--- Signing and submitting multi-investor dividend TX ---');
+    const { Transaction: MdivTxClass } = await import('@stellar/stellar-sdk');
+    const mDivTx = new MdivTxClass(mDivResult.transactionXDR, Networks.TESTNET);
+    mDivTx.sign(testCompany);  // Company pays → no issuer sig needed
+
+    const mDivSubmit = await stellarServer.submitTransaction(mDivTx);
+    assert(mDivSubmit.successful, `Multi dividend TX submitted: ${mDivSubmit.hash.slice(0, 16)}…`);
+    console.log(`  TX hash: ${mDivSubmit.hash}`);
+
+    // 5.5i: Verify on-chain USDC movements
+    console.log('\n--- Verifying multi-investor dividend balances ---');
+    const mInvAAfter = await getUSDCBalance(testInvestor.publicKey());
+    const mInvBAfter = await getUSDCBalance(testInvestorB.publicKey());
+    const mCompAfter = await getUSDCBalance(testCompany.publicKey());
+    const mTreasAfter = await getUSDCBalance(testTreasury.publicKey());
+
+    console.log(`  Post-dividend USDC → A: ${mInvAAfter}, B: ${mInvBAfter}, Company: ${mCompAfter}, Treasury: ${mTreasAfter}`);
+
+    // Investor A received exactly their monthly interest
+    assert(
+      Math.abs(mInvAAfter - (mInvABefore + mIndInterestA)) < 0.0001,
+      `A dividend: ${mInvAAfter} === ${mInvABefore} + ${mIndInterestA}`,
+    );
+    // Investor B received exactly their monthly interest
+    assert(
+      Math.abs(mInvBAfter - (mInvBBefore + mIndInterestB)) < 0.0001,
+      `B dividend: ${mInvBAfter} === ${mInvBBefore} + ${mIndInterestB}`,
+    );
+    // Treasury received spread
+    if (mIndSpread > 0) {
+      assert(
+        Math.abs(mTreasAfter - (mTreasBefore + mIndSpread)) < 0.0001,
+        `Treasury spread: ${mTreasAfter} === ${mTreasBefore} + ${mIndSpread}`,
+      );
+    }
+    // Company paid out total
+    const mExpectedDebit = round7(mIndTotalInvestorInterest + mIndSpread);
+    assert(
+      Math.abs(mCompAfter - (mCompBefore - mExpectedDebit)) < 0.0001,
+      `Company paid: ${mCompAfter} === ${mCompBefore} - ${mExpectedDebit}`,
+    );
+
+    // Sum conservation on-chain: Σ USDC deltas = 0
+    const deltaA = round7(mInvAAfter - mInvABefore);
+    const deltaB = round7(mInvBAfter - mInvBBefore);
+    const deltaComp = round7(mCompAfter - mCompBefore);
+    const deltaTreas = round7(mTreasAfter - mTreasBefore);
+    const netDelta = round7(deltaA + deltaB + deltaComp + deltaTreas);
+    assert(
+      Math.abs(netDelta) < 0.0001,
+      `On-chain sum conservation: Σ deltas = ${netDelta} ≈ 0 (A:+${deltaA}, B:+${deltaB}, Co:${deltaComp}, Tr:+${deltaTreas})`,
+    );
+
+    console.log('  ✅ Multi-investor periodic dividend verified on-chain');
+
+    // ═══════════════════════════════════════════════════════════════
+    // PHASE 5.6: EDGE CASES (zero-duration, zero-rate)
+    // ═══════════════════════════════════════════════════════════════
+    console.log('\n╔════════════════════════════════════════════╗');
+    console.log('║  PHASE 5.6: EDGE CASES                     ║');
+    console.log('╚════════════════════════════════════════════╝\n');
+
+    // --- Edge Case 1: Zero-duration offer (maturityDate = createdAt) ---
+    console.log('--- Edge 1: Zero-duration offer ---');
+    const ZERO_DUR_ASSET = 'Z' + crypto.randomBytes(3).toString('hex').toUpperCase().slice(0, 5);
+    const zeroDurNow = new Date();
+    const zeroDurOffer = await prisma.offer.create({
+      data: {
+        companyId: company.id,
+        requestedBy: companyUser.id,
+        offerName: `Zero Duration ${ZERO_DUR_ASSET}`,
+        assetCode: ZERO_DUR_ASSET,
+        description: 'Edge case: maturityDate = createdAt',
+        totalSupply: 100,
+        unitPrice: 1.0,
+        annualInterestRate: ANNUAL_RATE,
+        investorRate: INVESTOR_RATE,
+        offerType: 'sale',
+        paymentType: 'bullet',
+        maturityDate: zeroDurNow,       // Matures NOW = same as createdAt
+        createdAt: zeroDurNow,          // Explicitly set
+        status: 'active',
+        isTokenLocked: true,
+      },
+    });
+    testIds.zeroDurOfferId = zeroDurOffer.id;
+
+    await prisma.token.create({
+      data: {
+        assetCode: ZERO_DUR_ASSET,
+        issuerPublicKey: testIssuer.publicKey(),
+        totalSupply: 100,
+        annualInterestRate: ANNUAL_RATE,
+        offerId: zeroDurOffer.id,
+      },
+    });
+    await prisma.investment.create({
+      data: {
+        investorId: testIds.investorId,
+        offerId: zeroDurOffer.id,
+        assetCode: ZERO_DUR_ASSET,
+        usdcAmount: 100,
+        tokenAmount: 100,
+        status: 'distributed',
+      },
+    });
+
+    const zeroDurResult = await CompanyPaymentService.calculateBulletPayment(zeroDurOffer.id);
+    assert(!isNaN(zeroDurResult.totalInterest), `Zero-dur: interest is not NaN (${zeroDurResult.totalInterest})`);
+    assert(!isNaN(zeroDurResult.totalPayout), `Zero-dur: payout is not NaN (${zeroDurResult.totalPayout})`);
+    assert(
+      zeroDurResult.totalInterest === 0,
+      `Zero-dur: interest = ${zeroDurResult.totalInterest} === 0 (no time elapsed)`,
+    );
+    assert(
+      zeroDurResult.totalPayout === 100,
+      `Zero-dur: payout = ${zeroDurResult.totalPayout} === 100 (principal only)`,
+    );
+    assert(
+      zeroDurResult.breakdown[0].interest === 0,
+      `Zero-dur: per-investor interest = ${zeroDurResult.breakdown[0].interest} === 0`,
+    );
+    assert(
+      zeroDurResult.breakdown[0].totalPayout === 100,
+      `Zero-dur: per-investor payout = ${zeroDurResult.breakdown[0].totalPayout} === 100`,
+    );
+    console.log('  ✅ Zero-duration: payout=principal, interest=0, no NaN');
+
+    // --- Edge Case 2: Zero-rate offer (annualInterestRate = 0) ---
+    console.log('--- Edge 2: Zero-rate offer ---');
+    const ZERO_RATE_ASSET = 'R' + crypto.randomBytes(3).toString('hex').toUpperCase().slice(0, 5);
+    const thirtyDaysAgoEdge = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const yesterdayEdge = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const zeroRateOffer = await prisma.offer.create({
+      data: {
+        companyId: company.id,
+        requestedBy: companyUser.id,
+        offerName: `Zero Rate ${ZERO_RATE_ASSET}`,
+        assetCode: ZERO_RATE_ASSET,
+        description: 'Edge case: annualInterestRate = 0',
+        totalSupply: 100,
+        unitPrice: 1.0,
+        annualInterestRate: 0,
+        investorRate: 0,
+        offerType: 'sale',
+        paymentType: 'bullet',
+        maturityDate: yesterdayEdge,
+        createdAt: thirtyDaysAgoEdge,
+        status: 'active',
+        isTokenLocked: true,
+      },
+    });
+    testIds.zeroRateOfferId = zeroRateOffer.id;
+
+    await prisma.token.create({
+      data: {
+        assetCode: ZERO_RATE_ASSET,
+        issuerPublicKey: testIssuer.publicKey(),
+        totalSupply: 100,
+        annualInterestRate: 0,
+        offerId: zeroRateOffer.id,
+      },
+    });
+    await prisma.investment.create({
+      data: {
+        investorId: testIds.investorId,
+        offerId: zeroRateOffer.id,
+        assetCode: ZERO_RATE_ASSET,
+        usdcAmount: 100,
+        tokenAmount: 100,
+        status: 'distributed',
+      },
+    });
+
+    // 2a: Bullet calculation with zero rate
+    const zeroRateResult = await CompanyPaymentService.calculateBulletPayment(zeroRateOffer.id);
+    assert(!isNaN(zeroRateResult.totalInterest), `Zero-rate bullet: interest is not NaN`);
+    assert(
+      zeroRateResult.totalInterest === 0,
+      `Zero-rate bullet: interest = ${zeroRateResult.totalInterest} === 0`,
+    );
+    assert(
+      zeroRateResult.totalPayout === 100,
+      `Zero-rate bullet: payout = ${zeroRateResult.totalPayout} === 100 (principal only)`,
+    );
+    assert(
+      zeroRateResult.companyTotalInterest === 0,
+      `Zero-rate bullet: company interest = ${zeroRateResult.companyTotalInterest} === 0`,
+    );
+    console.log('  ✅ Zero-rate bullet: interest=0, payout=principal, no NaN');
+
+    // 2b: Zero-rate periodic (monthly) — verifies no divide-by-zero
+    const ZERO_RATE_MONTHLY = 'Q' + ZERO_RATE_ASSET.slice(1);
+    const zeroRateMonthly = await prisma.offer.create({
+      data: {
+        companyId: company.id,
+        requestedBy: companyUser.id,
+        offerName: `Zero Rate Monthly ${ZERO_RATE_MONTHLY}`,
+        assetCode: ZERO_RATE_MONTHLY,
+        description: 'Edge case: zero rate monthly dividend',
+        totalSupply: 100,
+        unitPrice: 1.0,
+        annualInterestRate: 0,
+        investorRate: 0,
+        offerType: 'collateral',
+        paymentType: 'monthly',
+        status: 'active',
+        isTokenLocked: true,
+      },
+    });
+    testIds.zeroRateMonthlyId = zeroRateMonthly.id;
+
+    await prisma.token.create({
+      data: {
+        assetCode: ZERO_RATE_MONTHLY,
+        issuerPublicKey: testIssuer.publicKey(),
+        totalSupply: 100,
+        annualInterestRate: 0,
+        offerId: zeroRateMonthly.id,
+      },
+    });
+    await prisma.investment.create({
+      data: {
+        investorId: testIds.investorId,
+        offerId: zeroRateMonthly.id,
+        assetCode: ZERO_RATE_MONTHLY,
+        usdcAmount: 100,
+        tokenAmount: 100,
+        status: 'distributed',
+      },
+    });
+
+    const zeroRatePeriodic = await CompanyPaymentService.calculateOwedAmount(zeroRateMonthly.id);
+    assert(!isNaN(zeroRatePeriodic.totalOwed), `Zero-rate periodic: totalOwed is not NaN`);
+    assert(
+      zeroRatePeriodic.totalOwed === 0,
+      `Zero-rate periodic: totalOwed = ${zeroRatePeriodic.totalOwed} === 0`,
+    );
+    assert(
+      zeroRatePeriodic.breakdown[0].interestOwed === 0,
+      `Zero-rate periodic: per-investor interestOwed = ${zeroRatePeriodic.breakdown[0].interestOwed} === 0`,
+    );
+    console.log('  ✅ Zero-rate periodic: interestOwed=0, no NaN/divide-by-zero');
+    console.log('  ✅ Phase 5.6 edge cases complete');
+
+    // ═══════════════════════════════════════════════════════════════
+    // PHASE 6: DEFAULT STATE MACHINE + ON-CHAIN COLLATERAL DISTRIBUTION
+    // ═══════════════════════════════════════════════════════════════
+    console.log('\n╔════════════════════════════════════════════╗');
+    console.log('║  PHASE 6: DEFAULT PATH + COLLATERAL DIST   ║');
+    console.log('╚════════════════════════════════════════════╝\n');
+
+    // --- 6a: Create a periodic offer with past nextPaymentDue ---
+    const DEFAULT_ASSET = 'D' + crypto.randomBytes(3).toString('hex').toUpperCase().slice(0, 5);
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+
+    const defaultOffer = await prisma.offer.create({
+      data: {
+        companyId: testIds.companyId,
+        requestedBy: (await prisma.companyUser.findFirst({ where: { companyId: testIds.companyId } })).id,
+        assetCode: DEFAULT_ASSET,
+        offerName: `Default Test ${DEFAULT_ASSET}`,
+        description: 'E2E test for default state machine',
+        totalSupply: 1000,
+        unitPrice: 1,
+        annualInterestRate: ANNUAL_RATE,
+        investorRate: INVESTOR_RATE,
+        offerType: 'collateral',
+        paymentType: 'monthly',
+        paymentFrequency: 1,
+        paymentDay: 1,
+        status: 'active',
+        paymentDueStatus: 'current',
+        nextPaymentDue: fiveDaysAgo,
+        collateralType: 'real_estate',
+        collateralDescription: 'Test collateral for E2E',
+        collateralValue: 150000,
+        isTokenLocked: true,
+      },
+    });
+    testIds.defaultOfferId = defaultOffer.id;
+
+    // Create token record for this offer
+    await prisma.token.create({
+      data: {
+        assetCode: DEFAULT_ASSET,
+        issuerPublicKey: testIssuer.publicKey(),
+        totalSupply: 1000,
+        annualInterestRate: ANNUAL_RATE,
+        offerId: defaultOffer.id,
+      },
+    });
+
+    // Create investment records (status: distributed) — required for calculateOwedAmount
+    await prisma.investment.create({
+      data: {
+        investorId: testIds.investorId,
+        offerId: defaultOffer.id,
+        assetCode: DEFAULT_ASSET,
+        usdcAmount: INVEST_A,
+        tokenAmount: INVEST_A,
+        status: 'distributed',
+      },
+    });
+    await prisma.investment.create({
+      data: {
+        investorId: testIds.investorBId,
+        offerId: defaultOffer.id,
+        assetCode: DEFAULT_ASSET,
+        usdcAmount: INVEST_B,
+        tokenAmount: INVEST_B,
+        status: 'distributed',
+      },
+    });
+
+    console.log(`  ✅ Default test offer(${defaultOffer.id}) created — nextPaymentDue: 5 days ago`);
+
+    // --- 6b: Overdue transition ---
+    console.log('\n--- 6b: Overdue transition ---');
+    const overdueResult = await CompanyPaymentService.checkOverduePayments();
+
+    const overdueEntry = overdueResult.overduePayments.find(p => p.offerId === defaultOffer.id);
+    assert(overdueEntry !== undefined, 'Default offer found in overduePayments');
+    assert(overdueEntry.status === 'overdue', `Overdue status: ${overdueEntry.status} === overdue`);
+    assert(overdueEntry.daysOverdue >= 4 && overdueEntry.daysOverdue <= 6,
+      `Days overdue: ${overdueEntry.daysOverdue} (expected ~5)`);
+
+    // Verify DB updated
+    const overdueOffer = await prisma.offer.findUnique({ where: { id: defaultOffer.id } });
+    assert(overdueOffer.paymentDueStatus === 'overdue',
+      `DB paymentDueStatus: ${overdueOffer.paymentDueStatus} === overdue`);
+
+    // Late fee penalty created (amount = 0 because LATE_FEE_PERCENT_PER_DAY = 0)
+    const latePenalty = await prisma.companyPenalty.findFirst({
+      where: { offerId: defaultOffer.id, penaltyType: 'late_fee' },
+    });
+    assert(latePenalty !== null, 'Late fee penalty record created');
+    assert(parseFloat(latePenalty.amount) === 0, `Late fee amount: ${latePenalty.amount} === 0 (MVP disabled)`);
+
+    console.log('  ✅ Overdue transition verified');
+
+    // --- 6c: Default transition (push date past grace period) ---
+    console.log('\n--- 6c: Default transition ---');
+    const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
+
+    // Reset to overdue and push date further back
+    await prisma.offer.update({
+      where: { id: defaultOffer.id },
+      data: {
+        nextPaymentDue: fifteenDaysAgo,
+        paymentDueStatus: 'overdue' // needed because checkOverduePayments excludes 'defaulted'
+      },
+    });
+
+    const defaultResult = await CompanyPaymentService.checkOverduePayments();
+    const defaultEntry = defaultResult.overduePayments.find(p => p.offerId === defaultOffer.id);
+
+    assert(defaultEntry !== undefined, 'Default offer found in defaulted check');
+    assert(defaultEntry.status === 'defaulted', `Default status: ${defaultEntry.status} === defaulted`);
+    assert(defaultEntry.daysOverdue >= 14 && defaultEntry.daysOverdue <= 16,
+      `Days overdue: ${defaultEntry.daysOverdue} (expected ~15, > grace period 10)`);
+
+    // Verify DB
+    const defaultedOffer = await prisma.offer.findUnique({ where: { id: defaultOffer.id } });
+    assert(defaultedOffer.paymentDueStatus === 'defaulted',
+      `DB paymentDueStatus: ${defaultedOffer.paymentDueStatus} === defaulted`);
+
+    // Default penalty created
+    const defaultPenalty = await prisma.companyPenalty.findFirst({
+      where: { offerId: defaultOffer.id, penaltyType: 'default_fee' },
+    });
+    assert(defaultPenalty !== null, 'Default fee penalty record created');
+    assert(parseFloat(defaultPenalty.amount) === 0, `Default fee amount: ${defaultPenalty.amount} === 0 (MVP disabled)`);
+
+    console.log('  ✅ Default transition verified');
+
+    // --- 6d: getDefaultedOffers query ---
+    console.log('\n--- 6d: Defaulted offers query ---');
+    const { CollateralDistributionService } = await import('../../src/services/collateralDistribution.service.js');
+    const defaultedOffers = await CollateralDistributionService.getDefaultedOffers();
+    const ourDefault = defaultedOffers.find(o => o.offerId === defaultOffer.id);
+
+    assert(ourDefault !== undefined, 'Defaulted offer found in getDefaultedOffers()');
+    assert(ourDefault.investorCount === 2, `Investor count: ${ourDefault.investorCount} === 2`);
+    assert(ourDefault.balanceSource === 'database', `Balance source: ${ourDefault.balanceSource} === database`);
+
+    // Check proportional distributions sum to 1.0
+    const proportionSum = round7(ourDefault.distributions.reduce((s, d) => s + d.proportion, 0));
+    assert(proportionSum === 1, `Distribution proportions sum: ${proportionSum} === 1.0`);
+
+    // Check individual proportions match investment split
+    const distA = ourDefault.distributions.find(d => d.investorId === testIds.investorId);
+    const distB = ourDefault.distributions.find(d => d.investorId === testIds.investorBId);
+    assert(distA !== undefined, 'Investor A found in distributions');
+    assert(distB !== undefined, 'Investor B found in distributions');
+    assert(distA.proportion === 0.6, `A proportion: ${distA.proportion} === 0.6`);
+    assert(distB.proportion === 0.4, `B proportion: ${distB.proportion} === 0.4`);
+
+    console.log('  ✅ Defaulted offers query verified');
+
+    // --- 6e: Bullet maturity default ---
+    console.log('\n--- 6e: Bullet maturity default ---');
+    const BULLET_DEFAULT_ASSET = 'BD' + crypto.randomBytes(2).toString('hex').toUpperCase().slice(0, 4);
+    const bulletDefaultOffer = await prisma.offer.create({
+      data: {
+        companyId: testIds.companyId,
+        requestedBy: (await prisma.companyUser.findFirst({ where: { companyId: testIds.companyId } })).id,
+        assetCode: BULLET_DEFAULT_ASSET,
+        offerName: `Bullet Default ${BULLET_DEFAULT_ASSET}`,
+        description: 'E2E bullet default test',
+        totalSupply: 500,
+        unitPrice: 1,
+        annualInterestRate: ANNUAL_RATE,
+        investorRate: INVESTOR_RATE,
+        offerType: 'collateral',
+        paymentType: 'bullet',
+        paymentFrequency: 1,
+        paymentDay: 1,
+        status: 'active',
+        paymentDueStatus: 'current',
+        maturityDate: fifteenDaysAgo,
+        collateralType: 'real_estate',
+        collateralDescription: 'Bullet default test collateral',
+        collateralValue: 75000,
+        isTokenLocked: true,
+      },
+    });
+    testIds.bulletDefaultOfferId = bulletDefaultOffer.id;
+
+    // Create investment for calculateBulletPayment
+    await prisma.token.create({
+      data: {
+        assetCode: BULLET_DEFAULT_ASSET,
+        issuerPublicKey: testIssuer.publicKey(),
+        totalSupply: 500,
+        annualInterestRate: ANNUAL_RATE,
+        offerId: bulletDefaultOffer.id,
+      },
+    });
+    await prisma.investment.create({
+      data: {
+        investorId: testIds.investorId,
+        offerId: bulletDefaultOffer.id,
+        assetCode: BULLET_DEFAULT_ASSET,
+        usdcAmount: 100,
+        tokenAmount: 100,
+        status: 'distributed',
+      },
+    });
+
+    const bulletDefaultResult = await CompanyPaymentService.checkOverduePayments();
+    const bulletEntry = bulletDefaultResult.bulletMaturities.find(p => p.offerId === bulletDefaultOffer.id);
+
+    assert(bulletEntry !== undefined, 'Bullet default found in bulletMaturities');
+    assert(bulletEntry.status === 'defaulted', `Bullet default status: ${bulletEntry.status} === defaulted`);
+
+    const bulletDefaulted = await prisma.offer.findUnique({ where: { id: bulletDefaultOffer.id } });
+    assert(bulletDefaulted.paymentDueStatus === 'defaulted',
+      `Bullet DB paymentDueStatus: ${bulletDefaulted.paymentDueStatus} === defaulted`);
+
+    console.log('  ✅ Bullet maturity default verified');
+
+    // --- 6f: On-chain collateral distribution ---
+    console.log('\n--- 6f: On-chain collateral distribution ---');
+
+    // Issue DEFAULT_ASSET on-chain for collateral distribution test
+    // We need: token issued, investor trustlines, tokens in distributor
+    console.log(`  Issuing ${DEFAULT_ASSET} on-chain for collateral test...`);
+    const collateralAsset = new Asset(DEFAULT_ASSET, testIssuer.publicKey());
+
+    // Create trustlines for both investors
+    const investorATrustline = new TransactionBuilder(
+      await stellarServer.loadAccount(testInvestor.publicKey()),
+      { fee: BASE_FEE, networkPassphrase: getNetworkPassphrase() },
+    )
+      .addOperation(Operation.changeTrust({ asset: collateralAsset }))
+      .setTimeout(60)
+      .build();
+    investorATrustline.sign(testInvestor);
+    await stellarServer.submitTransaction(investorATrustline);
+    console.log('  ✅ Investor A trustline for collateral token');
+
+    const investorBTrustline = new TransactionBuilder(
+      await stellarServer.loadAccount(testInvestorB.publicKey()),
+      { fee: BASE_FEE, networkPassphrase: getNetworkPassphrase() },
+    )
+      .addOperation(Operation.changeTrust({ asset: collateralAsset }))
+      .setTimeout(60)
+      .build();
+    investorBTrustline.sign(testInvestorB);
+    await stellarServer.submitTransaction(investorBTrustline);
+    console.log('  ✅ Investor B trustline for collateral token');
+
+    // Distributor trustline for collateral token
+    const distributorTrustline = new TransactionBuilder(
+      await stellarServer.loadAccount(testDistributor.publicKey()),
+      { fee: BASE_FEE, networkPassphrase: getNetworkPassphrase() },
+    )
+      .addOperation(Operation.changeTrust({ asset: collateralAsset }))
+      .setTimeout(60)
+      .build();
+    distributorTrustline.sign(testDistributor);
+    await stellarServer.submitTransaction(distributorTrustline);
+    console.log('  ✅ Distributor trustline for collateral token');
+
+    // Authorize both trustlines (issuer has auth_required)
+    const authBothTx = new TransactionBuilder(
+      await stellarServer.loadAccount(testIssuer.publicKey()),
+      { fee: BASE_FEE, networkPassphrase: getNetworkPassphrase() },
+    )
+      .addOperation(Operation.setTrustLineFlags({
+        trustor: testInvestor.publicKey(),
+        asset: collateralAsset,
+        flags: { authorized: true },
+      }))
+      .addOperation(Operation.setTrustLineFlags({
+        trustor: testInvestorB.publicKey(),
+        asset: collateralAsset,
+        flags: { authorized: true },
+      }))
+      .addOperation(Operation.setTrustLineFlags({
+        trustor: testDistributor.publicKey(),
+        asset: collateralAsset,
+        flags: { authorized: true },
+      }))
+      .setTimeout(60)
+      .build();
+    authBothTx.sign(testIssuer);
+    await stellarServer.submitTransaction(authBothTx);
+    console.log('  ✅ Trustlines authorized (A, B, Distributor)');
+
+    // Mint collateral tokens to distributor (representing collateral pool)
+    const mintTx = new TransactionBuilder(
+      await stellarServer.loadAccount(testIssuer.publicKey()),
+      { fee: BASE_FEE, networkPassphrase: getNetworkPassphrase() },
+    )
+      .addOperation(Operation.payment({
+        destination: testDistributor.publicKey(),
+        asset: collateralAsset,
+        amount: '100', // Enough for A=60 + B=40
+      }))
+      .setTimeout(60)
+      .build();
+    mintTx.sign(testIssuer);
+    await stellarServer.submitTransaction(mintTx);
+    console.log('  ✅ Minted 100 collateral tokens to distributor');
+
+    // Verify pre-distribution balances
+    const preDistAccount = await stellarServer.loadAccount(testDistributor.publicKey());
+    const preDistBalance = preDistAccount.balances.find(
+      b => b.asset_code === DEFAULT_ASSET && b.asset_issuer === testIssuer.publicKey()
+    );
+    assert(parseFloat(preDistBalance.balance) === 100,
+      `Distributor pre-distribution balance: ${preDistBalance.balance} === 100`);
+
+    // Build collateral distribution TX using the service
+    // Update offer's distributions to use classic Stellar wallet addresses (not smart wallets)
+    // The service reads investor.stellarContractId || investor.stellarPublicKey
+    // For this test, we temporarily update investors to use the test keypairs
+    // Since our test investors in DB use the Passkey smart wallet (stellarContractId),
+    // we need to check if the distribution targets are reachable.
+    // For this E2E, we'll manually build the distribution TX (same as the service, but with our test keys).
+    const distAAmount = round7(INVEST_A); // 60 tokens
+    const distBAmount = round7(INVEST_B); // 40 tokens
+
+    const collateralDistTx = new TransactionBuilder(
+      await stellarServer.loadAccount(testDistributor.publicKey()),
+      { fee: BASE_FEE, networkPassphrase: getNetworkPassphrase() },
+    )
+      .addOperation(Operation.payment({
+        destination: testInvestor.publicKey(),
+        asset: collateralAsset,
+        amount: distAAmount.toFixed(7),
+      }))
+      .addOperation(Operation.payment({
+        destination: testInvestorB.publicKey(),
+        asset: collateralAsset,
+        amount: distBAmount.toFixed(7),
+      }))
+      .setTimeout(60)
+      .build();
+
+    collateralDistTx.sign(testDistributor);
+    const distResult = await stellarServer.submitTransaction(collateralDistTx);
+    console.log(`  ✅ Collateral distribution TX submitted: ${distResult.hash.slice(0, 16)}…`);
+
+    // Verify post-distribution balances
+    const postDistAccount = await stellarServer.loadAccount(testDistributor.publicKey());
+    const postDistBalance = postDistAccount.balances.find(
+      b => b.asset_code === DEFAULT_ASSET && b.asset_issuer === testIssuer.publicKey()
+    );
+    assert(parseFloat(postDistBalance.balance) === 0,
+      `Distributor post-distribution balance: ${postDistBalance.balance} === 0`);
+
+    const investorAAccount = await stellarServer.loadAccount(testInvestor.publicKey());
+    const investorACollateral = investorAAccount.balances.find(
+      b => b.asset_code === DEFAULT_ASSET && b.asset_issuer === testIssuer.publicKey()
+    );
+    assert(parseFloat(investorACollateral.balance) === INVEST_A,
+      `Investor A collateral: ${investorACollateral.balance} === ${INVEST_A}`);
+
+    const investorBAccount = await stellarServer.loadAccount(testInvestorB.publicKey());
+    const investorBCollateral = investorBAccount.balances.find(
+      b => b.asset_code === DEFAULT_ASSET && b.asset_issuer === testIssuer.publicKey()
+    );
+    assert(parseFloat(investorBCollateral.balance) === INVEST_B,
+      `Investor B collateral: ${investorBCollateral.balance} === ${INVEST_B}`);
+
+    // Verify proportional conservation: A + B = total minted
+    const totalDistributed = parseFloat(investorACollateral.balance) + parseFloat(investorBCollateral.balance);
+    assert(totalDistributed === 100,
+      `Sum conservation: ${totalDistributed} === 100 (${INVEST_A} + ${INVEST_B})`);
+
+    console.log('  ✅ On-chain collateral distribution verified');
+    console.log('  ✅ Phase 6 complete: default state machine + on-chain collateral\n');
+
   } catch (err) {
     console.error('\n💥 FATAL ERROR:', err.message);
     console.error(err.stack);
@@ -1184,6 +1945,36 @@ async function main() {
       console.log('  ⚠️  Prisma not initialized — skipping DB cleanup');
     } else {
       try {
+        // Clean multi-monthly offer (Phase 5.5)
+        if (testIds.multiMonthlyOfferId) {
+          await prisma.interestPayment.deleteMany({ where: { offerId: testIds.multiMonthlyOfferId } }).catch(() => {});
+          await prisma.feeLog.deleteMany({ where: { sourceId: testIds.multiMonthlyOfferId } }).catch(() => {});
+          await prisma.investment.deleteMany({ where: { offerId: testIds.multiMonthlyOfferId } }).catch(() => {});
+          await prisma.token.deleteMany({ where: { offerId: testIds.multiMonthlyOfferId } }).catch(() => {});
+          await prisma.offer.delete({ where: { id: testIds.multiMonthlyOfferId } }).catch(() => {});
+        }
+        // Clean edge case offers (Phase 5.6)
+        for (const edgeId of [testIds.zeroDurOfferId, testIds.zeroRateOfferId, testIds.zeroRateMonthlyId]) {
+          if (edgeId) {
+            await prisma.investment.deleteMany({ where: { offerId: edgeId } }).catch(() => {});
+            await prisma.token.deleteMany({ where: { offerId: edgeId } }).catch(() => {});
+            await prisma.offer.delete({ where: { id: edgeId } }).catch(() => {});
+          }
+        }
+        // Clean default test offers (Phase 6)
+        if (testIds.bulletDefaultOfferId) {
+          await prisma.companyPenalty.deleteMany({ where: { offerId: testIds.bulletDefaultOfferId } }).catch(() => {});
+          await prisma.investment.deleteMany({ where: { offerId: testIds.bulletDefaultOfferId } }).catch(() => {});
+          await prisma.token.deleteMany({ where: { offerId: testIds.bulletDefaultOfferId } }).catch(() => {});
+          await prisma.offer.delete({ where: { id: testIds.bulletDefaultOfferId } }).catch(() => {});
+        }
+        if (testIds.defaultOfferId) {
+          await prisma.companyPenalty.deleteMany({ where: { offerId: testIds.defaultOfferId } }).catch(() => {});
+          await prisma.paymentReminder.deleteMany({ where: { offerId: testIds.defaultOfferId } }).catch(() => {});
+          await prisma.investment.deleteMany({ where: { offerId: testIds.defaultOfferId } }).catch(() => {});
+          await prisma.token.deleteMany({ where: { offerId: testIds.defaultOfferId } }).catch(() => {});
+          await prisma.offer.delete({ where: { id: testIds.defaultOfferId } }).catch(() => {});
+        }
         // Clean multi-investor offer
         if (testIds.multiOfferId) {
           await prisma.interestPayment.deleteMany({ where: { offerId: testIds.multiOfferId } }).catch(() => {});
@@ -1251,7 +2042,7 @@ async function main() {
     process.exit(1);
   } else {
     console.log('✅ Full token lifecycle verified!');
-    console.log('   SETUP → DEPLOY → TRADE → DIVIDEND → PAYOUT → BURN → MULTI-INVESTOR');
+    console.log('   SETUP → DEPLOY → TRADE → DIVIDEND → PAYOUT → BURN → MULTI-INVESTOR → PERIODIC-DIV → EDGE-CASES → DEFAULT');
     process.exit(0);
   }
 }
