@@ -17,7 +17,6 @@ import {
     AlertCircle,
     Building2,
     Briefcase,
-    Rocket,
     Shield,
     UserCheck
 } from "lucide-react";
@@ -113,30 +112,6 @@ export function OfferDetails() {
         );
     }
 
-    const handleLaunch = async () => {
-        if (!offer) return;
-        setLoading(true); // Re-use loading state or add specific one
-        try {
-            const response = await offersApi.activateCompany(offer.id);
-            if (response.success) {
-                // Refresh data
-                const updatedOffer = await offersApi.getById(offer.id);
-                if (updatedOffer.success && updatedOffer.data) {
-                    setOffer(updatedOffer.data);
-                }
-            } else {
-                setError(response.error || 'Failed to launch offer');
-            }
-        } catch (err: any) {
-            console.error('Launch error:', err);
-            setError(err.message || 'Failed to launch offer');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-
-    const canLaunch = offer.status === 'approved' && !!offer.token && (offer.offer_rules as any)?.admin_verified;
 
     return (
         <div className="space-y-8 animate-fade-in pb-12">
@@ -152,15 +127,6 @@ export function OfferDetails() {
                 </Button>
 
                 <div className="flex gap-3">
-                    {canLaunch && (
-                        <Button
-                            onClick={handleLaunch}
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 btn-glow rounded-full px-6"
-                        >
-                            <Rocket className="w-4 h-4 mr-2" />
-                            Launch to Market
-                        </Button>
-                    )}
                     {(offer.status === 'active' || offer.status === 'matured') && offer.offer_type === 'collateral' && (
                         <Button
                             onClick={() => navigate(`/company/payments/${offer.id}`)}
@@ -276,7 +242,7 @@ export function OfferDetails() {
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-0">
-                                {getTimelineSteps(offer, canLaunch, handleLaunch).map((step, index, arr) => (
+                                {getTimelineSteps(offer).map((step, index, arr) => (
                                     <VerticalStep
                                         key={step.id}
                                         step={step}
@@ -477,10 +443,9 @@ interface TimelineStep {
     cta?: { label: string; onClick: () => void };
 }
 
-function getTimelineSteps(offer: Offer, canLaunch: boolean, handleLaunch: () => void): TimelineStep[] {
+function getTimelineSteps(offer: Offer): TimelineStep[] {
     const s = offer.status;
     const hasToken = !!offer.token;
-    const isVerified = !!(offer.offer_rules as any)?.admin_verified;
 
     return [
         {
@@ -510,42 +475,22 @@ function getTimelineSteps(offer: Offer, canLaunch: boolean, handleLaunch: () => 
         },
         {
             id: 'issuance',
-            title: 'Token Issuance',
-            subtitle:
-                ['active', 'closed'].includes(s) || (s === 'approved' && hasToken)
-                    ? `Token ${offer.asset_code} minted on Stellar.`
-                    : s === 'approved'
-                        ? 'Waiting for the platform admin to mint your token on Stellar.'
-                        : 'Your token will be minted on the Stellar network after approval.',
-            date: hasToken ? offer.token?.createdAt : undefined,
-            status:
-                ['active', 'closed'].includes(s) || (s === 'approved' && hasToken) ? 'completed' :
-                    s === 'approved' ? 'current' : 'pending',
-            actionBadge: s === 'approved' && !hasToken
-                ? { label: 'Admin Action', type: 'admin' }
-                : undefined,
-        },
-        {
-            id: 'launch',
-            title: 'Launch to Market',
+            title: 'Token Issuance & Activation',
             subtitle:
                 ['active', 'closed'].includes(s)
-                    ? 'Your offer was launched to investors.'
-                    : canLaunch
-                        ? 'Your token is ready! Launch it so investors can start purchasing.'
-                        : s === 'approved' && hasToken && !isVerified
-                            ? 'Admin is performing final verification before you can launch.'
-                            : 'Once your token is issued and verified, you can launch it.',
+                    ? `Token ${offer.asset_code} minted and activated on Stellar.`
+                    : s === 'approved' && hasToken
+                        ? 'Token issued — admin is finalizing activation.'
+                        : s === 'approved'
+                            ? 'Waiting for the platform admin to mint your token on Stellar.'
+                            : 'Your token will be minted and activated automatically after approval.',
+            date: hasToken ? offer.token?.createdAt : undefined,
             status:
                 ['active', 'closed'].includes(s) ? 'completed' :
-                    (s === 'approved' && hasToken) ? 'current' : 'pending',
-            actionBadge:
-                canLaunch
-                    ? { label: 'Your Action', type: 'user' }
-                    : s === 'approved' && hasToken && !isVerified
-                        ? { label: 'Admin Action', type: 'admin' }
-                        : undefined,
-            cta: canLaunch ? { label: 'Launch to Market', onClick: handleLaunch } : undefined,
+                    s === 'approved' ? 'current' : 'pending',
+            actionBadge: s === 'approved'
+                ? { label: 'Admin Action', type: 'admin' }
+                : undefined,
         },
         {
             id: 'live',
@@ -632,7 +577,6 @@ function VerticalStep({ step, isLast }: { step: TimelineStep; isLast: boolean })
                         size="sm"
                         className="mt-3 bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 btn-glow rounded-full px-5 text-xs"
                     >
-                        <Rocket className="w-3.5 h-3.5 mr-1.5" />
                         {step.cta.label}
                     </Button>
                 )}

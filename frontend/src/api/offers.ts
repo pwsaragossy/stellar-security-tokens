@@ -162,11 +162,6 @@ export const offersApi = {
     return response.data;
   },
 
-  activateCompany: async (id: number): Promise<ApiResponse> => {
-    const response = await api.post(`/companies/offers/${id}/activate`);
-    return response.data;
-  },
-
   getInvestors: async (id: number): Promise<ApiResponse> => {
     const response = await api.get(`/companies/offers/${id}/investors`);
     return response.data;

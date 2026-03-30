@@ -193,7 +193,6 @@ router.get('/companies/offers', requireCompanyUser, OfferController.getCompanyOf
  */
 router.get('/companies/offers/:id', requireCompanyUser, OfferController.getOfferDetails);
 router.put('/companies/offers/:id', requireCompanyUser, upload.any(), OfferController.updateOffer);
-router.post('/companies/offers/:id/activate', requireCompanyUser, OfferController.activateCompanyOffer);
 
 /**
  * @swagger
