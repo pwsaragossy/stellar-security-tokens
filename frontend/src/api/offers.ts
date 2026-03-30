@@ -136,6 +136,7 @@ export const offersApi = {
       status: 'approved' | 'rejected' | 'under_review';
       rejection_reason?: string;
       due_diligence_notes?: string;
+      investor_rate?: number;
     }
   ): Promise<ApiResponse> => {
     const response = await api.put(`/admin/offers/${id}/review`, data);

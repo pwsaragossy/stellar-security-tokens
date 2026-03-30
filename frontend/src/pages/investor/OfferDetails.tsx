@@ -199,7 +199,7 @@ export function OfferDetails() {
             <div className="rounded-xl bg-white/[0.03] border border-white/8 p-4 mb-2 animate-fade-in-up animate-delay-1">
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                     {[
-                        { icon: <TrendingUp className="h-3.5 w-3.5" />, label: 'APY', value: offer.annual_interest_rate ? `${parseFloat(offer.annual_interest_rate.toString())}%` : 'N/A', accent: true },
+                        { icon: <TrendingUp className="h-3.5 w-3.5" />, label: 'APY', value: (() => { const rate = offer.investor_rate ?? offer.annual_interest_rate; return rate ? `${parseFloat(rate.toString())}%` : 'N/A'; })(), accent: true },
                         { icon: <DollarSign className="h-3.5 w-3.5" />, label: 'Price', value: `$${unitPrice}` },
                         { icon: <Calendar className="h-3.5 w-3.5" />, label: 'Maturity', value: offer.maturity_date ? new Date(offer.maturity_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Perpetual' },
                         { icon: <DollarSign className="h-3.5 w-3.5" />, label: 'Raise', value: formatCurrency(totalRaise) },
@@ -286,8 +286,8 @@ export function OfferDetails() {
             <SectionDivider label="Terms" icon={<TrendingUp className="h-3.5 w-3.5" />} />
             <div className="grid sm:grid-cols-2 gap-x-10 divide-y divide-white/8 sm:divide-y-0">
                 <div className="divide-y divide-white/8">
-                    {offer.annual_interest_rate && (
-                        <DetailRow label="Interest Rate" value={`${parseFloat(offer.annual_interest_rate.toString())}% APY`} />
+                    {(offer.investor_rate || offer.annual_interest_rate) && (
+                        <DetailRow label="Interest Rate" value={`${parseFloat((offer.investor_rate ?? offer.annual_interest_rate).toString())}% APY`} />
                     )}
                     <DetailRow label="Payment Schedule" value={paymentLabel} />
                     {offer.maturity_date && (

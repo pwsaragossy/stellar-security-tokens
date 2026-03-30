@@ -21,6 +21,7 @@ interface PortfolioHolding {
     offerType: string | null;
     offerId: number | null;
     annualInterestRate: number;
+    investorRate: number | null;
     maturityDate: string | null;
     paymentType: string | null;
     unitPrice: number;
@@ -148,6 +149,7 @@ function HoldingCard({ holding, index }: { holding: PortfolioHolding; index: num
     const maturityAccent = getMaturityAccent(holding.maturityDate);
     const paymentLabel = PAYMENT_LABELS[holding.paymentType || ''] || holding.paymentType || '—';
     const holdingValue = holding.totalDistributed * holding.unitPrice;
+    const effectiveRate = holding.investorRate ?? holding.annualInterestRate;
 
     return (
         <div
@@ -179,9 +181,9 @@ function HoldingCard({ holding, index }: { holding: PortfolioHolding; index: num
                         <p className="text-xs text-muted-foreground">
                             {holding.totalDistributed.toLocaleString()} tokens
                         </p>
-                        {holding.annualInterestRate > 0 && (
+                        {effectiveRate > 0 && (
                             <p className="text-xs text-emerald-400 mt-0.5">
-                                → {formatCurrency(holdingValue * (1 + holding.annualInterestRate / 100))} at maturity
+                                → {formatCurrency(holdingValue * (1 + effectiveRate / 100))} at maturity
                             </p>
                         )}
                     </div>
@@ -197,7 +199,7 @@ function HoldingCard({ holding, index }: { holding: PortfolioHolding; index: num
                         <span className="text-[10px] uppercase tracking-wider">APY</span>
                     </div>
                     <span className="text-sm font-bold text-emerald-400">
-                        {holding.annualInterestRate ? `${parseFloat(String(holding.annualInterestRate))}%` : '—'}
+                        {effectiveRate ? `${parseFloat(String(effectiveRate))}%` : '—'}
                     </span>
                 </div>
                 {/* Payout */}
@@ -355,6 +357,7 @@ export function Portfolio() {
                         offerType: inv.offerType || inv.offer_type || null,
                         offerId: inv.offerId || inv.offer_id || null,
                         annualInterestRate: Number(inv.annualInterestRate || inv.annual_interest_rate || 0),
+                        investorRate: inv.investorRate != null ? Number(inv.investorRate) : (inv.investor_rate != null ? Number(inv.investor_rate) : null),
                         maturityDate: inv.maturityDate || inv.maturity_date || null,
                         paymentType: inv.paymentType || inv.payment_type || null,
                         unitPrice: Number(inv.unitPrice || inv.unit_price || 1),
@@ -413,7 +416,7 @@ export function Portfolio() {
     const totalValue = holdings.reduce((sum, h) => sum + h.totalDistributed * h.unitPrice, 0);
     const expectedPayout = holdings.reduce((sum, h) => {
         const value = h.totalDistributed * h.unitPrice;
-        const apy = h.annualInterestRate || 0;
+        const apy = h.investorRate ?? h.annualInterestRate ?? 0;
         return sum + value * (1 + apy / 100);
     }, 0);
     const pendingCount = pendingInvestments.length + processingInvestments.length;

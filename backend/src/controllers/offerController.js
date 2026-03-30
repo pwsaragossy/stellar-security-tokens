@@ -80,6 +80,8 @@ export class OfferController {
       total_supply: offer.totalSupply,
       annualInterestRate: offer.annualInterestRate,
       annual_interest_rate: offer.annualInterestRate,
+      investorRate: offer.investorRate ?? null,
+      investor_rate: offer.investorRate ?? null,
       offerType: offer.offerType,
       offer_type: offer.offerType,
       unitPrice: offer.unitPrice,
@@ -706,7 +708,7 @@ export class OfferController {
   static async reviewOffer(req, res) {
     try {
       const { id } = req.params;
-      const { status, rejection_reason } = req.body;
+      const { status, rejection_reason, investor_rate } = req.body;
 
       if (!status || !['approved', 'rejected', 'under_review'].includes(status)) {
         return res.status(400).json({
@@ -722,13 +724,43 @@ export class OfferController {
         });
       }
 
+      // Validate investorRate against annualInterestRate before persisting
+      if (status === 'approved' && investor_rate != null) {
+        const offer = await Offer.findById(parseInt(id));
+        if (offer) {
+          const annualRate = parseFloat(offer.annualInterestRate || 0);
+          const parsedInvestorRate = parseFloat(investor_rate);
+          if (parsedInvestorRate < 0) {
+            return res.status(400).json({
+              success: false,
+              error: 'Investor rate cannot be negative',
+            });
+          }
+          if (parsedInvestorRate > annualRate) {
+            return res.status(400).json({
+              success: false,
+              error: `Investor rate (${parsedInvestorRate}%) cannot exceed annual interest rate (${annualRate}%)`,
+            });
+          }
+        }
+      }
+
       const reviewedBy = req.user.userId;
-      const updatedOffer = await Offer.updateStatus(
+      let updatedOffer = await Offer.updateStatus(
         parseInt(id),
         status,
         reviewedBy,
         rejection_reason
       );
+
+      // Persist investorRate on approval (yield spread = annualRate - investorRate)
+      if (status === 'approved' && investor_rate != null) {
+        updatedOffer = await prisma.offer.update({
+          where: { id: parseInt(id) },
+          data: { investorRate: parseFloat(investor_rate) },
+        });
+        log.info(`[reviewOffer] Set investorRate=${investor_rate}% for offer ${id}`);
+      }
 
       if (!updatedOffer) {
         return res.status(404).json({

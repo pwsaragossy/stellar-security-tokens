@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -36,7 +37,7 @@ interface DetailPanelProps {
     onApproveCompany: () => void;
     onRejectCompany: () => void;
     onSponsorCompany: () => void;
-    onApproveOffer: () => void;
+    onApproveOffer: (investorRate?: number) => void;
     onRejectOffer: () => void;
     onIssueToken: () => void;
     onVerifyIssuance: () => void;
@@ -72,6 +73,10 @@ export function DetailPanel({
     const cfg = TYPE_CONFIG[item.type];
     const Icon = cfg.icon;
 
+    // Platform fee state for offer review (default 2%)
+    const annualRate = parseFloat(item.raw?.annual_interest_rate || item.raw?.annualInterestRate || 0);
+    const [platformFee, setPlatformFee] = useState(2);
+
     return (
         <div className="flex flex-col h-full">
             {/* Header */}
@@ -94,7 +99,13 @@ export function DetailPanel({
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
                 {item.type === 'investor' && <InvestorDetail raw={item.raw} />}
                 {item.type === 'company' && <CompanyDetail raw={item.raw} />}
-                {item.type === 'offer' && <OfferDetail raw={item.raw} />}
+                {item.type === 'offer' && (
+                    <OfferDetail
+                        raw={item.raw}
+                        platformFee={platformFee}
+                        onPlatformFeeChange={setPlatformFee}
+                    />
+                )}
                 {item.type === 'issuance' && <IssuanceDetail raw={item.raw} />}
                 {item.type === 'token' && <TokenDetail raw={item.raw} />}
                 {item.type === 'multisig' && <MultisigDetail raw={item.raw} />}
@@ -161,7 +172,10 @@ export function DetailPanel({
                         <Button
                             className="flex-1 bg-emerald-600 hover:bg-emerald-500"
                             disabled={actionLoading}
-                            onClick={onApproveOffer}
+                            onClick={() => {
+                                const investorRate = Math.max(0, annualRate - platformFee);
+                                onApproveOffer(investorRate);
+                            }}
                         >
                             <Rocket className="w-4 h-4 mr-2" />
                             Approve & Issue

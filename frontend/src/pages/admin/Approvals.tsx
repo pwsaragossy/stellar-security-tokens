@@ -207,15 +207,19 @@ export function Approvals() {
         }
     };
 
-    const handleReviewOffer = async (item: ApprovalItem, status: 'approved' | 'rejected') => {
+    const handleReviewOffer = async (item: ApprovalItem, status: 'approved' | 'rejected', investorRate?: number) => {
         if (status === 'rejected') {
             setRejectDialog({ open: true, item });
             return;
         }
-        // Direct approve — fees are determined by investorRate spread, not admin input
+        // Direct approve — send investorRate for yield spread calculation
         setActionLoading(true);
         try {
-            const result = await offersApi.review(item.originalId, { status: 'approved' });
+            const payload: Parameters<typeof offersApi.review>[1] = { status: 'approved' };
+            if (investorRate != null) {
+                payload.investor_rate = investorRate;
+            }
+            const result = await offersApi.review(item.originalId, payload);
             if ((result as any)?.autoIssueResult?.status === 'pending_multisig') {
                 toast.success(`${item.label} approved — issuance pipeline started. Sign in the queue below.`);
             } else {
@@ -703,7 +707,7 @@ export function Approvals() {
                             onApproveCompany={() => handleApproveCompany(selected)}
                             onRejectCompany={() => setRejectDialog({ open: true, item: selected })}
                             onSponsorCompany={() => setSponsorDialog({ open: true, item: selected })}
-                            onApproveOffer={() => handleReviewOffer(selected, 'approved')}
+                            onApproveOffer={(investorRate?: number) => handleReviewOffer(selected, 'approved', investorRate)}
                             onRejectOffer={() => handleReviewOffer(selected, 'rejected')}
                             onIssueToken={() => handleIssueToken(selected)}
                             onVerifyIssuance={() => handleVerifyIssuance(selected)}

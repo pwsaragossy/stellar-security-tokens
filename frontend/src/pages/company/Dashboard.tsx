@@ -1,16 +1,18 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, Clock, Loader2, Plus, Users, DollarSign, PieChart as PieChartIcon, BarChart3, ArrowUpRight, AlertTriangle } from "lucide-react";
+import { TrendingUp, Clock, Loader2, Plus, Users, DollarSign, PieChart as PieChartIcon, BarChart3, ArrowUpRight, AlertTriangle, Calendar } from "lucide-react";
 import { useCompany } from "@/hooks/useCompany";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { offersApi } from "@/api/offers";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { companyPaymentsApi, type PaymentDetails, type BulletPaymentDetails } from '@/api/companyPayments';
 
 export function CompanyDashboard() {
     const { company, offers, stats, dashboardData, loading, error } = useCompany();
     const navigate = useNavigate();
     const [activeOfferStats, setActiveOfferStats] = useState<Record<number, { sold: number, investors: number }>>({});
+    const [upcomingPayments, setUpcomingPayments] = useState<(PaymentDetails | BulletPaymentDetails)[]>([]);
 
     // Fetch granular data for active offers
     useEffect(() => {
@@ -44,6 +46,13 @@ export function CompanyDashboard() {
             fetchDeepStats();
         }
     }, [offers]);
+
+    // Fetch upcoming payments
+    useEffect(() => {
+        companyPaymentsApi.getUpcomingPayments()
+            .then((res) => setUpcomingPayments(res.data || []))
+            .catch(() => setUpcomingPayments([]));
+    }, []);
 
     if (loading) {
         return (
@@ -129,6 +138,77 @@ export function CompanyDashboard() {
                         </Button>
                     </div>
                 </div>
+            )}
+
+            {/* Upcoming Payments Widget */}
+            {upcomingPayments.length > 0 && (
+                <Card className="glass-panel p-0 border-white/5 bg-white/5 animate-fade-in-up overflow-hidden">
+                    <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Calendar className="w-5 h-5 text-sky-400" />
+                            <h3 className="font-heading text-base font-semibold">Upcoming Payments</h3>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                            {upcomingPayments.length} offer{upcomingPayments.length > 1 ? 's' : ''}
+                        </span>
+                    </div>
+                    <div className="divide-y divide-white/5">
+                        {upcomingPayments.map((payment: any) => {
+                            const isBullet = 'maturityDate' in payment;
+                            const dueDate = isBullet
+                                ? payment.maturityDate
+                                : payment.nextPaymentDue;
+                            const totalOwed = isBullet
+                                ? payment.totalPayout
+                                : payment.totalOwed;
+                            const isOverdue = payment.paymentDueStatus === 'overdue';
+
+                            return (
+                                <div
+                                    key={payment.offerId}
+                                    className="flex items-center justify-between px-5 py-3 hover:bg-white/[0.02] transition-colors"
+                                >
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-white truncate">
+                                            {payment.offerName || payment.assetCode}
+                                        </p>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <span className="text-xs text-muted-foreground">
+                                                {dueDate ? new Date(dueDate).toLocaleDateString() : 'No date'}
+                                            </span>
+                                            {isOverdue && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-400 font-medium">
+                                                    OVERDUE
+                                                </span>
+                                            )}
+                                            {isBullet && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 font-medium">
+                                                    MATURITY
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-sm font-mono text-emerald-400 font-semibold">
+                                            ${Number(totalOwed || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                        </span>
+                                        <Button
+                                            size="sm"
+                                            onClick={() => navigate(`/company/pay/${payment.offerId}`)}
+                                            className={isOverdue
+                                                ? 'bg-red-500 hover:bg-red-600 text-white text-xs'
+                                                : 'bg-primary hover:bg-primary/90 text-primary-foreground text-xs'
+                                            }
+                                        >
+                                            <DollarSign className="w-3 h-3 mr-1" />
+                                            Pay
+                                        </Button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </Card>
             )}
 
             {/* Financial Performance Section */}

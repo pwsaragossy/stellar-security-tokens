@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import {
     ArrowLeft, AlertTriangle, Clock, CheckCircle, DollarSign, Users, Calendar,
-    Loader2, ShieldAlert, Package, CircleDot, Circle,
+    Loader2, ShieldAlert, Package, CircleDot, Circle, TrendingUp, Database,
+    History, ExternalLink, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { companyPaymentsApi, type PaymentDetails, type BulletPaymentDetails } from "@/api/companyPayments";
 import { usePasskey } from "@/hooks/usePasskey";
@@ -28,7 +29,117 @@ interface BatchStep {
     error?: string;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────
+// ─── Payment History Sub-Component ────────────────────────────────────────
+
+function PaymentHistorySection({ offerId }: { offerId: number }) {
+    const [history, setHistory] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [expanded, setExpanded] = useState(false);
+
+    useEffect(() => {
+        companyPaymentsApi.getPaymentHistory(offerId)
+            .then((res) => setHistory(res.data || []))
+            .catch(() => setHistory([]))
+            .finally(() => setLoading(false));
+    }, [offerId]);
+
+    if (loading || history.length === 0) return null;
+
+    const totalPaid = history
+        .filter((p: any) => p.status === 'completed')
+        .reduce((sum: number, p: any) => sum + Number(p.usdcAmount || p.usdc_amount || 0), 0);
+
+    const explorerBase = 'https://stellar.expert/explorer/testnet/tx/';
+
+    return (
+        <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in-up">
+            <CardHeader
+                className="cursor-pointer select-none"
+                onClick={() => setExpanded(!expanded)}
+            >
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <History className="w-5 h-5 text-zinc-400" />
+                        <CardTitle className="font-heading text-base">
+                            Payment History ({history.length})
+                        </CardTitle>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className="text-sm text-emerald-400 font-mono">
+                            ${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2 })} paid
+                        </span>
+                        {expanded ? (
+                            <ChevronUp className="w-4 h-4 text-zinc-500" />
+                        ) : (
+                            <ChevronDown className="w-4 h-4 text-zinc-500" />
+                        )}
+                    </div>
+                </div>
+            </CardHeader>
+            {expanded && (
+                <CardContent>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="text-left text-xs text-zinc-500 uppercase tracking-wider border-b border-white/5">
+                                    <th className="pb-2 pr-4">Date</th>
+                                    <th className="pb-2 pr-4">Amount</th>
+                                    <th className="pb-2 pr-4">TX Hash</th>
+                                    <th className="pb-2">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {history.map((payment: any, idx: number) => {
+                                    const hash = payment.transactionHash || payment.transaction_hash;
+                                    const amount = Number(payment.usdcAmount || payment.usdc_amount || 0);
+                                    const date = payment.paymentDate || payment.payment_date || payment.createdAt || payment.created_at;
+                                    return (
+                                        <tr key={idx} className="text-zinc-300">
+                                            <td className="py-2.5 pr-4 whitespace-nowrap">
+                                                {date ? new Date(date).toLocaleDateString() : '—'}
+                                            </td>
+                                            <td className="py-2.5 pr-4 font-mono text-emerald-400">
+                                                ${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="py-2.5 pr-4">
+                                                {hash ? (
+                                                    <a
+                                                        href={`${explorerBase}${hash}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 font-mono text-xs"
+                                                    >
+                                                        {hash.slice(0, 8)}...{hash.slice(-6)}
+                                                        <ExternalLink className="w-3 h-3" />
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-zinc-600">—</span>
+                                                )}
+                                            </td>
+                                            <td className="py-2.5">
+                                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                                    payment.status === 'completed'
+                                                        ? 'bg-emerald-500/10 text-emerald-400'
+                                                        : payment.status === 'failed'
+                                                            ? 'bg-red-500/10 text-red-400'
+                                                            : 'bg-amber-500/10 text-amber-400'
+                                                }`}>
+                                                    {payment.status}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            )}
+        </Card>
+    );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────
 
 export function PayInvestors() {
     const { offerId } = useParams<{ offerId: string }>();
@@ -323,51 +434,107 @@ export function PayInvestors() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="p-4 bg-white/5 rounded-lg">
-                            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-                                <DollarSign className="w-4 h-4" />
-                                Total Owed
+                    {/* Stats Grid — Payment Breakdown */}
+                    {(() => {
+                        // Compute spread from the offer's rates
+                        const annualRate = isBulletPayment
+                            ? 0
+                            : (paymentDetails as PaymentDetails)?.annualInterestRate || 0;
+                        const investorRate = isBulletPayment
+                            ? 0
+                            : (paymentDetails as PaymentDetails)?.investorRate ?? annualRate;
+                        const spreadPct = Math.max(0, annualRate - investorRate);
+                        const platformFeeEst = investorRate > 0
+                            ? Math.round(totalOwed * (spreadPct / investorRate) * 100) / 100
+                            : 0;
+                        const companyPays = totalOwed + platformFeeEst;
+                        const balanceSource = (paymentDetails as any)?.balanceSource;
+
+                        return (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    <div className="p-4 bg-white/5 rounded-lg">
+                                        <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+                                            <DollarSign className="w-4 h-4" />
+                                            Company Pays
+                                        </div>
+                                        <p className="text-2xl font-bold text-white">
+                                            ${companyPays.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                    <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
+                                        <div className="flex items-center gap-2 text-emerald-400/80 text-sm mb-1">
+                                            <TrendingUp className="w-4 h-4" />
+                                            Net to Investors
+                                        </div>
+                                        <p className="text-2xl font-bold text-emerald-400">
+                                            ${totalOwed.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                    <div className="p-4 bg-purple-500/5 border border-purple-500/10 rounded-lg">
+                                        <div className="flex items-center gap-2 text-purple-400/80 text-sm mb-1">
+                                            <ShieldAlert className="w-4 h-4" />
+                                            Platform Fee
+                                        </div>
+                                        <p className="text-2xl font-bold text-purple-400">
+                                            ${platformFeeEst.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                        </p>
+                                        {spreadPct > 0 && (
+                                            <p className="text-xs text-purple-400/60 mt-1">
+                                                {spreadPct.toFixed(1)}% spread
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    <div className="p-4 bg-white/5 rounded-lg">
+                                        <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+                                            <Users className="w-4 h-4" />
+                                            Investors
+                                        </div>
+                                        <p className="text-2xl font-bold text-white">
+                                            {paymentDetails?.investorCount || 0}
+                                        </p>
+                                    </div>
+                                    <div className="p-4 bg-white/5 rounded-lg">
+                                        <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+                                            <Calendar className="w-4 h-4" />
+                                            Due Date
+                                        </div>
+                                        <p className="text-lg font-medium text-white">
+                                            {paymentDetails && 'nextPaymentDue' in paymentDetails && paymentDetails.nextPaymentDue
+                                                ? new Date(paymentDetails.nextPaymentDue).toLocaleDateString()
+                                                : isBulletPayment
+                                                    ? new Date((paymentDetails as BulletPaymentDetails).maturityDate).toLocaleDateString()
+                                                    : 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="p-4 bg-white/5 rounded-lg">
+                                        <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+                                            <Clock className="w-4 h-4" />
+                                            {isBulletPayment ? 'Days to Maturity' : 'Rate'}
+                                        </div>
+                                        <p className="text-lg font-medium text-white">
+                                            {isBulletPayment
+                                                ? `${(paymentDetails as BulletPaymentDetails).daysUntilMaturity} days`
+                                                : `${annualRate}% APY`}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Balance source indicator */}
+                                {balanceSource && (
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
+                                        <Database className="w-3 h-3" />
+                                        <span>
+                                            Balance source: {balanceSource === 'on_chain' ? '🔗 On-chain (Soroban)' : '📊 Database'}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
-                            <p className="text-2xl font-bold text-success">
-                                ${totalOwed.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                            </p>
-                        </div>
-                        <div className="p-4 bg-white/5 rounded-lg">
-                            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-                                <Users className="w-4 h-4" />
-                                Investors
-                            </div>
-                            <p className="text-2xl font-bold text-white">
-                                {paymentDetails?.investorCount || 0}
-                            </p>
-                        </div>
-                        <div className="p-4 bg-white/5 rounded-lg">
-                            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-                                <Calendar className="w-4 h-4" />
-                                Due Date
-                            </div>
-                            <p className="text-lg font-medium text-white">
-                                {paymentDetails && 'nextPaymentDue' in paymentDetails && paymentDetails.nextPaymentDue
-                                    ? new Date(paymentDetails.nextPaymentDue).toLocaleDateString()
-                                    : isBulletPayment
-                                        ? new Date((paymentDetails as BulletPaymentDetails).maturityDate).toLocaleDateString()
-                                        : 'N/A'}
-                            </p>
-                        </div>
-                        <div className="p-4 bg-white/5 rounded-lg">
-                            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-                                <Clock className="w-4 h-4" />
-                                {isBulletPayment ? 'Days to Maturity' : 'Rate'}
-                            </div>
-                            <p className="text-lg font-medium text-white">
-                                {isBulletPayment
-                                    ? `${(paymentDetails as BulletPaymentDetails).daysUntilMaturity} days`
-                                    : `${(paymentDetails as PaymentDetails).annualInterestRate}% APY`}
-                            </p>
-                        </div>
-                    </div>
+                        );
+                    })()}
 
                     {/* Investor Breakdown */}
                     {paymentDetails?.breakdown && paymentDetails.breakdown.length > 0 && (
@@ -592,6 +759,11 @@ export function PayInvestors() {
                     </div>
                 )}
             </div>
+
+            {/* ── Payment History ── */}
+            {offerId && (
+                <PaymentHistorySection offerId={Number(offerId)} />
+            )}
 
             {/* ══════════════════════════════════════════════════════════════════
                 DO NOT INTERACT POPUP — Bullet Maturity Pending Admin Approval

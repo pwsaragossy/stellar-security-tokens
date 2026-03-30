@@ -39,7 +39,10 @@ const testCompany = Keypair.random();
 // Unique asset code per run to avoid collisions
 const ASSET_CODE = 'T' + crypto.randomBytes(3).toString('hex').toUpperCase().slice(0, 5);
 const TOKEN_AMOUNT = '1000';       // 1000 tokens issued
-const INVEST_USDC = 100;           // 100 USDC → buys 100 tokens at price 1:1
+const INVEST_USDC = 100;           // 100 USDC — investor's intended investment
+const FIXED_FEE = 5;               // $5 processing fee per trade (should be additive)
+// NOTE: Current contract deducts fee from buy_amount (company gets 95).
+//       Correct behavior: investor pays 105 total (100 + 5). Requires contract fix.
 const ANNUAL_RATE = 12;            // 12% APY — company's cost of capital
 const INVESTOR_RATE = 10;          // 10% APY — investor-facing yield (spread = 2%)
 const SELL_PRICE = 10000000;       // 1 token = 1 USDC (in stroops: 1 * 10^7)
@@ -312,7 +315,7 @@ async function main() {
       data: {
         name: `Test Company ${ASSET_CODE}`,
         email: `company-${ASSET_CODE.toLowerCase()}@lifecycle.test`,
-        cnpj: `00.000.000/0001-${crypto.randomInt(10, 99)}`,
+        cnpj: `00.000.000/${ASSET_CODE}`,
         stellarPublicKey: testCompany.publicKey(),
         status: 'approved',
       },
@@ -333,7 +336,7 @@ async function main() {
       data: {
         name: `Test Investor ${ASSET_CODE}`,
         email: `investor-${ASSET_CODE.toLowerCase()}@lifecycle.test`,
-        document: `000.000.000-${crypto.randomInt(10, 99)}`,
+        document: `000.000.${ASSET_CODE}`,
         stellarContractId: testInvestor.publicKey(),    // E2E uses classic account, not smart wallet
         passkeyCredentialId: `test-passkey-${ASSET_CODE}`,
         kycStatus: 'approved',
@@ -414,7 +417,7 @@ async function main() {
         buyToken: usdcSacId,
         treasury: testTreasury.publicKey(),
         company: testCompany.publicKey(),
-        fixedFee: 0n,        // No processing fee for test simplicity
+        fixedFee: BigInt(FIXED_FEE * 10_000_000),  // $5 processing fee (in stroops)
         sellPrice: SELL_PRICE,
         buyPrice: BUY_PRICE,
         deadlineLedger: 0,  // No deadline
@@ -465,7 +468,8 @@ async function main() {
     // Snapshot USDC balances BEFORE trade (TRADE INVARIANT: investor_USDC_before - trade_amount = investor_USDC_after)
     const investorUsdcBeforeTrade = await getUSDCBalance(testInvestor.publicKey());
     const companyUsdcBeforeTrade = await getUSDCBalance(testCompany.publicKey());
-    console.log(`  Pre-trade USDC → Investor: ${investorUsdcBeforeTrade}, Company: ${companyUsdcBeforeTrade}`);
+    const treasuryUsdcBeforeTrade = await getUSDCBalance(testTreasury.publicKey());
+    console.log(`  Pre-trade USDC → Investor: ${investorUsdcBeforeTrade}, Company: ${companyUsdcBeforeTrade}, Treasury: ${treasuryUsdcBeforeTrade}`);
 
     // 3a. Create classic trustline for investor on security token
     // SAC set_authorized() requires an existing classic trustline
@@ -547,7 +551,7 @@ async function main() {
       data: {
         investorId: investor.id,
         assetCode: ASSET_CODE,
-        amount: INVEST_USDC,
+        amount: INVEST_USDC,  // Tokens received (contract allocates on gross buy_amount)
         transactionHash: tradeSendResult.hash,
         offerId: offer.id,
       },
@@ -557,8 +561,8 @@ async function main() {
         investorId: investor.id,
         offerId: offer.id,
         assetCode: ASSET_CODE,
-        usdcAmount: INVEST_USDC,
-        tokenAmount: INVEST_USDC,
+        usdcAmount: INVEST_USDC,    // Investor's intended investment (fee should be additive)
+        tokenAmount: INVEST_USDC,   // Contract gives tokens on gross buy_amount
         status: 'distributed',
         distributionTxHash: tradeSendResult.hash,
       },
@@ -568,25 +572,166 @@ async function main() {
     // ── TRADE ASSERTIONS (Financial Invariants) ──────────────
     const investorUsdcAfterTrade = await getUSDCBalance(testInvestor.publicKey());
     const companyUsdcAfterTrade = await getUSDCBalance(testCompany.publicKey());
+    const treasuryUsdcAfterTrade = await getUSDCBalance(testTreasury.publicKey());
     const holders = await StellarService.listAssetHolders(ASSET_CODE);
     const investorHolder = holders.find(h => h.publicKey === testInvestor.publicKey());
     const investorTokens = investorHolder ? parseFloat(investorHolder.balance) : 0;
 
-    console.log(`\n  USDC balances → Investor: ${investorUsdcAfterTrade}, Company: ${companyUsdcAfterTrade}`);
+    console.log(`\n  USDC balances → Investor: ${investorUsdcAfterTrade}, Company: ${companyUsdcAfterTrade}, Treasury: ${treasuryUsdcAfterTrade}`);
     console.log(`  Token balance → Investor: ${investorTokens} ${ASSET_CODE}`);
+    console.log(`  Fee split: investor paid ${INVEST_USDC}, fee=${FIXED_FEE} → treasury, net=${NET_INVESTED} → company`);
 
-    assert(
-      investorTokens === INVEST_USDC,
-      `Token balance: ${investorTokens} === ${INVEST_USDC} (exact)`,
-    );
+    // Investor spent exactly INVEST_USDC
     assert(
       investorUsdcAfterTrade === investorUsdcBeforeTrade - INVEST_USDC,
       `Investor USDC: ${investorUsdcAfterTrade} === ${investorUsdcBeforeTrade} - ${INVEST_USDC} (exact debit)`,
     );
-    // fixedFee=0 → company gets 100% of investor's USDC
+    // Investor got INVEST_USDC tokens (contract allocates on gross, fee only splits USDC)
     assert(
-      companyUsdcAfterTrade === companyUsdcBeforeTrade + INVEST_USDC,
-      `Company USDC: ${companyUsdcAfterTrade} === ${companyUsdcBeforeTrade} + ${INVEST_USDC} (fixedFee=0, full amount)`,
+      investorTokens === INVEST_USDC,
+      `Token balance: ${investorTokens} === ${INVEST_USDC} (fee only affects USDC, not tokens)`,
+    );
+    // Company received INVEST_USDC - FIXED_FEE (current contract deducts fee from buy_amount)
+    // TODO: After contract fix, company should receive full INVEST_USDC (fee additive)
+    assert(
+      companyUsdcAfterTrade === companyUsdcBeforeTrade + (INVEST_USDC - FIXED_FEE),
+      `Company USDC: ${companyUsdcAfterTrade} === ${companyUsdcBeforeTrade} + ${INVEST_USDC - FIXED_FEE} (fee deducted — contract fix pending)`,
+    );
+    // Treasury received the fixed fee
+    assert(
+      Math.abs(treasuryUsdcAfterTrade - (treasuryUsdcBeforeTrade + FIXED_FEE)) < 0.0001,
+      `Treasury fee: ${treasuryUsdcAfterTrade} === ${treasuryUsdcBeforeTrade} + ${FIXED_FEE} ($${FIXED_FEE} processing fee)`,
+    );
+
+    // ─── PHASE 3.5: MONTHLY DIVIDEND PAYOUT ────────────────────
+    console.log('\n╔════════════════════════════════════════════╗');
+    console.log('║  PHASE 3.5: MONTHLY DIVIDEND PAYOUT        ║');
+    console.log('╚════════════════════════════════════════════╝\n');
+
+    // Create a monthly offer (same company, same asset) to test periodic path
+    console.log('--- Creating monthly dividend offer ---');
+    const MONTHLY_ASSET = 'M' + ASSET_CODE.slice(1);  // Different asset code for unique constraint
+    const monthlyOffer = await prisma.offer.create({
+      data: {
+        companyId: company.id,
+        requestedBy: companyUser.id,
+        offerName: `Monthly Dividend ${MONTHLY_ASSET}`,
+        assetCode: MONTHLY_ASSET,
+        description: `E2E monthly test for ${MONTHLY_ASSET}`,
+        totalSupply: parseInt(TOKEN_AMOUNT),
+        unitPrice: 1.0,
+        annualInterestRate: ANNUAL_RATE,
+        investorRate: INVESTOR_RATE,
+        offerType: 'collateral',
+        paymentType: 'monthly',
+        status: 'active',
+        isTokenLocked: true,
+      },
+    });
+    testIds.monthlyOfferId = monthlyOffer.id;
+
+    // Create investment record for the monthly offer
+    const monthlyInvestment = await prisma.investment.create({
+      data: {
+        investorId: investor.id,
+        offerId: monthlyOffer.id,
+        assetCode: ASSET_CODE,  // FK to tokens table requires existing asset
+        usdcAmount: INVEST_USDC,
+        tokenAmount: INVEST_USDC,  // Contract gives tokens on gross amount
+        status: 'distributed',
+        distributionTxHash: tradeSendResult.hash,  // Reuse — same underlying tokens
+      },
+    });
+    assert(true, `Monthly offer(${monthlyOffer.id}) + investment(${monthlyInvestment.id}) created`);
+
+    // 3.5a. Pre-compute expected dividend (DUAL COMPUTATION)
+    const periodsPerYear = 12; // monthly
+    const investorPeriodRate = (INVESTOR_RATE / 100) / periodsPerYear;
+    const companyPeriodRate = (ANNUAL_RATE / 100) / periodsPerYear;
+
+    const expectedInvestorInterest = Math.round(INVEST_USDC * investorPeriodRate * 100) / 100;
+    const expectedCompanyInterest = Math.round(INVEST_USDC * companyPeriodRate * 100) / 100;
+    const expectedSpread = Math.round((expectedCompanyInterest - expectedInvestorInterest) * 100) / 100;
+
+    console.log(`  Independent calc: investorInterest=${expectedInvestorInterest}, companyInterest=${expectedCompanyInterest}, spread=${expectedSpread}`);
+    console.log(`  Rates: investorRate=${INVESTOR_RATE}%/yr (${(investorPeriodRate*100).toFixed(4)}%/mo), companyRate=${ANNUAL_RATE}%/yr (${(companyPeriodRate*100).toFixed(4)}%/mo)`);
+
+    // 3.5b. Snapshot USDC before dividend
+    const investorUsdcBeforeDividend = await getUSDCBalance(testInvestor.publicKey());
+    const companyUsdcBeforeDividend = await getUSDCBalance(testCompany.publicKey());
+    const treasuryUsdcBeforeDividend = await getUSDCBalance(testTreasury.publicKey());
+    console.log(`  Pre-dividend USDC → Investor: ${investorUsdcBeforeDividend}, Company: ${companyUsdcBeforeDividend}, Treasury: ${treasuryUsdcBeforeDividend}`);
+
+    // 3.5c. Build periodic payment TX
+    console.log('\n--- Building monthly dividend TX ---');
+    const dividendResult = await CompanyPaymentService.createPaymentTransaction(
+      monthlyOffer.id, companyUser.id,
+    );
+    assert(!!dividendResult.transactionXDR, 'Dividend payment XDR built');
+    assert(dividendResult.isBullet === false, 'Payment type is periodic (not bullet)');
+    assert(dividendResult.investorCount > 0, `Investors in dividend: ${dividendResult.investorCount}`);
+    console.log(`  Total: ${dividendResult.totalAmount} USDC | Fee: ${dividendResult.platformFee} | Net: ${dividendResult.netToInvestors}`);
+
+    // 3.5d. Dual computation — service vs independent math
+    assert(
+      parseFloat(dividendResult.netToInvestors) === expectedInvestorInterest,
+      `Dividend dual-comp (investor): service net(${dividendResult.netToInvestors}) === independent(${expectedInvestorInterest})`,
+    );
+    assert(
+      parseFloat(dividendResult.platformFee) === expectedSpread,
+      `Dividend spread: platformFee(${dividendResult.platformFee}) === spread(${expectedSpread})`,
+    );
+    assert(
+      parseFloat(dividendResult.totalAmount) === expectedInvestorInterest + expectedSpread,
+      `Dividend total: ${dividendResult.totalAmount} === ${expectedInvestorInterest} + ${expectedSpread} (investor + spread)`,
+    );
+
+    // 3.5e. Sign with company and submit
+    console.log('\n--- Signing and submitting dividend TX ---');
+    const { Transaction: DivTxClass } = await import('@stellar/stellar-sdk');
+    const dividendTx = new DivTxClass(dividendResult.transactionXDR, Networks.TESTNET);
+    dividendTx.sign(testCompany);  // Company pays → no issuer sig needed (no clawback in periodic)
+
+    const divSubmitResult = await stellarServer.submitTransaction(dividendTx);
+    assert(divSubmitResult.successful, `Dividend TX submitted on-chain: ${divSubmitResult.hash}`);
+    console.log(`  TX hash: ${divSubmitResult.hash}`);
+
+    // 3.5f. Verify on-chain USDC movements
+    console.log('\n--- Verifying dividend balances ---');
+    const investorUsdcAfterDividend = await getUSDCBalance(testInvestor.publicKey());
+    const companyUsdcAfterDividend = await getUSDCBalance(testCompany.publicKey());
+    const treasuryUsdcAfterDividend = await getUSDCBalance(testTreasury.publicKey());
+
+    console.log(`  Post-dividend USDC → Investor: ${investorUsdcAfterDividend}, Company: ${companyUsdcAfterDividend}, Treasury: ${treasuryUsdcAfterDividend}`);
+
+    // Investor received exactly their monthly interest
+    assert(
+      Math.abs(investorUsdcAfterDividend - (investorUsdcBeforeDividend + expectedInvestorInterest)) < 0.0001,
+      `Investor dividend: ${investorUsdcAfterDividend} === ${investorUsdcBeforeDividend} + ${expectedInvestorInterest}`,
+    );
+
+    // Treasury received the spread
+    if (expectedSpread > 0) {
+      assert(
+        Math.abs(treasuryUsdcAfterDividend - (treasuryUsdcBeforeDividend + expectedSpread)) < 0.0001,
+        `Treasury spread: ${treasuryUsdcAfterDividend} === ${treasuryUsdcBeforeDividend} + ${expectedSpread}`,
+      );
+    }
+
+    // Company paid out total (interest + spread)
+    const expectedCompanyDebit = expectedInvestorInterest + expectedSpread;
+    assert(
+      Math.abs(companyUsdcAfterDividend - (companyUsdcBeforeDividend - expectedCompanyDebit)) < 0.0001,
+      `Company paid: ${companyUsdcAfterDividend} === ${companyUsdcBeforeDividend} - ${expectedCompanyDebit}`,
+    );
+
+    // Tokens NOT burned (periodic payments don't clawback)
+    const holdersAfterDividend = await StellarService.listAssetHolders(ASSET_CODE);
+    const investorAfterDiv = holdersAfterDividend.find(h => h.publicKey === testInvestor.publicKey());
+    const tokensAfterDividend = investorAfterDiv ? parseFloat(investorAfterDiv.balance) : 0;
+    assert(
+      tokensAfterDividend === INVEST_USDC,
+      `Tokens preserved after dividend: ${tokensAfterDividend} === ${INVEST_USDC} (no clawback in periodic)`,
     );
 
     // ─── PHASE 4: BULLET PAYOUT + BURN ────────────────────────
@@ -677,16 +822,16 @@ async function main() {
       `Yield spread: platformFee(${paymentResult.platformFee}) === spread(${independentSpread})`,
     );
 
-    // Investor actually received the payout on-chain
+    // Investor actually received the payout on-chain (starting from post-dividend balance)
     assert(
-      investorUsdcFinal === investorUsdcAfterTrade + independentPayout,
-      `Investor got paid: ${investorUsdcFinal} === ${investorUsdcAfterTrade} + ${independentPayout}`,
+      investorUsdcFinal === investorUsdcAfterDividend + independentPayout,
+      `Investor got paid: ${investorUsdcFinal} === ${investorUsdcAfterDividend} + ${independentPayout}`,
     );
 
-    // Company balance decreased (they paid out)
+    // Company balance decreased from post-dividend
     assert(
-      companyUsdcFinal < companyUsdcAfterTrade,
-      `Company paid out: ${companyUsdcFinal} < ${companyUsdcAfterTrade}`,
+      companyUsdcFinal < companyUsdcAfterDividend,
+      `Company paid out: ${companyUsdcFinal} < ${companyUsdcAfterDividend}`,
     );
 
     // Payout > principal (interest was earned, rate > 0)
@@ -712,6 +857,12 @@ async function main() {
     console.log('╚════════════════════════════════════════════╝\n');
 
     try {
+      if (testIds.monthlyOfferId) {
+        await prisma.companyPayment.deleteMany({ where: { offerId: testIds.monthlyOfferId } }).catch(() => {});
+        await prisma.interestPayment.deleteMany({ where: { offerId: testIds.monthlyOfferId } }).catch(() => {});
+        await prisma.investment.deleteMany({ where: { offerId: testIds.monthlyOfferId } });
+        await prisma.offer.delete({ where: { id: testIds.monthlyOfferId } });
+      }
       if (testIds.offerId) {
         await prisma.companyPayment.deleteMany({ where: { offerId: testIds.offerId } }).catch(() => {});
         await prisma.interestPayment.deleteMany({ where: { offerId: testIds.offerId } });
@@ -752,7 +903,7 @@ async function main() {
     process.exit(1);
   } else {
     console.log('✅ Full token lifecycle verified!');
-    console.log('   SETUP → DEPLOY → TRADE → PAYOUT → BURN');
+    console.log('   SETUP → DEPLOY → TRADE → DIVIDEND → PAYOUT → BURN');
     process.exit(0);
   }
 }

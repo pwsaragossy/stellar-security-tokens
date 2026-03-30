@@ -64,6 +64,7 @@ export interface Offer {
   description: string;
   total_supply: string;
   annual_interest_rate?: number;
+  investor_rate?: number;
   offer_type: 'collateral' | 'sale';
   offer_rules: Record<string, any>;
   status: 'pending_review' | 'under_review' | 'approved' | 'rejected' | 'active' | 'paused' | 'closed' | 'matured';

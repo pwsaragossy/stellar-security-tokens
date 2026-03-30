@@ -248,6 +248,7 @@ export class Investor {
           description: offer?.description || null,
           offerType: offer?.offerType || null,
           annualInterestRate: offer?.annualInterestRate || dist.token.annualInterestRate,
+          investorRate: offer?.investorRate ?? null,
           offerStatus: offer?.status || null,
           maturityDate: offer?.maturityDate || null,
           paymentType: offer?.paymentType || null,

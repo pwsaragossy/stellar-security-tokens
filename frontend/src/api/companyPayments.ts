@@ -21,10 +21,12 @@ export interface PaymentDetails {
     investorCount: number;
     paymentType: string;
     annualInterestRate: number;
+    investorRate?: number;
     periodRate: number;
     nextPaymentDue: string | null;
     lastPaymentDate: string | null;
     paymentDueStatus: string;
+    balanceSource?: 'database' | 'on_chain';
     breakdown: PaymentBreakdown[];
 }
 
@@ -36,8 +38,10 @@ export interface BulletPaymentDetails {
     daysUntilMaturity: number;
     totalPrincipal: number;
     totalInterest: number;
+    companyTotalInterest?: number;
     totalPayout: number;
     investorCount: number;
+    balanceSource?: 'database' | 'on_chain';
     breakdown: {
         investorId: number;
         investorName: string;
@@ -52,6 +56,8 @@ export interface PreparedTransaction {
     transactionXDR: string;
     offerId: number;
     totalAmount: number;
+    platformFee?: number;
+    netToInvestors?: number;
     investorCount: number;
     breakdown: PaymentBreakdown[];
     expiresAt: string;
