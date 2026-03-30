@@ -24,6 +24,7 @@ services:
       - ./backend/src:/app/backend/src
       - ./backend/prisma:/app/backend/prisma
       - ./backend/tests:/app/backend/tests
+      - ./contracts:/app/contracts:ro  # WASM binary for E2E tests
 
   frontend:
     build:

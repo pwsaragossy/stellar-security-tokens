@@ -1180,53 +1180,69 @@ async function main() {
     console.log('║  CLEANUP (DB records)                       ║');
     console.log('╚════════════════════════════════════════════╝\n');
 
-    try {
-      if (testIds.multiOfferId) {
-        await prisma.companyPayment.deleteMany({ where: { offerId: testIds.multiOfferId } }).catch(() => {});
-        await prisma.interestPayment.deleteMany({ where: { offerId: testIds.multiOfferId } }).catch(() => {});
-        await prisma.feeLog.deleteMany({ where: { assetCode: MULTI_ASSET_CODE } }).catch(() => {});
-        await prisma.investment.deleteMany({ where: { offerId: testIds.multiOfferId } });
-        await prisma.tokenDistribution.deleteMany({ where: { assetCode: MULTI_ASSET_CODE } }).catch(() => {});
-        await prisma.token.deleteMany({ where: { offerId: testIds.multiOfferId } }).catch(() => {});
-        await prisma.offer.delete({ where: { id: testIds.multiOfferId } });
+    if (!prisma) {
+      console.log('  ⚠️  Prisma not initialized — skipping DB cleanup');
+    } else {
+      try {
+        // Clean multi-investor offer
+        if (testIds.multiOfferId) {
+          await prisma.companyPayment.deleteMany({ where: { offerId: testIds.multiOfferId } }).catch(() => {});
+          await prisma.interestPayment.deleteMany({ where: { offerId: testIds.multiOfferId } }).catch(() => {});
+          await prisma.companyPenalty.deleteMany({ where: { offerId: testIds.multiOfferId } }).catch(() => {});
+          await prisma.paymentReminder.deleteMany({ where: { offerId: testIds.multiOfferId } }).catch(() => {});
+          await prisma.feeLog.deleteMany({ where: { assetCode: MULTI_ASSET_CODE } }).catch(() => {});
+          await prisma.investment.deleteMany({ where: { offerId: testIds.multiOfferId } }).catch(() => {});
+          await prisma.tokenDistribution.deleteMany({ where: { assetCode: MULTI_ASSET_CODE } }).catch(() => {});
+          await prisma.token.deleteMany({ where: { offerId: testIds.multiOfferId } }).catch(() => {});
+          await prisma.offer.delete({ where: { id: testIds.multiOfferId } }).catch(() => {});
+        }
+        // Clean monthly offer
+        if (testIds.monthlyOfferId) {
+          await prisma.companyPayment.deleteMany({ where: { offerId: testIds.monthlyOfferId } }).catch(() => {});
+          await prisma.interestPayment.deleteMany({ where: { offerId: testIds.monthlyOfferId } }).catch(() => {});
+          await prisma.companyPenalty.deleteMany({ where: { offerId: testIds.monthlyOfferId } }).catch(() => {});
+          await prisma.paymentReminder.deleteMany({ where: { offerId: testIds.monthlyOfferId } }).catch(() => {});
+          await prisma.investment.deleteMany({ where: { offerId: testIds.monthlyOfferId } }).catch(() => {});
+          await prisma.offer.delete({ where: { id: testIds.monthlyOfferId } }).catch(() => {});
+        }
+        // Clean main offer
+        if (testIds.offerId) {
+          await prisma.companyPayment.deleteMany({ where: { offerId: testIds.offerId } }).catch(() => {});
+          await prisma.interestPayment.deleteMany({ where: { offerId: testIds.offerId } }).catch(() => {});
+          await prisma.companyPenalty.deleteMany({ where: { offerId: testIds.offerId } }).catch(() => {});
+          await prisma.paymentReminder.deleteMany({ where: { offerId: testIds.offerId } }).catch(() => {});
+          await prisma.feeLog.deleteMany({ where: { assetCode: ASSET_CODE } }).catch(() => {});
+          await prisma.investment.deleteMany({ where: { offerId: testIds.offerId } }).catch(() => {});
+          await prisma.tokenDistribution.deleteMany({ where: { assetCode: ASSET_CODE } }).catch(() => {});
+          await prisma.multiSigTransaction.deleteMany({
+            where: { metadata: { path: ['offerId'], equals: testIds.offerId } },
+          }).catch(() => {});
+          await prisma.notification.deleteMany({
+            where: { actionLink: { contains: String(testIds.offerId) } },
+          }).catch(() => {});
+          await prisma.token.deleteMany({ where: { offerId: testIds.offerId } }).catch(() => {});
+          await prisma.offer.delete({ where: { id: testIds.offerId } }).catch(() => {});
+        }
+        // Clean investors
+        if (testIds.investorBId) {
+          await prisma.investor.delete({ where: { id: testIds.investorBId } }).catch(() => {});
+        }
+        if (testIds.investorId) {
+          await prisma.investor.delete({ where: { id: testIds.investorId } }).catch(() => {});
+        }
+        // Clean company (cascade: companyUser)
+        if (testIds.companyId) {
+          await prisma.companyUser.deleteMany({ where: { companyId: testIds.companyId } }).catch(() => {});
+          await prisma.company.delete({ where: { id: testIds.companyId } }).catch(() => {});
+        }
+        console.log('  ✅ All test records cleaned up');
+      } catch (cleanupErr) {
+        console.error('  ⚠️  Cleanup error:', cleanupErr.message);
+        console.error('  Stack:', cleanupErr.stack);
       }
-      if (testIds.monthlyOfferId) {
-        await prisma.companyPayment.deleteMany({ where: { offerId: testIds.monthlyOfferId } }).catch(() => {});
-        await prisma.interestPayment.deleteMany({ where: { offerId: testIds.monthlyOfferId } }).catch(() => {});
-        await prisma.investment.deleteMany({ where: { offerId: testIds.monthlyOfferId } });
-        await prisma.offer.delete({ where: { id: testIds.monthlyOfferId } });
-      }
-      if (testIds.offerId) {
-        await prisma.companyPayment.deleteMany({ where: { offerId: testIds.offerId } }).catch(() => {});
-        await prisma.interestPayment.deleteMany({ where: { offerId: testIds.offerId } });
-        await prisma.feeLog.deleteMany({ where: { assetCode: ASSET_CODE } }).catch(() => {});
-        await prisma.investment.deleteMany({ where: { offerId: testIds.offerId } });
-        await prisma.tokenDistribution.deleteMany({ where: { assetCode: ASSET_CODE } });
-        await prisma.multiSigTransaction.deleteMany({
-          where: { metadata: { path: ['offerId'], equals: testIds.offerId } },
-        });
-        await prisma.notification.deleteMany({
-          where: { actionLink: { contains: String(testIds.offerId) } },
-        }).catch(() => {});
-        await prisma.token.deleteMany({ where: { offerId: testIds.offerId } });
-        await prisma.offer.delete({ where: { id: testIds.offerId } });
-      }
-      if (testIds.investorBId) {
-        await prisma.investor.delete({ where: { id: testIds.investorBId } });
-      }
-      if (testIds.investorId) {
-        await prisma.investor.delete({ where: { id: testIds.investorId } });
-      }
-      if (testIds.companyId) {
-        await prisma.companyUser.deleteMany({ where: { companyId: testIds.companyId } });
-        await prisma.company.delete({ where: { id: testIds.companyId } });
-      }
-      console.log('  ✅ All test records cleaned up');
-    } catch (cleanupErr) {
-      console.error('  ⚠️  Cleanup error:', cleanupErr.message);
-    }
 
-    await prisma.$disconnect();
+      await prisma.$disconnect().catch(() => {});
+    }
   }
 
   // ─── SUMMARY ──────────────────────────────────────────────
