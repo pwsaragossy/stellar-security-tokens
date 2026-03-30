@@ -9,6 +9,7 @@ export interface Offer {
     total_supply: number;
     unit_price?: number;
     annual_interest_rate?: number;
+    investor_rate?: number;
     offer_type: 'collateral' | 'sale';
     status: string;
     asset_code: string;
