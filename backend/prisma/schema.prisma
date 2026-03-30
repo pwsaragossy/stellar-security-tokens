@@ -360,6 +360,11 @@ model Offer {
   totalSupply         Decimal     @map("total_supply") @db.Decimal(20, 7)
   unitPrice           Decimal     @default(1.0) @map("unit_price") @db.Decimal(20, 7)
   annualInterestRate  Decimal?    @map("annual_interest_rate") @db.Decimal(10, 7)
+
+  // Investor-facing yield rate. Company pays annualInterestRate, investor receives investorRate.
+  // Spread (annualInterestRate - investorRate) → platform treasury revenue.
+  // null = no spread (investorRate defaults to annualInterestRate).
+  investorRate         Decimal?    @map("investor_rate") @db.Decimal(10, 7)
   offerType           OfferType   @map("offer_type")
   offerRules          Json        @default("{}") @map("offer_rules")
   status              OfferStatus @default(pending_review)

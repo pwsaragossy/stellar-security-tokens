@@ -840,13 +840,13 @@ export class MultiSigTransactionService {
                 case 'maturity_clawback': {
                     // Atomic bullet maturity: payment + token burn executed on-chain.
                     // Now record InterestPayments + FeeLog + close offer if all holders burned.
-                    const { offerId, breakdown, feePercent, assetCode } = metadata;
+                    const { offerId, breakdown, spreadPct, assetCode } = metadata;
                     const { CompanyPaymentService } = await import('./companyPayment.service.js');
                     const clawbackOffer = await prisma.offer.findUnique({ where: { id: parseInt(offerId) } });
 
                     if (clawbackOffer && breakdown) {
                         await CompanyPaymentService._recordPayments(
-                            clawbackOffer, breakdown, txHash, feePercent, true
+                            clawbackOffer, breakdown, txHash, spreadPct || 0, true
                         );
                     }
 

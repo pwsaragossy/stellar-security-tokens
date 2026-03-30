@@ -40,7 +40,8 @@ const testCompany = Keypair.random();
 const ASSET_CODE = 'T' + crypto.randomBytes(3).toString('hex').toUpperCase().slice(0, 5);
 const TOKEN_AMOUNT = '1000';       // 1000 tokens issued
 const INVEST_USDC = 100;           // 100 USDC → buys 100 tokens at price 1:1
-const ANNUAL_RATE = 0;             // 0% for first pass — set to 12.0 for interest tests
+const ANNUAL_RATE = 12;            // 12% APY — company's cost of capital
+const INVESTOR_RATE = 10;          // 10% APY — investor-facing yield (spread = 2%)
 const SELL_PRICE = 10000000;       // 1 token = 1 USDC (in stroops: 1 * 10^7)
 const BUY_PRICE = 10000000;        // 1 USDC  = 1 token
 
@@ -61,7 +62,7 @@ process.env.OPERATIONS_SECRET_KEY = testOps.secret();
 process.env.OPERATIONS_PUBLIC_KEY = testOps.publicKey();
 // Test USDC: our test issuer is also the USDC issuer (we can mint unlimited)
 process.env.USDC_ISSUER = testIssuer.publicKey();
-process.env.DIVIDEND_FEE_PERCENT = '0';  // Zero platform fee for clean math
+process.env.DIVIDEND_FEE_PERCENT = '0';  // Legacy env — not used, spread model replaces this
 
 // Now import services (they read env at construction)
 const { default: prisma } = await import('../../src/config/prisma.js');
@@ -342,6 +343,8 @@ async function main() {
 
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const offer = await prisma.offer.create({
       data: {
@@ -353,11 +356,13 @@ async function main() {
         totalSupply: parseInt(TOKEN_AMOUNT),
         unitPrice: 1.0,
         annualInterestRate: ANNUAL_RATE,
+        investorRate: INVESTOR_RATE,
         offerType: 'sale',
         paymentType: 'bullet',
         maturityDate: yesterday,
         status: 'active',
         isTokenLocked: true,
+        createdAt: thirtyDaysAgo,   // Backdate: offer started 30 days ago, matured yesterday
       },
     });
     testIds.offerId = offer.id;
@@ -456,6 +461,11 @@ async function main() {
     console.log('\n╔════════════════════════════════════════════╗');
     console.log('║  PHASE 3: TRADE (investor buys tokens)     ║');
     console.log('╚════════════════════════════════════════════╝\n');
+
+    // Snapshot USDC balances BEFORE trade (TRADE INVARIANT: investor_USDC_before - trade_amount = investor_USDC_after)
+    const investorUsdcBeforeTrade = await getUSDCBalance(testInvestor.publicKey());
+    const companyUsdcBeforeTrade = await getUSDCBalance(testCompany.publicKey());
+    console.log(`  Pre-trade USDC → Investor: ${investorUsdcBeforeTrade}, Company: ${companyUsdcBeforeTrade}`);
 
     // 3a. Create classic trustline for investor on security token
     // SAC set_authorized() requires an existing classic trustline
@@ -570,13 +580,13 @@ async function main() {
       `Token balance: ${investorTokens} === ${INVEST_USDC} (exact)`,
     );
     assert(
-      investorUsdcAfterTrade === 500 - INVEST_USDC,
-      `Investor USDC after trade: ${investorUsdcAfterTrade} === ${500 - INVEST_USDC}`,
+      investorUsdcAfterTrade === investorUsdcBeforeTrade - INVEST_USDC,
+      `Investor USDC: ${investorUsdcAfterTrade} === ${investorUsdcBeforeTrade} - ${INVEST_USDC} (exact debit)`,
     );
-    // feeBps=0 → company gets 100% of investor's USDC (no contract retention)
+    // fixedFee=0 → company gets 100% of investor's USDC
     assert(
-      companyUsdcAfterTrade >= INVEST_USDC,
-      `Company received trade USDC: ${companyUsdcAfterTrade} >= ${INVEST_USDC} (feeBps=0, full amount)`,
+      companyUsdcAfterTrade === companyUsdcBeforeTrade + INVEST_USDC,
+      `Company USDC: ${companyUsdcAfterTrade} === ${companyUsdcBeforeTrade} + ${INVEST_USDC} (fixedFee=0, full amount)`,
     );
 
     // ─── PHASE 4: BULLET PAYOUT + BURN ────────────────────────
@@ -634,23 +644,62 @@ async function main() {
     const remainingTokens = finalBalance ? parseFloat(finalBalance.balance) : 0;
     assert(remainingTokens === 0, `Investor token balance after clawback: ${remainingTokens} (expected: 0)`);
 
-    // Check USDC balances post-payout (BULLET PAYOUT INVARIANTS)
-    // With 0% interest: payout = principal = INVEST_USDC
+    // ── BULLET PAYOUT INVARIANTS (with independent yield computation) ──
     const investorUsdcFinal = await getUSDCBalance(testInvestor.publicKey());
     const companyUsdcFinal = await getUSDCBalance(testCompany.publicKey());
-    const expectedPayout = INVEST_USDC; // principal + 0 interest
+
+    // Independent yield computation (DUAL COMPUTATION — never trust the service)
+    const maturityDate = yesterday;
+    const offerCreated = thirtyDaysAgo;  // offer.createdAt = thirtyDaysAgo
+    const yearsToMaturity = (maturityDate.getTime() - offerCreated.getTime()) / (365 * 24 * 60 * 60 * 1000);
+
+    // Investor gets investorRate, company pays annualRate
+    const independentInvestorInterest = Math.round(INVEST_USDC * (INVESTOR_RATE / 100) * yearsToMaturity * 100) / 100;
+    const independentCompanyInterest = Math.round(INVEST_USDC * (ANNUAL_RATE / 100) * yearsToMaturity * 100) / 100;
+    const independentSpread = Math.round(Math.max(0, independentCompanyInterest - independentInvestorInterest) * 100) / 100;
+    const independentPayout = INVEST_USDC + independentInvestorInterest;
 
     console.log(`\n  Final USDC → Investor: ${investorUsdcFinal}, Company: ${companyUsdcFinal}`);
-    console.log(`  Expected payout: ${expectedPayout} USDC (principal=${INVEST_USDC}, interest=0)`);
+    console.log(`  Yield computation: principal=${INVEST_USDC}, companyRate=${ANNUAL_RATE}%, investorRate=${INVESTOR_RATE}%, years=${yearsToMaturity.toFixed(6)}`);
+    console.log(`  Independent calc: investorInterest=${independentInvestorInterest}, companyInterest=${independentCompanyInterest}, spread=${independentSpread}`);
+    console.log(`  Independent payout to investor: ${independentPayout}`);
+    console.log(`  Service reported: total=${paymentResult.totalAmount}, fee=${paymentResult.platformFee}, net=${paymentResult.netToInvestors}`);
 
+    // Service net to investors matches independent investor-rate math
     assert(
-      investorUsdcFinal === investorUsdcAfterTrade + expectedPayout,
-      `Investor got paid: ${investorUsdcFinal} === ${investorUsdcAfterTrade} + ${expectedPayout}`,
+      parseFloat(paymentResult.netToInvestors) === independentPayout,
+      `Dual computation (investor): service net(${paymentResult.netToInvestors}) === independent(${independentPayout})`,
     );
+
+    // Platform fee matches the spread
+    assert(
+      parseFloat(paymentResult.platformFee) === independentSpread,
+      `Yield spread: platformFee(${paymentResult.platformFee}) === spread(${independentSpread})`,
+    );
+
+    // Investor actually received the payout on-chain
+    assert(
+      investorUsdcFinal === investorUsdcAfterTrade + independentPayout,
+      `Investor got paid: ${investorUsdcFinal} === ${investorUsdcAfterTrade} + ${independentPayout}`,
+    );
+
+    // Company balance decreased (they paid out)
     assert(
       companyUsdcFinal < companyUsdcAfterTrade,
       `Company paid out: ${companyUsdcFinal} < ${companyUsdcAfterTrade}`,
     );
+
+    // Payout > principal (interest was earned, rate > 0)
+    if (INVESTOR_RATE > 0) {
+      assert(
+        independentPayout > INVEST_USDC,
+        `Payout includes interest: ${independentPayout} > ${INVEST_USDC}`,
+      );
+      assert(
+        independentPayout < INVEST_USDC * 2,
+        `Payout sanity: ${independentPayout} < ${INVEST_USDC * 2} (no >100% for <1yr)`,
+      );
+    }
 
   } catch (err) {
     console.error('\n💥 FATAL ERROR:', err.message);

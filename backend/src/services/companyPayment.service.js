@@ -7,7 +7,7 @@ import { StellarService } from './stellar.service.js';
 import { PaymentService } from './payment.service.js';
 import { EmailService } from './email.service.js';
 import { AlertService } from './alert.service.js';
-import { ConfigService } from './config.service.js';
+// ConfigService import removed — yield fee now uses investorRate spread, not DIVIDEND_FEE_PERCENT
 import { MultiSigTransactionService } from './multiSigTransaction.service.js';
 import { Keypair, Asset, Operation, TransactionBuilder, Networks } from '@stellar/stellar-sdk';
 import { getUsdcIssuer } from '../config/stellar.js';
@@ -18,7 +18,9 @@ import logger from '../utils/logger.js';
 const log = logger.scope('CompanyPayment');
 // Configuration
 // Platform fee is handled on-chain in the Soroban trade() contract (fixed_fee field, v5+)
-const DIVIDEND_FEE_PERCENT_DEFAULT = 0.02; // Fallback if ConfigService has no value
+// Yield spread: company pays annualInterestRate, investor receives investorRate.
+// Spread (company rate - investor rate) → platform treasury revenue.
+// When investorRate is null: no spread, investor gets full company rate.
 const LATE_FEE_PERCENT_PER_DAY = 0;    // Disabled for MVP — no legal framework yet
 const GRACE_PERIOD_DAYS = 10;
 const DEFAULT_FEE_PERCENT = 0;         // Disabled for MVP — no legal framework yet
@@ -85,8 +87,10 @@ export class CompanyPaymentService {
         }
 
         const annualRate = parseFloat(offer.annualInterestRate || 0);
+        // Use investorRate for payouts; fall back to annualRate if null (no spread)
+        const effectiveInvestorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
         const periodsPerYear = this.getPeriodsPerYear(offer.paymentType);
-        const periodRate = annualRate / 100 / periodsPerYear;
+        const periodRate = effectiveInvestorRate / 100 / periodsPerYear;
 
         // Calculate per-investor owed amounts
         const breakdown = offer.investments.map(inv => {
@@ -234,10 +238,15 @@ export class CompanyPaymentService {
         );
 
         const annualRate = parseFloat(offer.annualInterestRate || 0);
+        // Use investorRate for payouts; fall back to annualRate if null (no spread)
+        const effectiveInvestorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
         const offerStartDate = offer.createdAt;
         const maturityDate = new Date(offer.maturityDate);
         const yearsToMaturity = (maturityDate - offerStartDate) / (365 * 24 * 60 * 60 * 1000);
-        const totalInterest = totalInvested * (annualRate / 100) * yearsToMaturity;
+        const totalInterest = totalInvested * (effectiveInvestorRate / 100) * yearsToMaturity;
+
+        // Company-side interest (for spread calculation)
+        const companyTotalInterest = totalInvested * (annualRate / 100) * yearsToMaturity;
 
         const breakdown = offer.investments.map(inv => {
             const investedAmount = parseFloat(inv.usdcAmount);
@@ -267,6 +276,7 @@ export class CompanyPaymentService {
             daysUntilMaturity: Math.ceil((maturityDate - new Date()) / (24 * 60 * 60 * 1000)),
             totalPrincipal,
             totalInterest: totalInterestOwed,
+            companyTotalInterest: Math.round(companyTotalInterest * 100) / 100,
             totalPayout,
             investorCount: breakdown.length,
             balanceSource: 'database',
@@ -437,10 +447,10 @@ export class CompanyPaymentService {
         //              NOT 2% × $12,000 = $240
         //
         const isBullet = offer.paymentType === 'bullet';
-        let totalAmount, feeBase, breakdown;
+        let totalAmount, feeBase, breakdown, bulletDetails;
 
         if (isBullet) {
-            const bulletDetails = await this.calculateBulletPayment(offerId);
+            bulletDetails = await this.calculateBulletPayment(offerId);
             if (bulletDetails.totalPayout === 0) {
                 throw new Error('No payment owed for this offer');
             }
@@ -457,9 +467,35 @@ export class CompanyPaymentService {
             breakdown = paymentDetails.breakdown;
         }
 
-        // Read fee from ConfigService (editable via Admin > Fee Config)
-        const feePercent = await ConfigService.getFloat('DIVIDEND_FEE_PERCENT', DIVIDEND_FEE_PERCENT_DEFAULT);
-        let platformFee = Math.round(feeBase * (feePercent / 100) * 100) / 100;
+        // Yield spread: platform keeps (annualInterestRate - investorRate) × invested × time
+        // When investorRate = annualInterestRate (or null), spread = 0
+        //
+        // MONEY FLOW:
+        //   Company pays:      totalAmount = principal + companyInterest
+        //   Platform keeps:    platformFee = companyInterest - investorInterest (the spread)
+        //   Investor receives: netToInvestors = principal + investorInterest
+        //
+        let platformFee;
+        if (isBullet) {
+            // Spread = company interest - investor interest
+            platformFee = Math.round(
+                Math.max(0, (bulletDetails.companyTotalInterest || bulletDetails.totalInterest) - bulletDetails.totalInterest) * 100
+            ) / 100;
+            // totalAmount = what company pays (investor payout + spread)
+            totalAmount = bulletDetails.totalPayout + platformFee;
+        } else {
+            // Periodic: calculate company-side interest for this period
+            const offer = await prisma.offer.findUnique({ where: { id: offerId } });
+            const annualRate = parseFloat(offer.annualInterestRate || 0);
+            const effectiveInvestorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
+            const spreadPct = Math.max(0, annualRate - effectiveInvestorRate);
+            // Scale the spread relative to the investor interest
+            platformFee = effectiveInvestorRate > 0
+                ? Math.round(totalAmount * (spreadPct / effectiveInvestorRate) * 100) / 100
+                : 0;
+            // totalAmount = what company pays (investor interest + spread)
+            totalAmount = totalAmount + platformFee;
+        }
         let netToInvestors = Math.round((totalAmount - platformFee) * 100) / 100;
 
         // ─── BULLET: batch guard + clawback ops ──────────────────────────
@@ -520,11 +556,17 @@ export class CompanyPaymentService {
                 throw new Error('No remaining investors to pay in this batch');
             }
 
-            // Recalculate fee for this batch's subset
-            feeBase = breakdown.reduce((sum, b) => sum + b.interest, 0);
-            totalAmount = breakdown.reduce((sum, b) => sum + b.totalPayout, 0);
-            platformFee = Math.round(feeBase * (feePercent / 100) * 100) / 100;
-            netToInvestors = Math.round((totalAmount - platformFee) * 100) / 100;
+            // Recalculate spread fee for this batch's subset
+            const batchInvestorInterest = breakdown.reduce((sum, b) => sum + b.interest, 0);
+            const batchInvestorPayout = breakdown.reduce((sum, b) => sum + b.totalPayout, 0);
+            // Spread ratio: if full set had companyInterest=X and investorInterest=Y, batch uses same ratio
+            const spreadRatio = bulletDetails.totalInterest > 0
+                ? (bulletDetails.companyTotalInterest - bulletDetails.totalInterest) / bulletDetails.totalInterest
+                : 0;
+            platformFee = Math.round(Math.max(0, batchInvestorInterest * spreadRatio) * 100) / 100;
+            // totalAmount = what company pays (investor payout + spread)
+            totalAmount = batchInvestorPayout + platformFee;
+            netToInvestors = batchInvestorPayout;
         }
 
         // Build transaction with payment operations
@@ -545,30 +587,25 @@ export class CompanyPaymentService {
         // Ops 2+: Investor payments
         let investorOps;
         if (isBullet) {
-            // Bullet: principal untaxed, fee deducted from interest only
-            const interestFeeRatio = feeBase > 0 ? (feeBase - platformFee) / feeBase : 1;
+            // Bullet: investors get full investorRate payout (spread already sent to treasury above)
             investorOps = breakdown
                 .filter(b => b.investorWallet && b.totalPayout > 0)
                 .map(b => {
-                    const adjustedInterest = Math.round(b.interest * interestFeeRatio * 100) / 100;
-                    const payout = b.principal + adjustedInterest;
                     return Operation.payment({
                         destination: b.investorWallet,
                         asset: usdcAsset,
-                        amount: Math.max(payout, 0.0000001).toFixed(7),
+                        amount: Math.max(b.totalPayout, 0.0000001).toFixed(7),
                     });
                 });
         } else {
-            // Periodic: everything is interest, apply feeRatio uniformly
-            const feeRatio = totalAmount > 0 ? netToInvestors / totalAmount : 1;
+            // Periodic: investors get full investorRate interest (spread already sent to treasury above)
             investorOps = breakdown
                 .filter(b => b.investorWallet && b.interestOwed > 0)
                 .map(b => {
-                    const adjustedAmount = Math.round(b.interestOwed * feeRatio * 100) / 100;
                     return Operation.payment({
                         destination: b.investorWallet,
                         asset: usdcAsset,
-                        amount: Math.max(adjustedAmount, 0.0000001).toFixed(7),
+                        amount: Math.max(b.interestOwed, 0.0000001).toFixed(7),
                     });
                 });
         }
@@ -662,7 +699,11 @@ export class CompanyPaymentService {
         try {
             const offer = await prisma.offer.findUnique({ where: { id: offerId } });
             const isBullet = offer.paymentType === 'bullet';
-            const feePercent = await ConfigService.getFloat('DIVIDEND_FEE_PERCENT', DIVIDEND_FEE_PERCENT_DEFAULT);
+
+            // Compute spread-based fee
+            const annualRate = parseFloat(offer.annualInterestRate || 0);
+            const effectiveInvestorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
+            const spreadPct = Math.max(0, annualRate - effectiveInvestorRate);
 
             // ─── BULLET: queue for admin multisig (DO NOT submit to Stellar) ───
             //
@@ -677,8 +718,10 @@ export class CompanyPaymentService {
                 const bulletDetails = await this.calculateBulletPayment(offerId);
                 const issuerPublicKey = keyManager.getIssuerPublicKey();
 
-                // Calculate fee breakdown for metadata
-                const totalFee = Math.round(bulletDetails.totalInterest * (feePercent / 100) * 100) / 100;
+                // Calculate fee breakdown for metadata — use spread
+                const totalFee = Math.round(
+                    Math.max(0, (bulletDetails.companyTotalInterest || bulletDetails.totalInterest) - bulletDetails.totalInterest) * 100
+                ) / 100;
 
                 const txData = {
                     operationType: 'maturity_clawback',
@@ -690,7 +733,7 @@ export class CompanyPaymentService {
                         offerId,
                         assetCode: offer.assetCode,
                         breakdown: batchInfo?.breakdown || bulletDetails.breakdown,
-                        feePercent,
+                        spreadPct,
                         totalFee,
                         totalPaid: bulletDetails.totalPayout,
                     },
@@ -782,7 +825,7 @@ export class CompanyPaymentService {
                     offer,
                     paymentDetails.breakdown,
                     result.transactionHash,
-                    feePercent,
+                    spreadPct,
                     false // isPeriodic
                 );
 
@@ -817,31 +860,33 @@ export class CompanyPaymentService {
      * @param {Object} offer - Offer record
      * @param {Array} breakdown - Per-investor payment breakdown
      * @param {string} txHash - On-chain transaction hash
-     * @param {number} feePercent - Platform fee percentage
+     * @param {number} spreadPct - Yield spread percentage (annualRate - investorRate)
      * @param {boolean} isBullet - true = bullet, false = periodic
      * @returns {Promise<{records: Array, totalFee: number}>}
      */
-    static async _recordPayments(offer, breakdown, txHash, feePercent, isBullet) {
-        const feeRatio = feePercent > 0 ? (100 - feePercent) / 100 : 1;
+    static async _recordPayments(offer, breakdown, txHash, spreadPct, isBullet) {
+        // spreadRatio: portion of investor interest that goes to platform
+        // e.g. annualRate=12, investorRate=10 => spreadPct=2, investorRate=10 => ratio = 2/10 = 0.2
+        const effectiveInvestorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
+        const spreadRatio = effectiveInvestorRate > 0 ? spreadPct / effectiveInvestorRate : 0;
         const records = [];
 
         for (const payment of breakdown) {
             let gross, base, net, fee, tokenBalance;
 
             if (isBullet) {
-                // Bullet: fee on interest only, principal untaxed
+                // Bullet: spread on interest only, principal untaxed
                 gross = payment.totalPayout;
                 base = payment.interest;
-                const netInterest = Math.round(base * feeRatio * 100) / 100;
-                fee = Math.round((base - netInterest) * 100) / 100;
-                net = payment.principal + netInterest;
+                fee = Math.round(base * spreadRatio * 100) / 100;
+                net = payment.principal + (base - fee);
                 tokenBalance = payment.principal;
             } else {
-                // Periodic: totalOwed IS interest, fee on everything
+                // Periodic: totalOwed IS interest, spread applies
                 gross = payment.interestOwed;
                 base = payment.interestOwed;
-                net = Math.round(gross * feeRatio * 100) / 100;
-                fee = Math.round((gross - net) * 100) / 100;
+                fee = Math.round(gross * spreadRatio * 100) / 100;
+                net = gross - fee;
                 tokenBalance = payment.tokenBalance;
             }
 
@@ -876,7 +921,7 @@ export class CompanyPaymentService {
                         assetCode: offer.assetCode,
                         category: 'DIVIDEND',
                         sourceId: offer.id,
-                        description: `${isBullet ? 'Bullet maturity' : 'Periodic'} payment fee (${feePercent}%)`,
+                        description: `${isBullet ? 'Bullet maturity' : 'Periodic'} yield spread (${spreadPct}pp)`,
                         transactionHash: txHash,
                     }
                 });
