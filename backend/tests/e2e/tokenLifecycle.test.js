@@ -409,7 +409,7 @@ async function main() {
         buyToken: usdcSacId,
         treasury: testTreasury.publicKey(),
         company: testCompany.publicKey(),
-        feeBps: 0,          // No platform fee for simplicity
+        fixedFee: 0n,        // No processing fee for test simplicity
         sellPrice: SELL_PRICE,
         buyPrice: BUY_PRICE,
         deadlineLedger: 0,  // No deadline

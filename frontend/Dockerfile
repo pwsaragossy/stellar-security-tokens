@@ -15,7 +15,7 @@ COPY package*.json ./
 COPY frontend/package*.json ./frontend/
 
 # Install dependencies
-RUN cd frontend && npm ci
+RUN cd frontend && npm ci --legacy-peer-deps
 
 # Copy frontend source code
 COPY frontend/ ./frontend/

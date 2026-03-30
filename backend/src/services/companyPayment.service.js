@@ -17,7 +17,7 @@ import logger from '../utils/logger.js';
 // Scoped logger for this service
 const log = logger.scope('CompanyPayment');
 // Configuration
-// Platform fee is handled on-chain in the Soroban trade() contract (fee_bps field)
+// Platform fee is handled on-chain in the Soroban trade() contract (fixed_fee field, v5+)
 const DIVIDEND_FEE_PERCENT_DEFAULT = 0.02; // Fallback if ConfigService has no value
 const LATE_FEE_PERCENT_PER_DAY = 0;    // Disabled for MVP — no legal framework yet
 const GRACE_PERIOD_DAYS = 10;

@@ -136,6 +136,7 @@ export const offersApi = {
       status: 'approved' | 'rejected' | 'under_review';
       rejection_reason?: string;
       due_diligence_notes?: string;
+      /** @deprecated v4 only — v5 uses fixed processingFee */
       platform_fee_bps?: number;
     }
   ): Promise<ApiResponse> => {
