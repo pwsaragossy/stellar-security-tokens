@@ -392,10 +392,6 @@ model Offer {
   sorobanInitStatus   String?   @map("soroban_init_status") @db.VarChar(20)
   sorobanInitError    String?   @map("soroban_init_error") @db.Text
 
-  // Platform fee in basis points. DEPRECATED — replaced by fixed processing fee in v5 contracts.
-  // Kept for backward compatibility with v4 contracts. New offers use processingFee instead.
-  platformFeeBps      Int       @default(0) @map("platform_fee_bps")
-
   // Fixed processing fee per trade in USDC. Deducted from investor's trade amount → treasury.
   // 5.0 = $5 USDC per trade. 0 = no processing fee. Globally configurable via ConfigService.
   processingFee       Decimal   @default(5.0) @map("processing_fee") @db.Decimal(20, 7)

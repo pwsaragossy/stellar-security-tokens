@@ -7,7 +7,7 @@ import { StellarService } from './stellar.service.js';
 import { PaymentService } from './payment.service.js';
 import { EmailService } from './email.service.js';
 import { AlertService } from './alert.service.js';
-// ConfigService import removed — yield fee now uses investorRate spread, not DIVIDEND_FEE_PERCENT
+
 import { MultiSigTransactionService } from './multiSigTransaction.service.js';
 import { Keypair, Asset, Operation, TransactionBuilder, Networks } from '@stellar/stellar-sdk';
 import { getUsdcIssuer } from '../config/stellar.js';
@@ -427,24 +427,21 @@ export class CompanyPaymentService {
             throw new Error('Company does not have a Stellar wallet linked');
         }
 
-        // Fee strategy by payment type:
+        // Yield spread model by payment type:
         //
         //  PERIODIC (monthly/quarterly/annual):
-        //    Company pays: INTEREST ONLY (principal stays as tokens)
-        //    feeBase = totalOwed = interest
-        //    Fee = feePercent × interest
-        //    Per investor: interestOwed × (1 - fee%)
+        //    Company pays: interest at annualInterestRate
+        //    Investor gets: interest at investorRate
+        //    Spread = (annualRate - investorRate) × principal × time → treasury
         //
         //  BULLET (maturity payout):
-        //    Company pays: PRINCIPAL + INTEREST
-        //    feeBase = totalInterest ONLY  ← principal is untaxed
-        //    Fee = feePercent × totalInterest
-        //    Per investor: principal + (interest × (1 - fee%))
+        //    Company pays: PRINCIPAL + interest at annualInterestRate
+        //    Investor gets: PRINCIPAL + interest at investorRate
+        //    Spread = companyInterest - investorInterest → treasury
         //
-        //  Example: $10K invested, 10% APY, 2 years, 2% fee
-        //    Periodic: $1000/yr interest, fee = $20/yr
-        //    Bullet:   $12,000 total, fee = 2% × $2,000 = $40
-        //              NOT 2% × $12,000 = $240
+        //  Example: $10K invested, company 12% APY, investor 10% APY, 1 year
+        //    Periodic: investor gets $1000, treasury $200 spread
+        //    Bullet:   investor gets $11,000, treasury $200 spread
         //
         const isBullet = offer.paymentType === 'bullet';
         let totalAmount, feeBase, breakdown, bulletDetails;

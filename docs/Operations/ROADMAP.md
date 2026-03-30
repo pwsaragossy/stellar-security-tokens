@@ -131,24 +131,28 @@ Reference: Security audit Fix #4 (Mar 2026), `companyUserRoutes.js` comments.
 - [x] E2E verified: 75/75 Rust, 38/38 E2E lifecycle
 - [x] Updated Project Bible `smart_contract_layer.md`
 
-#### Change 2 — Yield Spread (Invisible Fee)
-- [ ] Add `investorRate` field to Offer schema
-- [ ] Payout math: company pays at `annualInterestRate`, investor receives at `investorRate`, delta → treasury
-- [ ] Remove `DIVIDEND_FEE_PERCENT` logic entirely from `companyPayment.service.js`
+#### Change 2 — Yield Spread ✅ (2026-03-30)
+- [x] Added `investorRate` field to Prisma Offer schema + migration
+- [x] Payout math: company pays at `annualInterestRate`, investor receives at `investorRate`, delta → treasury
+- [x] Removed `DIVIDEND_FEE_PERCENT` constant + `ConfigService` import entirely
+- [x] Spread-based fee in `createPaymentTransaction`, `processSignedPayment`, `_recordPayments`
+- [x] Updated `multiSigTransaction.service.js` processEffects to use `spreadPct`
+- [x] E2E verified with dual computation: 12% company / 10% investor → $0.16 spread on $100 over 29 days
+- [x] 42/42 E2E assertions pass
 - [ ] Frontend: investor sees `investorRate` as "APY", company sees `annualInterestRate` as "Cost of Capital"
-- [ ] Migration: existing offers default `investorRate = annualInterestRate` (spread=0)
 
-#### Change 3 — Admin/AUM Fee (Recurring Monthly)
+#### Change 3 — Admin/AUM Fee (Deferred)
+> **Build when:** $1M+ AUM and finer-grained fee control needed. Yield spread (Change 2) already
+> captures platform revenue. AUM fee adds complexity without clear MVP value.
+
 - [ ] Add `adminFeePercent` field to Offer schema (default 1.0%)
 - [ ] New `adminFee.service.js` — monthly cron charges `AUM × adminFeePercent / 12`
 - [ ] Company wallet → treasury, automated USDC transfer
 - [ ] FeeLog category: `ADMINISTRATION`
 - [ ] Insufficient balance handling: grace period → auto-pause offer
 
-#### Change 4 — Network Fee (evaluate: merge with Change 1?)
-- [ ] Decide: is the $5 processing fee (Change 1) sufficient, or add separate $0.50 network fee?
-- [ ] If merged: $5 covers everything (processing + network). Done.
-- [ ] If separate: implement as second fixed fee in contract
+#### Change 4 — Network Fee ✅ (Merged with Change 1)
+- [x] Decision: $5 processing fee covers everything (processing + network). No separate fee needed.
 
 #### Change 5 — Late/Default Fee Enablement
 > **Build when:** Legal framework established (CVM/contract terms reviewed by counsel).

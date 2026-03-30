@@ -236,7 +236,7 @@ export class Offer {
    * @param {string} [rejectionReason] - Motivo da rejeição (se aplicável)
    * @returns {Promise<Object|null>} Oferta atualizada ou null
    */
-  static async updateStatus(id, status, reviewedBy = null, rejectionReason = null, platformFeeBps = undefined) {
+  static async updateStatus(id, status, reviewedBy = null, rejectionReason = null) {
     const updateData = {
       status: status.toLowerCase(),
     };
@@ -248,13 +248,6 @@ export class Offer {
 
     if (rejectionReason !== null) {
       updateData.rejectionReason = rejectionReason;
-    }
-
-    if (platformFeeBps !== undefined && platformFeeBps !== null) {
-      const bps = parseInt(platformFeeBps);
-      if (bps >= 0 && bps <= 10000) {
-        updateData.platformFeeBps = bps;
-      }
     }
 
     try {
