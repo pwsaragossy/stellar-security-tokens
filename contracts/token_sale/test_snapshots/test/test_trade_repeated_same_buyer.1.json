@@ -72,7 +72,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "u32": 10000
+                  "i128": "0"
                 },
                 {
                   "u32": 1
@@ -1077,10 +1077,10 @@
                           },
                           {
                             "key": {
-                              "symbol": "fee_bps"
+                              "symbol": "fixed_fee"
                             },
                             "val": {
-                              "u32": 10000
+                              "i128": "0"
                             }
                           },
                           {
@@ -1216,7 +1216,7 @@
                     "symbol": "Balance"
                   },
                   {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                   }
                 ]
               },

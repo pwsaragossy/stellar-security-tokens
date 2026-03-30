@@ -72,7 +72,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
                 },
                 {
-                  "u32": 10000
+                  "i128": "0"
                 },
                 {
                   "u32": 1
@@ -535,10 +535,10 @@
                           },
                           {
                             "key": {
-                              "symbol": "fee_bps"
+                              "symbol": "fixed_fee"
                             },
                             "val": {
-                              "u32": 10000
+                              "i128": "0"
                             }
                           },
                           {
@@ -933,7 +933,7 @@
                     "symbol": "Balance"
                   },
                   {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                   }
                 ]
               },
@@ -945,7 +945,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "800000000"
+                      "i128": "0"
                     }
                   },
                   {
@@ -985,7 +985,7 @@
                     "symbol": "Balance"
                   },
                   {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
                   }
                 ]
               },
@@ -997,7 +997,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "0"
+                      "i128": "800000000"
                     }
                   },
                   {

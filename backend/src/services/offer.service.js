@@ -416,7 +416,7 @@ export class OfferService {
       const companyWallet = deployedOffer.company?.stellarContractId || deployedOffer.company?.stellarPublicKey;
       if (!companyWallet) throw new Error(`Company wallet not found for offer #${offer.id}`);
 
-      const feeBps = deployedOffer.platformFeeBps ?? 0;
+      const fixedFee = BigInt(Math.floor((parseFloat(deployedOffer.processingFee) || 5) * 10_000_000));
 
       const rules = typeof deployedOffer.offerRules === 'string'
         ? JSON.parse(deployedOffer.offerRules)
@@ -432,7 +432,7 @@ export class OfferService {
           buyToken,
           treasury: km.getTreasuryPublicKey(),
           company: companyWallet,
-          feeBps,
+          fixedFee,
           sellPrice: parseInt(deployedOffer.unitPrice * 10000000) || 1,
           buyPrice: 10000000,
           deadlineLedger: 0,

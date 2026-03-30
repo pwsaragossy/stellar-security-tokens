@@ -86,10 +86,10 @@
                           },
                           {
                             "key": {
-                              "symbol": "fee_bps"
+                              "symbol": "fixed_fee"
                             },
                             "val": {
-                              "u32": 10000
+                              "i128": "0"
                             }
                           },
                           {

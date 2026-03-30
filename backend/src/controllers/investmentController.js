@@ -184,12 +184,10 @@ export const purchaseInvestment = async (req, res, next) => {
       }
     }
 
-    // Fee Logic — platform fee is enforced on-chain via contract fee_bps.
+    // Fee Logic — fixed processing fee is enforced on-chain via contract fixed_fee.
     // Here we log it for audit trail only.
     const grossAmount = parseFloat(usdcAmount);
-    const fixedFee = await ConfigService.getFloat('BLOCKCHAIN_OPERATION_FEE_FIXED', 0);
-    const platformFeeBps = offer.platformFeeBps ?? 0;
-    const feePercent = platformFeeBps / 100; // bps → percent
+    const processingFee = parseFloat(offer.processingFee) || 5; // $5 default
 
     if (grossAmount <= 0) {
       return res.status(400).json({
@@ -199,27 +197,16 @@ export const purchaseInvestment = async (req, res, next) => {
     }
 
     const tokenAmount = grossAmount;
-    const totalDeduction = grossAmount; // Fixed fee NOT routed on-chain — keep at $0 until contract upgrade
-    const investmentFeeAmount = grossAmount * (feePercent / 100);
+    const totalDeduction = grossAmount; // Investor sends gross amount; contract deducts fixed fee on-chain
 
-    // Log Fees
-    if (fixedFee > 0) {
+    // Log processing fee for audit
+    if (processingFee > 0) {
       await ConfigService.logFee({
-        amount: fixedFee,
+        amount: processingFee,
         assetCode: 'USDC',
-        category: 'BLOCKCHAIN_FEE',
-        sourceId: investor.id,
-        description: `Blockchain Operation Fee: ${fixedFee} USDC (Paid by Investor)`,
-      });
-    }
-
-    if (investmentFeeAmount > 0) {
-      await ConfigService.logFee({
-        amount: investmentFeeAmount,
-        assetCode: 'USDC',
-        category: 'INVESTMENT_FEE',
+        category: 'PROCESSING_FEE',
         sourceId: offerId || null,
-        description: `Platform Fee: ${platformFeeBps}bps (${investmentFeeAmount.toFixed(2)} USDC) - Enforced on-chain`,
+        description: `Processing Fee: $${processingFee} USDC per trade — enforced on-chain`,
       });
     }
 
@@ -385,9 +372,9 @@ export const getFeeSchedule = async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        blockchainFee,
-        platformFee: 'Per-offer (set at approval, enforced on-chain)',
-        description: 'Blockchain fee is added on top of the investment amount. Platform fee is set per-offer and enforced by the smart contract.',
+        processingFee: 5.0,    // $5 USDC per trade (globally configurable)
+        yieldFee: 'Spread-based (company rate - investor rate)',
+        description: 'A fixed $5 processing fee is deducted per trade on-chain. Yield revenue is earned via the spread between company cost of capital and investor advertised return.',
       },
     });
   } catch (error) {

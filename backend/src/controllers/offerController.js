@@ -122,9 +122,12 @@ export class OfferController {
       // Supply tracking (computed, attached by controller)
       tokensSold: offer._tokensSold ?? null,
       tokens_sold: offer._tokensSold ?? null,
-      // Platform fee (basis points, set at approval, immutable on-chain)
+      // Platform fee (DEPRECATED — v4 contracts only, replaced by processingFee in v5)
       platformFeeBps: offer.platformFeeBps ?? 0,
       platform_fee_bps: offer.platformFeeBps ?? 0,
+      // Fixed processing fee per trade in USDC (v5 contracts)
+      processingFee: parseFloat(offer.processingFee) || 5.0,
+      processing_fee: parseFloat(offer.processingFee) || 5.0,
       // Maturity cutoff (computed from maturityDate - cutoffDays)
       investmentCutoffDate: offer.maturityDate
         ? new Date(new Date(offer.maturityDate).getTime() - cutoffDays * 24 * 60 * 60 * 1000).toISOString()
@@ -706,6 +709,7 @@ export class OfferController {
   static async reviewOffer(req, res) {
     try {
       const { id } = req.params;
+      // platform_fee_bps: DEPRECATED — kept for v4 backward compat. v5 contracts use fixed processingFee.
       const { status, rejection_reason, platform_fee_bps } = req.body;
 
       if (!status || !['approved', 'rejected', 'under_review'].includes(status)) {

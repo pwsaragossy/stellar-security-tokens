@@ -3,7 +3,7 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
 };
 
-const CONTRACT_VERSION: u32 = 4;
+const CONTRACT_VERSION: u32 = 5;
 // ~30 days at 5s per ledger
 const TTL_THRESHOLD: u32 = 518_400;
 const TTL_EXTEND: u32 = 518_400;
@@ -24,7 +24,7 @@ pub enum SaleError {
     BuyerBlocked = 10,
     NoPendingAdmin = 11,
     NotPendingAdmin = 12,
-    InvalidFeeBps = 13,
+    InsufficientForFee = 13,
 }
 
 #[contracttype]
@@ -42,17 +42,14 @@ pub enum DataKey {
 /// - `admin`: cold key / multisig — controls upgrade, withdraw, drain, freeze, admin transfer, fee updates
 /// - `seller`: hot key — controls pause, price updates (day-to-day operations)
 ///
-/// Fee split model ("payout slider"):
+/// Fixed fee model:
 /// ```text
 ///   Investor ──$100──▶ trade()
-///                        ├── company_amount = amount × (10000 - fee_bps) / 10000
-///                        └── fee_amount    = amount - company_amount
-///                        ├── if company_amount > 0: send to offer.company
-///                        └── if fee_amount > 0:     send to offer.treasury (platform)
+///                        ├── fixed_fee ($5)  → treasury (processing fee)
+///                        └── remainder ($95) → company (full capital)
 /// ```
-/// - `fee_bps = 10000`: 100% to treasury (platform keeps all — current default)
-/// - `fee_bps = 0`:     100% to company (sponsored — platform fee waived)
-/// - `fee_bps = 200`:   2% to treasury, 98% to company
+/// - `fixed_fee = 50_000_000`: $5 USDC per trade (1 USDC = 10^7 stroops)
+/// - `fixed_fee = 0`:          no fee, company gets 100%
 ///
 /// Compliance fields:
 /// - `deadline_ledger`: sale closes after this ledger (0 = no deadline)
@@ -67,7 +64,7 @@ pub struct Offer {
     pub buy_token: Address,
     pub treasury: Address,
     pub company: Address,
-    pub fee_bps: u32,
+    pub fixed_fee: i128,
     pub sell_price: u32,
     pub buy_price: u32,
     pub is_active: bool,
@@ -97,6 +94,7 @@ impl TokenSale {
     ///
     /// `admin`: high-privilege key (upgrade, withdraw, drain, freeze). Ideally multisig/cold.
     /// `seller`: operational key (pause, price). Can be same as admin for MVP.
+    /// `fixed_fee`: flat fee per trade in stroops (e.g., 50_000_000 = $5 USDC). 0 = no fee.
     /// `deadline_ledger`: ledger sequence after which trades are rejected (0 = no deadline).
     /// `min_buy_amount`: minimum buy_token amount per trade in stroops (0 = no minimum).
     /// `max_buy_per_buyer`: cumulative buy_token cap per buyer in stroops (0 = no cap).
@@ -108,7 +106,7 @@ impl TokenSale {
         buy_token: Address,
         treasury: Address,
         company: Address,
-        fee_bps: u32,
+        fixed_fee: i128,
         sell_price: u32,
         buy_price: u32,
         deadline_ledger: u32,
@@ -121,8 +119,8 @@ impl TokenSale {
         if buy_price == 0 || sell_price == 0 {
             return Err(SaleError::ZeroPrice);
         }
-        if fee_bps > 10_000 {
-            return Err(SaleError::InvalidFeeBps);
+        if fixed_fee < 0 {
+            return Err(SaleError::InvalidAmount);
         }
         admin.require_auth();
         write_offer(
@@ -134,7 +132,7 @@ impl TokenSale {
                 buy_token,
                 treasury,
                 company,
-                fee_bps,
+                fixed_fee,
                 sell_price,
                 buy_price,
                 is_active: false,
@@ -202,22 +200,17 @@ impl TokenSale {
 
         let contract = e.current_contract_address();
 
+        // Guard: trade must cover the fixed fee (investor always pays at least $5)
+        if offer.fixed_fee > 0 && buy_token_amount <= offer.fixed_fee {
+            return Err(SaleError::InsufficientForFee);
+        }
+
         // Atomic: if any transfer fails, all revert (Soroban guarantee)
         buy_token_client.transfer(&buyer, &contract, &buy_token_amount);
         sell_token_client.transfer(&contract, &buyer, &sell_token_amount);
 
-        // Fee split: company gets (100% - fee), treasury (platform) gets fee
-        let fee = if offer.fee_bps == 0 {
-            0i128
-        } else if offer.fee_bps >= 10_000 {
-            buy_token_amount
-        } else {
-            buy_token_amount
-                .checked_mul(offer.fee_bps as i128)
-                .ok_or(SaleError::Overflow)?
-                .checked_div(10_000)
-                .ok_or(SaleError::Overflow)?
-        };
+        // Fixed fee: treasury gets flat fee, company gets remainder
+        let fee = offer.fixed_fee;
         let company_amount = buy_token_amount
             .checked_sub(fee)
             .ok_or(SaleError::Overflow)?;

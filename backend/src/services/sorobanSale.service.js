@@ -163,7 +163,7 @@ export class SorobanSaleService {
         buyToken,
         treasury,
         company,
-        feeBps = 10000,
+        fixedFee = 50_000_000n,  // $5 USDC in stroops (default processing fee)
         sellPrice,
         buyPrice,
         deadlineLedger = 0,
@@ -180,7 +180,7 @@ export class SorobanSaleService {
             new Address(buyToken).toScVal(),
             new Address(treasury).toScVal(),
             new Address(company).toScVal(),
-            nativeToScVal(feeBps, { type: 'u32' }),
+            nativeToScVal(fixedFee, { type: 'i128' }),
             nativeToScVal(sellPrice, { type: 'u32' }),
             nativeToScVal(buyPrice, { type: 'u32' }),
             nativeToScVal(deadlineLedger, { type: 'u32' }),
