@@ -287,7 +287,7 @@ export function OfferDetails() {
             <div className="grid sm:grid-cols-2 gap-x-10 divide-y divide-white/8 sm:divide-y-0">
                 <div className="divide-y divide-white/8">
                     {(offer.investor_rate || offer.annual_interest_rate) && (
-                        <DetailRow label="Interest Rate" value={`${parseFloat((offer.investor_rate ?? offer.annual_interest_rate).toString())}% APY`} />
+                        <DetailRow label="Interest Rate" value={`${parseFloat((offer.investor_rate ?? offer.annual_interest_rate ?? 0).toString())}% APY`} />
                     )}
                     <DetailRow label="Payment Schedule" value={paymentLabel} />
                     {offer.maturity_date && (

@@ -123,7 +123,7 @@ export class SorobanEventIndexer {
             });
         } catch (err) {
             // getEvents might fail if startLedger is too old (pruned)
-            if (err.message?.includes('start is before oldest ledger')) {
+            if (err.message?.includes('start is before oldest ledger') || err.message?.includes('startLedger must be within the ledger range')) {
                 const latestLedger = await rpcServer.getLatestLedger();
                 const newStart = Math.max(1, latestLedger.sequence - INITIAL_LOOKBACK_LEDGERS);
                 log.warn(`[pollContract] Cursor too old for ${contractId}, resetting to ${newStart}`);
