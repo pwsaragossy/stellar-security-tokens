@@ -156,7 +156,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
                 {
-                  "i128": "1000000000"
+                  "i128": "1050000000"
                 }
               ]
             }
@@ -216,7 +216,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
                     },
                     {
-                      "i128": "1000000000"
+                      "i128": "1050000000"
                     }
                   ]
                 }
@@ -227,6 +227,8 @@
         }
       ]
     ],
+    [],
+    [],
     [],
     []
   ],
@@ -712,7 +714,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "950000000"
+                      "i128": "1000000000"
                     }
                   },
                   {

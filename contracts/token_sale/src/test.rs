@@ -1068,19 +1068,22 @@ fn test_trade_fixed_fee_5_usdc() {
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
 
-    // fixed_fee = 50_000_000 stroops = $5 USDC
+    // fixed_fee = 50_000_000 stroops = $5 USDC (additive)
     let fee: i128 = 50_000_000;
     sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &company, &fee, &1, &1, &0, &0, &0);
     sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
-    buy_token_admin.mint(&buyer, &(100 * 10_000_000i128));
+    // Buyer needs 100 USDC + $5 fee = 105 USDC
+    buy_token_admin.mint(&buyer, &(105 * 10_000_000i128));
     sale.set_active(&true);
 
-    let amount: i128 = 100 * 10_000_000; // 100 USDC
+    let amount: i128 = 100 * 10_000_000; // 100 USDC investment
     sale.trade(&buyer, &amount);
-    // fee = $5 (50_000_000), company = $95 (950_000_000)
-    assert_eq!(buy_token.balance(&treasury), 50_000_000);
-    assert_eq!(buy_token.balance(&company), 950_000_000);
+    // Additive fee: company gets full $100, treasury gets $5
+    assert_eq!(buy_token.balance(&treasury), 50_000_000);       // $5 fee
+    assert_eq!(buy_token.balance(&company), 100 * 10_000_000);  // $100 investment
+    assert_eq!(buy_token.balance(&buyer), 0);                   // 105 - 105 = 0
+    assert_eq!(sell_token.balance(&buyer), 100 * 10_000_000);   // 100 tokens
 }
 
 #[test]
@@ -1110,7 +1113,7 @@ fn test_trade_fixed_fee_zero_no_fee() {
 }
 
 #[test]
-fn test_trade_insufficient_for_fee() {
+fn test_trade_insufficient_balance_for_fee() {
     let e = Env::default();
     e.mock_all_auths();
 
@@ -1123,21 +1126,18 @@ fn test_trade_insufficient_for_fee() {
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
 
-    // fixed_fee = $5. Trade $5 → InsufficientForFee (nothing left for company)
+    // fixed_fee = $5. Buyer has $10, wants to buy $10 → needs $15, fails
     let fee: i128 = 50_000_000;
     sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &company, &fee, &1, &1, &0, &0, &0);
     sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
-    buy_token_admin.mint(&buyer, &(100 * 10_000_000i128));
+    // Buyer only has $10, but $10 trade + $5 fee = $15 needed
+    buy_token_admin.mint(&buyer, &(10 * 10_000_000i128));
     sale.set_active(&true);
 
-    // Exactly $5 → fails (trade must be strictly greater than fee)
-    let result = sale.try_trade(&buyer, &fee);
-    assert_eq!(result, Err(Ok(SaleError::InsufficientForFee)));
-
-    // $3 → fails
-    let result = sale.try_trade(&buyer, &(30_000_000i128));
-    assert_eq!(result, Err(Ok(SaleError::InsufficientForFee)));
+    // $10 trade → needs $15, but only has $10 → transfer fails (Soroban reverts)
+    let result = sale.try_trade(&buyer, &(10 * 10_000_000i128));
+    assert!(result.is_err());
 }
 
 #[test]
@@ -1154,18 +1154,20 @@ fn test_trade_fixed_fee_just_above() {
     let sale_id = e.register(TokenSale, ());
     let sale = TokenSaleClient::new(&e, &sale_id);
 
-    // fixed_fee = $5. Trade $5.01 → company gets $0.01
+    // fixed_fee = $5. Trade 1 stroop → company gets 1 stroop, treasury gets $5
     let fee: i128 = 50_000_000;
     sale.create(&admin, &admin, &sell_token.address, &buy_token.address, &treasury, &company, &fee, &1, &1, &0, &0, &0);
     sell_token_admin.mint(&admin, &(1_000 * 10_000_000i128));
     sell_token.transfer(&admin, &sale_id, &(1_000 * 10_000_000i128));
-    buy_token_admin.mint(&buyer, &(100 * 10_000_000i128));
+    // Buyer needs 1 stroop + $5 fee
+    buy_token_admin.mint(&buyer, &(50_000_001i128));
     sale.set_active(&true);
 
-    let just_above: i128 = 50_000_001; // $5.0000001
-    sale.trade(&buyer, &just_above);
+    let one_stroop: i128 = 1;
+    sale.trade(&buyer, &one_stroop);
     assert_eq!(buy_token.balance(&treasury), 50_000_000); // $5 fee
-    assert_eq!(buy_token.balance(&company), 1);            // 1 stroop
+    assert_eq!(buy_token.balance(&company), 1);            // 1 stroop investment
+    assert_eq!(sell_token.balance(&buyer), 1);             // 1 token
 }
 
 #[test]

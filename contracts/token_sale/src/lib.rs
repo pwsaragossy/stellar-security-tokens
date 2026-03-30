@@ -200,24 +200,20 @@ impl TokenSale {
 
         let contract = e.current_contract_address();
 
-        // Guard: trade must cover the fixed fee (investor always pays at least $5)
-        if offer.fixed_fee > 0 && buy_token_amount <= offer.fixed_fee {
-            return Err(SaleError::InsufficientForFee);
-        }
-
-        // Atomic: if any transfer fails, all revert (Soroban guarantee)
-        buy_token_client.transfer(&buyer, &contract, &buy_token_amount);
-        sell_token_client.transfer(&contract, &buyer, &sell_token_amount);
-
-        // Fixed fee: treasury gets flat fee, company gets remainder
+        // Fee is additive: investor pays buy_token_amount + fixed_fee
         let fee = offer.fixed_fee;
-        let company_amount = buy_token_amount
-            .checked_sub(fee)
+        let total_pull = buy_token_amount
+            .checked_add(fee)
             .ok_or(SaleError::Overflow)?;
 
-        if company_amount > 0 {
-            buy_token_client.transfer(&contract, &offer.company, &company_amount);
-        }
+        // Atomic: if any transfer fails, all revert (Soroban guarantee)
+        // Pull investment + fee from buyer in a single transfer
+        buy_token_client.transfer(&buyer, &contract, &total_pull);
+        // Tokens calculated on buy_token_amount only (not including fee)
+        sell_token_client.transfer(&contract, &buyer, &sell_token_amount);
+
+        // Company gets full investment amount, treasury gets fee
+        buy_token_client.transfer(&contract, &offer.company, &buy_token_amount);
         if fee > 0 {
             buy_token_client.transfer(&contract, &offer.treasury, &fee);
         }
