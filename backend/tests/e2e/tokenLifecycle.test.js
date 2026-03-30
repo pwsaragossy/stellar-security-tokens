@@ -40,9 +40,7 @@ const testCompany = Keypair.random();
 const ASSET_CODE = 'T' + crypto.randomBytes(3).toString('hex').toUpperCase().slice(0, 5);
 const TOKEN_AMOUNT = '1000';       // 1000 tokens issued
 const INVEST_USDC = 100;           // 100 USDC — investor's intended investment
-const FIXED_FEE = 5;               // $5 processing fee per trade (should be additive)
-// NOTE: Current contract deducts fee from buy_amount (company gets 95).
-//       Correct behavior: investor pays 105 total (100 + 5). Requires contract fix.
+const FIXED_FEE = 5;               // $5 processing fee per trade (additive — investor pays 105 total)
 const ANNUAL_RATE = 12;            // 12% APY — company's cost of capital
 const INVESTOR_RATE = 10;          // 10% APY — investor-facing yield (spread = 2%)
 const SELL_PRICE = 10000000;       // 1 token = 1 USDC (in stroops: 1 * 10^7)
@@ -579,23 +577,22 @@ async function main() {
 
     console.log(`\n  USDC balances → Investor: ${investorUsdcAfterTrade}, Company: ${companyUsdcAfterTrade}, Treasury: ${treasuryUsdcAfterTrade}`);
     console.log(`  Token balance → Investor: ${investorTokens} ${ASSET_CODE}`);
-    console.log(`  Fee split: investor paid ${INVEST_USDC}, fee=${FIXED_FEE} → treasury, net=${NET_INVESTED} → company`);
+    console.log(`  Fee split: investor paid ${INVEST_USDC + FIXED_FEE} total (${INVEST_USDC} investment + ${FIXED_FEE} fee)`);
 
-    // Investor spent exactly INVEST_USDC
+    // Investor spent INVEST_USDC + FIXED_FEE (additive fee)
     assert(
-      investorUsdcAfterTrade === investorUsdcBeforeTrade - INVEST_USDC,
-      `Investor USDC: ${investorUsdcAfterTrade} === ${investorUsdcBeforeTrade} - ${INVEST_USDC} (exact debit)`,
+      investorUsdcAfterTrade === investorUsdcBeforeTrade - INVEST_USDC - FIXED_FEE,
+      `Investor USDC: ${investorUsdcAfterTrade} === ${investorUsdcBeforeTrade} - ${INVEST_USDC + FIXED_FEE} (investment + fee)`,
     );
     // Investor got INVEST_USDC tokens (contract allocates on gross, fee only splits USDC)
     assert(
       investorTokens === INVEST_USDC,
       `Token balance: ${investorTokens} === ${INVEST_USDC} (fee only affects USDC, not tokens)`,
     );
-    // Company received INVEST_USDC - FIXED_FEE (current contract deducts fee from buy_amount)
-    // TODO: After contract fix, company should receive full INVEST_USDC (fee additive)
+    // Company received full INVEST_USDC (fee is additive, not deducted)
     assert(
-      companyUsdcAfterTrade === companyUsdcBeforeTrade + (INVEST_USDC - FIXED_FEE),
-      `Company USDC: ${companyUsdcAfterTrade} === ${companyUsdcBeforeTrade} + ${INVEST_USDC - FIXED_FEE} (fee deducted — contract fix pending)`,
+      companyUsdcAfterTrade === companyUsdcBeforeTrade + INVEST_USDC,
+      `Company USDC: ${companyUsdcAfterTrade} === ${companyUsdcBeforeTrade} + ${INVEST_USDC} (full investment, fee additive)`,
     );
     // Treasury received the fixed fee
     assert(
