@@ -197,7 +197,7 @@ export const purchaseInvestment = async (req, res, next) => {
     }
 
     const tokenAmount = grossAmount;
-    const totalDeduction = grossAmount; // Investor sends gross amount; contract deducts fixed fee on-chain
+    const totalDeduction = grossAmount; // Investment principal only — contract adds fixed_fee on top (additive model v6)
 
     // Log processing fee for audit
     if (processingFee > 0) {
@@ -367,7 +367,6 @@ export const getInvestmentStatus = async (req, res, next) => {
  */
 export const getFeeSchedule = async (req, res, next) => {
   try {
-    const blockchainFee = await ConfigService.getFloat('BLOCKCHAIN_OPERATION_FEE_FIXED', 0);
 
     res.json({
       success: true,
