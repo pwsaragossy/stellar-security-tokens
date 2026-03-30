@@ -10,12 +10,6 @@ import { HELP_CONTENT } from '@/constants/help-content';
 
 const FEE_KEYS = [
     {
-        key: 'DIVIDEND_FEE_PERCENT',
-        label: 'Dividend Fee (%)',
-        description: 'Percentage fee deducted from dividend distributions',
-        type: 'percent',
-    },
-    {
         key: 'BLOCKCHAIN_OPERATION_FEE_FIXED',
         label: 'Blockchain Operation Fee (USDC)',
         description: 'Fixed fee per transaction to cover network costs (set to 0 until routing is active)',
@@ -39,10 +33,7 @@ export function FeeConfig() {
         setError('');
         try {
             const response = await platformAdminsApi.getSystemConfig();
-            // Backend returns { success: true, data: { KEY: value, ... } }
-            // So response.data is the configMap directly (typed as any here to avoid ts mismatch if interface says SystemConfig[])
             const configMap: Record<string, string> = (response.data as any) || {};
-            // Set defaults for missing keys
             FEE_KEYS.forEach((fee) => {
                 if (!configMap[fee.key]) {
                     configMap[fee.key] = fee.type === 'fixed' ? '5.0' : '0';
@@ -120,10 +111,7 @@ export function FeeConfig() {
                             <Label htmlFor={fee.key} className="flex items-center gap-1.5">
                                 {fee.label}
                                 <InfoTooltip
-                                    content={
-                                        fee.key === 'DIVIDEND_FEE_PERCENT' ? HELP_CONTENT.feeConfigAdditions.dividendFee.content :
-                                            HELP_CONTENT.feeConfigAdditions.blockchainFee.content
-                                    }
+                                    content={HELP_CONTENT.feeConfigAdditions.blockchainFee.content}
                                     side="right"
                                 />
                             </Label>
@@ -168,32 +156,25 @@ export function FeeConfig() {
                 </CardContent>
             </Card>
 
-            {/* Preview */}
+            {/* Fee Model Overview */}
             <Card className="glass-panel border-white/5 bg-white/5">
                 <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-1.5">
-                        Fee Preview
-                        <InfoTooltip content={HELP_CONTENT.feeConfigAdditions.systemFeeOverview.content} side="top" />
-                    </CardTitle>
-                    <CardDescription>Example calculation for a $100 investment</CardDescription>
+                    <CardTitle className="text-base">Fee Model</CardTitle>
+                    <CardDescription>How the platform earns revenue</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="space-y-2 text-sm">
+                    <div className="space-y-3 text-sm">
                         <div className="flex justify-between">
-                            <span className="text-muted-foreground">Investment Amount</span>
-                            <span className="text-white">$100.00</span>
+                            <span className="text-muted-foreground">Trade Fee</span>
+                            <span className="text-white">$5.00 USDC fixed per trade (on-chain)</span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-muted-foreground">+ Blockchain Fee (Investor pays)</span>
-                            <span className="text-red-400">+${parseFloat(config['BLOCKCHAIN_OPERATION_FEE_FIXED'] || '0').toFixed(2)}</span>
+                            <span className="text-muted-foreground">Yield Spread</span>
+                            <span className="text-white">annualInterestRate − investorRate → treasury</span>
                         </div>
-                        <div className="flex justify-between">
-                            <span className="text-muted-foreground">Platform Fee</span>
-                            <span className="text-slate-400">Per-offer (set at approval)</span>
-                        </div>
-                        <div className="flex justify-between pt-2 border-t border-white/10 font-medium">
-                            <span className="text-white">Total from Investor</span>
-                            <span className="text-emerald-400">${(100 + parseFloat(config['BLOCKCHAIN_OPERATION_FEE_FIXED'] || '0')).toFixed(2)}</span>
+                        <div className="pt-2 border-t border-white/10 text-xs text-zinc-500">
+                            Trade fee is deducted on-chain by the Soroban contract.
+                            Yield spread is calculated at payout time — company pays full rate, investor receives their rate, delta goes to treasury.
                         </div>
                     </div>
                 </CardContent>
