@@ -34,6 +34,7 @@ const testDistributor = Keypair.random();
 const testTreasury = Keypair.random();
 const testOps = Keypair.random();
 const testInvestor = Keypair.random();
+const testInvestorB = Keypair.random();
 const testCompany = Keypair.random();
 
 // Unique asset code per run to avoid collisions
@@ -45,6 +46,14 @@ const ANNUAL_RATE = 12;            // 12% APY — company's cost of capital
 const INVESTOR_RATE = 10;          // 10% APY — investor-facing yield (spread = 2%)
 const SELL_PRICE = 10000000;       // 1 token = 1 USDC (in stroops: 1 * 10^7)
 const BUY_PRICE = 10000000;        // 1 USDC  = 1 token
+
+// Multi-investor phase constants
+const MULTI_ASSET_CODE = 'M' + crypto.randomBytes(3).toString('hex').toUpperCase().slice(0, 5);
+const INVEST_A = 60;               // Investor A buys 60 tokens
+const INVEST_B = 40;               // Investor B buys 40 tokens
+
+/** Round to Stellar USDC precision (7dp = 1 stroop) — matches service's round7 */
+const round7 = (v) => Math.round(v * 10_000_000) / 10_000_000;
 
 // Override env BEFORE any service import
 process.env.KEY_MANAGEMENT_MODE = 'env';
@@ -258,9 +267,10 @@ async function main() {
       fundAccount(testTreasury.publicKey()),
       fundAccount(testOps.publicKey()),
       fundAccount(testInvestor.publicKey()),
+      fundAccount(testInvestorB.publicKey()),
       fundAccount(testCompany.publicKey()),
     ]);
-    assert(true, 'All 6 accounts funded via friendbot');
+    assert(true, 'All 7 accounts funded via friendbot');
     await sleep(3000);
 
     // 1b. Setup issuer thresholds (OPS key as signer with weight=2)
@@ -303,9 +313,10 @@ async function main() {
     // 1f. Mint test USDC to investor (to buy tokens) and others (trustlines)
     console.log('\n--- Minting test USDC ---');
     await mintTestUSDC(testInvestor, 500);   // 500 USDC to buy tokens
-    await mintTestUSDC(testCompany, 500);    // 500 USDC for bullet payout
+    await mintTestUSDC(testInvestorB, 500);   // 500 USDC for multi-investor test
+    await mintTestUSDC(testCompany, 500);     // 500 USDC for bullet payout
     await mintTestUSDC(testTreasury, 0.0000001);  // Trustline for fee collection
-    assert(true, 'Test USDC minted to investor (500), company (500), treasury (trustline)');
+    assert(true, 'Test USDC minted to investors (500 each), company (500), treasury (trustline)');
 
     // 1g. Create DB records
     console.log('\n--- Creating DB records ---');
@@ -646,9 +657,9 @@ async function main() {
     const investorPeriodRate = (INVESTOR_RATE / 100) / periodsPerYear;
     const companyPeriodRate = (ANNUAL_RATE / 100) / periodsPerYear;
 
-    const expectedInvestorInterest = Math.round(INVEST_USDC * investorPeriodRate * 100) / 100;
-    const expectedCompanyInterest = Math.round(INVEST_USDC * companyPeriodRate * 100) / 100;
-    const expectedSpread = Math.round((expectedCompanyInterest - expectedInvestorInterest) * 100) / 100;
+    const expectedInvestorInterest = round7(INVEST_USDC * investorPeriodRate);
+    const expectedCompanyInterest = round7(INVEST_USDC * companyPeriodRate);
+    const expectedSpread = round7(expectedCompanyInterest - expectedInvestorInterest);
 
     console.log(`  Independent calc: investorInterest=${expectedInvestorInterest}, companyInterest=${expectedCompanyInterest}, spread=${expectedSpread}`);
     console.log(`  Rates: investorRate=${INVESTOR_RATE}%/yr (${(investorPeriodRate*100).toFixed(4)}%/mo), companyRate=${ANNUAL_RATE}%/yr (${(companyPeriodRate*100).toFixed(4)}%/mo)`);
@@ -796,10 +807,10 @@ async function main() {
     const yearsToMaturity = (maturityDate.getTime() - offerCreated.getTime()) / (365 * 24 * 60 * 60 * 1000);
 
     // Investor gets investorRate, company pays annualRate
-    const independentInvestorInterest = Math.round(INVEST_USDC * (INVESTOR_RATE / 100) * yearsToMaturity * 100) / 100;
-    const independentCompanyInterest = Math.round(INVEST_USDC * (ANNUAL_RATE / 100) * yearsToMaturity * 100) / 100;
-    const independentSpread = Math.round(Math.max(0, independentCompanyInterest - independentInvestorInterest) * 100) / 100;
-    const independentPayout = INVEST_USDC + independentInvestorInterest;
+    const independentInvestorInterest = round7(INVEST_USDC * (INVESTOR_RATE / 100) * yearsToMaturity);
+    const independentCompanyInterest = round7(INVEST_USDC * (ANNUAL_RATE / 100) * yearsToMaturity);
+    const independentSpread = round7(Math.max(0, independentCompanyInterest - independentInvestorInterest));
+    const independentPayout = round7(INVEST_USDC + independentInvestorInterest);
 
     console.log(`\n  Final USDC → Investor: ${investorUsdcFinal}, Company: ${companyUsdcFinal}`);
     console.log(`  Yield computation: principal=${INVEST_USDC}, companyRate=${ANNUAL_RATE}%, investorRate=${INVESTOR_RATE}%, years=${yearsToMaturity.toFixed(6)}`);
@@ -843,6 +854,322 @@ async function main() {
       );
     }
 
+    // ─── PHASE 5: MULTI-INVESTOR PROPORTIONAL SPLIT ───────────
+    console.log('\n╔════════════════════════════════════════════╗');
+    console.log('║  PHASE 5: MULTI-INVESTOR (60/40 split)     ║');
+    console.log('╚════════════════════════════════════════════╝\n');
+
+    // 5a. DB records — Investor B + new offer
+    console.log('--- Creating Investor B + multi-investor offer ---');
+    const investorB = await prisma.investor.create({
+      data: {
+        name: `Test Investor B ${MULTI_ASSET_CODE}`,
+        email: `investor-b-${MULTI_ASSET_CODE.toLowerCase()}@lifecycle.test`,
+        document: `000.001.${MULTI_ASSET_CODE}`,
+        stellarContractId: testInvestorB.publicKey(),
+        passkeyCredentialId: `test-passkey-b-${MULTI_ASSET_CODE}`,
+        kycStatus: 'approved',
+      },
+    });
+    testIds.investorBId = investorB.id;
+
+    const multiOffer = await prisma.offer.create({
+      data: {
+        companyId: company.id,
+        requestedBy: companyUser.id,
+        offerName: `Multi-Investor Test ${MULTI_ASSET_CODE}`,
+        assetCode: MULTI_ASSET_CODE,
+        description: `Multi-investor E2E test for ${MULTI_ASSET_CODE}`,
+        totalSupply: 1000,
+        unitPrice: 1.0,
+        annualInterestRate: ANNUAL_RATE,
+        investorRate: INVESTOR_RATE,
+        offerType: 'sale',
+        paymentType: 'bullet',
+        maturityDate: yesterday,
+        status: 'active',
+        isTokenLocked: true,
+        createdAt: thirtyDaysAgo,
+      },
+    });
+    testIds.multiOfferId = multiOffer.id;
+    assert(true, `Multi-offer(${multiOffer.id}) + InvestorB(${investorB.id}) created`);
+
+    // 5b. Issue token + deploy contract
+    console.log('\n--- Issuing multi-investor token ---');
+    const multiIssueResult = await StellarService.issueSecurityToken(MULTI_ASSET_CODE, '1000', {
+      forSaleContract: true,
+    });
+    assert(multiIssueResult.success, `Issued ${MULTI_ASSET_CODE}`);
+    const multiTokenSacId = multiIssueResult.sacContractId;
+    assert(!!multiTokenSacId, `Multi-token SAC: ${multiTokenSacId?.slice(0, 12)}…`);
+
+    await prisma.token.create({
+      data: {
+        offerId: multiOffer.id,
+        assetCode: MULTI_ASSET_CODE,
+        issuerPublicKey: testIssuer.publicKey(),
+        sacContractId: multiTokenSacId,
+        totalSupply: 1000,
+        annualInterestRate: ANNUAL_RATE,
+      },
+    });
+
+    console.log('\n--- Deploying multi-investor sale contract ---');
+    const multiSalt = crypto.createHash('sha256').update(`radox:multi:${multiOffer.id}`).digest();
+    const multiDeployResult = await SorobanSaleService.buildDeployXdr(
+      testIssuer.publicKey(), wasmHash, multiSalt,
+    );
+    const multiSaleContractId = multiDeployResult.contractId;
+    assert(!!multiSaleContractId, `Multi sale contract: ${multiSaleContractId.slice(0, 12)}…`);
+    await signAndSubmitSoroban(multiDeployResult.xdr);
+    assert(true, 'Multi sale contract deployed');
+    await sleep(3000);
+
+    const multiCreateResult = await SorobanSaleService.buildCreateSaleXdr(
+      multiSaleContractId, testIssuer.publicKey(), {
+        admin: testIssuer.publicKey(),
+        seller: testIssuer.publicKey(),
+        sellToken: multiTokenSacId,
+        buyToken: usdcSacId,
+        treasury: testTreasury.publicKey(),
+        company: testCompany.publicKey(),
+        fixedFee: BigInt(FIXED_FEE * 10_000_000),
+        sellPrice: SELL_PRICE,
+        buyPrice: BUY_PRICE,
+        deadlineLedger: 0,
+        minBuyAmount: 0n,
+        maxBuyPerBuyer: 0n,
+      },
+    );
+    await signAndSubmitSoroban(multiCreateResult.xdr);
+    assert(true, 'Multi sale initialized (create)');
+    await sleep(3000);
+
+    // Authorize contract on token SAC + deposit + activate
+    await SorobanSaleService.authorizeBuyerOnSac(multiTokenSacId, multiSaleContractId);
+    const multiDepositAmount = BigInt(1000 * 10_000_000);
+    const multiDepositResult = await SorobanSaleService.buildSacTransferXdr(
+      multiTokenSacId, testIssuer.publicKey(), multiSaleContractId, multiDepositAmount,
+    );
+    await signAndSubmitSoroban(multiDepositResult.xdr);
+    assert(true, `Deposited 1000 ${MULTI_ASSET_CODE} into sale contract`);
+    await sleep(2000);
+
+    const multiActivateResult = await SorobanSaleService.buildSetActiveXdr(multiSaleContractId, true);
+    await signAndSubmitSoroban(multiActivateResult.xdr);
+    assert(true, 'Multi sale activated');
+
+    // 5c. Authorize both investors on SACs
+    console.log('\n--- Authorizing investors A + B on multi-asset SACs ---');
+
+    // Investor A: trustline + token SAC auth (USDC SAC already authorized from Phase 3)
+    const multiAsset = new Asset(MULTI_ASSET_CODE, testIssuer.publicKey());
+    const invAAcct = await stellarServer.loadAccount(testInvestor.publicKey());
+    const trustA = new TransactionBuilder(invAAcct, { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
+      .addOperation(Operation.changeTrust({ asset: multiAsset }))
+      .setTimeout(120).build();
+    trustA.sign(testInvestor);
+    await stellarServer.submitTransaction(trustA);
+    await SorobanSaleService.authorizeBuyerOnSac(multiTokenSacId, testInvestor.publicKey());
+    assert(true, 'Investor A authorized on multi-token SAC');
+
+    // Investor B: trustline + token SAC + USDC SAC auth
+    const invBAcct = await stellarServer.loadAccount(testInvestorB.publicKey());
+    const trustB = new TransactionBuilder(invBAcct, { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
+      .addOperation(Operation.changeTrust({ asset: multiAsset }))
+      .setTimeout(120).build();
+    trustB.sign(testInvestorB);
+    await stellarServer.submitTransaction(trustB);
+    await SorobanSaleService.authorizeBuyerOnSac(multiTokenSacId, testInvestorB.publicKey());
+    await SorobanSaleService.authorizeBuyerOnSac(usdcSacId, testInvestorB.publicKey());
+    assert(true, 'Investor B authorized on multi-token SAC + USDC SAC');
+
+    // Authorize sale contract on USDC SAC (new contract needs its own auth)
+    await SorobanSaleService.authorizeBuyerOnSac(usdcSacId, multiSaleContractId);
+    assert(true, 'Multi sale contract authorized on USDC SAC');
+
+    // 5d. Snapshot + trades
+    console.log('\n--- Trading: A=60, B=40 ---');
+    const aUsdcBefore = await getUSDCBalance(testInvestor.publicKey());
+    const bUsdcBefore = await getUSDCBalance(testInvestorB.publicKey());
+    const compUsdcBefore = await getUSDCBalance(testCompany.publicKey());
+    const treasUsdcBefore = await getUSDCBalance(testTreasury.publicKey());
+
+    // Investor A trades 60
+    const multiContract = new Contract(multiSaleContractId);
+    const tradeAmountA = BigInt(INVEST_A * 10_000_000);
+    const tradeOpA = multiContract.call('trade',
+      new Address(testInvestor.publicKey()).toScVal(),
+      nativeToScVal(tradeAmountA, { type: 'i128' }),
+    );
+    const invAAccount = await StellarService.getAccountRPC(testInvestor.publicKey());
+    let tradeATx = new TransactionBuilder(invAAccount, {
+      fee: BASE_FEE, networkPassphrase: getNetworkPassphrase(),
+    }).addOperation(tradeOpA).setTimeout(180).build();
+    tradeATx = await StellarService.prepareSorobanTransaction(tradeATx);
+    tradeATx.sign(testInvestor);
+
+    const rpcServerMulti = new rpc.Server(getSorobanRpcUrl());
+    let tradeASend = await rpcServerMulti.sendTransaction(tradeATx);
+    let tradeARes = tradeASend;
+    if (tradeARes.status === 'PENDING') {
+      let waited = 0;
+      while (waited < 60000) { await sleep(3000); waited += 3000; tradeARes = await rpcServerMulti.getTransaction(tradeASend.hash); if (tradeARes.status !== 'NOT_FOUND') break; }
+    }
+    assert(tradeARes.status === 'SUCCESS', `Investor A traded ${INVEST_A} USDC`);
+
+    // Investor B trades 40
+    const tradeAmountB = BigInt(INVEST_B * 10_000_000);
+    const tradeOpB = multiContract.call('trade',
+      new Address(testInvestorB.publicKey()).toScVal(),
+      nativeToScVal(tradeAmountB, { type: 'i128' }),
+    );
+    const invBAccount = await StellarService.getAccountRPC(testInvestorB.publicKey());
+    let tradeBTx = new TransactionBuilder(invBAccount, {
+      fee: BASE_FEE, networkPassphrase: getNetworkPassphrase(),
+    }).addOperation(tradeOpB).setTimeout(180).build();
+    tradeBTx = await StellarService.prepareSorobanTransaction(tradeBTx);
+    tradeBTx.sign(testInvestorB);
+
+    let tradeBSend = await rpcServerMulti.sendTransaction(tradeBTx);
+    let tradeBRes = tradeBSend;
+    if (tradeBRes.status === 'PENDING') {
+      let waited = 0;
+      while (waited < 60000) { await sleep(3000); waited += 3000; tradeBRes = await rpcServerMulti.getTransaction(tradeBSend.hash); if (tradeBRes.status !== 'NOT_FOUND') break; }
+    }
+    assert(tradeBRes.status === 'SUCCESS', `Investor B traded ${INVEST_B} USDC`);
+
+    // Create DB records for both trades
+    await prisma.investment.create({
+      data: {
+        investorId: investor.id, offerId: multiOffer.id, assetCode: MULTI_ASSET_CODE,
+        usdcAmount: INVEST_A, tokenAmount: INVEST_A, status: 'distributed',
+        distributionTxHash: tradeASend.hash,
+      },
+    });
+    await prisma.investment.create({
+      data: {
+        investorId: investorB.id, offerId: multiOffer.id, assetCode: MULTI_ASSET_CODE,
+        usdcAmount: INVEST_B, tokenAmount: INVEST_B, status: 'distributed',
+        distributionTxHash: tradeBSend.hash,
+      },
+    });
+    assert(true, 'Both investment records created');
+
+    // Update offer with contract ID
+    await prisma.offer.update({
+      where: { id: multiOffer.id },
+      data: { sorobanContractId: multiSaleContractId, sorobanInitStatus: 'active' },
+    });
+
+    // 5e. Trade assertions
+    console.log('\n--- Multi-investor trade assertions ---');
+    const multiHolders = await StellarService.listAssetHolders(MULTI_ASSET_CODE);
+    const holderA = multiHolders.find(h => h.publicKey === testInvestor.publicKey());
+    const holderB = multiHolders.find(h => h.publicKey === testInvestorB.publicKey());
+    const tokensA = holderA ? parseFloat(holderA.balance) : 0;
+    const tokensB = holderB ? parseFloat(holderB.balance) : 0;
+
+    assert(tokensA === INVEST_A, `Investor A tokens: ${tokensA} === ${INVEST_A}`);
+    assert(tokensB === INVEST_B, `Investor B tokens: ${tokensB} === ${INVEST_B}`);
+
+    const aUsdcAfter = await getUSDCBalance(testInvestor.publicKey());
+    const bUsdcAfter = await getUSDCBalance(testInvestorB.publicKey());
+    const compUsdcAfter = await getUSDCBalance(testCompany.publicKey());
+    const treasUsdcAfter = await getUSDCBalance(testTreasury.publicKey());
+
+    assert(
+      aUsdcAfter === aUsdcBefore - INVEST_A - FIXED_FEE,
+      `A USDC: ${aUsdcAfter} === ${aUsdcBefore} - ${INVEST_A + FIXED_FEE}`,
+    );
+    assert(
+      bUsdcAfter === bUsdcBefore - INVEST_B - FIXED_FEE,
+      `B USDC: ${bUsdcAfter} === ${bUsdcBefore} - ${INVEST_B + FIXED_FEE}`,
+    );
+    assert(
+      compUsdcAfter === compUsdcBefore + INVEST_A + INVEST_B,
+      `Company USDC: ${compUsdcAfter} === ${compUsdcBefore} + ${INVEST_A + INVEST_B} (100% of investment)`,
+    );
+    assert(
+      Math.abs(treasUsdcAfter - (treasUsdcBefore + FIXED_FEE * 2)) < 0.0001,
+      `Treasury fees: ${treasUsdcAfter} === ${treasUsdcBefore} + ${FIXED_FEE * 2} (2 × $${FIXED_FEE})`,
+    );
+    console.log(`  Tokens: A=${tokensA}, B=${tokensB}`);
+    console.log(`  USDC: A=${aUsdcAfter}, B=${bUsdcAfter}, Company=${compUsdcAfter}, Treasury=${treasUsdcAfter}`);
+
+    // 5f. Bullet payout — proportional split assertions
+    console.log('\n--- Multi-investor bullet payout ---');
+    const multiPayment = await CompanyPaymentService.createPaymentTransaction(multiOffer.id, companyUser.id);
+
+    assert(multiPayment.investorCount === 2, `investorCount: ${multiPayment.investorCount} === 2`);
+    assert(multiPayment.breakdown.length === 2, `breakdown length: ${multiPayment.breakdown.length} === 2`);
+
+    // Independent calculation (round7 precision — matches service)
+    const multiYears = (yesterday.getTime() - thirtyDaysAgo.getTime()) / (365 * 24 * 60 * 60 * 1000);
+    const totalInvested = INVEST_A + INVEST_B;
+
+    // Per-investor independent math
+    const indInterestA = round7(INVEST_A * (INVESTOR_RATE / 100) * multiYears);
+    const indInterestB = round7(INVEST_B * (INVESTOR_RATE / 100) * multiYears);
+    const indPayoutA = round7(INVEST_A + indInterestA);
+    const indPayoutB = round7(INVEST_B + indInterestB);
+
+    // Aggregate independent math
+    const indTotalInterest = round7(totalInvested * (INVESTOR_RATE / 100) * multiYears);
+    const indCompanyInterest = round7(totalInvested * (ANNUAL_RATE / 100) * multiYears);
+    const indSpread = round7(indCompanyInterest - indTotalInterest);
+
+    console.log(`  Independent calc: A interest=${indInterestA}, B interest=${indInterestB}`);
+    console.log(`  Independent payouts: A=${indPayoutA}, B=${indPayoutB}`);
+    console.log(`  Independent spread: ${indSpread} (company=${indCompanyInterest} - investor=${indTotalInterest})`);
+    console.log(`  Service reported: investors=${multiPayment.investorCount}, fee=${multiPayment.platformFee}, net=${multiPayment.netToInvestors}`);
+
+    // Find each investor in the breakdown
+    const bdA = multiPayment.breakdown.find(b => b.investorWallet === testInvestor.publicKey());
+    const bdB = multiPayment.breakdown.find(b => b.investorWallet === testInvestorB.publicKey());
+    assert(!!bdA, 'Investor A found in breakdown');
+    assert(!!bdB, 'Investor B found in breakdown');
+
+    // ASSERTION GROUP 1: Per-investor correctness
+    assert(
+      bdA.interest === indInterestA,
+      `A interest: service(${bdA.interest}) === independent(${indInterestA})`,
+    );
+    assert(
+      bdB.interest === indInterestB,
+      `B interest: service(${bdB.interest}) === independent(${indInterestB})`,
+    );
+    assert(
+      bdA.totalPayout === indPayoutA,
+      `A payout: service(${bdA.totalPayout}) === independent(${indPayoutA})`,
+    );
+    assert(
+      bdB.totalPayout === indPayoutB,
+      `B payout: service(${bdB.totalPayout}) === independent(${indPayoutB})`,
+    );
+
+    // ASSERTION GROUP 2: Sum conservation (Σ parts === aggregate)
+    const sumInterest = round7(bdA.interest + bdB.interest);
+    const sumPayout = round7(bdA.totalPayout + bdB.totalPayout);
+
+    assert(
+      sumInterest === indTotalInterest,
+      `Sum conservation (interest): Σ(${bdA.interest} + ${bdB.interest}) = ${sumInterest} === total ${indTotalInterest}`,
+    );
+    assert(
+      sumPayout === round7(totalInvested + indTotalInterest),
+      `Sum conservation (payout): Σ(${bdA.totalPayout} + ${bdB.totalPayout}) = ${sumPayout} === total ${round7(totalInvested + indTotalInterest)}`,
+    );
+
+    // ASSERTION GROUP 3: Platform spread
+    assert(
+      multiPayment.platformFee === indSpread,
+      `Platform spread: service(${multiPayment.platformFee}) === independent(${indSpread})`,
+    );
+
+    console.log('  ✅ All multi-investor proportional split assertions passed');
+
   } catch (err) {
     console.error('\n💥 FATAL ERROR:', err.message);
     console.error(err.stack);
@@ -854,6 +1181,15 @@ async function main() {
     console.log('╚════════════════════════════════════════════╝\n');
 
     try {
+      if (testIds.multiOfferId) {
+        await prisma.companyPayment.deleteMany({ where: { offerId: testIds.multiOfferId } }).catch(() => {});
+        await prisma.interestPayment.deleteMany({ where: { offerId: testIds.multiOfferId } }).catch(() => {});
+        await prisma.feeLog.deleteMany({ where: { assetCode: MULTI_ASSET_CODE } }).catch(() => {});
+        await prisma.investment.deleteMany({ where: { offerId: testIds.multiOfferId } });
+        await prisma.tokenDistribution.deleteMany({ where: { assetCode: MULTI_ASSET_CODE } }).catch(() => {});
+        await prisma.token.deleteMany({ where: { offerId: testIds.multiOfferId } }).catch(() => {});
+        await prisma.offer.delete({ where: { id: testIds.multiOfferId } });
+      }
       if (testIds.monthlyOfferId) {
         await prisma.companyPayment.deleteMany({ where: { offerId: testIds.monthlyOfferId } }).catch(() => {});
         await prisma.interestPayment.deleteMany({ where: { offerId: testIds.monthlyOfferId } }).catch(() => {});
@@ -874,6 +1210,9 @@ async function main() {
         }).catch(() => {});
         await prisma.token.deleteMany({ where: { offerId: testIds.offerId } });
         await prisma.offer.delete({ where: { id: testIds.offerId } });
+      }
+      if (testIds.investorBId) {
+        await prisma.investor.delete({ where: { id: testIds.investorBId } });
       }
       if (testIds.investorId) {
         await prisma.investor.delete({ where: { id: testIds.investorId } });
@@ -900,7 +1239,7 @@ async function main() {
     process.exit(1);
   } else {
     console.log('✅ Full token lifecycle verified!');
-    console.log('   SETUP → DEPLOY → TRADE → DIVIDEND → PAYOUT → BURN');
+    console.log('   SETUP → DEPLOY → TRADE → DIVIDEND → PAYOUT → BURN → MULTI-INVESTOR');
     process.exit(0);
   }
 }

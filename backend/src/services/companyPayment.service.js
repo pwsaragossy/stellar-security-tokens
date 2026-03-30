@@ -28,6 +28,9 @@ const DEFAULT_FEE_PERCENT = 0;         // Disabled for MVP — no legal framewor
 const USDC_ASSET_CODE = 'USDC';
 const USDC_ISSUER = getUsdcIssuer();
 
+/** Round to Stellar USDC precision (7 decimal places = 1 stroop = 0.0000001) */
+const round7 = (v) => Math.round(v * 10_000_000) / 10_000_000;
+
 /**
  * Company Payment Service
  * Responsible for:
@@ -102,7 +105,7 @@ export class CompanyPaymentService {
                 investorName: inv.investor.name,
                 investorWallet: inv.investor.stellarContractId || inv.investor.stellarPublicKey,
                 tokenBalance: investedAmount, // For locked tokens, invested = balance
-                interestOwed: Math.round(interestOwed * 100) / 100, // Round to cents
+                interestOwed: round7(interestOwed),
             };
         });
 
@@ -113,7 +116,7 @@ export class CompanyPaymentService {
             assetCode: offer.assetCode,
             offerName: offer.offerName,
             totalInvested,
-            totalOwed: Math.round(totalOwed * 100) / 100,
+            totalOwed: round7(totalOwed),
             investorCount: breakdown.length,
             paymentType: offer.paymentType,
             annualInterestRate: annualRate,
@@ -163,7 +166,7 @@ export class CompanyPaymentService {
                     investorName: inv.name,
                     investorWallet: inv.stellarContractId || inv.stellarPublicKey,
                     tokenBalance,
-                    interestOwed: Math.round(interestOwed * 100) / 100,
+                    interestOwed: round7(interestOwed),
                 };
             }).filter(b => b.interestOwed > 0); // Only include holders with non-zero interest
 
@@ -182,7 +185,7 @@ export class CompanyPaymentService {
                 assetCode: offer.assetCode,
                 offerName: offer.offerName,
                 totalInvested: totalTokensHeld, // Current token holdings, not original investment
-                totalOwed: Math.round(totalOwed * 100) / 100,
+                totalOwed: round7(totalOwed),
                 investorCount: breakdown.length,
                 paymentType: offer.paymentType,
                 annualInterestRate: annualRate,
@@ -259,13 +262,13 @@ export class CompanyPaymentService {
                 investorName: inv.investor.name,
                 investorWallet: inv.investor.stellarContractId || inv.investor.stellarPublicKey,
                 principal: principalReturn,
-                interest: Math.round(interestEarned * 100) / 100,
-                totalPayout: Math.round((principalReturn + interestEarned) * 100) / 100,
+                interest: round7(interestEarned),
+                totalPayout: round7(principalReturn + interestEarned),
             };
         });
 
         const totalPrincipal = totalInvested;
-        const totalInterestOwed = Math.round(totalInterest * 100) / 100;
+        const totalInterestOwed = round7(totalInterest);
         const totalPayout = totalPrincipal + totalInterestOwed;
 
         return {
@@ -276,7 +279,7 @@ export class CompanyPaymentService {
             daysUntilMaturity: Math.ceil((maturityDate - new Date()) / (24 * 60 * 60 * 1000)),
             totalPrincipal,
             totalInterest: totalInterestOwed,
-            companyTotalInterest: Math.round(companyTotalInterest * 100) / 100,
+            companyTotalInterest: round7(companyTotalInterest),
             totalPayout,
             investorCount: breakdown.length,
             balanceSource: 'database',
@@ -329,12 +332,12 @@ export class CompanyPaymentService {
                     investorName: inv.name,
                     investorWallet: inv.stellarContractId || inv.stellarPublicKey,
                     principal: principalReturn,
-                    interest: Math.round(interestEarned * 100) / 100,
-                    totalPayout: Math.round((principalReturn + interestEarned) * 100) / 100,
+                    interest: round7(interestEarned),
+                    totalPayout: round7(principalReturn + interestEarned),
                 };
             }).filter(b => b.principal > 0);
 
-            const totalInterestOwed = Math.round(totalInterest * 100) / 100;
+            const totalInterestOwed = round7(totalInterest);
             const totalPayout = totalTokensHeld + totalInterestOwed;
 
             log.debug(`On-chain bullet calculation for offer ${offer.id}:`, {
@@ -475,9 +478,9 @@ export class CompanyPaymentService {
         let platformFee;
         if (isBullet) {
             // Spread = company interest - investor interest
-            platformFee = Math.round(
-                Math.max(0, (bulletDetails.companyTotalInterest || bulletDetails.totalInterest) - bulletDetails.totalInterest) * 100
-            ) / 100;
+            platformFee = round7(
+                Math.max(0, (bulletDetails.companyTotalInterest || bulletDetails.totalInterest) - bulletDetails.totalInterest)
+            );
             // totalAmount = what company pays (investor payout + spread)
             totalAmount = bulletDetails.totalPayout + platformFee;
         } else {
@@ -488,12 +491,12 @@ export class CompanyPaymentService {
             const spreadPct = Math.max(0, annualRate - effectiveInvestorRate);
             // Scale the spread relative to the investor interest
             platformFee = effectiveInvestorRate > 0
-                ? Math.round(totalAmount * (spreadPct / effectiveInvestorRate) * 100) / 100
+                ? round7(totalAmount * (spreadPct / effectiveInvestorRate))
                 : 0;
             // totalAmount = what company pays (investor interest + spread)
             totalAmount = totalAmount + platformFee;
         }
-        let netToInvestors = Math.round((totalAmount - platformFee) * 100) / 100;
+        let netToInvestors = round7(totalAmount - platformFee);
 
         // ─── BULLET: batch guard + clawback ops ──────────────────────────
         //
@@ -560,7 +563,7 @@ export class CompanyPaymentService {
             const spreadRatio = bulletDetails.totalInterest > 0
                 ? (bulletDetails.companyTotalInterest - bulletDetails.totalInterest) / bulletDetails.totalInterest
                 : 0;
-            platformFee = Math.round(Math.max(0, batchInvestorInterest * spreadRatio) * 100) / 100;
+            platformFee = round7(Math.max(0, batchInvestorInterest * spreadRatio));
             // totalAmount = what company pays (investor payout + spread)
             totalAmount = batchInvestorPayout + platformFee;
             netToInvestors = batchInvestorPayout;
@@ -716,9 +719,9 @@ export class CompanyPaymentService {
                 const issuerPublicKey = keyManager.getIssuerPublicKey();
 
                 // Calculate fee breakdown for metadata — use spread
-                const totalFee = Math.round(
-                    Math.max(0, (bulletDetails.companyTotalInterest || bulletDetails.totalInterest) - bulletDetails.totalInterest) * 100
-                ) / 100;
+                const totalFee = round7(
+                    Math.max(0, (bulletDetails.companyTotalInterest || bulletDetails.totalInterest) - bulletDetails.totalInterest)
+                );
 
                 const txData = {
                     operationType: 'maturity_clawback',
@@ -875,14 +878,14 @@ export class CompanyPaymentService {
                 // Bullet: spread on interest only, principal untaxed
                 gross = payment.totalPayout;
                 base = payment.interest;
-                fee = Math.round(base * spreadRatio * 100) / 100;
+                fee = round7(base * spreadRatio);
                 net = payment.principal + (base - fee);
                 tokenBalance = payment.principal;
             } else {
                 // Periodic: totalOwed IS interest, spread applies
                 gross = payment.interestOwed;
                 base = payment.interestOwed;
-                fee = Math.round(gross * spreadRatio * 100) / 100;
+                fee = round7(gross * spreadRatio);
                 net = gross - fee;
                 tokenBalance = payment.tokenBalance;
             }
