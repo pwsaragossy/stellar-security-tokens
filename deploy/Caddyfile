@@ -20,6 +20,18 @@ radox.net {
     }
 }
 
+# Dev domain — serves stellar.toml for dev issuer account (SEP-1)
+dev.radox.net {
+    handle /.well-known/* {
+        reverse_proxy backend:3000
+    }
+
+    # Fallback: redirect to main landing page
+    handle {
+        redir https://radox.net{uri} permanent
+    }
+}
+
 # Frontend app — React SPA served by nginx
 app.radox.net {
     reverse_proxy frontend:80

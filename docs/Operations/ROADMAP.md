@@ -155,14 +155,33 @@ Reference: Security audit Fix #4 (Mar 2026), `companyUserRoutes.js` comments.
 - [x] Decision: $5 processing fee covers everything (processing + network). No separate fee needed.
 
 #### Change 5 — Late/Default Fee Enablement
-> **Build when:** Legal framework established (CVM/contract terms reviewed by counsel).
+> **Status:** Zero for MVP. Rates stay at `0` until legal framework + business decision.
 
-Infrastructure is **already built** in `companyPayment.service.js:22-24`. Just needs non-zero values:
-- [ ] Legal review: confirm late fee + default penalty terms are enforceable under Brazilian law
-- [ ] Set `LATE_FEE_PERCENT_PER_DAY = 0.1` (0.1%/day after 10-day grace)
-- [ ] Set `DEFAULT_FEE_PERCENT = 5.0` (5% one-time penalty on default)
+Infrastructure is **already built** in `companyPayment.service.js:22-26`:
+- `LATE_FEE_PERCENT_PER_DAY = 0` — calculates `amount × 0 = $0`
+- `DEFAULT_FEE_PERCENT = 0` — calculates `amount × 0 = $0`
+- `GRACE_PERIOD_DAYS = 10` — cron auto-escalates `due → overdue → defaulted`
+- Frontend overdue warning updated to soft language (no fake rates) — Mar 2026
+
+**Build when:** Legal counsel confirms late fee + default penalty terms are enforceable under Brazilian law.
+- [ ] Legal review: confirm terms are enforceable under CVM regulations
+- [ ] Set `LATE_FEE_PERCENT_PER_DAY` to agreed rate
+- [ ] Set `DEFAULT_FEE_PERCENT` to agreed rate
 - [ ] Update investor + company terms of service
 - [ ] Add fee disclosure to offer prospectus documents
+- [ ] Add E2E assertions for non-zero fee amounts
+
+#### Unlocked Token Balance E2E
+> **Status:** Deferred. Tokens are locked for MVP — no secondary trading.
+
+The `isTokenLocked: false` code path uses `listAssetHolders()` (on-chain balances) instead of DB investment records. This path is untested in E2E.
+
+**Build when:** DEX/secondary trading is enabled (tokens unlocked for market trading).
+- [ ] Simulate DEX trades in test setup
+- [ ] Verify `calculateBulletPayment` uses on-chain balances when unlocked
+- [ ] Verify `calculateOwedAmount` uses on-chain balances when unlocked
+- [ ] Verify collateral distribution uses on-chain proportions
+- [ ] See also: Trading Market Lockout caution in Phase 1.5
 
 #### v6 — On-Chain Distribution Contract (Future)
 > **Build when:** Post-MVP, when investor trust and regulatory audit trail are priorities.

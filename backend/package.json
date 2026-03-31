@@ -33,7 +33,9 @@
     "lint:fix": "eslint src tests --fix",
     "format": "prettier --write \"src/**/*.{js,json}\" \"tests/**/*.{js,json}\"",
     "multisig:inspect": "node --import tsx scripts/inspect-accounts.js",
-    "multisig:setup": "node --import tsx scripts/setup-multisig.js"
+    "multisig:setup": "node --import tsx scripts/setup-multisig.js",
+    "test:e2e:lifecycle": "sh -c 'test -f ../.env && . ../.env; NODE_ENV=development STELLAR_NETWORK=testnet node --import tsx tests/e2e/tokenLifecycle.test.js'",
+    "test:e2e:contracts": "STELLAR_NETWORK=testnet node --import tsx tests/e2e/contractManagement.test.js"
   },
   "keywords": [
     "stellar",
