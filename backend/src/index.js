@@ -7,6 +7,15 @@ import { MaintenanceService } from './services/maintenance.service.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
 
+// ─── SECURITY GUARD: prevent test-mode bypasses in production ───
+// NODE_ENV=test disables Redis blocklist checks (F2 in security review).
+// Require explicit ALLOW_TEST_MODE=1 to prevent accidental misconfiguration.
+if (process.env.NODE_ENV === 'test' && !process.env.ALLOW_TEST_MODE) {
+    console.error('FATAL: NODE_ENV=test without ALLOW_TEST_MODE=1. Refusing to start server.');
+    console.error('If this is intentional, set ALLOW_TEST_MODE=1 in your environment.');
+    process.exit(1);
+}
+
 const PORT = process.env.PORT || 3000;
 
 // Process-level error handlers to prevent crashes from unhandled errors
