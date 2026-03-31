@@ -4,7 +4,7 @@ export interface Investor {
   name: string;
   email: string;
   document: string;
-  stellar_public_key?: string;
+  stellar_contract_id?: string;
   kyc_status: 'pending' | 'approved' | 'rejected';
   password_hash?: string;
   last_login?: string;

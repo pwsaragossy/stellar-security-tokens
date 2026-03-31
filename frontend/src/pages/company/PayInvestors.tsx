@@ -518,7 +518,7 @@ export function PayInvestors() {
                                         <p className="text-lg font-medium text-white">
                                             {isBulletPayment
                                                 ? `${(paymentDetails as BulletPaymentDetails).daysUntilMaturity} days`
-                                                : `${annualRate}% APY`}
+                                                : `${investorRate}% APY`}
                                         </p>
                                     </div>
                                 </div>
@@ -668,11 +668,11 @@ export function PayInvestors() {
                         <div className="flex items-start gap-3">
                             <AlertTriangle className="w-5 h-5 text-destructive mt-0.5" />
                             <div>
-                                <h4 className="text-destructive font-medium">Payment Overdue - Consequences</h4>
+                                <h4 className="text-destructive font-medium">Payment Overdue</h4>
                                 <ul className="text-sm text-destructive/80 mt-2 space-y-1">
-                                    <li>• Late fee: 0.1% per day accumulating</li>
-                                    <li>• After 10 days: Collateral will be liquidated</li>
-                                    <li>• Your company may be banned from creating new offers</li>
+                                    <li>• Please settle this payment as soon as possible</li>
+                                    <li>• Continued non-payment may result in penalties and collateral enforcement</li>
+                                    <li>• Your company may be restricted from creating new offers</li>
                                 </ul>
                             </div>
                         </div>

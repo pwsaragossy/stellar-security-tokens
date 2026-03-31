@@ -13,11 +13,11 @@ export function InvestorDetail({ raw }: { raw: any }) {
             </DetailSection>
             <DetailSection title="Wallet">
                 <DetailRow
-                    label="Public Key"
+                    label="Smart Wallet"
                     value={
-                        raw.stellar_public_key ? (
+                        raw.stellarContractId ? (
                             <code className="text-xs text-emerald-400 bg-black/30 px-2 py-1 rounded break-all">
-                                {raw.stellar_public_key}
+                                {raw.stellarContractId}
                             </code>
                         ) : (
                             <span className="text-zinc-500">Not created yet</span>
