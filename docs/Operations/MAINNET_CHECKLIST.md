@@ -1,5 +1,7 @@
 # Radox — Mainnet Migration Checklist
 
+> Last updated: 2026-03-31
+
 This document details all specific actions required to transition the **Radox** platform from Testnet to Mainnet (Production).
 
 ## ✅ Code Changes (Already Complete)
@@ -9,10 +11,24 @@ This document details all specific actions required to transition the **Radox** 
 - [x] **CORS Policy (`backend/src/app.js`):** Already uses `process.env.FRONTEND_URL`.
 - [x] **JWT Fail-Fast (`backend/src/middleware/auth.js`):** App crashes if `JWT_SECRET` is missing.
 - [x] **Network-Aware Config (`passkeyWallet.service.js`):** Uses centralized `getSorobanRpcUrl()` and `isTestnet()`.
+- [x] **Production Startup Guard (`index.js`):** Blocks `NODE_ENV=test` in production without explicit `ALLOW_TEST_MODE=1`.
 
 ### Hardcoded Values
 - [x] **Asset Code:** Configurable via env vars.
 - [x] **USDC Issuer:** Auto-detected based on `STELLAR_NETWORK`. Mainnet: `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN`.
+
+### Fee Model
+- [x] **Soroban v6 contract** — additive $5 fixed fee per trade (`CONTRACT_VERSION = 6`)
+- [x] **Yield spread model** — `investorRate` vs `annualInterestRate`, spread → treasury
+- [x] **FeeLog** — all fee events recorded to DB, admin `GET /fee-logs` endpoint active
+
+### SEP-1 / Asset Discoverability
+- [x] **TOML generation** — `TomlService.js` produces SEP-1 compliant `stellar.toml`
+- [x] **IPFS metadata** — standard fields (`attestation_of_reserve`, `redemption_instructions`) with valid IPFS links
+- [x] **Caddy routing** — `/.well-known/stellar.toml` served for `radox.net`
+
+### Email
+- [x] **Resend HTTP API** — email service uses Resend (not SMTP). Requires `RESEND_API_KEY` env var.
 
 ---
 
@@ -50,6 +66,7 @@ Create a production `.env` file with the following changes:
 - [ ] **`ACCOUNT_WASM_HASH`**: Deploy OZ Smart Account WASM to Mainnet and record hash.
 - [ ] **`WEBAUTHN_VERIFIER_ADDRESS`**: Deploy WebAuthn verifier and record address.
 - [ ] **`ED25519_VERIFIER_ADDRESS`**: Deploy Ed25519 verifier and record address.
+- [ ] **`SALE_WASM_HASH`**: Deploy token_sale v6 WASM to Mainnet and record hash.
 
 ### Channel Accounts Pool (Parallel Fee Sponsorship)
 - [ ] **Generate 5 new keypairs** for mainnet (never reuse testnet keys):
@@ -72,17 +89,19 @@ Create a production `.env` file with the following changes:
 
 ### Third Party Services
 - [ ] **Channels API Key**: Get production API key from OpenZeppelin.
+- [ ] **`RESEND_API_KEY`**: Production Resend API key (already configured for testnet).
+- [ ] **Launchtube Mainnet JWT**: Obtain from SDF for sponsoring Soroban transactions on mainnet.
 
 ---
 
-## 📧 Email Configuration (SMTP)
+## 📧 Email Configuration
 
-For production, configure real SMTP to send verification emails:
+Email uses **Resend HTTP API** (not SMTP). Only one env var needed:
 
-- [ ] `SMTP_HOST` (e.g., `smtp.sendgrid.net`)
-- [ ] `SMTP_USER` 
-- [ ] `SMTP_PASSWORD`
-- [ ] `SMTP_FROM` (verified sender domain)
+- [ ] `RESEND_API_KEY` — production key from [Resend dashboard](https://resend.com)
+- [ ] Verify sender domain `radox.net` is configured in Resend DNS settings
+
+> **Note:** The old SMTP fields (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`) are no longer used. The email service was migrated to Resend in Mar 2026.
 
 ---
 
@@ -90,7 +109,7 @@ For production, configure real SMTP to send verification emails:
 
 ### Frontend
 - Run `npm run build` in the `frontend` directory.
-- Set `VITE_*` env vars before building.
+- Set `VITE_*` env vars before building (they are baked into the bundle at build time).
 
 ### Database
 - Run `npm run migrate` to apply migrations.
@@ -101,7 +120,7 @@ For production, configure real SMTP to send verification emails:
 # JWT Secret
 openssl rand -hex 32
 
-# Stellar Keypairs (run for Issuer, Distributor, Treasury)
+# Stellar Keypairs (run for Issuer, Distributor, Treasury, Operations)
 node -e "const {Keypair} = require('@stellar/stellar-sdk'); const kp = Keypair.random(); console.log('SECRET=' + kp.secret()); console.log('PUBLIC=' + kp.publicKey());"
 ```
 
@@ -178,4 +197,10 @@ npm run multisig:setup    # Configure production signers
 #   - Flags: auth_required, auth_revocable, auth_clawback_enabled
 #   - Master Weight: 0 (if locked)
 #   - Signers: Your Ledger public keys
+```
+
+# Verify TOML is live
+```bash
+curl -s https://radox.net/.well-known/stellar.toml | head -20
+# Should show: NETWORK_PASSPHRASE, ACCOUNTS, [[CURRENCIES]] with IPFS links
 ```

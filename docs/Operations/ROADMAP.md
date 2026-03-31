@@ -1,20 +1,26 @@
 # Radox — Production Roadmap
 
-> Last updated: 2026-03-15
-> Status: Pre-production hardening
+> Last updated: 2026-03-31
+> Status: Pre-production hardening — feature-complete, hardening E2E test suite
 
 ---
 
-## Phase 1 — Fix the Money (Week 1)
+## Phase 1 — Fix the Money ✅ (Complete)
 
-- [ ] When fees are enabled: log on-chain fee events to `FeeLog` via `SorobanEventIndexer` for dashboard reporting
+- [x] **Fixed Processing Fee** — $5 additive fee per trade via Soroban v6 contract
+- [x] **Yield Spread Model** — `investorRate` vs `annualInterestRate`, spread → treasury
+- [x] **FeeLog recording** — all fee events logged to `FeeLog` table via `companyPayment.service.js` and `multiSigTransaction.service.js`
+- [x] **Admin fee dashboard** — `GET /fee-logs` endpoint + `investmentMetrics.service.js` revenue aggregation
+- [ ] **SorobanEventIndexer → FeeLog** — wire on-chain trade fee events to FeeLog for redundancy (currently DB-only recording is sufficient)
 
 ---
 
-## Phase 1.5 — Bullet Maturity (Week 1)
+## Phase 1.5 — Bullet Maturity ✅ (Complete)
 
-- [ ] **Reconciliation results UI** — display discrepancies table in admin detail panel
-- [ ] **Persistent batch_pending status** — show "waiting for admin" on PayInvestors if batches exist in pending state
+- [x] **Maturity clawback + payout** — E2E tested in `tokenLifecycle.test.js` Phase 4
+- [x] **Multi-investor batching** — 49-investor cap per TX, tested with 30/49/50/100 investors in `paymentBatching.test.js`
+- [x] **Reconciliation results UI** — `MultisigDetail.tsx` has "On-Chain Reconciliation" section with reconcile button
+- [ ] **Persistent batch_pending status** — show "waiting for admin" on PayInvestors if batches exist in pending state (cosmetic, low priority)
 
 > [!CAUTION]
 > **Trading Market Lockout**: Do NOT unlock tokens for secondary trading before maturity date.
@@ -25,29 +31,37 @@
 
 ---
 
+## Phase 2 — RWA Asset Discoverability ✅ (Complete — 2026-03-31)
+
+- [x] **SEP-1 compliant TOML** — `TomlService.js` maps IPFS docs to standard fields (`attestation_of_reserve`, `redemption_instructions`)
+- [x] **Caddy routing** — `/.well-known/stellar.toml` served for `radox.net` and `dev.radox.net`
+- [x] **E2E TOML validation** — `contractManagement.test.js` Layer 3 asserts SEP-1 fields + IPFS links
+- [x] **TOML injection mitigation** — `tomlEscape()` sanitizes all user-supplied values
+- [x] **Startup security guard** — `index.js` blocks `NODE_ENV=test` in production without `ALLOW_TEST_MODE=1`
+
 ---
 
 ## Phase 3 — Delete Dead Weight (Week 2)
 
 > Checklist source: `04_dead_code.md`
 
-- [ ] Delete `frontend/src/lib/api/auth.ts` (legacy password login)
-- [ ] Delete `TransactionManagerService` (superseded by Soroban)
-- [ ] Remove password fields from `types/index.ts`
+- [x] Delete `frontend/src/lib/api/auth.ts` (legacy password login) — **DONE**
+- [x] Delete `TransactionManagerService` (superseded by Soroban) — **DONE**
+- [ ] Remove password fields from `types/index.ts` (lines 9, 183) — dead types, no functional impact
 - [ ] Consolidate API clients: kill `lib/api.ts`, migrate `passkey.ts` to use Axios client
 - [ ] Sweep remaining dead code from `04_dead_code.md`
-- [ ] **DRY audit** — find and consolidate duplicated constants, magic numbers, and repeated logic across backend/frontend (e.g. fee defaults were hardcoded in 3 files)
+- [ ] **DRY audit** — find and consolidate duplicated constants, magic numbers, and repeated logic across backend/frontend
 
 ---
 
 ## Phase 4 — Break Up the Monster (Week 2)
 
-> `platformAdminRoutes.js` = 1,877 lines with inline handlers
+> `platformAdminRoutes.js` = 1,902 lines with inline handlers
 
 - [ ] Extract `adminSponsorRoutes.js` (eliminate ~300L duplication)
 - [ ] Extract `adminDefaultsRoutes.js`
 - [ ] Extract `adminSorobanRoutes.js`
-- [ ] Move all inline handlers to `PlatformAdminController`
+- [x] Move core handlers to `PlatformAdminController` — **DONE** (209+ lines extracted)
 - [ ] Reference: `routes_layer.md`
 
 ---
@@ -68,30 +82,37 @@
 
 ---
 
-## Phase 6 — Bible as MCP Server (Week 3+)
+## Backlog — Verified / Resolved
 
-- [ ] Expose Project Bible as MCP context source
-- [ ] Priority docs for MCP: `01_call_graph.md`, `02_feature_matrix.md`, `05_config_env_map.md`, `06_security_audit.md`
-- [ ] Every future AI session starts with deep understanding instead of grep
+### SAC Edge Case ✅
+- [x] **SAC reuse on re-issued asset codes** — `ensureSACDeployed()` implemented in `stellar.service.js:601`, handles `ExistingValue` gracefully
+
+### Contract Management Actions ✅
+> All 8 Soroban admin actions + 5 Classic token actions E2E tested in `contractManagement.test.js`
+
+- [x] **Pause** — pause a sale contract
+- [x] **Resume** — unpause a paused sale contract
+- [x] **Deposit** — deposit sell tokens into contract
+- [x] **Price** — update token price on active contract
+- [x] **Extend TTL** — extend Soroban contract time-to-live
+- [x] **Withdraw** — withdraw unsold tokens from contract
+- [x] **Freeze** — freeze investor account (compliance)
+- [x] **Emergency Drain** — drain all funds from contract (emergency)
 
 ---
 
-## Backlog — Untested / Unverified
+## E2E Test Coverage Summary (61 files, 3,537 E2E + ~4,200 unit/integration)
 
-### SAC Edge Case
-- [ ] **SAC reuse on re-issued asset codes** — `deploySACForAsset` throws `Error(Storage, ExistingValue)` when SAC already exists. Fix: swap to `ensureSACDeployed` in `reviewOffer()`.
-
-### Contract Management Actions (Admin → Contracts)
-> These buttons exist in the UI but have **never been end-to-end tested** with real contract state.
-
-- [ ] **Pause** — pause a sale contract
-- [ ] **Resume** — unpause a paused sale contract
-- [ ] **Deposit** — deposit sell tokens into contract
-- [ ] **Price** — update token price on active contract
-- [ ] **Extend TTL** — extend Soroban contract time-to-live
-- [ ] **Withdraw** — withdraw unsold tokens from contract
-- [ ] **Freeze** — freeze investor account (compliance)
-- [ ] **Emergency Drain** — drain all funds from contract (emergency)
+| Suite | Lines | Coverage |
+|---|---|---|
+| `tokenLifecycle.test.js` | 2,053 | 10 phases: setup → trade → dividends → maturity → multi-investor → defaults |
+| `contractManagement.test.js` | 961 | 8 Soroban + 5 Classic actions + TOML/SEP-1 + validation |
+| `paymentBatching.test.js` | 342 | 49-investor cap, split logic, fee recalc per batch |
+| `hardeningE2E.test.js` | 196 | Reconciler, idempotency, race conditions |
+| `sorobanSaleE2E.test.js` | 175 | Soroban sale contract setup + trade |
+| `sorobanOnlySmoke.test.js` | 152 | Quick Soroban connectivity check |
+| Integration (28 files) | ~2,200 | Auth, passkey, KYC, payments, compliance, investments, offers |
+| Unit (33 files) | ~2,000 | Controllers, middleware, services, models |
 
 ---
 
@@ -118,18 +139,16 @@ Reference: Security audit Fix #4 (Mar 2026), `companyUserRoutes.js` comments.
 
 ---
 
-### Fee Model Redesign
-> **Principle:** Company is the customer. Investor's yield is sacred. Platform earns via spread.
+### Fee Model ✅ (Complete)
 
 #### Change 1 — Fixed Processing Fee ✅ (2026-03-30)
 - [x] Removed `feeBps` entirely from Soroban Offer struct
 - [x] Added `fixed_fee: i128` field — flat $5 USDC per trade (50_000_000 stroops)
-- [x] In `trade()`: deduct `fixed_fee` → treasury, remainder → company
+- [x] In `trade()`: fee is **additive** — investor pays `investment + fee`, company gets full `investment`
 - [x] Added `processingFee` field to Prisma Offer model (Decimal, default 5.0)
-- [x] Bumped `CONTRACT_VERSION` to 5, added `InsufficientForFee` error
-- [x] Built + deployed v5 WASM to testnet: `13e1d732...1fb874`
-- [x] E2E verified: 75/75 Rust, 38/38 E2E lifecycle
-- [x] Updated Project Bible `smart_contract_layer.md`
+- [x] Bumped `CONTRACT_VERSION` to 6 (v6 = additive fee model)
+- [x] Built + deployed v6 WASM to testnet
+- [x] E2E verified: 75/75 Rust, full lifecycle E2E
 
 #### Change 2 — Yield Spread ✅ (2026-03-30)
 - [x] Added `investorRate` field to Prisma Offer schema + migration
@@ -137,9 +156,8 @@ Reference: Security audit Fix #4 (Mar 2026), `companyUserRoutes.js` comments.
 - [x] Removed `DIVIDEND_FEE_PERCENT` constant + `ConfigService` import entirely
 - [x] Spread-based fee in `createPaymentTransaction`, `processSignedPayment`, `_recordPayments`
 - [x] Updated `multiSigTransaction.service.js` processEffects to use `spreadPct`
-- [x] E2E verified with dual computation: 12% company / 10% investor → $0.16 spread on $100 over 29 days
-- [x] 42/42 E2E assertions pass
-- [ ] Frontend: investor sees `investorRate` as "APY", company sees `annualInterestRate` as "Cost of Capital"
+- [x] E2E verified with dual computation: 12% company / 10% investor → spread verified
+- [x] Frontend: investor sees `investorRate` as "APY" in Portfolio, company sees spread in PayInvestors, admin sets spread at offer approval
 
 #### Change 3 — Admin/AUM Fee (Deferred)
 > **Build when:** $1M+ AUM and finer-grained fee control needed. Yield spread (Change 2) already
@@ -161,7 +179,7 @@ Infrastructure is **already built** in `companyPayment.service.js:22-26`:
 - `LATE_FEE_PERCENT_PER_DAY = 0` — calculates `amount × 0 = $0`
 - `DEFAULT_FEE_PERCENT = 0` — calculates `amount × 0 = $0`
 - `GRACE_PERIOD_DAYS = 10` — cron auto-escalates `due → overdue → defaulted`
-- Frontend overdue warning updated to soft language (no fake rates) — Mar 2026
+- Default state machine E2E tested in `tokenLifecycle.test.js` Phase 6
 
 **Build when:** Legal counsel confirms late fee + default penalty terms are enforceable under Brazilian law.
 - [ ] Legal review: confirm terms are enforceable under CVM regulations
@@ -235,13 +253,6 @@ Backend route exists (`POST /contracts/batch/ttl` → `ContractController.batchE
 - [ ] `contract_audit_log` table in Prisma schema: `{ offerId, action, actor, details, timestamp }`
 - [ ] `AuditService.log()` called on every contract route (pause, resume, drain, price update, etc.)
 - [ ] Scrollable log section in `ContractDetail.tsx`
-
-### Fee UX (Investor-Facing)
-> **Build with** Change 2 (yield spread). Once spread model is live, investor never sees a "fee."
-
-- [ ] Investor payment history shows net amount only (= `investorRate` yield, no deductions)
-- [ ] Admin panel retains full visibility: `companyRate`, `investorRate`, `spread`, `treasuryAmount`
-- [ ] Payment notification: "Payment received: R$ 800.00 — 8.0% APY on your R$ 10,000 investment"
 
 ### Loyalty Points Program 🎯
 > **Build when:** Post-MVP, when investor retention becomes a priority.
