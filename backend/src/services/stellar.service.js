@@ -1303,11 +1303,16 @@ export class StellarService {
         Operation.setTrustLineFlags({
           trustor: investorPublicKey,
           asset: asset,
-          setFlags: 1, // AUTHORIZED_FLAG = 1
+          flags: {
+            authorized: true
+          },
+          source: issuerPublicKey,
         }),
       ];
 
-      const transaction = await this.buildUnsignedTransaction(issuerPublicKey, operations);
+      // Use RPC for sequence (consistent with freezeAccount)
+      const issuerAccountForUnfreeze = await this.getAccountRPC(issuerPublicKey);
+      const transaction = await buildTransactionWithAccount(issuerAccountForUnfreeze, operations);
       const result = await TransactionManager.submit({
         transaction,
         signingRole: 'ISSUER',
@@ -1367,12 +1372,16 @@ export class StellarService {
         Operation.setTrustLineFlags({
           trustor: investorPublicKey,
           asset: asset,
-          // CLAWBACK_ENABLED_FLAG = 4
-          clearFlags: 4,
+          flags: {
+            clawbackEnabled: false,
+          },
+          source: issuerPublicKey,
         }),
       ];
 
-      const transaction = await this.buildUnsignedTransaction(issuerPublicKey, operations);
+      // Use RPC for sequence (consistent with freeze/unfreeze)
+      const issuerAccountForClawback = await this.getAccountRPC(issuerPublicKey);
+      const transaction = await buildTransactionWithAccount(issuerAccountForClawback, operations);
       const result = await TransactionManager.submit({
         transaction,
         signingRole: 'ISSUER',
@@ -1416,7 +1425,9 @@ export class StellarService {
     return Operation.setTrustLineFlags({
       trustor: investorPublicKey,
       asset: asset,
-      clearFlags: 4, // AuthClawbackEnabledFlag = 4
+      flags: {
+        clawbackEnabled: false,
+      },
     });
   }
 

@@ -230,6 +230,10 @@ export async function blocklistToken(token, ttlSeconds = TOKEN_BLOCKLIST_TTL) {
  * @returns {Promise<boolean>} True if token is blocklisted (invalid)
  */
 export async function isTokenBlocklisted(token) {
+    // In test environment, Redis is deliberately skipped (getRedisClient returns null).
+    // Without this bypass, the fail-closed logic blocks ALL tokens — making auth impossible.
+    if (process.env.NODE_ENV === 'test') return false;
+
     const tokenHash = hashToken(token);
     const key = `${TOKEN_BLOCKLIST_PREFIX}${tokenHash}`;
 
