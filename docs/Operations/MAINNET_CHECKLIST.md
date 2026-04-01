@@ -4,6 +4,8 @@
 
 This document details all specific actions required to transition the **Radox** platform from Testnet to Mainnet (Production).
 
+---
+
 ## 🌍 Environment Variables Configuration
 
 Create a production `.env` file with the following changes:
@@ -13,16 +15,19 @@ Create a production `.env` file with the following changes:
 |----------|---------------|----------------------|
 | `STELLAR_NETWORK` | `testnet` | `public` |
 | `STELLAR_HORIZON_URL` | `https://horizon-testnet.stellar.org` | `https://horizon.stellar.org` |
-| `SOROBAN_RPC_URL` | `https://soroban-testnet.stellar.org` | `https://soroban-rpc.mainnet.stellar.org` |
+| `SOROBAN_RPC_URL` | `https://soroban-testnet.stellar.org` | `https://soroban-rpc.mainnet.stellar.gateway.fm` |
 | `VITE_STELLAR_NETWORK` | `testnet` | `public` |
 | `VITE_SOROBAN_RPC_URL` | *(Testnet URL)* | `https://soroban-rpc.mainnet.stellar.gateway.fm` |
 | `VITE_STELLAR_NETWORK_PASSPHRASE`| `Test SDF Network ; September 2015` | `Public Global Stellar Network ; September 2015` |
+
+> ⚠️ **VITE vars are baked into the bundle at `docker build` time.** Changing them in `.env.production` alone is NOT enough — you must rebuild the frontend image (`docker compose up -d --build frontend`).
 
 ### Keys & Accounts (Action Required)
 > **NOTE:** The platform uses `KEY_MANAGEMENT_MODE=multisig` — only public keys + the Operations hot wallet key are needed. Issuer/Treasury/Distributor sign via Freighter/Ledger.
 
 - [ ] **Generate new mainnet keypairs** for Issuer, Distributor, Treasury, Operations. Fund each with XLM.
 - [ ] **All `*_PUBLIC_KEY` vars**: Update in `.env.production` with mainnet public keys.
+- [x] **`USDC_ISSUER`**: **No action needed.** `getUsdcIssuer()` in `stellar.js` auto-detects Circle's mainnet issuer (`GA5ZS...`) when `STELLAR_NETWORK=public`. The env var is only an override for non-Circle USDC.
 
 ### Operations Hot Wallet Security
 > `OPERATIONS_SECRET_KEY` is the **only** secret key on the server. It sponsors gasless transactions (wallet creation, trustlines).
@@ -34,10 +39,18 @@ Create a production `.env` file with the following changes:
 - [ ] **Key rotation plan** — document how to rotate the Operations key if compromised (replace `/root/.secrets/operations_key`, recreate backend container).
 
 ### Smart Contracts (Smart Account Kit)
-- [ ] **`ACCOUNT_WASM_HASH`**: Deploy OZ Smart Account WASM to Mainnet and record hash.
-- [ ] **`WEBAUTHN_VERIFIER_ADDRESS`**: Deploy WebAuthn verifier and record address.
-- [ ] **`ED25519_VERIFIER_ADDRESS`**: Deploy Ed25519 verifier and record address.
-- [ ] **`SALE_WASM_HASH`**: Deploy token_sale v6 WASM to Mainnet and record hash.
+> Current values in `.env.production` are **testnet**. All four must be re-deployed/looked up for mainnet.
+
+- [ ] **`ACCOUNT_WASM_HASH`**: Deploy OZ Smart Account WASM to Mainnet and record hash. *(Testnet hash already set — must be replaced for mainnet.)*
+- [ ] **`WEBAUTHN_VERIFIER_ADDRESS`**: Look up OZ's pre-deployed WebAuthn verifier address on mainnet. *(Testnet address already set.)*
+- [ ] **`ED25519_VERIFIER_ADDRESS`**: Look up OZ's pre-deployed Ed25519 verifier address on mainnet. *(Testnet address already set.)*
+- [ ] **`SALE_WASM_HASH`**: Deploy token_sale v6 WASM to Mainnet and record hash. *(Testnet hash already set — must be replaced for mainnet.)*
+
+### Soroban Asset Contracts (SAC IDs)
+> Currently set to testnet SAC IDs — must be updated for mainnet.
+
+- [ ] **`XLM_SAC_CONTRACT_ID`**: Look up mainnet XLM SAC on [Stellar Expert](https://stellar.expert/explorer/public). Current value is testnet.
+- [ ] **`USDC_SAC_CONTRACT_ID`**: Look up mainnet USDC (Circle) SAC on [Stellar Expert](https://stellar.expert/explorer/public). Current value is testnet.
 
 ### Channel Accounts Pool (Parallel Fee Sponsorship)
 - [ ] **Generate 5 new keypairs** for mainnet (never reuse testnet keys):
@@ -50,30 +63,37 @@ Create a production `.env` file with the following changes:
 - [ ] **File permissions** — ensure channel keys have same security as `OPERATIONS_SECRET_KEY` (chmod 600 or Docker Secrets).
 
 ### Infrastructure & Security
-- [ ] **`DB_SSL`**: Set to `true` (Required for cloud databases).
-- [ ] **`JWT_SECRET`**: Generate with `openssl rand -hex 32`.
-- [ ] **`WEBAUTHN_RP_ID`**: Keep as `radox.net` (covers all subdomains).
-- [ ] **`WEBAUTHN_ORIGIN`**: Change to `https://app.radox.net`.
-- [ ] **`FRONTEND_URL`**: Update to `https://app.radox.net`.
-- [ ] **`API_URL`**: Update to `https://api.radox.net`.
-- [ ] **`VITE_API_URL`**: Keep as `/api` (same-origin proxy via nginx).
+- [ ] **`DB_SSL`**: Keep `false` for self-hosted Docker (internal network). Only set `true` for managed cloud DB (AWS RDS, Supabase, etc.).
+- [x] **`JWT_SECRET`**: Generated with `openssl rand -hex 32`. Real value present in `.env.production`.
+- [x] **`WEBAUTHN_RP_ID`**: Set to `radox.net` in `.env.production`.
+- [x] **`WEBAUTHN_ORIGIN`**: Set to `https://app.radox.net` in `.env.production`.
+- [x] **`FRONTEND_URL`**: Set to `https://app.radox.net` in `.env.production`.
+- [x] **`API_URL`**: Set to `https://api.radox.net` in `.env.production`.
+- [ ] **`VITE_API_URL`**: Keep as `/api` (same-origin proxy via nginx). *(Already correct in `docker-compose.prod.yml` build arg.)*
 
 ### Third Party Services
-- [ ] **Channels API Key**: Get production API key from OpenZeppelin.
-- [ ] **`RESEND_API_KEY`**: Production Resend API key (already configured for testnet).
-- [ ] **Launchtube Mainnet JWT**: Obtain from SDF for sponsoring Soroban transactions on mainnet.
+- [x] **`RESEND_API_KEY`**: Live Resend key present in `.env.production`. *(Same key works for testnet and mainnet.)*
+- [ ] **Channels API Key**: `.env.production` has a **testnet** OZ Channels key. Get **mainnet** API key from [channels.openzeppelin.com/gen](https://channels.openzeppelin.com/gen).
+  > ~~Launchtube Mainnet JWT~~ — **Launchtube has been replaced by OpenZeppelin Channels.** The item below is obsolete: ~~"Launchtube Mainnet JWT: Obtain from SDF"~~.
+- [ ] **Pusher credentials**: `.env.production` has `<YOUR_PUSHER_*>` placeholders. Fill in or disable real-time if not needed for MVP. Real-time notifications will silently fail with placeholder values.
+
+### Admin Accounts
+- [ ] **`ADMIN_2_EMAIL`**: Currently `admin2@stellar-tokens.local` (a dummy placeholder). Update to Gabriel's real email before mainnet launch.
+  > Admins are seeded at container startup from `ADMIN_1_EMAIL` / `ADMIN_2_EMAIL` env vars (or the `bootstrap-admin.sh` script). A bad email means Gabriel's admin account won't work.
 
 ---
 
 ## 🏗️ Build & Deployment
 
 ### Frontend
-- Run `npm run build` in the `frontend` directory.
-- Set `VITE_*` env vars before building (they are baked into the bundle at build time).
+- Run `npm run build` in the `frontend` directory (or `docker compose up --build`).
+- **CRITICAL**: Set `VITE_*` env vars **before building** — they are baked into the bundle at build time, not at runtime.
+  - `VITE_STELLAR_NETWORK_PASSPHRASE=Public Global Stellar Network ; September 2015`
+  - `VITE_SOROBAN_RPC_URL=https://soroban-rpc.mainnet.stellar.gateway.fm`
 
 ### Database
-- Run `npm run migrate` to apply migrations.
-- Enable SSL for production databases.
+- Run `npm run migrate` (or `npx prisma migrate deploy` inside container) to apply migrations.
+- Enable SSL (`DB_SSL=true`) only for managed PostgreSQL (RDS, Supabase). Not needed for Docker-internal Postgres.
 
 ### Key Generation
 ```bash
@@ -110,12 +130,13 @@ npm run multisig:setup    # Configure production signers
 - [ ] **Master keys disabled** on all production accounts
 
 ### Error Monitoring
-- [ ] **SENTRY_DSN** configured in backend `.env`
-- [ ] **VITE_SENTRY_DSN** configured in frontend `.env`
+- [ ] **SENTRY_DSN** configured in backend `.env` (optional but strongly recommended for production)
+- [ ] **VITE_SENTRY_DSN** configured in frontend `.env` (optional but strongly recommended)
 
 ### Stellar-Specific Security (CRITICAL)
 
-> ⚠️ **Read the full audit:** [STELLAR_SECURITY_AUDIT.md](./STELLAR_SECURITY_AUDIT.md)
+> ⚠️ **Read the full audit:** [06_security_audit.md](../Project_Bible/06_security_audit.md)
+> *(Note: `STELLAR_SECURITY_AUDIT.md` referenced here previously does not exist — the audit is in `docs/Project_Bible/06_security_audit.md`)*
 
 - [ ] **Verify issuer flags** - Run `npm run multisig:inspect` to confirm:
   - `auth_required: true`
@@ -145,10 +166,19 @@ npm run multisig:setup    # Configure production signers
   ```
   This sets `masterWeight: 0` preventing any further minting.
 
-- [x] **Remove secret keys from production .env** — `.env.production` has zero Stellar secret keys. Only public keys + `OPERATIONS_SECRET_KEY` present.
+- [x] **Remove secret keys from production .env** — `.env.production` has zero Stellar secret keys. Only public keys + `OPERATIONS_SECRET_KEY` present (Operations key is via Docker Secrets, not `.env`).
   - Issuer/Treasury/Distributor transactions require Ledger/Freighter signatures
 
-### Post-Launch Verification
+### Emergency Contacts (CONTINGENCY_RUNBOOK.md)
+- [ ] **Fill in emergency contact table** in `CONTINGENCY_RUNBOOK.md` — all roles (Issuer signer 1/2/3, Contract admin, Contract seller, Ops on-call) are blank. Without this, incident response is ad-hoc.
+
+### Kill Switch
+- [ ] **`ENABLE_SOROBAN_SALE`**: Currently `=true` in `.env.production`. Confirm this is intentional before mainnet launch. Set to `false` to block all investments if needed (API returns 503).
+
+---
+
+## ✅ Post-Launch Verification
+
 ```bash
 # Verify account configuration on Stellar Explorer
 # https://stellarchain.io/accounts/GXXXX (your issuer public key)
@@ -158,8 +188,22 @@ npm run multisig:setup    # Configure production signers
 #   - Signers: Your Ledger public keys
 ```
 
-# Verify TOML is live
+### Verify stellar.toml is live and shows mainnet passphrase
 ```bash
 curl -s https://radox.net/.well-known/stellar.toml | head -20
-# Should show: NETWORK_PASSPHRASE, ACCOUNTS, [[CURRENCIES]] with IPFS links
+# Should show:
+#   NETWORK_PASSPHRASE="Public Global Stellar Network ; September 2015"
+#   ACCOUNTS, [[CURRENCIES]] with IPFS links
+```
+
+### Container health
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.production ps
+# All 5 containers: Up (healthy)
+```
+
+### API endpoint
+```bash
+curl https://api.radox.net/health
+# → {"status":"ok"}
 ```
