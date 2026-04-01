@@ -47,7 +47,7 @@ fi
 # Instalar dependências
 if [ ! -d "node_modules" ]; then
     echo "📦 Instalando dependências npm..."
-    npm install
+    npm ci
     echo "✓ Dependências instaladas"
 else
     echo "✓ Dependências já instaladas"
