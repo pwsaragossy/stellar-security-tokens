@@ -37,21 +37,21 @@ describe('PlatformAdmin Model Integration (Mocked)', () => {
         assert.strictEqual(admin.passwordHash, undefined); // Should not return hash
     });
 
-    it('should authenticate correctly (mocked)', async () => {
+    it('should find admin by email (mocked)', async () => {
         const adminData = {
-            email: `auth.mocked.${Date.now()}@platform.com`,
+            email: `find.mocked.${Date.now()}@platform.com`,
             password: 'password123',
-            name: 'Auth Admin Mocked',
+            name: 'Find Admin Mocked',
         };
 
         await PlatformAdmin.create(adminData);
 
-        const authenticated = await PlatformAdmin.authenticate(adminData.email, 'password123');
-        assert.ok(authenticated);
-        assert.strictEqual(authenticated.email, adminData.email);
+        const found = await PlatformAdmin.findByEmail(adminData.email);
+        assert.ok(found);
+        assert.strictEqual(found.email, adminData.email);
 
-        const failed = await PlatformAdmin.authenticate(adminData.email, 'wrongpassword');
-        assert.strictEqual(failed, null);
+        const notFound = await PlatformAdmin.findByEmail('nonexistent@platform.com');
+        assert.strictEqual(notFound, null);
     });
 
     it('should update admin details (mocked)', async () => {

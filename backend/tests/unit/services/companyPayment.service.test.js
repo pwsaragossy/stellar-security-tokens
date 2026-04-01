@@ -189,96 +189,115 @@ describe('CompanyPaymentService', () => {
         }
     });
 
-    test('Dividend fee calculation: 2% on $1000 = $20 platform fee, $980 to investors', async () => {
-        // Mirrors the math in createPaymentTransaction():
-        //   feePercent = 2 (from ConfigService, stored as "2" meaning 2%)
-        //   platformFee = totalOwed × (feePercent / 100)
-        //   netToInvestors = totalOwed - platformFee
-        const totalOwed = 1000;
-        const feePercent = 2; // as stored in DB / returned by ConfigService.getFloat()
-        const platformFee = Math.round(totalOwed * (feePercent / 100) * 100) / 100;
-        const netToInvestors = Math.round((totalOwed - platformFee) * 100) / 100;
+    test('Yield spread fee: annualRate=12, investorRate=10, $1000 interest', async () => {
+        // Mirrors the math in _recordPayments():
+        //   spreadPct = annualRate - investorRate = 12 - 10 = 2
+        //   effectiveInvestorRate = investorRate ?? annualRate = 10
+        //   spreadRatio = spreadPct / effectiveInvestorRate = 2 / 10 = 0.2
+        //   fee = round7(interest × spreadRatio)
+        const round7 = (v) => Math.round(v * 10_000_000) / 10_000_000;
+        const annualRate = 12;
+        const investorRate = 10;
+        const spreadPct = annualRate - investorRate; // 2
+        const effectiveInvestorRate = investorRate;
+        const spreadRatio = spreadPct / effectiveInvestorRate; // 0.2
+        const interestOwed = 1000;
 
-        assert.strictEqual(platformFee, 20);
-        assert.strictEqual(netToInvestors, 980);
-        assert.strictEqual(platformFee + netToInvestors, totalOwed);
+        const platformFee = round7(interestOwed * spreadRatio);
+        const netToInvestors = round7(interestOwed - platformFee);
+
+        assert.strictEqual(spreadRatio, 0.2);
+        assert.strictEqual(platformFee, 200);
+        assert.strictEqual(netToInvestors, 800);
+        assert.strictEqual(platformFee + netToInvestors, interestOwed);
     });
 
-    test('Dividend fee rounding: handles fractional cents correctly', async () => {
-        // $333.33 × 2% = $6.6666 → rounded to $6.67
-        const totalOwed = 333.33;
-        const feePercent = 2;
-        const platformFee = Math.round(totalOwed * (feePercent / 100) * 100) / 100;
-        const netToInvestors = Math.round((totalOwed - platformFee) * 100) / 100;
+    test('Yield spread rounding: handles fractional stroops correctly (round7)', async () => {
+        // $333.33 × 0.2 = $66.666 → round7 = $66.666
+        const round7 = (v) => Math.round(v * 10_000_000) / 10_000_000;
+        const interestOwed = 333.33;
+        const spreadRatio = 0.2;
+        const platformFee = round7(interestOwed * spreadRatio);
+        const netToInvestors = round7(interestOwed - platformFee);
 
-        assert.strictEqual(platformFee, 6.67);
-        assert.strictEqual(netToInvestors, 326.66);
-        // Allow 1 cent variance from rounding
-        assert.ok(Math.abs((platformFee + netToInvestors) - totalOwed) <= 0.01);
+        assert.strictEqual(platformFee, 66.666);
+        assert.strictEqual(netToInvestors, 266.664);
+        // Stroop-precision means fee + net = gross within 1 stroop
+        assert.ok(Math.abs((platformFee + netToInvestors) - interestOwed) <= 0.0000001);
     });
 
-    test('Dividend fee: zero fee skips treasury operation', async () => {
-        // When admin sets fee to 0%, no treasury payment should be created
-        const totalOwed = 1000;
-        const feePercent = 0;
-        const platformFee = Math.round(totalOwed * (feePercent / 100) * 100) / 100;
+    test('Yield spread: zero spread skips treasury operation', async () => {
+        // When investorRate = annualRate (or null), spread = 0 → no fee
+        const round7 = (v) => Math.round(v * 10_000_000) / 10_000_000;
+        const annualRate = 12;
+        const investorRate = 12; // No spread
+        const spreadPct = Math.max(0, annualRate - investorRate); // 0
+        const effectiveInvestorRate = investorRate;
+        const spreadRatio = effectiveInvestorRate > 0 ? spreadPct / effectiveInvestorRate : 0;
+        const interestOwed = 1000;
 
+        const platformFee = round7(interestOwed * spreadRatio);
+
+        assert.strictEqual(spreadPct, 0);
+        assert.strictEqual(spreadRatio, 0);
         assert.strictEqual(platformFee, 0);
-        // createPaymentTransaction() guards: if (platformFee > 0) — so no treasury op
+        // _recordPayments() guards: if (totalFee > 0) — so no FeeLog
         assert.strictEqual(platformFee > 0, false);
     });
 
-    test('Per-investor fee deduction: feeRatio applied to individual amounts', async () => {
-        // Mirrors processSignedPayment() recording logic:
-        //   feeRatio = (100 - feePercent) / 100
-        //   net = Math.round(gross × feeRatio × 100) / 100
-        const feePercent = 2;
-        const feeRatio = (100 - feePercent) / 100; // 0.98
-        const investorGross = 400; // investor's share before fee
+    test('Per-investor spread deduction: spreadRatio applied to individual amounts', async () => {
+        // Mirrors _recordPayments() periodic branch:
+        //   fee = round7(gross * spreadRatio)
+        //   net = gross - fee
+        const round7 = (v) => Math.round(v * 10_000_000) / 10_000_000;
+        const spreadRatio = 2 / 10; // 0.2 (annualRate=12, investorRate=10)
+        const investorGross = 400; // investor's interest before spread
 
-        const net = Math.round(investorGross * feeRatio * 100) / 100;
-        const fee = Math.round((investorGross - net) * 100) / 100;
+        const fee = round7(investorGross * spreadRatio);
+        const net = round7(investorGross - fee);
 
-        assert.strictEqual(feeRatio, 0.98);
-        assert.strictEqual(net, 392);
-        assert.strictEqual(fee, 8);
-        assert.strictEqual(net + fee, investorGross);
+        assert.strictEqual(spreadRatio, 0.2);
+        assert.strictEqual(fee, 80);
+        assert.strictEqual(net, 320);
+        assert.strictEqual(fee + net, investorGross);
     });
 
-    test('Bullet fee: 2% on INTEREST only, NOT on principal + interest', async () => {
+    test('Bullet spread: fee on INTEREST only, NOT on principal + interest', async () => {
         // Bullet: $10,000 principal + $2,000 interest = $12,000 total
-        // Fee should be 2% × $2,000 = $40 (NOT 2% × $12,000 = $240)
+        // spreadRatio = 2/8 = 0.25 (annualRate=10, investorRate=8)
+        // Fee = 0.25 × $2,000 = $500 (on INTEREST)
+        // NOT: 0.25 × $12,000 = $3,000 (on total)
+        const round7 = (v) => Math.round(v * 10_000_000) / 10_000_000;
         const totalPrincipal = 10000;
         const totalInterest = 2000;
         const totalPayout = totalPrincipal + totalInterest;
-        const feePercent = 2;
+        const spreadRatio = 2 / 8; // 0.25
 
         // feeBase = totalInterest (NOT totalPayout)
-        const feeBase = totalInterest;
-        const platformFee = Math.round(feeBase * (feePercent / 100) * 100) / 100;
-        const netToInvestors = Math.round((totalPayout - platformFee) * 100) / 100;
+        const platformFee = round7(totalInterest * spreadRatio);
+        const netToInvestors = round7(totalPayout - platformFee);
 
-        assert.strictEqual(platformFee, 40);         // NOT 240
-        assert.strictEqual(netToInvestors, 11960);   // NOT 11760
+        assert.strictEqual(platformFee, 500);           // NOT 3000
+        assert.strictEqual(netToInvestors, 11500);       // NOT 9000
         assert.strictEqual(platformFee + netToInvestors, totalPayout);
     });
 
-    test('Bullet per-investor: principal untaxed, fee only on interest', async () => {
-        // Mirrors createPaymentTransaction() bullet branch:
-        //   interestFeeRatio = (feeBase - platformFee) / feeBase
-        //   payout = principal + (interest × interestFeeRatio)
-        const feePercent = 2;
-        const investorPrincipal = 5000;  // investor's own money
+    test('Bullet per-investor: principal untaxed, spread only on interest', async () => {
+        // Mirrors _recordPayments() bullet branch:
+        //   fee = round7(interest × spreadRatio)
+        //   net = principal + (interest - fee)
+        const round7 = (v) => Math.round(v * 10_000_000) / 10_000_000;
+        const spreadRatio = 2 / 8; // 0.25
+        const investorPrincipal = 5000;  // investor's own money — NEVER taxed
         const investorInterest = 1000;   // investor's yield
-        const feeRatio = (100 - feePercent) / 100; // 0.98
 
-        const adjustedInterest = Math.round(investorInterest * feeRatio * 100) / 100;
-        const fee = Math.round((investorInterest - adjustedInterest) * 100) / 100;
+        const fee = round7(investorInterest * spreadRatio);
+        const adjustedInterest = round7(investorInterest - fee);
         const payout = investorPrincipal + adjustedInterest;
 
-        assert.strictEqual(adjustedInterest, 980);
-        assert.strictEqual(fee, 20);
-        assert.strictEqual(payout, 5980);
+        assert.strictEqual(fee, 250);
+        assert.strictEqual(adjustedInterest, 750);
+        assert.strictEqual(payout, 5750);
         // Principal is UNTOUCHED
         assert.strictEqual(payout - investorPrincipal, adjustedInterest);
     });

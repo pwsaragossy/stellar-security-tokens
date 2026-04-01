@@ -111,54 +111,6 @@ export class PlatformAdmin {
   }
 
   /**
-   * Autentica admin com email e senha
-   * @param {string} email - Email do admin
-   * @param {string} password - Senha do admin
-   * @returns {Promise<Object|null>} Admin autenticado (sem password_hash) ou null
-   */
-  static async authenticate(email, password) {
-    const admin = await this.findByEmail(email);
-    if (!admin || !admin.passwordHash) {
-      return null;
-    }
-
-    const isValid = await bcrypt.compare(password, admin.passwordHash);
-    if (!isValid) {
-      return null;
-    }
-
-    if (!admin.isActive) {
-      return null;
-    }
-
-    // Retornar sem password_hash
-    const { passwordHash, ...adminWithoutPassword } = admin;
-    return adminWithoutPassword;
-  }
-
-  /**
-   * Atualiza senha do admin
-   * @param {number} id - ID do admin
-   * @param {string} newPassword - Nova senha
-   * @returns {Promise<boolean>} True se atualizado com sucesso
-   */
-  static async updatePassword(id, newPassword) {
-    const passwordHash = await bcrypt.hash(newPassword, 10);
-    try {
-      await prisma.platformAdmin.update({
-        where: { id },
-        data: { passwordHash },
-      });
-      return true;
-    } catch (error) {
-      if (error.code === 'P2025') {
-        return false;
-      }
-      throw error;
-    }
-  }
-
-  /**
    * Atualiza dados do admin
    * @param {number} id - ID do admin
    * @param {Object} adminData - Dados a atualizar

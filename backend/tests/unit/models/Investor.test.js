@@ -29,8 +29,6 @@ describe('Investor Model - Integration Style Tests', () => {
       'findAll',
       'update',
       'delete',
-      'authenticate',
-      'updatePassword',
       'getPortfolio',
       'getConsolidatedMetrics'
     ];

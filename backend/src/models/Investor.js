@@ -1,5 +1,4 @@
 import prisma from '../config/prisma.js';
-import bcrypt from 'bcrypt';
 
 /**
  * Modelo para gerenciar investidores no banco de dados usando Prisma
@@ -144,55 +143,7 @@ export class Investor {
     }
   }
 
-  /**
-   * Autentica investidor com email e senha
-   * @param {string} email - Email do investidor
-   * @param {string} password - Senha do investidor
-   * @returns {Promise<Object|null>} Investidor autenticado (sem password_hash) ou null
-   */
-  static async authenticate(email, password) {
-    const investor = await this.findByEmail(email);
-    if (!investor || !investor.passwordHash) {
-      return null;
-    }
 
-    const isValid = await bcrypt.compare(password, investor.passwordHash);
-    if (!isValid) {
-      return null;
-    }
-
-    // Atualizar last_login
-    await prisma.investor.update({
-      where: { id: investor.id },
-      data: { lastLogin: new Date() },
-    });
-
-    // Retornar sem password_hash
-    const { passwordHash, ...investorWithoutPassword } = investor;
-    return investorWithoutPassword;
-  }
-
-  /**
-   * Atualiza senha do investidor
-   * @param {number} id - ID do investidor
-   * @param {string} newPassword - Nova senha
-   * @returns {Promise<boolean>} True se atualizado com sucesso
-   */
-  static async updatePassword(id, newPassword) {
-    const passwordHash = await bcrypt.hash(newPassword, 10);
-    try {
-      await prisma.investor.update({
-        where: { id },
-        data: { passwordHash },
-      });
-      return true;
-    } catch (error) {
-      if (error.code === 'P2025') {
-        return false;
-      }
-      throw error;
-    }
-  }
 
   /**
    * Busca portfólio do investidor (tokens de múltiplas ofertas)

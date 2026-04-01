@@ -39,6 +39,7 @@ const PERIODIC_OFFER = {
     assetCode: 'REALT1',
     paymentType: 'monthly',
     annualInterestRate: 12,
+    investorRate: 10,        // spread = 2pp → spreadRatio = 2/10 = 0.2
     paymentDay: 15,
     createdAt: new Date('2024-01-01'),
     company: { stellarPublicKey: 'GCOMPANY...' },
@@ -49,6 +50,7 @@ const BULLET_OFFER = {
     assetCode: 'BULLET1',
     paymentType: 'bullet',
     annualInterestRate: 10,
+    investorRate: 8,          // spread = 2pp → spreadRatio = 2/8 = 0.25
     maturityDate: new Date('2026-01-01'),
     createdAt: new Date('2024-01-01'),
     company: { stellarPublicKey: 'GCOMPANY...' },
@@ -156,16 +158,8 @@ mock.module('../../../src/services/alert.service.js', {
     },
 });
 
-mock.module('../../../src/services/config.service.js', {
-    namedExports: {
-        ConfigService: {
-            getFloat: async (key, defaultVal) => {
-                calls.configGetFloat.push({ key, defaultVal });
-                return 2; // 2% fee
-            },
-        },
-    },
-});
+// ConfigService mock removed — the service uses yield spread (annualRate - investorRate),
+// not ConfigService.getFloat('DIVIDEND_FEE_PERCENT'). That key is deprecated.
 
 mock.module('../../../src/config/stellar.js', {
     namedExports: {
@@ -192,6 +186,7 @@ mock.module('../../../src/services/KeyManager.js', {
     namedExports: {
         keyManager: {
             getTreasuryPublicKey: () => 'GTREASURY...',
+            getIssuerPublicKey: () => 'GISSUER...',
         },
     },
 });
@@ -246,11 +241,11 @@ describe('processSignedPayment – Periodic (mocked)', () => {
             // Should have created 2 InterestPayment records
             assert.strictEqual(calls.interestPaymentCreate.length, 2);
 
-            // Verify fee breakdown: 2% of $500 = $10 fee, $490 net
+            // Verify fee breakdown: spreadRatio = 2/10 = 0.2, fee = 500 × 0.2 = 100, net = 400
             const firstPayment = calls.interestPaymentCreate[0].data;
             assert.strictEqual(firstPayment.grossAmount, 500);
-            assert.strictEqual(firstPayment.netAmount, 490);
-            assert.strictEqual(firstPayment.platformFeeAmount, 10);
+            assert.strictEqual(firstPayment.netAmount, 400);
+            assert.strictEqual(firstPayment.platformFeeAmount, 100);
             assert.strictEqual(firstPayment.transactionHash, 'txhash_mock_123');
             assert.strictEqual(firstPayment.status, 'completed');
             assert.strictEqual(firstPayment.assetCode, 'REALT1');
@@ -273,13 +268,13 @@ describe('processSignedPayment – Periodic (mocked)', () => {
             assert.strictEqual(calls.feeLogCreate.length, 1);
 
             const feeLog = calls.feeLogCreate[0].data;
-            assert.strictEqual(feeLog.amount, 20);  // 2% of $1000
+            assert.strictEqual(feeLog.amount, 200);  // spreadRatio 0.2 × $1000
             assert.strictEqual(feeLog.assetCode, 'REALT1');
             assert.strictEqual(feeLog.category, 'DIVIDEND');
             assert.strictEqual(feeLog.sourceId, 1);  // offerId
             assert.strictEqual(feeLog.transactionHash, 'txhash_mock_123');
             assert.ok(feeLog.description.includes('Periodic'));
-            assert.ok(feeLog.description.includes('2%'));
+            assert.ok(feeLog.description.includes('2pp'));
         } finally {
             CompanyPaymentService.calculateOwedAmount = originalCalc;
         }
@@ -310,78 +305,64 @@ describe('processSignedPayment – Periodic (mocked)', () => {
 describe('processSignedPayment – Bullet (mocked)', () => {
     beforeEach(() => resetCalls());
 
-    test('records InterestPayment with fee on INTEREST only, principal untaxed', async () => {
+    test('bullet queues to multisig (NO inline InterestPayments or FeeLog)', async () => {
         const originalCalc = CompanyPaymentService.calculateBulletPayment;
         CompanyPaymentService.calculateBulletPayment = async () => ({
             totalPrincipal: 10000,
             totalInterest: 2000,
+            companyTotalInterest: 2500,  // annualRate=10, investorRate=8, spread
             totalPayout: 12000,
             breakdown: BULLET_BREAKDOWN,
         });
 
         try {
-            const result = await CompanyPaymentService.processSignedPayment('signed_xdr', 2);
+            const result = await CompanyPaymentService.processSignedPayment('signed_xdr', 2, {
+                batchGroupId: 'fee-test-group',
+                batchInfo: { breakdown: BULLET_BREAKDOWN, remaining: 0 },
+            });
 
             assert.strictEqual(result.success, true);
+            assert.strictEqual(result.status, 'pending_admin_approval');
             assert.strictEqual(result.investorsPaid, 2);
-            assert.strictEqual(result.totalPaid, 12000);
 
-            // 2 InterestPayment records
-            assert.strictEqual(calls.interestPaymentCreate.length, 2);
+            // Bullet does NOT create InterestPayments inline — that happens in processEffects
+            assert.strictEqual(calls.interestPaymentCreate.length, 0);
 
-            // Verify each: interest = 1000, fee = 2% × 1000 = 20, net interest = 980
-            const first = calls.interestPaymentCreate[0].data;
-            assert.strictEqual(first.grossAmount, 6000);                // totalPayout
-            assert.strictEqual(first.netAmount, 5000 + 980);            // principal + netInterest
-            assert.strictEqual(first.platformFeeAmount, 20);            // fee on interest only
-            assert.strictEqual(first.tokenBalance, 5000);               // principal recorded
-            assert.strictEqual(first.assetCode, 'BULLET1');
-            assert.strictEqual(first.paymentType, 'bullet');
+            // Bullet does NOT write FeeLog inline — that happens in processEffects
+            assert.strictEqual(calls.feeLogCreate.length, 0);
+
+            // Bullet does NOT submit to Stellar directly — goes through multisig
+            assert.strictEqual(calls.stellarSubmit.length, 0);
+
+            // No transactionHash in bullet result (admin hasn't signed yet)
+            assert.strictEqual(result.transactionHash, undefined);
         } finally {
             CompanyPaymentService.calculateBulletPayment = originalCalc;
         }
     });
 
-    test('FeeLog records fee on interest only for bullet', async () => {
+    test('bullet multisig metadata includes spread info', async () => {
         const originalCalc = CompanyPaymentService.calculateBulletPayment;
         CompanyPaymentService.calculateBulletPayment = async () => ({
             totalPrincipal: 10000,
             totalInterest: 2000,
+            companyTotalInterest: 2500,
             totalPayout: 12000,
             breakdown: BULLET_BREAKDOWN,
         });
 
         try {
-            await CompanyPaymentService.processSignedPayment('signed_xdr', 2);
+            await CompanyPaymentService.processSignedPayment('signed_xdr', 2, {
+                batchGroupId: 'metadata-test-group',
+                batchInfo: { breakdown: BULLET_BREAKDOWN, remaining: 0 },
+            });
 
-            assert.strictEqual(calls.feeLogCreate.length, 1);
-
-            const feeLog = calls.feeLogCreate[0].data;
-            // Total fee = 2 investors × $20 = $40 (NOT $240)
-            assert.strictEqual(feeLog.amount, 40);
-            assert.strictEqual(feeLog.category, 'DIVIDEND');
-            assert.ok(feeLog.description.includes('Bullet'));
-        } finally {
-            CompanyPaymentService.calculateBulletPayment = originalCalc;
-        }
-    });
-
-    test('return shape is consistent for bullet branch', async () => {
-        const originalCalc = CompanyPaymentService.calculateBulletPayment;
-        CompanyPaymentService.calculateBulletPayment = async () => ({
-            totalPrincipal: 10000,
-            totalInterest: 2000,
-            totalPayout: 12000,
-            breakdown: BULLET_BREAKDOWN,
-        });
-
-        try {
-            const result = await CompanyPaymentService.processSignedPayment('signed_xdr', 2);
-
-            // Must not throw — this was the return-shape bug fix
-            assert.strictEqual(result.investorsPaid, 2);
-            assert.strictEqual(result.totalPaid, 12000);
-            assert.strictEqual(result.transactionHash, 'txhash_mock_123');
+            // MultiSig TX should have been created with spread metadata
+            assert.ok(calls.multiSigCreate.length >= 1);
+            const txData = calls.multiSigCreate[0].data;
+            assert.strictEqual(txData.metadata.offerId, 2);
+            assert.strictEqual(txData.metadata.assetCode, 'BULLET1');
+            assert.strictEqual(txData.metadata.spreadPct, 2);  // 10 - 8
         } finally {
             CompanyPaymentService.calculateBulletPayment = originalCalc;
         }
@@ -418,26 +399,29 @@ describe('processSignedPayment – FeeLog resilience', () => {
         }
     });
 
-    test('FeeLog skipped when total fee is zero (0% fee config)', async () => {
+    test('FeeLog skipped when spread is zero (investorRate == annualRate)', async () => {
         const originalCalc = CompanyPaymentService.calculateOwedAmount;
         CompanyPaymentService.calculateOwedAmount = async () => ({
             totalOwed: 1000,
             breakdown: PERIODIC_BREAKDOWN,
         });
 
-        // Override ConfigService to return 0% fee
-        const { ConfigService } = await import('../../../src/services/config.service.js');
-        const originalGetFloat = ConfigService.getFloat;
-        ConfigService.getFloat = async () => 0;
+        // Override offer findUnique to return zero-spread offer
+        const { default: prisma } = await import('../../../src/config/prisma.js');
+        const originalFindUnique = prisma.offer.findUnique;
+        prisma.offer.findUnique = async () => ({
+            ...PERIODIC_OFFER,
+            investorRate: 12,  // same as annualRate → spread = 0
+        });
 
         try {
             await CompanyPaymentService.processSignedPayment('signed_xdr', 1);
 
-            // FeeLog should NOT have been written (fee = 0)
+            // FeeLog should NOT have been written (spread = 0 → fee = 0)
             assert.strictEqual(calls.feeLogCreate.length, 0);
         } finally {
             CompanyPaymentService.calculateOwedAmount = originalCalc;
-            ConfigService.getFloat = originalGetFloat;
+            prisma.offer.findUnique = originalFindUnique;
         }
     });
 });
@@ -605,7 +589,8 @@ describe('_recordPayments – DRY helper', () => {
     beforeEach(() => resetCalls());
 
     test('bullet: records InterestPayments with fee on INTEREST only', async () => {
-        const offer = { id: 2, assetCode: 'BULLET1', annualInterestRate: 10, paymentType: 'bullet' };
+        // investorRate=8, spreadPct=2, spreadRatio=2/8=0.25
+        const offer = { id: 2, assetCode: 'BULLET1', annualInterestRate: 10, investorRate: 8, paymentType: 'bullet' };
         const breakdown = [
             { investorId: 1, principal: 5000, interest: 1000, totalPayout: 6000 },
         ];
@@ -620,13 +605,14 @@ describe('_recordPayments – DRY helper', () => {
         const created = calls.interestPaymentCreate[0].data;
         assert.strictEqual(created.grossAmount, 6000);       // principal + interest
         assert.strictEqual(created.tokenBalance, 5000);       // principal as token balance
-        assert.strictEqual(created.platformFeeAmount, 20);    // 2% of 1000 interest = 20
-        assert.strictEqual(created.netAmount, 5000 + 980);    // principal + (interest - fee)
+        assert.strictEqual(created.platformFeeAmount, 250);   // spreadRatio 0.25 × 1000
+        assert.strictEqual(created.netAmount, 5000 + 750);    // principal + (interest - fee)
         assert.strictEqual(created.status, 'completed');
     });
 
-    test('periodic: records InterestPayments with fee on everything', async () => {
-        const offer = { id: 1, assetCode: 'REALT1', annualInterestRate: 12, paymentType: 'monthly' };
+    test('periodic: records InterestPayments with spread on everything', async () => {
+        // investorRate=10, spreadPct=2, spreadRatio=2/10=0.2
+        const offer = { id: 1, assetCode: 'REALT1', annualInterestRate: 12, investorRate: 10, paymentType: 'monthly' };
         const breakdown = [
             { investorId: 1, tokenBalance: 500, interestOwed: 500 },
         ];
@@ -638,12 +624,13 @@ describe('_recordPayments – DRY helper', () => {
         assert.strictEqual(records.length, 1);
         const created = calls.interestPaymentCreate[0].data;
         assert.strictEqual(created.grossAmount, 500);
-        assert.strictEqual(created.platformFeeAmount, 10);    // 2% of 500 = 10
-        assert.strictEqual(created.netAmount, 490);            // 500 - 10
+        assert.strictEqual(created.platformFeeAmount, 100);   // spreadRatio 0.2 × 500
+        assert.strictEqual(created.netAmount, 400);            // 500 - 100
     });
 
     test('writes FeeLog when totalFee > 0', async () => {
-        const offer = { id: 2, assetCode: 'BULLET1', annualInterestRate: 10, paymentType: 'bullet' };
+        // investorRate=8, spreadPct=2, spreadRatio=2/8=0.25
+        const offer = { id: 2, assetCode: 'BULLET1', annualInterestRate: 10, investorRate: 8, paymentType: 'bullet' };
         const breakdown = [
             { investorId: 1, principal: 5000, interest: 1000, totalPayout: 6000 },
         ];
@@ -652,19 +639,20 @@ describe('_recordPayments – DRY helper', () => {
 
         assert.strictEqual(calls.feeLogCreate.length, 1);
         assert.strictEqual(calls.feeLogCreate[0].data.category, 'DIVIDEND');
-        assert.strictEqual(calls.feeLogCreate[0].data.amount, 20); // 2% of 1000
+        assert.strictEqual(calls.feeLogCreate[0].data.amount, 250); // spreadRatio 0.25 × 1000
         assert.ok(calls.feeLogCreate[0].data.description.includes('Bullet maturity'));
     });
 
-    test('skips FeeLog when fee is 0', async () => {
-        const offer = { id: 1, assetCode: 'REALT1', annualInterestRate: 12, paymentType: 'monthly' };
+    test('skips FeeLog when spread is 0', async () => {
+        // investorRate = annualRate → spread = 0 → no fee
+        const offer = { id: 1, assetCode: 'REALT1', annualInterestRate: 12, investorRate: 12, paymentType: 'monthly' };
         const breakdown = [
             { investorId: 1, tokenBalance: 500, interestOwed: 500 },
         ];
 
         await CompanyPaymentService._recordPayments(offer, breakdown, 'tx_hash_nofee', 0, false);
 
-        assert.strictEqual(calls.feeLogCreate.length, 0, 'No FeeLog when fee is 0%');
+        assert.strictEqual(calls.feeLogCreate.length, 0, 'No FeeLog when spread is 0');
     });
 });
 
