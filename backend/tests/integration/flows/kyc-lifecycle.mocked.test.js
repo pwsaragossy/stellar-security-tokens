@@ -23,9 +23,19 @@ let request;
 describe('KYC Lifecycle Flow (Mocked)', () => {
     before(async () => {
         // Load app with mocked services
+        // 2nd arg: direct mocks (passkeyWallet)
+        // 3rd arg: deep mocks — applied recursively through all imports
+        //   - @stellar/stellar-sdk/rpc: prevents real RPC calls for on-chain contract verification
         const appModule = await esmock('../../../src/app.js', {
             '../../../src/services/passkeyWallet.service.js': {
                 PasskeyWalletService: MockPasskeyWalletService
+            }
+        }, {
+            '@stellar/stellar-sdk/rpc': {
+                Server: class MockRpcServer {
+                    constructor() {}
+                    getContractData() { return Promise.resolve({ val: 'mock-contract-data' }); }
+                }
             }
         });
         app = appModule.default;
@@ -73,7 +83,11 @@ describe('KYC Lifecycle Flow (Mocked)', () => {
         // Verify user exists in specific state
         const investorId = registerRes.body.data.investor.id;
         assert.ok(investorId);
-        assert.strictEqual(registerRes.body.data.investor.kycStatus, 'pending');
+        // On testnet, KYC is auto-approved; on mainnet, it starts as 'pending'
+        assert.ok(
+            ['pending', 'approved'].includes(registerRes.body.data.investor.kycStatus),
+            `Expected kycStatus to be 'pending' or 'approved', got '${registerRes.body.data.investor.kycStatus}'`
+        );
         assert.strictEqual(registerRes.body.data.investor.emailVerified, true);
     });
 });
