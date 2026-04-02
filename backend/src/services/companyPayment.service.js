@@ -9,8 +9,8 @@ import { EmailService } from './email.service.js';
 import { AlertService } from './alert.service.js';
 
 import { MultiSigTransactionService } from './multiSigTransaction.service.js';
-import { Keypair, Asset, Operation, TransactionBuilder, Networks } from '@stellar/stellar-sdk';
-import { getUsdcIssuer } from '../config/stellar.js';
+import { Keypair, Asset, Operation, TransactionBuilder, Networks, Contract, Address, nativeToScVal, xdr, rpc, BASE_FEE } from '@stellar/stellar-sdk';
+import { getUsdcIssuer, getNetworkPassphrase, getSorobanRpcUrl } from '../config/stellar.js';
 import { keyManager } from './KeyManager.js';
 import logger from '../utils/logger.js';
 
@@ -515,7 +515,10 @@ export class CompanyPaymentService {
         //       │
         //  Last batch → offer 'closed'
         //
-        const MAX_INVESTORS_PER_BATCH = 49; // Stellar limit: 1 fee + 49 pay + 49 clawback = 99 ops
+        // Smart wallets (C...) require Soroban SAC transfers (1 invokeHostFunction per TX)
+        // Classic wallets (G...) can be batched up to 49 per TX
+        const hasSmartWalletInvestors = breakdown.some(b => b.investorWallet?.startsWith('C'));
+        const MAX_INVESTORS_PER_BATCH = hasSmartWalletInvestors ? 1 : 49;
 
         if (isBullet) {
             // Guard: block if batches already submitted to admin
@@ -570,75 +573,125 @@ export class CompanyPaymentService {
             netToInvestors = batchInvestorPayout;
         }
 
-        // Build transaction with payment operations
-        // Support both classic (G...) and smart wallet (C...) addresses
-        const companyKeypair = companyWalletAddress.startsWith('G')
-            ? Keypair.fromPublicKey(companyWalletAddress)
-            : null; // Smart wallets don't use Keypair
+        // ─── BUILD PAYMENT TRANSACTION ──────────────────────────────────
+        // Two paths: classic (G... wallets) vs Soroban SAC (C... smart wallets)
         const usdcAsset = new Asset(USDC_ASSET_CODE, USDC_ISSUER);
-        const operations = [];
+        let transaction;
+        let investorOps = [];
+        let clawbackOps = [];
 
-        // Op 1: Platform fee to treasury (skip if fee is zero)
-        if (platformFee > 0) {
-            const treasuryAddress = keyManager.getTreasuryPublicKey();
-            operations.push(Operation.payment({
-                destination: treasuryAddress,
-                asset: usdcAsset,
-                amount: platformFee.toFixed(7),
-            }));
-        }
+        if (hasSmartWalletInvestors) {
+            // ─── SOROBAN PATH: SAC transfer for C... addresses ─────────────
+            // Soroban limits: 1 invokeHostFunction per TX, so batch = 1 investor
+            const usdcSacId = process.env.USDC_SAC_CONTRACT_ID;
+            if (!usdcSacId) throw new Error('USDC_SAC_CONTRACT_ID not configured');
 
-        // Ops 2+: Investor payments
-        let investorOps;
-        if (isBullet) {
-            // Bullet: investors get full investorRate payout (spread already sent to treasury above)
-            investorOps = breakdown
-                .filter(b => b.investorWallet && b.totalPayout > 0)
-                .map(b => {
-                    return Operation.payment({
+            const inv = breakdown[0]; // batch size = 1
+            const payAmount = isBullet
+                ? Math.max(inv.totalPayout, 0.0000001)
+                : Math.max(inv.interestOwed, 0.0000001);
+
+            if (!inv.investorWallet || payAmount <= 0) {
+                throw new Error('No valid investor wallets to pay');
+            }
+
+            // Total USDC the company sends = investor payout + platform fee
+            const totalSendAmount = payAmount + platformFee;
+
+            // Build SAC transfer: company → investor (full investor payout)
+            // Platform fee is handled separately via treasury transfer
+            const usdcContract = new Contract(usdcSacId);
+            const transferOp = usdcContract.call(
+                'transfer',
+                new Address(companyWalletAddress).toScVal(),
+                new Address(inv.investorWallet).toScVal(),
+                nativeToScVal(BigInt(Math.round(payAmount * 10_000_000)), { type: 'i128' })
+            );
+
+            investorOps = [transferOp];
+
+            // Build Soroban TX sourced from operations keypair
+            const opsKeypair = keyManager.getOperationsKeypair();
+            const networkPassphrase = getNetworkPassphrase();
+            const rpcServer = new rpc.Server(getSorobanRpcUrl());
+            const sourceAccount = await rpcServer.getAccount(opsKeypair.publicKey());
+
+            let tx = new TransactionBuilder(sourceAccount, {
+                fee: BASE_FEE,
+                networkPassphrase,
+            })
+                .addOperation(transferOp)
+                .setTimeout(180)
+                .build();
+
+            // Simulate & prepare
+            log.info(`[CompanyPayment] Simulating SAC transfer: ${payAmount} USDC → ${inv.investorWallet.slice(0, 12)}…`);
+            tx = await StellarService.prepareSorobanTransaction(tx);
+            transaction = tx;
+        } else {
+            // ─── CLASSIC PATH: Operation.payment for G... addresses ────────
+            const operations = [];
+
+            // Op 1: Platform fee to treasury (skip if fee is zero)
+            if (platformFee > 0) {
+                const treasuryAddress = keyManager.getTreasuryPublicKey();
+                operations.push(Operation.payment({
+                    destination: treasuryAddress,
+                    asset: usdcAsset,
+                    amount: platformFee.toFixed(7),
+                }));
+            }
+
+            // Ops 2+: Investor payments
+            if (isBullet) {
+                investorOps = breakdown
+                    .filter(b => b.investorWallet && b.totalPayout > 0)
+                    .map(b => Operation.payment({
                         destination: b.investorWallet,
                         asset: usdcAsset,
                         amount: Math.max(b.totalPayout, 0.0000001).toFixed(7),
-                    });
-                });
-        } else {
-            // Periodic: investors get full investorRate interest (spread already sent to treasury above)
-            investorOps = breakdown
-                .filter(b => b.investorWallet && b.interestOwed > 0)
-                .map(b => {
-                    return Operation.payment({
+                    }));
+            } else {
+                investorOps = breakdown
+                    .filter(b => b.investorWallet && b.interestOwed > 0)
+                    .map(b => Operation.payment({
                         destination: b.investorWallet,
                         asset: usdcAsset,
                         amount: Math.max(b.interestOwed, 0.0000001).toFixed(7),
-                    });
-                });
-        }
+                    }));
+            }
 
-        operations.push(...investorOps);
+            operations.push(...investorOps);
 
-        if (investorOps.length === 0) {
-            throw new Error('No valid investor wallets to pay');
-        }
+            if (investorOps.length === 0) {
+                throw new Error('No valid investor wallets to pay');
+            }
 
-        // ─── BULLET: append clawback ops (source: issuer, needs admin sig) ──
-        let clawbackOps = [];
-        if (isBullet) {
-            const issuerPublicKey = keyManager.getIssuerPublicKey();
-            const tokenAsset = new Asset(offer.assetCode, issuerPublicKey);
-            const holders = await StellarService.listAssetHolders(offer.assetCode);
+            // ─── BULLET: append clawback ops (source: issuer, needs admin sig) ──
+            if (isBullet) {
+                const issuerPublicKey = keyManager.getIssuerPublicKey();
+                const tokenAsset = new Asset(offer.assetCode, issuerPublicKey);
+                const holders = await StellarService.listAssetHolders(offer.assetCode);
 
-            // Match only investors in THIS batch
-            const batchWallets = new Set(breakdown.map(b => b.investorWallet));
-            clawbackOps = holders
-                .filter(h => parseFloat(h.balance) > 0 && batchWallets.has(h.publicKey))
-                .map(h => Operation.clawback({
-                    asset: tokenAsset,
-                    from: h.publicKey,
-                    amount: h.balance,
-                    source: issuerPublicKey,
-                }));
+                const batchWallets = new Set(breakdown.map(b => b.investorWallet));
+                clawbackOps = holders
+                    .filter(h => parseFloat(h.balance) > 0 && batchWallets.has(h.publicKey))
+                    .map(h => Operation.clawback({
+                        asset: tokenAsset,
+                        from: h.publicKey,
+                        amount: h.balance,
+                        source: issuerPublicKey,
+                    }));
 
-            operations.push(...clawbackOps);
+                operations.push(...clawbackOps);
+            }
+
+            // Create unsigned classic transaction
+            transaction = await StellarService.buildUnsignedTransaction(
+                companyWalletAddress,
+                operations,
+                `${isBullet ? 'Maturity' : 'Yield'} payment for ${offer.assetCode}`
+            );
         }
 
         log.info('Payment transaction prepared', {
@@ -650,15 +703,8 @@ export class CompanyPaymentService {
             netToInvestors,
             investorCount: investorOps.length,
             clawbackCount: clawbackOps.length,
+            txType: hasSmartWalletInvestors ? 'soroban_sac' : 'classic',
         });
-
-        // Create unsigned transaction
-        // Company will sign this with their passkey
-        const transaction = await StellarService.buildUnsignedTransaction(
-            companyWalletAddress,
-            operations,
-            `${isBullet ? 'Maturity' : 'Yield'} payment for ${offer.assetCode}`
-        );
 
         // Calculate remaining investors for batch info
         const totalInvestors = isBullet
