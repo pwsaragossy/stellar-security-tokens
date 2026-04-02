@@ -4,7 +4,8 @@
  */
 import express from 'express';
 import prisma from '../config/prisma.js';
-import { authenticateToken, requireCompanyUser } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
+import { requireCompanyUser } from '../middleware/authorize.js';
 import { CompanyPaymentService } from '../services/companyPayment.service.js';
 import logger from '../utils/logger.js';
 const log = logger.scope('CompanyPayRoutes');

@@ -1,6 +1,6 @@
 import express from 'express';
 import { MultiSigTransactionService } from '../services/multiSigTransaction.service.js';
-import { authenticatePlatformAdmin } from '../middleware/auth.js';
+import { requirePlatformAdmin } from '../middleware/authorize.js';
 import logger from '../utils/logger.js';
 const log = logger.scope('AdminTxRoutes');
 
@@ -25,7 +25,7 @@ const router = express.Router();
  *       200:
  *         description: List of pending transactions
  */
-router.get('/pending', authenticatePlatformAdmin, async (req, res) => {
+router.get('/pending', requirePlatformAdmin, async (req, res) => {
     try {
         const transactions = await MultiSigTransactionService.listPending();
         const stats = await MultiSigTransactionService.getStats();
@@ -61,7 +61,7 @@ router.get('/pending', authenticatePlatformAdmin, async (req, res) => {
  *       200:
  *         description: Transaction details with signature status
  */
-router.get('/:id', authenticatePlatformAdmin, async (req, res) => {
+router.get('/:id', requirePlatformAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const transaction = await MultiSigTransactionService.getById(parseInt(id, 10));
@@ -116,7 +116,7 @@ router.get('/:id', authenticatePlatformAdmin, async (req, res) => {
  *       200:
  *         description: XDR and network passphrase for signing
  */
-router.get('/:id/xdr', authenticatePlatformAdmin, async (req, res) => {
+router.get('/:id/xdr', requirePlatformAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const transaction = await MultiSigTransactionService.getById(parseInt(id, 10));
@@ -214,7 +214,7 @@ router.get('/:id/xdr', authenticatePlatformAdmin, async (req, res) => {
  *       200:
  *         description: Signature added successfully
  */
-router.post('/:id/sign', authenticatePlatformAdmin, async (req, res) => {
+router.post('/:id/sign', requirePlatformAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { publicKey, signature } = req.body;
@@ -266,7 +266,7 @@ router.post('/:id/sign', authenticatePlatformAdmin, async (req, res) => {
  *       200:
  *         description: Transaction submitted successfully
  */
-router.post('/:id/submit', authenticatePlatformAdmin, async (req, res) => {
+router.post('/:id/submit', requirePlatformAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { signedXDR } = req.body;
@@ -424,7 +424,7 @@ router.post('/:id/submit', authenticatePlatformAdmin, async (req, res) => {
  *       200:
  *         description: Transaction rejected
  */
-router.post('/:id/reject', authenticatePlatformAdmin, async (req, res) => {
+router.post('/:id/reject', requirePlatformAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { reason } = req.body;
@@ -460,7 +460,7 @@ router.post('/:id/reject', authenticatePlatformAdmin, async (req, res) => {
  *       200:
  *         description: Transaction statistics
  */
-router.get('/stats', authenticatePlatformAdmin, async (req, res) => {
+router.get('/stats', requirePlatformAdmin, async (req, res) => {
     try {
         const stats = await MultiSigTransactionService.getStats();
 
@@ -500,7 +500,7 @@ router.get('/stats', authenticatePlatformAdmin, async (req, res) => {
  *       200:
  *         description: Deposit forwarding triggered
  */
-router.post('/deposits/:depositId/retry', authenticatePlatformAdmin, async (req, res) => {
+router.post('/deposits/:depositId/retry', requirePlatformAdmin, async (req, res) => {
     try {
         const { depositId } = req.params;
         const { assetCode = 'USDC' } = req.body;
@@ -534,7 +534,7 @@ router.post('/deposits/:depositId/retry', authenticatePlatformAdmin, async (req,
  *       200:
  *         description: Heal results summary
  */
-router.post('/deposits/retry-all', authenticatePlatformAdmin, async (req, res) => {
+router.post('/deposits/retry-all', requirePlatformAdmin, async (req, res) => {
     try {
         const prisma = (await import('../config/prisma.js')).default;
         const { DepositRelayService } = await import('../services/depositRelay.service.js');
@@ -593,7 +593,7 @@ router.post('/deposits/retry-all', authenticatePlatformAdmin, async (req, res) =
  *       200:
  *         description: Threshold setup TX queued for signing
  */
-router.post('/setup-thresholds', authenticatePlatformAdmin, async (req, res) => {
+router.post('/setup-thresholds', requirePlatformAdmin, async (req, res) => {
     try {
         const { SorobanSaleService } = await import('../services/sorobanSale.service.js');
         const { keyManager: km } = await import('../services/KeyManager.js');

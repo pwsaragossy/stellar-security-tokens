@@ -1,6 +1,6 @@
 /**
  * Mocked version of Wallet Controller Integration test
- * Uses esmock to replace Stellar server calls for CI stability
+ * Uses esmock to replace Stellar server AND StellarService calls for CI stability
  */
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
@@ -10,16 +10,19 @@ import prisma from '../../../src/config/prisma.js';
 import { Keypair } from '@stellar/stellar-sdk';
 import { generateToken } from '../../../src/middleware/auth.js';
 
+// Mock account object that satisfies TransactionBuilder requirements
+const createMockAccount = (publicKey) => ({
+    id: publicKey,
+    accountId: () => publicKey,
+    sequenceNumber: () => '123456',
+    incrementSequenceNumber: () => {},
+    sequence: '123456',
+    balances: [{ asset_type: 'native', balance: '100.00' }],
+});
+
 // Mock Stellar Server
 const mockStellarServer = {
-    loadAccount: async (publicKey) => ({
-        id: publicKey,
-        sequence: '123456',
-        sequenceNumber: () => '123456',
-        incrementSequenceNumber: () => { },
-        accountId: () => publicKey,
-        balances: [{ asset_type: 'native', balance: '100.00' }]
-    }),
+    loadAccount: async (publicKey) => createMockAccount(publicKey),
     submitTransaction: async () => ({
         hash: 'mock_transaction_hash_mocked',
         ledger: 1000,
@@ -33,11 +36,19 @@ describe('Wallet Controller Integration (Mocked)', () => {
     const destinationDetail = Keypair.random();
 
     before(async () => {
-        // Load app with mocked stellar server
-        const appModule = await esmock('../../../src/app.js', {
+        // Load app with mocked stellar server AND StellarService.getAccountRPC
+        const appModule = await esmock('../../../src/app.js', {}, {
             '../../../src/config/stellar.js': {
-                stellarServer: mockStellarServer
-            }
+                stellarServer: mockStellarServer,
+                createFreshServer: () => mockStellarServer,
+                getNetworkPassphrase: () => 'Test SDF Network ; September 2015',
+                getUsdcIssuer: () => 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+            },
+            '../../../src/services/stellar.service.js': {
+                StellarService: {
+                    getAccountRPC: async (publicKey) => createMockAccount(publicKey),
+                }
+            },
         });
         app = appModule.default;
 
@@ -64,7 +75,11 @@ describe('Wallet Controller Integration (Mocked)', () => {
     after(async () => {
         await prisma.multiSigTransaction.deleteMany({});
         if (adminId) {
-            await prisma.platformAdmin.delete({ where: { id: adminId } });
+            try {
+                await prisma.platformAdmin.delete({ where: { id: adminId } });
+            } catch {
+                // Record may have been cleaned by another test
+            }
         }
     });
 

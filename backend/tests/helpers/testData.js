@@ -112,11 +112,13 @@ import { generateToken } from '../../src/middleware/auth.js';
 
 export class TestData {
   static async createCompany(data = {}) {
+    const ts = Date.now();
+    const rnd = Math.floor(Math.random() * 10000);
     return await prisma.company.create({
       data: {
-        name: 'Test Company',
-        cnpj: '12345678901234',
-        email: 'company@test.com',
+        name: data.name || 'Test Company',
+        cnpj: data.cnpj || `${ts}${rnd}`.slice(-14).padStart(14, '0'),
+        email: data.email || `company-${ts}-${rnd}@test.com`,
         legalRepresentative: 'John Doe',
         status: 'approved',
         kycStatus: 'approved',

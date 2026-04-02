@@ -2,11 +2,21 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import request from 'supertest';
-// import app from '../../../src/app.js';
+import esmock from 'esmock';
 import prisma from '../../../src/config/prisma.js';
-import { stellarServer } from '../../../src/config/stellar.js'; // Import the singleton
+import { stellarServer } from '../../../src/config/stellar.js';
 import { Keypair } from '@stellar/stellar-sdk';
 import { generateToken } from '../../../src/middleware/auth.js';
+
+// Mock account object that satisfies TransactionBuilder requirements
+const createMockAccount = (publicKey) => ({
+    id: publicKey,
+    accountId: () => publicKey,
+    sequenceNumber: () => '123456',
+    incrementSequenceNumber: () => {},
+    sequence: '123456',
+    balances: [{ asset_type: 'native', balance: '100.00' }],
+});
 
 describe('Wallet Controller Integration', () => {
     let app;
@@ -15,27 +25,30 @@ describe('Wallet Controller Integration', () => {
     const destinationDetail = Keypair.random();
 
     before(async () => {
-        const appModule = await import('../../../src/app.js');
+        // Use esmock to intercept StellarService.getAccountRPC (the primary RPC path)
+        // and stellarServer (the fallback path) so the test never hits real testnet
+        const appModule = await esmock('../../../src/app.js', {}, {
+            '../../../src/config/stellar.js': {
+                stellarServer: {
+                    loadAccount: async (publicKey) => createMockAccount(publicKey),
+                    submitTransaction: async () => ({
+                        hash: 'mock_transaction_hash',
+                        ledger: 1000,
+                    }),
+                },
+                createFreshServer: () => ({
+                    loadAccount: async (publicKey) => createMockAccount(publicKey),
+                }),
+                getNetworkPassphrase: () => 'Test SDF Network ; September 2015',
+                getUsdcIssuer: () => 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+            },
+            '../../../src/services/stellar.service.js': {
+                StellarService: {
+                    getAccountRPC: async (publicKey) => createMockAccount(publicKey),
+                }
+            },
+        });
         app = appModule.default;
-
-        // Mock Stellar Server
-        stellarServer.loadAccount = async (publicKey) => {
-            return {
-                id: publicKey,
-                sequence: '123456',
-                sequenceNumber: () => '123456',
-                incrementSequenceNumber: () => { },
-                accountId: () => publicKey,
-                balances: [{ asset_type: 'native', balance: '100.00' }]
-            };
-        };
-
-        stellarServer.submitTransaction = async () => {
-            return {
-                hash: 'mock_transaction_hash',
-                ledger: 1000,
-            };
-        };
 
         // Setup Admin
         const admin = await prisma.platformAdmin.create({
@@ -49,7 +62,6 @@ describe('Wallet Controller Integration', () => {
 
         adminId = admin.id;
         // Middleware expects role='platform_admin' for generic admin access
-        // The specific role (super_admin) is usually stored in adminRole if needed, but the base role claim must be platform_admin
         adminToken = generateToken({
             id: admin.id,
             userId: admin.id,
@@ -62,7 +74,11 @@ describe('Wallet Controller Integration', () => {
     after(async () => {
         await prisma.multiSigTransaction.deleteMany({});
         if (adminId) {
-            await prisma.platformAdmin.delete({ where: { id: adminId } });
+            try {
+                await prisma.platformAdmin.delete({ where: { id: adminId } });
+            } catch {
+                // Record may have been cleaned by another test
+            }
         }
     });
 
