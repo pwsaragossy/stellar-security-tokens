@@ -24,7 +24,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 // Deployed contract on testnet
-const CONTRACT_ID = 'CCFAC4GCDKFRBFWHA7H62YCQKRYXCS3HKXD23OBD45XQXG6DRIFA7QIY';
+const CONTRACT_ID = process.env.TEST_SALE_CONTRACT_ID || 'CCFAC4GCDKFRBFWHA7H62YCQKRYXCS3HKXD23OBD45XQXG6DRIFA7QIY';
 const OPS_PUBLIC = process.env.OPERATIONS_PUBLIC_KEY;
 const USDC_SAC = process.env.USDC_SAC_CONTRACT_ID;
 

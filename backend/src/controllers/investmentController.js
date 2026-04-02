@@ -418,6 +418,50 @@ export const submitInvestmentTx = async (req, res, next) => {
       });
     }
 
+    // ─── Idempotent return: if investor already has a completed/in-flight investment ───
+    // Prevents wasted fee-bump fees and duplicate records on browser retries.
+    const existingInvestment = await prisma.investment.findFirst({
+      where: {
+        investorId: parseInt(investorId, 10),
+        offerId: parseInt(offerId, 10),
+        status: { in: ['trade_submitted', 'distributed'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingInvestment) {
+      log.info(`[Investment] Idempotent return: investor #${investorId} already has investment #${existingInvestment.id} (${existingInvestment.status})`);
+      return res.json({
+        success: true,
+        idempotent: true,
+        data: {
+          investmentId: existingInvestment.id,
+          status: existingInvestment.status,
+          transactionHash: existingInvestment.usdcPaymentHash,
+        },
+      });
+    }
+
+    // ─── RACE CONDITION GUARD ───
+    // Two simultaneous requests could both pass the idempotency check (no record yet).
+    // This catches the second request if the first already created a pending_payment record.
+    const pendingDuplicate = await prisma.investment.findFirst({
+      where: {
+        investorId: parseInt(investorId, 10),
+        offerId: parseInt(offerId, 10),
+        status: { in: ['pending_payment', 'trade_submitted'] },
+      },
+    });
+
+    if (pendingDuplicate) {
+      log.warn(`[Investment] Duplicate pending investment blocked: investor #${investorId}, existing #${pendingDuplicate.id}`);
+      return res.status(409).json({
+        success: false,
+        error: 'Duplicate pending investment blocked',
+        existingInvestmentId: pendingDuplicate.id,
+      });
+    }
+
     // ── SECURITY: Re-derive critical values server-side ──
     // Never trust tokenAmount or totalDeduction from the client.
     const { Offer } = await import('../models/Offer.js');
@@ -564,22 +608,10 @@ export const submitInvestmentTx = async (req, res, next) => {
     const innerTxHash = tx.hash().toString('hex');
     log.info(`[Investment] Inner TX hash: ${innerTxHash}`);
 
-    // ─── FEE BUMP SPONSORSHIP ───
-    let feeBumpHash;
-    try {
-      const sponsorResult = await PasskeyWalletService.submitWithSponsorship(tx);
-      feeBumpHash = sponsorResult.hash;
-      log.info(`[Investment] Fee-bumped TX submitted: ${feeBumpHash} (inner: ${innerTxHash})`);
-    } catch (sponsorErr) {
-      log.error(`[Investment] Fee bump sponsorship failed: ${sponsorErr.message}`);
-      throw new Error(`Fee-bump sponsorship failed: ${sponsorErr.message}`);
-    }
-
-    // ─── HORIZON CONFIRMED — create DB records NOW ───
-    log.info(`[Investment] Transaction confirmed by Horizon: ${innerTxHash}`);
-
-    // Create the Investment record directly as 'distributed'
-    // SECURITY: Use server-derived amounts, not client-supplied values
+    // ─── CREATE DB RECORD BEFORE BROADCAST (crash recovery anchor) ───
+    // If the server crashes after TX broadcast but before this update,
+    // SorobanReconciler will find this 'trade_submitted' record and
+    // check on-chain status to resolve it.
     const investment = await Investment.create({
       investor_id: investorId,
       offer_id: offerId,
@@ -590,12 +622,38 @@ export const submitInvestmentTx = async (req, res, next) => {
     });
 
     await Investment.updateStatus(investment.id, {
+      status: 'trade_submitted',
+      usdc_payment_hash: innerTxHash,
+    });
+
+    log.info(`[Investment] Created investment #${investment.id} as trade_submitted (pre-broadcast anchor)`);
+
+    // ─── FEE BUMP SPONSORSHIP ───
+    let feeBumpHash;
+    try {
+      const sponsorResult = await PasskeyWalletService.submitWithSponsorship(tx);
+      feeBumpHash = sponsorResult.hash;
+      log.info(`[Investment] Fee-bumped TX submitted: ${feeBumpHash} (inner: ${innerTxHash})`);
+    } catch (sponsorErr) {
+      // TX failed — mark investment as failed so investor can retry
+      log.error(`[Investment] Fee bump sponsorship failed: ${sponsorErr.message}`);
+      await Investment.updateStatus(investment.id, {
+        status: 'failed',
+        error_message: `Fee-bump sponsorship failed: ${sponsorErr.message}`,
+      });
+      throw new Error(`Fee-bump sponsorship failed: ${sponsorErr.message}`);
+    }
+
+    // ─── HORIZON CONFIRMED — update to distributed ───
+    log.info(`[Investment] Transaction confirmed by Horizon: ${innerTxHash}`);
+
+    await Investment.updateStatus(investment.id, {
       status: 'distributed',
       usdc_payment_hash: innerTxHash,
       distribution_tx_hash: innerTxHash,
     });
 
-    log.info(`[Investment] Created investment #${investment.id} as distributed (atomic swap).`);
+    log.info(`[Investment] Investment #${investment.id} updated to distributed (atomic swap confirmed).`);
 
     // Create token_distributions record for portfolio
     // SECURITY: Use server-derived tokenAmount

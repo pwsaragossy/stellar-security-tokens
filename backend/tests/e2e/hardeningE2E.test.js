@@ -20,7 +20,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
-const CONTRACT_ID = 'CCFAC4GCDKFRBFWHA7H62YCQKRYXCS3HKXD23OBD45XQXG6DRIFA7QIY';
+// CONTRACT_ID removed — live contract queries moved to sorobanSaleE2E.test.js
 let passed = 0;
 let failed = 0;
 
@@ -101,38 +101,56 @@ async function main() {
         'Sets trade_submitted before sending'
     );
 
-    // ─── 5. Init Script ───
-    console.log('\n--- Item 5: initSorobanSale.js ---');
-    const { existsSync } = await import('fs');
-    assert(
-        existsSync(path.resolve(__dirname, '../../scripts/initSorobanSale.js')),
-        'initSorobanSale.js exists'
-    );
-    const initScript = readFileSync(
-        path.resolve(__dirname, '../../scripts/initSorobanSale.js'), 'utf-8'
-    );
-    assert(initScript.includes('--dry-run'), 'Supports --dry-run flag');
-    assert(initScript.includes('setSorobanContractId'), 'Stores contract ID in DB');
-    assert(initScript.includes('create'), 'Calls create() on contract');
-
-    // ─── 6. Contract Live on Testnet ───
-    console.log('\n--- Item 6: Contract is Live ---');
+    // ─── 5. Auto-Provisioning (replaced initSorobanSale.js) ───
+    // The CLI script was replaced by OfferService.activateOffer() → #initSorobanDeploy().
+    // These assertions verify the same capabilities the old script had.
+    console.log('\n--- Item 5: Auto-Provisioning ---');
     try {
-        const { SorobanSaleService } = await import('../../src/services/sorobanSale.service.js');
-        const version = await SorobanSaleService.getVersion(CONTRACT_ID);
-        assert(version === 3, `version() returns ${version} (expected 3)`);
+        const offerServiceCode = readFileSync(
+            path.resolve(__dirname, '../../src/services/offer.service.js'), 'utf-8'
+        );
 
-        // Verify getOffer fails on uninitialized contract
-        try {
-            await SorobanSaleService.getOffer(CONTRACT_ID);
-            assert(false, 'getOffer should fail on uninitialized contract');
-        } catch {
-            assert(true, 'getOffer correctly fails on uninitialized contract');
-        }
+        // 1. The method exists and is callable
+        const { OfferService } = await import('../../src/services/offer.service.js');
+        assert(typeof OfferService.activateOffer === 'function', 'OfferService.activateOffer() exists');
+
+        // 2. Deploys a WASM contract (equivalent to old script's stellar contract deploy)
+        assert(
+            offerServiceCode.includes('buildDeployXdr'),
+            'Builds deploy XDR for WASM contract'
+        );
+
+        // 3. Creates the sale on-chain (equivalent to old script's create() call)
+        assert(
+            offerServiceCode.includes('buildCreateSaleXdr'),
+            'Builds create_sale XDR (initializes the contract)'
+        );
+
+        // 4. Stores contractId in DB (equivalent to old script's setSorobanContractId)
+        assert(
+            offerServiceCode.includes('sorobanContractId: contractId'),
+            'Stores contractId in DB after deploy'
+        );
+
+        // 5. Crash recovery: checks if contract already exists on-chain
+        assert(
+            offerServiceCode.includes('contractExistsOnChain'),
+            'Has crash recovery — checks for already-deployed contracts'
+        );
+
+        // 6. Deterministic salt: re-deploy always gets same contractId
+        assert(
+            offerServiceCode.includes('radox:sale:'),
+            'Uses deterministic salt (same deploy = same contractId)'
+        );
     } catch (err) {
-        console.error('  ❌ Testnet query failed:', err.message);
+        console.error('  ❌ Auto-provisioning check failed:', err.message);
         failed++;
     }
+
+    // ─── 6. Contract Live on Testnet ───
+    // REMOVED: Live testnet queries (version(), getOffer()) are covered by
+    // sorobanSaleE2E.test.js. This hardening test focuses on code auditing only.
 
     // ─── 7. Soroban-Only Architecture ───
     console.log('\n--- Item 7: Soroban-Only Architecture ---');
