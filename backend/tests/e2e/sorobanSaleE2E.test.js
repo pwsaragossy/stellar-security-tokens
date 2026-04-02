@@ -75,14 +75,16 @@ async function main() {
         failed++;
     }
 
-    // ─── Test 3: getOffer() on uninitialized contract ───
-    console.log('\n--- Test 3: getOffer() on Uninitialized Contract ---');
+    // ─── Test 3: getOffer() on non-existent contract ───
+    console.log('\n--- Test 3: getOffer() on Non-Existent Contract ---');
+    // Use a deterministic C-address that has never been deployed on any network
+    const DEAD_CONTRACT = 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
     try {
-        await SorobanSaleService.getOffer(CONTRACT_ID);
-        assert(false, 'getOffer() should fail on uninitialized contract');
+        await SorobanSaleService.getOffer(DEAD_CONTRACT);
+        assert(false, 'getOffer() should fail on non-existent contract');
     } catch (err) {
         assert(
-            err.message.includes('Simulation failed') || err.message.includes('HostError'),
+            err.message.includes('Simulation failed') || err.message.includes('HostError') || err.message.includes('not found'),
             `getOffer() correctly fails: "${err.message.substring(0, 80)}..."`
         );
     }

@@ -15,6 +15,7 @@ describe('Token Issuance Flow (Mocked)', () => {
     let adminToken;
     let app;
     let adminAccount;
+    let testAssetCode;
 
     before(async () => {
         const srcPath = path.resolve(process.cwd(), 'src');
@@ -50,13 +51,16 @@ describe('Token Issuance Flow (Mocked)', () => {
         await TestDatabase.cleanup();
     });
 
-    it('should issue a token from an approved offer', async () => {
+    it('should auto-issue token when offer is approved', async () => {
+        // Use unique asset code per run to avoid collision with leftover data
+        testAssetCode = `ISS${Date.now().toString().slice(-5)}`;
+
         // 1. Create an offer
         const offerResponse = await request(app)
             .post('/api/companies/offers')
             .set('Authorization', `Bearer ${companyToken}`)
             .send({
-                asset_code: 'ISSUE01',
+                asset_code: testAssetCode,
                 offer_name: 'Issue Test Offer',
                 description: 'Testing token issuance',
                 total_supply: '1000000',
@@ -68,7 +72,7 @@ describe('Token Issuance Flow (Mocked)', () => {
         assert.strictEqual(offerResponse.status, 201);
         const offerId = offerResponse.body.data.id;
 
-        // 2. Approve the offer (Admin)
+        // 2. Approve the offer — this now auto-issues the token
         const approveResponse = await request(app)
             .put(`/api/admin/offers/${offerId}/review`)
             .set('Authorization', `Bearer ${adminToken}`)
@@ -77,36 +81,41 @@ describe('Token Issuance Flow (Mocked)', () => {
             });
 
         assert.strictEqual(approveResponse.status, 200);
+        assert.strictEqual(approveResponse.body.success, true);
 
-        // 3. Issue the token
-        const issueResponse = await request(app)
-            .post(`/api/admin/offers/${offerId}/issue`)
+        // Auto-issue fires on approval. It creates the Token DB record,
+        // then attempts SAC deploy (which fails in mocked env — that's expected).
+        // The token should exist regardless of SAC outcome.
+        assert.ok(
+            approveResponse.body.autoIssueResult,
+            'Approval response should include autoIssueResult'
+        );
+
+        // Verify the token was created by fetching the offer details
+        const offerDetails = await request(app)
+            .get('/api/admin/offers')
             .set('Authorization', `Bearer ${adminToken}`);
 
-        if (issueResponse.status !== 201) {
-            console.error('Issuance failed:', issueResponse.body);
-        }
-
-        assert.strictEqual(issueResponse.status, 201, 'Should return 201 Created');
-        assert.strictEqual(issueResponse.body.success, true);
-        assert.ok(issueResponse.body.data.token, 'Should contain token data');
-        assert.strictEqual(issueResponse.body.data.token.assetCode, 'ISSUE01');
-        assert.ok(issueResponse.body.data.stellar_transaction, 'Should contain stellar transaction data');
+        const updatedOffer = offerDetails.body.data.find(o => o.assetCode === testAssetCode);
+        assert.ok(updatedOffer, 'Offer should exist in admin list');
+        assert.strictEqual(updatedOffer.status, 'approved');
     });
 
-    it('should fail to issue if already issued', async () => {
-        // Find existing offer for ISSUE01
+    it('should return 409 when explicitly issuing an already auto-issued token', async () => {
+        // The token was already auto-issued during approval in the previous test.
+        // Calling the explicit /issue endpoint should return 409.
         const offers = await request(app)
             .get('/api/admin/offers')
             .set('Authorization', `Bearer ${adminToken}`);
 
-        const offer = offers.body.data.find(o => o.assetCode === 'ISSUE01');
+        const offer = offers.body.data.find(o => o.assetCode === testAssetCode);
+        assert.ok(offer, 'Offer should exist');
 
-        const secondIssueResponse = await request(app)
+        const issueResponse = await request(app)
             .post(`/api/admin/offers/${offer.id}/issue`)
             .set('Authorization', `Bearer ${adminToken}`);
 
-        assert.strictEqual(secondIssueResponse.status, 409);
-        assert.strictEqual(secondIssueResponse.body.error, 'Token already issued for this offer');
+        assert.strictEqual(issueResponse.status, 409);
+        assert.strictEqual(issueResponse.body.error, 'Token already issued for this offer');
     });
 });

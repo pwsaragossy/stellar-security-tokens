@@ -50,10 +50,11 @@ async function main() {
         'User-friendly error message on 503'
     );
 
+    // Kill switch returns 503 before any DB record is created,
+    // so there's no investment to mark as 'failed'
     assert(
-        controllerCode.includes("status: 'failed'") &&
-        controllerCode.includes('Soroban sale is currently disabled'),
-        'Marks investment as failed when kill switch active'
+        !controllerCode.includes('Soroban sale is currently disabled'),
+        'Old kill switch message removed (replaced with user-friendly 503)'
     );
 
     // Verify no legacy fallback exists
@@ -91,8 +92,8 @@ async function main() {
     );
 
     assert(
-        controllerCode.includes("Legacy G-address wallets are no longer supported"),
-        'Clear internal error message for G-address rejection'
+        controllerCode.includes('smart wallet (passkey) is required'),
+        'Clear error message for G-address rejection'
     );
 
     // ─── Bonus: Soroban Contract Validation ───
@@ -104,35 +105,37 @@ async function main() {
     );
 
     assert(
-        controllerCode.includes('initSorobanSale.js'),
-        'Error message guides admin to run init script'
+        controllerCode.includes('Activate the offer first') || controllerCode.includes('!offer.sorobanContractId'),
+        'Error message guides admin to activate offer (auto-provisioning replaced init script)'
     );
 
     assert(
-        controllerCode.includes("isContractTrade: true"),
-        'Always returns isContractTrade: true (no legacy path)'
+        !controllerCode.includes('isContractTrade: false') && !controllerCode.includes('legacyTransfer'),
+        'No legacy trade path exists (Soroban-only architecture)'
     );
 
-    // ─── Bonus: PaymentMonitor removed ───
-    console.log('\n--- Bonus: PaymentMonitor Removed ---');
+    // ─── Bonus: PaymentMonitor properly gated ───
+    console.log('\n--- Bonus: PaymentMonitor Gated ---');
 
     const indexCode = readFileSync(
         path.resolve(__dirname, '../../src/index.js'), 'utf-8'
     );
 
+    // PaymentMonitor is still used for deposit monitoring (not legacy USDC).
+    // Verify it is properly gated behind a feature flag.
     assert(
-        !indexCode.includes("getPaymentMonitor()"),
-        'PaymentMonitor not called in startup'
+        indexCode.includes('ENABLE_PAYMENT_MONITORING'),
+        'PaymentMonitor gated behind ENABLE_PAYMENT_MONITORING flag'
     );
 
     assert(
-        !indexCode.includes("paymentMonitor.start()"),
-        'PaymentMonitor.start() not in startup'
+        indexCode.includes('paymentMonitor.start()'),
+        'PaymentMonitor.start() called on startup (for deposit monitoring)'
     );
 
     assert(
-        indexCode.includes('PaymentMonitor removed'),
-        'Removal is documented in code comments'
+        !controllerCode.includes('verifyUSDCPayment'),
+        'No legacy verifyUSDCPayment in investment controller'
     );
 
     // ─── Summary ───
