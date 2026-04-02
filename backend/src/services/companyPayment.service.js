@@ -426,7 +426,8 @@ export class CompanyPaymentService {
             }
         });
 
-        if (!offer.company.stellarPublicKey) {
+        const companyWalletAddress = offer.company.stellarPublicKey || offer.company.stellarContractId;
+        if (!companyWalletAddress) {
             throw new Error('Company does not have a Stellar wallet linked');
         }
 
@@ -570,7 +571,10 @@ export class CompanyPaymentService {
         }
 
         // Build transaction with payment operations
-        const companyKeypair = Keypair.fromPublicKey(offer.company.stellarPublicKey);
+        // Support both classic (G...) and smart wallet (C...) addresses
+        const companyKeypair = companyWalletAddress.startsWith('G')
+            ? Keypair.fromPublicKey(companyWalletAddress)
+            : null; // Smart wallets don't use Keypair
         const usdcAsset = new Asset(USDC_ASSET_CODE, USDC_ISSUER);
         const operations = [];
 
@@ -651,7 +655,7 @@ export class CompanyPaymentService {
         // Create unsigned transaction
         // Company will sign this with their passkey
         const transaction = await StellarService.buildUnsignedTransaction(
-            offer.company.stellarPublicKey,
+            companyWalletAddress,
             operations,
             `${isBullet ? 'Maturity' : 'Yield'} payment for ${offer.assetCode}`
         );
