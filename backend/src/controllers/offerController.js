@@ -169,17 +169,32 @@ export class OfferController {
         collateral_ltv,
       } = req.body;
 
+      // Sanitize Brazilian number format ("1.000.000,50" → "1000000.50") before parseFloat
+      const sanitizeNumber = (val) => {
+        if (typeof val !== 'string') return val;
+        // If it has both dots and comma, it's likely BR format: dots are thousands, comma is decimal
+        if (val.includes(',') && val.includes('.')) {
+          return val.replace(/\./g, '').replace(',', '.');
+        }
+        // If only comma (e.g. "1000,50"), treat comma as decimal separator
+        if (val.includes(',') && !val.includes('.')) {
+          return val.replace(',', '.');
+        }
+        return val;
+      };
+
       // Converter campos numéricos vindos de multipart/form-data (strings)
-      if (total_supply) total_supply = parseFloat(total_supply);
-      if (annual_interest_rate) annual_interest_rate = parseFloat(annual_interest_rate);
-      if (bullet_payment_amount) bullet_payment_amount = parseFloat(bullet_payment_amount);
+      if (total_supply) total_supply = parseFloat(sanitizeNumber(total_supply));
+      if (annual_interest_rate) annual_interest_rate = parseFloat(sanitizeNumber(annual_interest_rate));
+      if (bullet_payment_amount) bullet_payment_amount = parseFloat(sanitizeNumber(bullet_payment_amount));
       if (payment_frequency) payment_frequency = parseInt(payment_frequency, 10);
-      if (collateral_ltv) collateral_ltv = parseFloat(collateral_ltv);
+      if (collateral_ltv) collateral_ltv = parseFloat(sanitizeNumber(collateral_ltv));
+      if (collateral_value) collateral_value = parseFloat(sanitizeNumber(collateral_value));
 
       // Parse unit_price if provided
       let unit_price = 1.0;
       if (req.body.unit_price) {
-        unit_price = parseFloat(req.body.unit_price);
+        unit_price = parseFloat(sanitizeNumber(req.body.unit_price));
       }
 
 
