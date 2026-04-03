@@ -88,6 +88,16 @@ export interface Offer {
   // Token Lifecycle
   isTokenLocked?: boolean;
   tokenUnlockedAt?: string;
+  // Soroban contracts
+  sorobanContractId?: string;
+  soroban_contract_id?: string;
+  sorobanSettlementContractId?: string;
+  soroban_settlement_contract_id?: string;
+  // Payment lifecycle
+  paymentDueStatus?: string;
+  payment_due_status?: string;
+  lastPaymentDate?: string;
+  last_payment_date?: string;
 }
 
 // Token Types

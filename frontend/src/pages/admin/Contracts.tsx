@@ -3,6 +3,7 @@ import {
     Search, Loader2, RefreshCw, Inbox, Check, Copy,
     Pause, Play, Upload, DollarSign, Clock, Trash2, ArrowUpCircle,
     Snowflake, ExternalLink, Lock, Unlock, Users, Calendar, Percent, Tag,
+    Landmark,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +63,10 @@ interface ContractDetail {
     company: ContractDetailCompany | null;
     token: ContractDetailToken | null;
     onChain: { offer: any; balance: string; version: number | null };
+    settlementContract?: {
+        contractId: string | null;
+        balance: string | null;
+    } | null;
 }
 
 type ActionType = 'pause' | 'resume' | 'deposit' | 'price' | 'withdraw' | 'freeze' |
@@ -430,6 +435,39 @@ export function Contracts() {
                                     <div className="bg-red-500/5 rounded-lg border border-red-500/10 p-3">
                                         <p className="text-[10px] text-red-400 uppercase font-bold mb-1">Init Error</p>
                                         <p className="text-sm text-red-300">{selected.offer.sorobanInitError}</p>
+                                    </div>
+                                )}
+
+                                {/* Settlement Contract */}
+                                {selected.settlementContract?.contractId && (
+                                    <div className="bg-purple-500/5 rounded-xl border border-purple-500/15 p-3 space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <Landmark className="w-3.5 h-3.5 text-purple-400" />
+                                            <p className="text-[10px] text-purple-400 uppercase font-bold">Settlement Contract</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <code className="text-xs text-purple-300 font-mono flex-1 break-all">
+                                                {selected.settlementContract.contractId}
+                                            </code>
+                                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-purple-400"
+                                                onClick={() => navigator.clipboard.writeText(selected.settlementContract?.contractId || '')}>
+                                                <Copy className="w-3.5 h-3.5" />
+                                            </Button>
+                                            <a href={`https://stellar.expert/explorer/testnet/contract/${selected.settlementContract.contractId}`}
+                                                target="_blank" rel="noopener noreferrer">
+                                                <Button variant="ghost" size="sm" className="h-7 px-2 text-purple-400 gap-1">
+                                                    <ExternalLink className="w-3 h-3" /> Explorer
+                                                </Button>
+                                            </a>
+                                        </div>
+                                        {selected.settlementContract.balance && (
+                                            <div className="bg-white/[0.03] rounded-lg px-3 py-2 flex items-center justify-between">
+                                                <span className="text-[11px] text-zinc-500">USDC Balance</span>
+                                                <span className={`text-sm font-mono font-medium ${parseFloat(selected.settlementContract.balance) > 0 ? 'text-emerald-400' : 'text-zinc-400'}`}>
+                                                    {parseFloat(selected.settlementContract.balance).toLocaleString()} USDC
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

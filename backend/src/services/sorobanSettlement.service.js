@@ -197,6 +197,9 @@ export class SorobanSettlementService {
         }
 
         const companyWallet = offer.company?.stellarPublicKey || offer.company?.stellarContractId;
+        if (!companyWallet) {
+            throw new Error('Company does not have a Stellar wallet configured');
+        }
         const contract = new Contract(offer.sorobanSettlementContractId);
 
         const depositCall = contract.call(
@@ -380,13 +383,32 @@ export class SorobanSettlementService {
             log.info(`[executeFullSettlement] Batch ${bIdx + 1}/${batches.length}: ${batch.length} investors, payout=${batchPayout}, fee=${batchFee}, hash=${results[bIdx].txHash}`);
         }
 
-        // All batches settled → close the offer
+        // All batches settled → record payments + close
+        const annualRate = parseFloat(offer.annualInterestRate || 0);
+        const effectiveInvestorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
+        const spreadPct = Math.max(0, annualRate - effectiveInvestorRate);
+
+        const { CompanyPaymentService: CPS } = await import('./companyPayment.service.js');
+        const allTxHashes = results.map(r => r.txHash).join(',');
+
+        await CPS._recordPayments(
+            offer,
+            bulletDetails.breakdown,
+            allTxHashes,
+            spreadPct,
+            true  // isBullet
+        );
+
         await prisma.offer.update({
             where: { id: offerId },
-            data: { status: 'closed' },
+            data: {
+                status: 'closed',
+                lastPaymentDate: new Date(),
+                paymentDueStatus: 'current',
+            },
         });
 
-        log.info(`[executeFullSettlement] Offer ${offerId} → closed. ${allInvestors.length} investors settled.`);
+        log.info(`[executeFullSettlement] Offer ${offerId} → closed. ${allInvestors.length} investors settled, payments recorded.`);
 
         return {
             offerId,

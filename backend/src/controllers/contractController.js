@@ -107,11 +107,20 @@ export class ContractController {
             const contractId = offer.sorobanContractId;
 
             // Parallel on-chain queries
-            const [onChainOffer, balance, version] = await Promise.all([
+            const settlementId = offer.sorobanSettlementContractId;
+            const onChainQueries = [
                 SorobanSaleService.getOffer(contractId).catch(() => null),
                 SorobanSaleService.getBalance(contractId).catch(() => null),
                 SorobanSaleService.getVersion(contractId).catch(() => null),
-            ]);
+            ];
+            // If settlement contract exists, query its balance
+            if (settlementId) {
+                const { SorobanSettlementService } = await import('../services/sorobanSettlement.service.js');
+                onChainQueries.push(
+                    SorobanSettlementService.getContractBalance(offer.id).catch(() => null)
+                );
+            }
+            const [onChainOffer, balance, version, settlementBalance] = await Promise.all(onChainQueries);
 
             const token = offer.tokens?.[0] || null;
 
@@ -152,6 +161,10 @@ export class ContractController {
                     balance: balance?.toString() || '0',
                     version,
                 },
+                settlementContract: settlementId ? {
+                    contractId: settlementId,
+                    balance: settlementBalance?.toString() || '0',
+                } : null,
             };
             const safe = JSON.parse(JSON.stringify(payload, (_, v) => typeof v === 'bigint' ? v.toString() : v));
             res.json(safe);

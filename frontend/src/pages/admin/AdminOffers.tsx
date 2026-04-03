@@ -5,6 +5,9 @@ import {
     FileText,
     Building2,
     DollarSign,
+    Landmark,
+    Zap,
+    Wallet,
     Check,
     Copy,
     Clock,
@@ -36,8 +39,18 @@ import { useAutoSelect } from '@/hooks/useAdminNavigation';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
-type ActionType = 'issue' | 'activate' | 'verify' | null;
-type StatusFilter = 'all' | 'approved' | 'active' | 'rejected' | 'closed';
+type ActionType = 'issue' | 'activate' | 'verify' | 'deploy_settlement' | 'execute_settlement' | null;
+type StatusFilter = 'all' | 'approved' | 'active' | 'matured' | 'rejected' | 'closed';
+
+interface SettlementStatus {
+    offerId: number;
+    offerType: string;
+    offerStatus: string;
+    settlementContractId: string | null;
+    contractBalance: number | null;
+    maturityDate: string | null;
+    hasSettlementContract: boolean;
+}
 
 // ─── Design tokens ────────────────────────────────────────────────────────
 
@@ -63,6 +76,7 @@ const FILTER_CONFIG: { key: StatusFilter; label: string }[] = [
     { key: 'all', label: 'All' },
     { key: 'approved', label: 'Approved' },
     { key: 'active', label: 'Active' },
+    { key: 'matured', label: 'Matured' },
     { key: 'rejected', label: 'Declined' },
     { key: 'closed', label: 'Completed' },
 ];
@@ -90,6 +104,10 @@ export function AdminOffers() {
 
     const [selected, setSelected] = useState<Offer | null>(null);
     const [pendingIssuances, setPendingIssuances] = useState<number[]>([]);
+
+    // Settlement
+    const [settlementStatus, setSettlementStatus] = useState<SettlementStatus | null>(null);
+    const [settlementLoading, setSettlementLoading] = useState(false);
 
     // Action dialog state
     const [actionDialog, setActionDialog] = useState<{ type: ActionType; offer: Offer | null }>({ type: null, offer: null });
@@ -144,6 +162,29 @@ export function AdminOffers() {
         }
     }, [offers]);
 
+    // Load settlement status when selecting a matured/collateral offer
+    useEffect(() => {
+        if (selected && selected.offer_type === 'collateral' && ['matured', 'active'].includes(selected.status)) {
+            loadSettlementStatus(selected.id);
+        } else {
+            setSettlementStatus(null);
+        }
+    }, [selected?.id]);
+
+    const loadSettlementStatus = async (offerId: number) => {
+        try {
+            setSettlementLoading(true);
+            const res = await offersApi.getSettlementStatus(offerId);
+            if (res.success && res.data) {
+                setSettlementStatus(res.data);
+            }
+        } catch {
+            setSettlementStatus(null);
+        } finally {
+            setSettlementLoading(false);
+        }
+    };
+
     // Auto-select from URL ?id= param (for cross-navigation)
     const handleAutoSelect = useCallback((id: number) => {
         const offer = offers.find(o => o.id === id);
@@ -173,17 +214,32 @@ export function AdminOffers() {
                 response = await offersApi.activate(offer.id);
             } else if (type === 'verify') {
                 response = await offersApi.verifyIssuance(offer.id);
+            } else if (type === 'deploy_settlement') {
+                response = await offersApi.deploySettlement(offer.id);
+            } else if (type === 'execute_settlement') {
+                response = await offersApi.executeSettlement(offer.id);
             }
 
             if (response && response.success) {
-                toast.success(`Offer ${type}d successfully`);
+                const MSG: Record<string, string> = {
+                    issue: 'Token issued successfully',
+                    activate: 'Offer activated',
+                    verify: 'Issuance verified',
+                    deploy_settlement: 'Settlement contract deployed',
+                    execute_settlement: 'Settlement executed — offer closed',
+                };
+                toast.success(MSG[type] || `${type} completed`);
                 await loadOffers();
+                // Refresh settlement status after deploy/settle
+                if (['deploy_settlement', 'execute_settlement'].includes(type)) {
+                    await loadSettlementStatus(offer.id);
+                }
                 closeAction();
             } else {
                 setError(response?.error || `Failed to ${type} offer`);
             }
         } catch (err: any) {
-            setError(err.message);
+            setError(err.response?.data?.error || err.message);
         } finally {
             setIsSubmitting(false);
         }
@@ -201,6 +257,7 @@ export function AdminOffers() {
         all: offers.length,
         approved: offers.filter((o) => o.status === 'approved').length,
         active: offers.filter((o) => o.status === 'active').length,
+        matured: offers.filter((o) => o.status === 'matured').length,
         rejected: offers.filter((o) => o.status === 'rejected').length,
         closed: offers.filter((o) => o.status === 'closed').length,
     };
@@ -455,6 +512,100 @@ export function AdminOffers() {
                                     </div>
                                 )}
 
+                                {/* ── Settlement Panel (matured debt offers) ── */}
+                                {selected.offer_type === 'collateral' && ['matured', 'active'].includes(selected.status) && (
+                                    <div className="bg-purple-500/5 rounded-xl border border-purple-500/15 p-4 space-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <Landmark className="w-4 h-4 text-purple-400" />
+                                            <h4 className="text-sm font-semibold text-purple-300">Bullet Maturity Settlement</h4>
+                                            {settlementLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400 ml-auto" />}
+                                        </div>
+
+                                        {settlementStatus ? (
+                                            <>
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    <div className="bg-white/[0.03] rounded-lg p-2.5">
+                                                        <p className="text-[10px] text-zinc-500 mb-0.5">Contract</p>
+                                                        <p className="text-xs font-mono text-white truncate">
+                                                            {settlementStatus.settlementContractId
+                                                                ? `${settlementStatus.settlementContractId.slice(0, 8)}…`
+                                                                : '—'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="bg-white/[0.03] rounded-lg p-2.5">
+                                                        <p className="text-[10px] text-zinc-500 mb-0.5">Balance</p>
+                                                        <p className={`text-xs font-mono font-medium ${
+                                                            (settlementStatus.contractBalance ?? 0) > 0 ? 'text-emerald-400' : 'text-zinc-400'
+                                                        }`}>
+                                                            {settlementStatus.contractBalance != null
+                                                                ? `${settlementStatus.contractBalance.toLocaleString()} USDC`
+                                                                : '—'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="bg-white/[0.03] rounded-lg p-2.5">
+                                                        <p className="text-[10px] text-zinc-500 mb-0.5">Status</p>
+                                                        <p className="text-xs font-medium">
+                                                            {!settlementStatus.hasSettlementContract ? (
+                                                                <span className="text-amber-400">No Contract</span>
+                                                            ) : (settlementStatus.contractBalance ?? 0) > 0 ? (
+                                                                <span className="text-emerald-400">Ready to Settle</span>
+                                                            ) : (
+                                                                <span className="text-zinc-400">Awaiting Deposit</span>
+                                                            )}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {settlementStatus.settlementContractId && (
+                                                    <div className="flex items-center gap-2 bg-purple-500/5 rounded-lg px-3 py-1.5 border border-purple-500/10">
+                                                        <code className="text-[11px] text-purple-300 font-mono flex-1 truncate">
+                                                            {settlementStatus.settlementContractId}
+                                                        </code>
+                                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-purple-400"
+                                                            onClick={() => navigator.clipboard.writeText(settlementStatus.settlementContractId || '')}>
+                                                            <Copy className="w-3 h-3" />
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : !settlementLoading ? (
+                                            <p className="text-xs text-zinc-500">No settlement contract deployed yet.</p>
+                                        ) : null}
+
+                                        {/* Settlement actions */}
+                                        <div className="flex items-center gap-2 pt-1">
+                                            {!settlementStatus?.hasSettlementContract && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="gap-1.5 text-purple-400 border-purple-500/30 hover:bg-purple-500/10"
+                                                    onClick={() => setActionDialog({ type: 'deploy_settlement', offer: selected })}
+                                                >
+                                                    <Wallet className="w-3.5 h-3.5" /> Deploy Contract
+                                                </Button>
+                                            )}
+                                            {settlementStatus?.hasSettlementContract && (settlementStatus.contractBalance ?? 0) > 0 && (
+                                                <Button
+                                                    size="sm"
+                                                    className="gap-1.5 bg-purple-600 hover:bg-purple-700 text-white"
+                                                    onClick={() => setActionDialog({ type: 'execute_settlement', offer: selected })}
+                                                >
+                                                    <Zap className="w-3.5 h-3.5" /> Execute Settlement
+                                                </Button>
+                                            )}
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="gap-1 text-zinc-400 ml-auto"
+                                                onClick={() => loadSettlementStatus(selected.id)}
+                                                disabled={settlementLoading}
+                                            >
+                                                <RefreshCw className={`w-3 h-3 ${settlementLoading ? 'animate-spin' : ''}`} /> Refresh
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Asset code + dates */}
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="bg-white/[0.03] rounded-lg p-3">
@@ -540,6 +691,67 @@ export function AdminOffers() {
                         <Button onClick={handleAction} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700">
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
                             Verify & Enable
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Deploy Settlement Contract Dialog ── */}
+            <Dialog open={actionDialog.type === 'deploy_settlement' && !!actionDialog.offer} onOpenChange={() => closeAction()}>
+                <DialogContent className="bg-slate-900 border-white/10 text-white">
+                    <DialogHeader>
+                        <DialogTitle className="text-purple-400 flex items-center gap-2">
+                            <Wallet className="w-5 h-5" /> Deploy Settlement Contract
+                        </DialogTitle>
+                        <DialogDescription>
+                            This will deploy a MaturitySettlement Soroban contract for "{actionDialog.offer?.offer_name}".
+                            The company will then deposit USDC into this contract before you can trigger settlement.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeAction} className="border-white/10">Cancel</Button>
+                        <Button onClick={handleAction} disabled={isSubmitting} className="bg-purple-600 hover:bg-purple-700">
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Wallet className="w-4 h-4 mr-2" />}
+                            Deploy Contract
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Execute Settlement Dialog ── */}
+            <Dialog open={actionDialog.type === 'execute_settlement' && !!actionDialog.offer} onOpenChange={() => closeAction()}>
+                <DialogContent className="bg-slate-900 border-white/10 text-white">
+                    <DialogHeader>
+                        <DialogTitle className="text-purple-400 flex items-center gap-2">
+                            <Zap className="w-5 h-5" /> Execute Settlement
+                        </DialogTitle>
+                        <DialogDescription>
+                            This will execute the full bullet maturity settlement for "{actionDialog.offer?.offer_name}".
+                            The contract will pay all investors their principal + interest, burn their tokens,
+                            send the platform fee to treasury, and close the offer. This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {settlementStatus && (
+                        <div className="bg-purple-500/10 rounded-lg p-3 border border-purple-500/20 space-y-1.5">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-zinc-400">Contract Balance</span>
+                                <span className="text-emerald-400 font-mono font-medium">
+                                    {(settlementStatus.contractBalance ?? 0).toLocaleString()} USDC
+                                </span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-zinc-400">Contract</span>
+                                <span className="text-purple-300 font-mono text-xs">
+                                    {settlementStatus.settlementContractId?.slice(0, 16)}…
+                                </span>
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeAction} className="border-white/10">Cancel</Button>
+                        <Button onClick={handleAction} disabled={isSubmitting} className="bg-purple-600 hover:bg-purple-700">
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
+                            Execute Settlement
                         </Button>
                     </DialogFooter>
                 </DialogContent>

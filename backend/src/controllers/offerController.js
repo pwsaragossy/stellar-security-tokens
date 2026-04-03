@@ -137,6 +137,17 @@ export class OfferController {
       // Relations
       company: offer.company || null,
       token: (offer.tokens && offer.tokens.length > 0) ? offer.tokens[0] : (offer.token || null),
+      // Soroban contracts
+      sorobanContractId: offer.sorobanContractId || null,
+      soroban_contract_id: offer.sorobanContractId || null,
+      sorobanSettlementContractId: offer.sorobanSettlementContractId || null,
+      soroban_settlement_contract_id: offer.sorobanSettlementContractId || null,
+      // Token lifecycle
+      isTokenLocked: offer.isTokenLocked ?? true,
+      paymentDueStatus: offer.paymentDueStatus || null,
+      payment_due_status: offer.paymentDueStatus || null,
+      lastPaymentDate: offer.lastPaymentDate || null,
+      last_payment_date: offer.lastPaymentDate || null,
     };
   }
 
