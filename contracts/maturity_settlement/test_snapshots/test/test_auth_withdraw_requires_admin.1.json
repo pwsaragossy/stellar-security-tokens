@@ -114,6 +114,14 @@
                           },
                           {
                             "key": {
+                              "symbol": "max_fee_bps"
+                            },
+                            "val": {
+                              "u32": 5000
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "token_sac"
                             },
                             "val": {

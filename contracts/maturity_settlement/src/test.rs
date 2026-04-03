@@ -63,7 +63,7 @@ fn setup<'a>(
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(e, &contract_id);
 
-    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury);
+    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury, &5000);
 
     usdc_admin.mint(&company, &(10_000 * 10_000_000i128));
     sec_token_admin.mint(&investor, &(1_000 * 10_000_000i128));
@@ -81,6 +81,7 @@ fn seed_config(e: &Env, contract: &Address, admin: &Address) {
                 usdc_sac: Address::generate(e),
                 token_sac: Address::generate(e),
                 treasury: Address::generate(e),
+                max_fee_bps: 5000,
             },
         );
     });
@@ -103,7 +104,7 @@ fn test_initialize_happy_path() {
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
 
-    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury);
+    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury, &5000);
     // No panic = success
 }
 
@@ -120,8 +121,8 @@ fn test_initialize_double_call_fails() {
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
 
-    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury);
-    let result = client.try_initialize(&admin, &usdc.address, &sec_token.address, &treasury);
+    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury, &5000);
+    let result = client.try_initialize(&admin, &usdc.address, &sec_token.address, &treasury, &5000);
     assert_eq!(result, Err(Ok(SettleError::AlreadyInitialized)));
 }
 
@@ -137,7 +138,7 @@ fn test_initialize_stores_correct_config() {
 
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
-    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury);
+    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury, &5000);
 
     // Verify via get_balance (proves config.usdc_sac is stored correctly)
     assert_eq!(client.get_balance(), 0);
@@ -157,7 +158,7 @@ fn test_initialize_different_admin_and_treasury() {
 
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
-    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury);
+    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury, &5000);
     // No panic = admin ≠ treasury is fine
 }
 
@@ -172,7 +173,7 @@ fn test_initialize_extends_ttl() {
 
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
-    client.initialize(&admin, &usdc.address, &sec_token.address, &Address::generate(&e));
+    client.initialize(&admin, &usdc.address, &sec_token.address, &Address::generate(&e), &5000);
     // Subsequent calls shouldn't panic due to expired TTL
     assert_eq!(client.version(), 1);
 }
@@ -274,7 +275,7 @@ fn test_deposit_overflow_accumulation() {
 
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
-    client.initialize(&admin, &usdc.address, &sec_token.address, &Address::generate(&e));
+    client.initialize(&admin, &usdc.address, &sec_token.address, &Address::generate(&e), &5000);
 
     // Seed a huge existing deposit via storage
     e.as_contract(&contract_id, || {
@@ -1037,7 +1038,7 @@ fn test_auth_initialize_requires_admin() {
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
 
-    client.initialize(&admin, &usdc.address, &sec_token.address, &Address::generate(&e));
+    client.initialize(&admin, &usdc.address, &sec_token.address, &Address::generate(&e), &5000);
 }
 
 #[test]
@@ -1062,6 +1063,7 @@ fn test_auth_deposit_requires_depositor() {
                 usdc_sac: usdc.address.clone(),
                 token_sac: sec_token.address.clone(),
                 treasury: Address::generate(&e),
+                max_fee_bps: 5000,
             },
         );
     });
@@ -1201,7 +1203,109 @@ fn test_deposit_1_stroop_allowed() {
 }
 
 // ═══════════════════════════════════════════════════════
-//  12. COMPUTE BUDGET STRESS — 2 tests
+//  12a. CVM FEE CAP ENFORCEMENT — 4 tests
+//
+//  On-chain transparency: fee cannot exceed the
+//  max_fee_bps declared at initialization.
+// ═══════════════════════════════════════════════════════
+
+/// Fee at exactly max_fee_bps boundary should succeed.
+#[test]
+fn test_fee_cap_at_boundary_succeeds() {
+    let e = Env::default();
+    e.mock_all_auths();
+    // max_fee_bps = 5000 (50%) from setup
+    let (client, _, company, investor, _, _, _, _, _, _) = setup(&e);
+
+    // payout = 100 USDC, fee = 50 USDC (exactly 50% = 5000 bps)
+    let payout: i128 = 100 * 10_000_000;
+    let fee: i128 = 50 * 10_000_000;
+    client.deposit(&company, &(payout + fee));
+
+    let items = vec![&e, SettleItem {
+        investor: investor.clone(),
+        payout,
+        clawback_amount: 100 * 10_000_000,
+    }];
+    client.settle_batch(&items, &fee);
+    // No panic = fee at exact boundary accepted
+}
+
+/// Fee exceeding max_fee_bps should be rejected.
+#[test]
+fn test_fee_cap_exceeded_rejected() {
+    let e = Env::default();
+    e.mock_all_auths();
+    // max_fee_bps = 5000 (50%) from setup
+    let (client, _, company, investor, _, _, _, _, _, _) = setup(&e);
+
+    // payout = 100 USDC, fee = 51 USDC (51% > 50% cap)
+    let payout: i128 = 100 * 10_000_000;
+    let fee: i128 = 51 * 10_000_000;
+    client.deposit(&company, &(payout + fee));
+
+    let items = vec![&e, SettleItem {
+        investor: investor.clone(),
+        payout,
+        clawback_amount: 100 * 10_000_000,
+    }];
+    let result = client.try_settle_batch(&items, &fee);
+    assert_eq!(result, Err(Ok(SettleError::FeeTooHigh)));
+}
+
+/// Zero fee always allowed regardless of max_fee_bps.
+#[test]
+fn test_fee_cap_zero_fee_always_allowed() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let (client, _, company, investor, _, _, _, _, _, _) = setup(&e);
+
+    let payout: i128 = 100 * 10_000_000;
+    client.deposit(&company, &payout);
+
+    let items = vec![&e, SettleItem {
+        investor: investor.clone(),
+        payout,
+        clawback_amount: 100 * 10_000_000,
+    }];
+    client.settle_batch(&items, &0);
+    // Zero fee always passes — no FeeTooHigh check triggered
+}
+
+/// max_fee_bps = 0 means uncapped (no fee limit enforcement).
+#[test]
+fn test_fee_cap_uncapped_when_zero_bps() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let company = Address::generate(&e);
+    let treasury = Address::generate(&e);
+    let (usdc, usdc_admin) = create_token_contract(&e, &admin);
+    let (sec_token, sec_token_admin) = create_clawback_token_contract(&e, &admin);
+
+    let contract_id = e.register(MaturitySettlement, ());
+    let client = MaturitySettlementClient::new(&e, &contract_id);
+    // max_fee_bps = 0 → uncapped
+    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury, &0);
+
+    let investor = Address::generate(&e);
+    sec_token_admin.mint(&investor, &(100 * 10_000_000i128));
+    usdc_admin.mint(&company, &(200 * 10_000_000i128));
+    client.deposit(&company, &(200 * 10_000_000i128));
+
+    // payout = 100, fee = 100 (100% of payouts!) — should pass with bps=0
+    let items = vec![&e, SettleItem {
+        investor: investor.clone(),
+        payout: 100 * 10_000_000,
+        clawback_amount: 100 * 10_000_000,
+    }];
+    client.settle_batch(&items, &(100 * 10_000_000i128));
+    // No panic — uncapped fee allowed
+}
+
+// ═══════════════════════════════════════════════════════
+//  12b. COMPUTE BUDGET STRESS — 2 tests
 // ═══════════════════════════════════════════════════════
 
 #[test]
@@ -1243,7 +1347,7 @@ fn test_batch_25_investors_realistic_max() {
 
     let payout_each: i128 = 5 * 10_000_000;
     let clawback_each: i128 = 3 * 10_000_000;
-    let fee: i128 = 100 * 10_000_000;
+    let fee: i128 = 2_500_000; // 0.25 USDC (~2% of 125 USDC total payouts)
     let total_deposit = payout_each * 25 + fee;
 
     usdc_admin.mint(&company, &total_deposit);
@@ -1518,7 +1622,7 @@ fn test_settle_investor_is_treasury() {
 
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
-    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury);
+    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury, &5000);
 
     usdc_admin.mint(&company, &(110 * 10_000_000i128));
     sec_token_admin.mint(&treasury, &(100 * 10_000_000i128));
@@ -1838,7 +1942,7 @@ fn test_initialize_treasury_equals_admin() {
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
     // treasury = admin — degenerate but must work
-    client.initialize(&admin, &usdc.address, &sec_token.address, &admin);
+    client.initialize(&admin, &usdc.address, &sec_token.address, &admin, &5000);
 
     let company = Address::generate(&e);
     let investor = Address::generate(&e);
@@ -2058,6 +2162,7 @@ fn test_auth_company_cannot_self_refund() {
                 usdc_sac: usdc.address.clone(),
                 token_sac: sec_token.address.clone(),
                 treasury: Address::generate(&e),
+                max_fee_bps: 5000,
             },
         );
     });
@@ -2099,7 +2204,7 @@ fn test_initialize_same_sac_both_tokens() {
     // Use USDC SAC as both buy and sell token
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
-    client.initialize(&admin, &usdc.address, &usdc.address, &Address::generate(&e));
+    client.initialize(&admin, &usdc.address, &usdc.address, &Address::generate(&e), &5000);
 
     // Setup: investor holds "security tokens" which are actually USDC
     let company = Address::generate(&e);
@@ -2178,6 +2283,7 @@ fn test_auth_depositor_cannot_deposit_for_other() {
                 usdc_sac: usdc.address.clone(),
                 token_sac: sec_token.address.clone(),
                 treasury: Address::generate(&e),
+                max_fee_bps: 5000,
             },
         );
     });
@@ -2308,7 +2414,7 @@ fn test_full_lifecycle_init_deposit_settle_withdraw() {
 
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
-    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury);
+    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury, &5000);
     assert_eq!(client.version(), 1);
     assert_eq!(client.get_balance(), 0);
 
@@ -2576,6 +2682,7 @@ fn test_auth_company_cannot_withdraw() {
                 usdc_sac: usdc.address.clone(),
                 token_sac: sec_token.address.clone(),
                 treasury: treasury.clone(),
+                max_fee_bps: 5000,
             },
         );
     });

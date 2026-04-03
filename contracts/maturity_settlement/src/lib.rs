@@ -30,6 +30,8 @@ pub enum SettleError {
     DuplicateInvestor = 9,
     /// Payout to address holding zero tokens — defense against phantom investor attack.
     PhantomInvestor = 10,
+    /// Fee exceeds the max_fee_bps cap declared at initialization (CVM transparency).
+    FeeTooHigh = 11,
 }
 
 /// Per-offer contract state keys.
@@ -52,6 +54,9 @@ pub enum DataKey {
 /// `usdc_sac`: USDC SAC contract address (for payouts + fee routing).
 /// `token_sac`: security token SAC contract address (for clawback/burn).
 /// `treasury`: platform treasury address (receives aggregated fees).
+/// `max_fee_bps`: maximum fee in basis points (e.g. 200 = 2%). Immutable after init.
+///                Enforced on-chain: total_fee ≤ sum(payouts) × max_fee_bps / 10_000.
+///                CVM transparency: auditors can verify fee cap on-chain.
 #[contracttype]
 #[derive(Clone)]
 pub struct Config {
@@ -59,6 +64,7 @@ pub struct Config {
     pub usdc_sac: Address,
     pub token_sac: Address,
     pub treasury: Address,
+    pub max_fee_bps: u32,
 }
 
 /// One item in a settlement batch — represents a single investor's payout + clawback.
@@ -97,12 +103,15 @@ impl MaturitySettlement {
     /// `usdc_sac`: USDC SAC contract address.
     /// `token_sac`: security token SAC contract address.
     /// `treasury`: platform treasury for fee routing.
+    /// `max_fee_bps`: maximum platform fee in basis points (200 = 2%).
+    ///                Immutable after init. Enforced in settle_batch().
     pub fn initialize(
         env: Env,
         admin: Address,
         usdc_sac: Address,
         token_sac: Address,
         treasury: Address,
+        max_fee_bps: u32,
     ) -> Result<(), SettleError> {
         // Prevent double init
         if env.storage().instance().has(&DataKey::Config) {
@@ -116,6 +125,7 @@ impl MaturitySettlement {
             usdc_sac,
             token_sac,
             treasury,
+            max_fee_bps,
         };
         env.storage().instance().set(&DataKey::Config, &config);
 
@@ -232,6 +242,28 @@ impl MaturitySettlement {
                 let token_balance = sec_token.balance(&item.investor);
                 if token_balance == 0 {
                     return Err(SettleError::PhantomInvestor);
+                }
+            }
+        }
+
+        // V-CVM: Fee cap enforcement (CVM transparency invariant)
+        // Fee cannot exceed max_fee_bps of total payouts.
+        // e.g. max_fee_bps=200 → fee ≤ 2% of payouts.
+        // Skip when: fee=0, max_fee_bps=0 (uncapped), or payouts=0 (clawback-only).
+        if total_fee > 0 && config.max_fee_bps > 0 {
+            let mut sum_payouts: i128 = 0;
+            for i in 0..items.len() {
+                let item = items.get(i).unwrap();
+                sum_payouts = sum_payouts.checked_add(item.payout).ok_or(SettleError::Overflow)?;
+            }
+            // Only enforce when there are actual payouts (fee as % of payouts)
+            if sum_payouts > 0 {
+                let max_allowed = sum_payouts
+                    .checked_mul(config.max_fee_bps as i128)
+                    .ok_or(SettleError::Overflow)?
+                    / 10_000;
+                if total_fee > max_allowed {
+                    return Err(SettleError::FeeTooHigh);
                 }
             }
         }

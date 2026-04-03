@@ -64,6 +64,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "u32": 5000
                 }
               ]
             }
@@ -129,7 +132,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
                 {
-                  "i128": "2250000000"
+                  "i128": "1252500000"
                 }
               ]
             }
@@ -151,7 +154,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
                 {
-                  "i128": "2250000000"
+                  "i128": "1252500000"
                 }
               ]
             }
@@ -170,7 +173,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
                     },
                     {
-                      "i128": "2250000000"
+                      "i128": "1252500000"
                     }
                   ]
                 }
@@ -1445,7 +1448,7 @@
                   ]
                 },
                 {
-                  "i128": "1000000000"
+                  "i128": "2500000"
                 }
               ]
             }
@@ -2612,7 +2615,7 @@
               },
               "durability": "persistent",
               "val": {
-                "i128": "2250000000"
+                "i128": "1252500000"
               }
             }
           },
@@ -2651,6 +2654,14 @@
                             },
                             "val": {
                               "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "max_fee_bps"
+                            },
+                            "val": {
+                              "u32": 5000
                             }
                           },
                           {
@@ -4233,7 +4244,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1000000000"
+                      "i128": "2500000"
                     }
                   },
                   {
@@ -7129,7 +7140,7 @@
               }
             ],
             "data": {
-              "i128": "1000000000"
+              "i128": "2500000"
             }
           }
         }

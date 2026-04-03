@@ -194,7 +194,7 @@ export function CompanyDashboard() {
                                         </span>
                                         <Button
                                             size="sm"
-                                            onClick={() => navigate(`/company/pay/${payment.offerId}`)}
+                                            onClick={() => navigate(`/company/payments/${payment.offerId}`)}
                                             className={isOverdue
                                                 ? 'bg-red-500 hover:bg-red-600 text-white text-xs'
                                                 : 'bg-primary hover:bg-primary/90 text-primary-foreground text-xs'
