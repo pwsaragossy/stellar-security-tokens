@@ -178,10 +178,10 @@ export function CreateOffer() {
                 offer_type: formData.offer_type,
                 total_supply: formData.total_supply,
                 unit_price: formData.unit_price,
-                annual_interest_rate: formData.offer_type === 'collateral' ? parseFloat(formData.annual_interest_rate) : undefined,
-                payment_type: formData.offer_type === 'collateral' ? formData.payment_type : undefined,
-                payment_day: formData.offer_type === 'collateral' && formData.payment_type !== 'bullet' ? parseInt(formData.payment_day) : undefined,
-                maturity_date: formData.maturity_date || undefined,
+                annual_interest_rate: formData.annual_interest_rate ? parseFloat(formData.annual_interest_rate) : undefined,
+                payment_type: formData.payment_type || undefined,
+                payment_day: formData.payment_type !== 'bullet' ? parseInt(formData.payment_day) : undefined,
+                maturity_date: formData.offer_type === 'collateral' ? (formData.maturity_date || undefined) : undefined,
                 offer_rules: {
                     min_investment: formData.min_investment ? Number(formData.min_investment) : undefined,
                     max_investment: formData.max_investment ? Number(formData.max_investment) : undefined,
@@ -235,8 +235,8 @@ export function CreateOffer() {
             case 2: {
                 // Target raise required
                 if (!formData.total_supply) return false;
-                // Collateral needs interest rate
-                if (formData.offer_type === 'collateral' && !formData.annual_interest_rate) return false;
+                // Both offer types need a rate (interest for collateral, dividend for sale)
+                if (!formData.annual_interest_rate) return false;
                 // Bullet payments need a future maturity date
                 if (formData.offer_type === 'collateral' && formData.payment_type === 'bullet') {
                     if (!formData.maturity_date) return false;
@@ -418,57 +418,63 @@ export function CreateOffer() {
                                 </div>
                             )}
 
-                            {formData.offer_type === 'collateral' && (
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-white">Annual Interest Rate (%) *</label>
-                                    <div className="relative">
-                                        <Input
-                                            type="number"
-                                            step="0.1"
-                                            placeholder="12.5"
-                                            value={formData.annual_interest_rate}
-                                            onChange={(e) => updateFormData({ annual_interest_rate: e.target.value })}
-                                            className="pr-8 glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-foreground"
-                                        />
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        Annual percentage yield paid to token holders
-                                    </p>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-white">
+                                    {formData.offer_type === 'collateral' ? 'Annual Interest Rate (%) *' : 'Expected Annual Dividend (%) *'}
+                                </label>
+                                <div className="relative">
+                                    <Input
+                                        type="number"
+                                        step="0.1"
+                                        placeholder={formData.offer_type === 'collateral' ? '12.5' : '8.0'}
+                                        value={formData.annual_interest_rate}
+                                        onChange={(e) => updateFormData({ annual_interest_rate: e.target.value })}
+                                        className="pr-8 glass-panel bg-black/20 border-white/10 focus:border-primary/50 text-foreground"
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
                                 </div>
-                            )}
+                                <p className="text-xs text-muted-foreground">
+                                    {formData.offer_type === 'collateral'
+                                        ? 'Annual percentage yield paid to token holders'
+                                        : 'Projected annual dividend rate distributed to shareholders'}
+                                </p>
+                            </div>
 
-                            {formData.offer_type === 'collateral' && (
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-white">Payment Frequency *</label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {[
-                                            { value: 'monthly', label: 'Monthly' },
-                                            { value: 'quarterly', label: 'Quarterly' },
-                                            { value: 'semi_annual', label: 'Semi-Annual' },
-                                            { value: 'annual', label: 'Annual' },
-                                            { value: 'bullet', label: 'Bullet (at maturity)' },
-                                        ].map((option) => (
-                                            <button
-                                                key={option.value}
-                                                type="button"
-                                                onClick={() => updateFormData({ payment_type: option.value as any })}
-                                                className={`p-2 rounded-lg border text-sm transition-all ${formData.payment_type === option.value
-                                                    ? 'border-primary bg-primary/10 text-primary'
-                                                    : 'border-white/10 bg-white/5 hover:bg-white/10 text-white'
-                                                    }`}
-                                            >
-                                                {option.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        How often investors receive yield payments
-                                    </p>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-white">
+                                    {formData.offer_type === 'collateral' ? 'Payment Frequency *' : 'Dividend Frequency *'}
+                                </label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {[
+                                        { value: 'monthly', label: 'Monthly' },
+                                        { value: 'quarterly', label: 'Quarterly' },
+                                        { value: 'semi_annual', label: 'Semi-Annual' },
+                                        { value: 'annual', label: 'Annual' },
+                                        ...(formData.offer_type === 'collateral'
+                                            ? [{ value: 'bullet', label: 'Bullet (at maturity)' }]
+                                            : []),
+                                    ].map((option) => (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            onClick={() => updateFormData({ payment_type: option.value as any })}
+                                            className={`p-2 rounded-lg border text-sm transition-all ${formData.payment_type === option.value
+                                                ? 'border-primary bg-primary/10 text-primary'
+                                                : 'border-white/10 bg-white/5 hover:bg-white/10 text-white'
+                                                }`}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
                                 </div>
-                            )}
+                                <p className="text-xs text-muted-foreground">
+                                    {formData.offer_type === 'collateral'
+                                        ? 'How often investors receive yield payments'
+                                        : 'How often dividends are distributed to shareholders'}
+                                </p>
+                            </div>
 
-                            {formData.offer_type === 'collateral' && formData.payment_type !== 'bullet' && (
+                            {formData.payment_type !== 'bullet' && (
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-white">Payment Day</label>
                                     <Input
@@ -507,8 +513,8 @@ export function CreateOffer() {
                                 </div>
                             )}
 
-                            {/* Maturity Date — available for all offer types */}
-                            {!(formData.offer_type === 'collateral' && formData.payment_type === 'bullet') && (
+                            {/* Maturity Date — collateral non-bullet only (equity is perpetual) */}
+                            {formData.offer_type === 'collateral' && formData.payment_type !== 'bullet' && (
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-white">Maturity Date</label>
                                     <Input
@@ -528,6 +534,130 @@ export function CreateOffer() {
                                     )}
                                 </div>
                             )}
+
+                            {/* ─── Payment Preview Calculator ─── */}
+                            {formData.total_supply && parseFloat(formData.total_supply) > 0 &&
+                             formData.annual_interest_rate && parseFloat(formData.annual_interest_rate) > 0 && (() => {
+                                const round7 = (v: number) => Math.round(v * 10_000_000) / 10_000_000;
+                                const fmt = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+                                const totalInvested = parseFloat(formData.total_supply);
+                                const rate = parseFloat(formData.annual_interest_rate);
+                                const periodsMap: Record<string, { perYear: number; label: string }> = {
+                                    monthly: { perYear: 12, label: 'month' },
+                                    quarterly: { perYear: 4, label: 'quarter' },
+                                    semi_annual: { perYear: 2, label: 'semester' },
+                                    annual: { perYear: 1, label: 'year' },
+                                };
+
+                                if (formData.payment_type === 'bullet') {
+                                    // Bullet: show total at maturity
+                                    if (!formData.maturity_date || new Date(formData.maturity_date) <= new Date()) return null;
+                                    const now = new Date();
+                                    const maturity = new Date(formData.maturity_date);
+                                    const yearsToMaturity = (maturity.getTime() - now.getTime()) / (365 * 24 * 60 * 60 * 1000);
+                                    const totalInterest = round7(totalInvested * (rate / 100) * yearsToMaturity);
+                                    const totalPayout = totalInvested + totalInterest;
+                                    const months = Math.round(yearsToMaturity * 12);
+
+                                    return (
+                                        <div className="p-4 rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-amber-600/5 animate-fade-in space-y-3">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                                                <span className="text-sm font-semibold text-amber-300">Cost Preview — Bullet</span>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                                Assuming 100% of the offer is sold, in ~{months} month{months !== 1 ? 's' : ''} you will owe:
+                                            </p>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div className="p-3 rounded-lg bg-black/20 text-center">
+                                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Principal</p>
+                                                    <p className="text-base font-bold text-white mt-0.5">{fmt(totalInvested)}</p>
+                                                </div>
+                                                <div className="p-3 rounded-lg bg-black/20 text-center">
+                                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Interest</p>
+                                                    <p className="text-base font-bold text-amber-400 mt-0.5">{fmt(totalInterest)}</p>
+                                                </div>
+                                                <div className="p-3 rounded-lg bg-black/20 border border-amber-500/20 text-center">
+                                                    <p className="text-[10px] text-amber-300/80 uppercase tracking-wider font-semibold">Total Due</p>
+                                                    <p className="text-base font-bold text-amber-300 mt-0.5">{fmt(totalPayout)}</p>
+                                                </div>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground/60">
+                                                Single lump-sum payment at maturity. Exact amount depends on actual amount raised.
+                                            </p>
+                                        </div>
+                                    );
+                                } else {
+                                    // Periodic: show per-period amount
+                                    const period = periodsMap[formData.payment_type];
+                                    if (!period) return null;
+                                    const periodInterest = round7(totalInvested * (rate / 100) / period.perYear);
+                                    const annualInterest = round7(totalInvested * (rate / 100));
+
+                                    // If maturity date is set, compute total payments
+                                    let totalPayments: number | null = null;
+                                    let totalInterestOverLife: number | null = null;
+                                    let totalOwedAtEnd: number | null = null;
+                                    if (formData.maturity_date && new Date(formData.maturity_date) > new Date()) {
+                                        const now = new Date();
+                                        const maturity = new Date(formData.maturity_date);
+                                        const yearsToMaturity = (maturity.getTime() - now.getTime()) / (365 * 24 * 60 * 60 * 1000);
+                                        totalPayments = Math.floor(yearsToMaturity * period.perYear);
+                                        totalInterestOverLife = round7(periodInterest * totalPayments);
+                                        totalOwedAtEnd = totalInvested + totalInterestOverLife;
+                                    }
+
+                                    return (
+                                        <div className="p-4 rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-amber-600/5 animate-fade-in space-y-3">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                                                <span className="text-sm font-semibold text-amber-300">
+                                                    {formData.offer_type === 'sale' ? 'Dividend' : 'Cost'} Preview — {formData.payment_type.replace('_', '-').replace(/\b\w/g, c => c.toUpperCase())}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                                Assuming 100% of the offer is sold, each {period.label} you will owe:
+                                            </p>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="p-3 rounded-lg bg-black/20 border border-amber-500/20 text-center">
+                                                    <p className="text-[10px] text-amber-300/80 uppercase tracking-wider font-semibold">Per {period.label}</p>
+                                                    <p className="text-lg font-bold text-amber-300 mt-0.5">{fmt(periodInterest)}</p>
+                                                    <p className="text-[10px] text-muted-foreground">interest only</p>
+                                                </div>
+                                                <div className="p-3 rounded-lg bg-black/20 text-center">
+                                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Annual Total</p>
+                                                    <p className="text-lg font-bold text-white mt-0.5">{fmt(annualInterest)}</p>
+                                                    <p className="text-[10px] text-muted-foreground">{period.perYear} payment{period.perYear > 1 ? 's' : ''}/year</p>
+                                                </div>
+                                            </div>
+                                            {totalPayments !== null && totalInterestOverLife !== null && totalOwedAtEnd !== null && (
+                                                <div className="pt-2 border-t border-white/5 space-y-1.5">
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Over the full term ({totalPayments} payment{totalPayments !== 1 ? 's' : ''} + principal return):
+                                                    </p>
+                                                    <div className="grid grid-cols-3 gap-3">
+                                                        <div className="p-2.5 rounded-lg bg-black/20 text-center">
+                                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Interest</p>
+                                                            <p className="text-sm font-bold text-amber-400 mt-0.5">{fmt(totalInterestOverLife)}</p>
+                                                        </div>
+                                                        <div className="p-2.5 rounded-lg bg-black/20 text-center">
+                                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Principal</p>
+                                                            <p className="text-sm font-bold text-white mt-0.5">{fmt(totalInvested)}</p>
+                                                        </div>
+                                                        <div className="p-2.5 rounded-lg bg-black/20 border border-amber-500/20 text-center">
+                                                            <p className="text-[10px] text-amber-300/80 uppercase tracking-wider font-semibold">Grand Total</p>
+                                                            <p className="text-sm font-bold text-amber-300 mt-0.5">{fmt(totalOwedAtEnd)}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <p className="text-[10px] text-muted-foreground/60">
+                                                Interest payments are periodic. Principal is returned at maturity. Exact amounts depend on actual amount raised.
+                                            </p>
+                                        </div>
+                                    );
+                                }
+                            })()}
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
@@ -745,12 +875,12 @@ export function CreateOffer() {
                                     </p>
                                     <p className="text-xs text-muted-foreground mt-0.5">{new Intl.NumberFormat('en-US').format(parseFloat(formData.total_supply || '0'))} tokens @ $1.00</p>
                                 </div>
-                                {formData.offer_type === 'collateral' && (
-                                    <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
-                                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Interest Rate</p>
-                                        <p className="text-xl font-bold text-emerald-400 mt-1">{formData.annual_interest_rate}% APY</p>
-                                    </div>
-                                )}
+                                <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
+                                    <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                                        {formData.offer_type === 'collateral' ? 'Interest Rate' : 'Dividend Yield'}
+                                    </p>
+                                    <p className="text-xl font-bold text-emerald-400 mt-1">{formData.annual_interest_rate}% APY</p>
+                                </div>
                                 <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
                                     <p className="text-xs text-muted-foreground uppercase tracking-wider">Min Investment</p>
                                     <p className="text-xl font-bold text-white mt-1">${formData.min_investment || '100'}</p>
@@ -785,22 +915,26 @@ export function CreateOffer() {
                                     </div>
                                 </div>
 
-                                {/* Payment Schedule (for Collateral only) */}
-                                {formData.offer_type === 'collateral' && (
-                                    <div className="p-5 rounded-xl border border-white/10 bg-white/[0.02]">
-                                        <h4 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-                                            <Calendar className="w-4 h-4 text-primary" />
-                                            Payment Schedule
-                                        </h4>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-sm text-muted-foreground">Frequency</span>
-                                            <span className="text-sm text-primary font-medium capitalize">
-                                                {formData.payment_type.replace('_', '-')}
-                                                {formData.payment_type !== 'bullet' && ` (Day ${formData.payment_day})`}
-                                            </span>
-                                        </div>
+                                {/* Payment / Dividend Schedule */}
+                                <div className="p-5 rounded-xl border border-white/10 bg-white/[0.02]">
+                                    <h4 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                                        <Calendar className="w-4 h-4 text-primary" />
+                                        {formData.offer_type === 'collateral' ? 'Payment Schedule' : 'Dividend Schedule'}
+                                    </h4>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-muted-foreground">Frequency</span>
+                                        <span className="text-sm text-primary font-medium capitalize">
+                                            {formData.payment_type.replace('_', '-')}
+                                            {formData.payment_type !== 'bullet' && ` (Day ${formData.payment_day})`}
+                                        </span>
                                     </div>
-                                )}
+                                    {formData.offer_type === 'sale' && (
+                                        <div className="flex justify-between items-center mt-3 pt-3 border-t border-white/5">
+                                            <span className="text-sm text-muted-foreground">Duration</span>
+                                            <span className="text-sm text-white font-medium">Perpetual (no maturity)</span>
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Important Dates */}
                                 <div className="p-5 rounded-xl border border-white/10 bg-white/[0.02]">
@@ -833,11 +967,13 @@ export function CreateOffer() {
                                         )}
                                         {formData.offer_type === 'sale' && (
                                             <div className="flex justify-between items-start border-b border-white/5 pb-3">
-                                                <span className="text-sm text-muted-foreground">Payment Cycle</span>
-                                                <span className="text-sm text-white font-medium">Variable Dividends</span>
+                                                <span className="text-sm text-muted-foreground">Dividend Cycle</span>
+                                                <span className="text-sm text-white font-medium capitalize">
+                                                    {formData.payment_type.replace('_', '-')} — {formData.annual_interest_rate}% APY
+                                                </span>
                                             </div>
                                         )}
-                                        {formData.maturity_date && (
+                                        {formData.offer_type === 'collateral' && formData.maturity_date && (
                                             <div className="flex justify-between items-start">
                                                 <span className="text-sm text-muted-foreground">Maturity Date</span>
                                                 <span className="text-sm text-white font-medium">
