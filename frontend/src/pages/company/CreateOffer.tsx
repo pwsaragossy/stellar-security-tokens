@@ -622,7 +622,7 @@ export function CreateOffer() {
                                                 <div className="p-3 rounded-lg bg-black/20 border border-amber-500/20 text-center">
                                                     <p className="text-[10px] text-amber-300/80 uppercase tracking-wider font-semibold">Per {period.label}</p>
                                                     <p className="text-lg font-bold text-amber-300 mt-0.5">{fmt(periodInterest)}</p>
-                                                    <p className="text-[10px] text-muted-foreground">interest only</p>
+                                                    <p className="text-[10px] text-muted-foreground">{formData.offer_type === 'sale' ? 'dividend' : 'interest only'}</p>
                                                 </div>
                                                 <div className="p-3 rounded-lg bg-black/20 text-center">
                                                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Annual Total</p>
