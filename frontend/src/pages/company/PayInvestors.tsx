@@ -2,8 +2,9 @@
  * Pay Investors Page
  * Company dashboard for paying investors their yield
  *
- * For bullet maturity: auto-loops prepare→sign→submit in batches of 49,
- * shows timeline progress, and displays "DO NOT INTERACT" popup when done.
+ * Periodic (monthly/quarterly/etc): Classic Stellar TX — prepare → sign → submit.
+ * Bullet (maturity): Company deposits USDC to MaturitySettlement Soroban contract.
+ *   Settlement is triggered by admin on the Contracts page.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { companyPaymentsApi, type PaymentDetails, type BulletPaymentDetails } from "@/api/companyPayments";
 import { usePasskey } from "@/hooks/usePasskey";
+import { offersApi } from "@/api/offers";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -154,12 +156,31 @@ export function PayInvestors() {
     const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | BulletPaymentDetails | null>(null);
     const [preparedTx, setPreparedTx] = useState<{ transactionXDR: string; expiresAt: string } | null>(null);
 
-    // Batch signing state (bullet maturity)
-    const [batchSteps, setBatchSteps] = useState<BatchStep[]>([]);
+    // Legacy batch signing state — kept for rendering pending batch banner on page revisit
+    const [batchSteps, _setBatchSteps] = useState<BatchStep[]>([]);
     const [isBatchSigning, setIsBatchSigning] = useState(false);
     const [showPendingAdminDialog, setShowPendingAdminDialog] = useState(false);
     const [pendingBatchInfo, setPendingBatchInfo] = useState<{ batchCount: number; batchGroupId: string | null } | null>(null);
     const abortRef = useRef(false);
+
+    // Settlement contract state (bullet maturity — new Soroban flow)
+    const [depositSubmitting, setDepositSubmitting] = useState(false);
+    const [depositSuccess, setDepositSuccess] = useState(false);
+    const [depositBreakdown, setDepositBreakdown] = useState<{
+        xdr: string;
+        depositAmount: number;
+        breakdown: {
+            investorPrincipal: number;
+            investorInterest: number;
+            platformFee: number;
+            totalOwed: number;
+        };
+    } | null>(null);
+    const [settlementStatus, setSettlementStatus] = useState<{
+        hasSettlementContract: boolean;
+        contractBalance: number | null;
+        settlementContractId: string | null;
+    } | null>(null);
 
     useEffect(() => {
         if (offerId) loadPaymentDetails();
@@ -172,14 +193,21 @@ export function PayInvestors() {
             const response = await companyPaymentsApi.getPaymentDetails(parseInt(offerId!));
             if (response.success) {
                 setPaymentDetails(response.data);
-                // Check for pending maturity batches on bullet offers
+                // For bullet offers: check settlement contract status
                 if (response.data && 'totalPayout' in response.data) {
+                    try {
+                        const statusRes = await offersApi.getSettlementStatus(parseInt(offerId!));
+                        if (statusRes.success && statusRes.data) {
+                            setSettlementStatus(statusRes.data);
+                        }
+                    } catch { /* silent — settlement status is non-critical */ }
+                    // Also check for legacy pending batches
                     try {
                         const batchRes = await companyPaymentsApi.getBatchStatus(parseInt(offerId!));
                         if (batchRes.success && batchRes.data.hasPending) {
                             setPendingBatchInfo(batchRes.data);
                         }
-                    } catch { /* silent — batch status is non-critical */ }
+                    } catch { /* silent */ }
                 }
             } else {
                 setError('Failed to load payment details');
@@ -230,88 +258,55 @@ export function PayInvestors() {
         }
     };
 
-    // ─── Bullet Maturity: Batch Signing Loop ──────────────────────────────
+    // ─── Bullet Maturity: Deposit to Settlement Contract ───────────────────
 
-    const handleBulletMaturity = useCallback(async () => {
-        abortRef.current = false;
-        setIsBatchSigning(true);
-        setError(null);
-        setBatchSteps([]);
-
-        const groupId = crypto.randomUUID();
-
-        let batchNum = 0;
-        let remaining = Infinity;
-
+    /** Step 1: Backend computes deposit amount + builds Soroban TX */
+    const handlePrepareDeposit = useCallback(async () => {
         try {
-            while (remaining > 0 && !abortRef.current) {
-                batchNum++;
+            setDepositSubmitting(true);
+            setError(null);
 
-                // Update timeline: add new batch step
-                setBatchSteps(prev => [...prev, {
-                    batch: batchNum,
-                    investorCount: 0,
-                    status: 'signing',
-                }]);
+            const res = await companyPaymentsApi.prepareDeposit(parseInt(offerId!));
+            if (!res.success) throw new Error('Failed to prepare deposit');
 
-                // 1. Prepare
-                const prepRes = await companyPaymentsApi.preparePayment(parseInt(offerId!), groupId);
-                if (!prepRes.success) throw new Error('Failed to prepare batch');
-
-                const { transactionXDR, batchInfo } = prepRes.data;
-                const thisCount = batchInfo?.thisCount || prepRes.data.investorCount;
-                remaining = batchInfo?.remaining ?? 0;
-
-                setBatchSteps(prev => prev.map(s =>
-                    s.batch === batchNum ? { ...s, investorCount: thisCount } : s
-                ));
-
-                // 2. Sign with passkey
-                const signedXDR = await signTransaction(transactionXDR);
-                if (abortRef.current) break;
-
-                // 3. Submit
-                setBatchSteps(prev => prev.map(s =>
-                    s.batch === batchNum ? { ...s, status: 'submitting' } : s
-                ));
-
-                const submitRes = await companyPaymentsApi.submitPayment(
-                    parseInt(offerId!),
-                    signedXDR,
-                    groupId,
-                    batchInfo
-                );
-
-                if (!submitRes.success) throw new Error('Failed to submit batch');
-
-                setBatchSteps(prev => prev.map(s =>
-                    s.batch === batchNum ? { ...s, status: 'done' } : s
-                ));
-
-                const status = submitRes.data?.status;
-                if (status === 'pending_admin_approval') {
-                    remaining = 0;
-                } else if (status === 'batch_queued') {
-                    remaining = batchInfo?.remaining ?? 1;
-                } else if (status === 'completed') {
-                    remaining = 0;
-                }
-            }
-
-            // All batches signed — show DO NOT INTERACT popup
-            setShowPendingAdminDialog(true);
+            // Store breakdown + XDR for the confirmation step
+            setDepositBreakdown({
+                xdr: res.data.xdr,
+                depositAmount: res.data.depositAmount,
+                breakdown: res.data.breakdown,
+            });
         } catch (err: any) {
-            setBatchSteps(prev => prev.map((s, i) =>
-                i === prev.length - 1 && s.status !== 'done'
-                    ? { ...s, status: 'error', error: err.message }
-                    : s
-            ));
-            setError(err.message || 'Batch signing failed');
+            setError(err.message || 'Failed to prepare deposit');
         } finally {
-            setIsBatchSigning(false);
+            setDepositSubmitting(false);
         }
-    }, [offerId, signTransaction]);
+    }, [offerId]);
 
+    /** Step 2: Company signs and submits (no admin needed) */
+    const handleSignAndSubmitDeposit = useCallback(async () => {
+        if (!depositBreakdown) return;
+        try {
+            setDepositSubmitting(true);
+            setError(null);
+
+            const signedXDR = await signTransaction(depositBreakdown.xdr);
+            const res = await companyPaymentsApi.submitDeposit(parseInt(offerId!), signedXDR);
+            if (!res.success) throw new Error('Deposit submission failed');
+
+            setDepositSuccess(true);
+            setDepositBreakdown(null);
+
+            // Refresh settlement status
+            const statusRes = await offersApi.getSettlementStatus(parseInt(offerId!));
+            if (statusRes.success && statusRes.data) setSettlementStatus(statusRes.data);
+        } catch (err: any) {
+            setError(err.message || 'Failed to sign or submit deposit');
+        } finally {
+            setDepositSubmitting(false);
+        }
+    }, [offerId, depositBreakdown, signTransaction]);
+
+    // Legacy batch cancel (kept for backward compatibility)
     const handleCancelBatch = () => {
         abortRef.current = true;
         setIsBatchSigning(false);
@@ -683,29 +678,98 @@ export function PayInvestors() {
             {/* Action Buttons */}
             <div className="flex gap-4 animate-fade-in-up animate-delay-3">
                 {isBulletPayment ? (
-                    /* ── Bullet Maturity: single "Pay Maturity" button ── */
-                    <Button
-                        onClick={handleBulletMaturity}
-                        disabled={isBatchSigning || showPendingAdminDialog || !!pendingBatchInfo}
-                        className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-6 text-lg shadow-lg shadow-purple-500/20 transition-all"
-                    >
-                        {isBatchSigning ? (
-                            <>
-                                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                Signing Batches...
-                            </>
-                        ) : showPendingAdminDialog ? (
-                            <>
-                                <Clock className="w-5 h-5 mr-2" />
-                                Awaiting Admin Approval
-                            </>
-                        ) : (
-                            <>
-                                <Package className="w-5 h-5 mr-2" />
-                                Pay Maturity (${totalOwed.toLocaleString('en-US', { minimumFractionDigits: 2 })})
-                            </>
-                        )}
-                    </Button>
+                    /* ── Bullet Maturity: Deposit to Settlement Contract ── */
+                    depositSuccess ? (
+                        <div className="flex-1 p-5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center space-y-3">
+                            <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto" />
+                            <h4 className="text-lg font-bold text-emerald-300">Deposit Submitted</h4>
+                            <p className="text-sm text-emerald-200/70">
+                                USDC deposited to settlement contract. Admin will execute the settlement to pay investors and burn tokens.
+                            </p>
+                            <Button
+                                variant="outline"
+                                onClick={() => navigate('/company/offers')}
+                                className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                            >
+                                Back to Offers
+                            </Button>
+                        </div>
+                    ) : settlementStatus?.contractBalance && settlementStatus.contractBalance > 0 ? (
+                        <div className="flex-1 p-5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-center space-y-3">
+                            <Clock className="w-10 h-10 text-amber-400 mx-auto" />
+                            <h4 className="text-lg font-bold text-amber-300">Deposit Already Made</h4>
+                            <p className="text-sm text-amber-200/70">
+                                ${settlementStatus.contractBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC is in the settlement contract. Admin will execute settlement.
+                            </p>
+                        </div>
+                    ) : depositBreakdown ? (
+                        /* Confirmation step — show breakdown + sign button */
+                        <div className="flex-1 space-y-4">
+                            <div className="p-5 bg-purple-500/5 border border-purple-500/20 rounded-xl space-y-4">
+                                <h4 className="text-sm font-bold text-purple-300 uppercase tracking-wider">Deposit Breakdown</h4>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Investor Principal</span>
+                                        <span className="text-white font-mono">${depositBreakdown.breakdown.investorPrincipal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Investor Interest</span>
+                                        <span className="text-emerald-400 font-mono">${depositBreakdown.breakdown.investorInterest.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Platform Fee (spread)</span>
+                                        <span className="text-purple-400 font-mono">${depositBreakdown.breakdown.platformFee.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                    <div className="h-px bg-white/10 my-2" />
+                                    <div className="flex justify-between text-base font-bold">
+                                        <span className="text-white">Total USDC to Deposit</span>
+                                        <span className="text-white font-mono">${depositBreakdown.depositAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex gap-3">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setDepositBreakdown(null)}
+                                    className="flex-1"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleSignAndSubmitDeposit}
+                                    disabled={depositSubmitting}
+                                    className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white"
+                                >
+                                    {depositSubmitting ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                            Submitting...
+                                        </>
+                                    ) : (
+                                        'Sign & Deposit'
+                                    )}
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <Button
+                            onClick={handlePrepareDeposit}
+                            disabled={depositSubmitting || !!pendingBatchInfo}
+                            className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-6 text-lg shadow-lg shadow-purple-500/20 transition-all"
+                        >
+                            {depositSubmitting ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                                    Preparing...
+                                </>
+                            ) : (
+                                <>
+                                    <Package className="w-5 h-5 mr-2" />
+                                    Deposit for Maturity (${totalOwed.toLocaleString('en-US', { minimumFractionDigits: 2 })})
+                                </>
+                            )}
+                        </Button>
+                    )
                 ) : !preparedTx ? (
                     /* ── Periodic: prepare button ── */
                     <Button
