@@ -177,14 +177,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -209,7 +201,25 @@
               ]
             }
           },
-          "sub_invocations": []
+          "sub_invocations": [
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                    },
+                    {
+                      "i128": "10000000000"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            }
+          ]
         }
       ]
     ],
@@ -442,6 +452,33 @@
             "contract_data": {
               "ext": "v0",
               "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
               "val": {
@@ -507,12 +544,12 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "Settled"
+                            "symbol": "SettledCount"
                           }
                         ]
                       },
                       "val": {
-                        "bool": true
+                        "u32": 1
                       }
                     }
                   ]
@@ -549,7 +586,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "10000000000"
+                      "i128": "0"
                     }
                   },
                   {

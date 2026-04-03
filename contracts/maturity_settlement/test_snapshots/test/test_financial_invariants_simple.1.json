@@ -164,7 +164,6 @@
     ],
     [],
     [],
-    [],
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
@@ -178,14 +177,6 @@
                   "vec": [
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "1000000000"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -223,7 +214,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                     },
                     {
-                      "i128": "1000000000"
+                      "i128": "10000000000"
                     }
                   ]
                 }
@@ -465,6 +456,33 @@
             "contract_data": {
               "ext": "v0",
               "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
               "val": {
@@ -530,12 +548,12 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "Settled"
+                            "symbol": "SettledCount"
                           }
                         ]
                       },
                       "val": {
-                        "bool": true
+                        "u32": 1
                       }
                     }
                   ]
@@ -572,7 +590,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "9000000000"
+                      "i128": "0"
                     }
                   },
                   {

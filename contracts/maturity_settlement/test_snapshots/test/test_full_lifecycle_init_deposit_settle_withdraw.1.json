@@ -269,14 +269,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "600000000"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -297,14 +289,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "300000000"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -323,14 +307,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "100000000"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -761,6 +737,87 @@
             "contract_data": {
               "ext": "v0",
               "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
               "val": {
@@ -826,12 +883,12 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "Settled"
+                            "symbol": "SettledCount"
                           }
                         ]
                       },
                       "val": {
-                        "bool": true
+                        "u32": 3
                       }
                     }
                   ]

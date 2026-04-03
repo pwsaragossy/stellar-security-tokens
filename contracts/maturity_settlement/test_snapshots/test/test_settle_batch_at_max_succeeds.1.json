@@ -837,14 +837,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -863,14 +855,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -893,14 +877,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -919,14 +895,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -949,14 +917,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -975,14 +935,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -1005,14 +957,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -1031,14 +975,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -1061,14 +997,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -1087,14 +1015,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -1117,14 +1037,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -1143,14 +1055,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -1173,14 +1077,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -1199,14 +1095,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -1229,14 +1117,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -1255,14 +1135,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -1285,14 +1157,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -1311,14 +1175,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -1341,14 +1197,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -1367,14 +1215,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -1397,14 +1237,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -1423,14 +1255,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -1453,14 +1277,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -1479,14 +1295,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -1509,14 +1317,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -1535,14 +1335,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -1565,14 +1357,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -1591,14 +1375,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -1621,14 +1397,6 @@
                       "map": [
                         {
                           "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
-                        {
-                          "key": {
                             "symbol": "investor"
                           },
                           "val": {
@@ -1647,14 +1415,6 @@
                     },
                     {
                       "map": [
-                        {
-                          "key": {
-                            "symbol": "clawback_amount"
-                          },
-                          "val": {
-                            "i128": "0"
-                          }
-                        },
                         {
                           "key": {
                             "symbol": "investor"
@@ -1681,7 +1441,518 @@
               ]
             }
           },
-          "sub_invocations": []
+          "sub_invocations": [
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVAX5"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYRE5"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA2ZMN"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4BV5"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6J5N"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABB6KO"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABDWC6"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABFO3O"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABI7IO"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABKXA6"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABMPZO"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABOHR6"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABR4OP"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABTUG7"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABVM7P"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABXEX7"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABY5MP"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB2VE7"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4N5P"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB6FV7"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACBKTY"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACDC3I"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACF2CY"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHSKI"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACILRY"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            },
+            {
+              "function": {
+                "contract_fn": {
+                  "contract_address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+                  "function_name": "clawback",
+                  "args": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACKDZI"
+                    },
+                    {
+                      "i128": "1"
+                    }
+                  ]
+                }
+              },
+              "sub_invocations": []
+            }
+          ]
         }
       ]
     ]
@@ -2512,6 +2783,816 @@
             "contract_data": {
               "ext": "v0",
               "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVAX5"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYRE5"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA2ZMN"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4BV5"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6J5N"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABB6KO"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABDWC6"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABFO3O"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABI7IO"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABKXA6"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABMPZO"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABOHR6"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABR4OP"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABTUG7"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABVM7P"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABXEX7"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABY5MP"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB2VE7"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4N5P"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB6FV7"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACBKTY"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACDC3I"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACF2CY"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHSKI"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACILRY"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "InvestorSettled"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACKDZI"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "bool": true
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
               "val": {
@@ -2577,12 +3658,12 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "Settled"
+                            "symbol": "SettledCount"
                           }
                         ]
                       },
                       "val": {
-                        "bool": true
+                        "u32": 30
                       }
                     }
                   ]
@@ -2671,7 +3752,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -2723,7 +3804,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -2775,7 +3856,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -2827,7 +3908,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -2879,7 +3960,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -2931,7 +4012,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -2983,7 +4064,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3035,7 +4116,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3087,7 +4168,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3139,7 +4220,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3191,7 +4272,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3243,7 +4324,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3295,7 +4376,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3347,7 +4428,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3399,7 +4480,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3451,7 +4532,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3503,7 +4584,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3555,7 +4636,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3607,7 +4688,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3659,7 +4740,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3711,7 +4792,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3763,7 +4844,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3815,7 +4896,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3867,7 +4948,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3919,7 +5000,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -3971,7 +5052,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -4023,7 +5104,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -4075,7 +5156,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -4127,7 +5208,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -4179,7 +5260,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "0"
                     }
                   },
                   {
@@ -6125,6 +7206,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6141,6 +7248,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6183,6 +7316,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVAX5"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6199,6 +7358,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6241,6 +7426,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYRE5"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6257,6 +7468,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA2ZMN"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6299,6 +7536,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4BV5"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6315,6 +7578,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6J5N"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6357,6 +7646,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABB6KO"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6373,6 +7688,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABDWC6"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6415,6 +7756,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABFO3O"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6431,6 +7798,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6473,6 +7866,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABI7IO"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6489,6 +7908,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABKXA6"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6531,6 +7976,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABMPZO"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6547,6 +8018,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABOHR6"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6589,6 +8086,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABR4OP"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6605,6 +8128,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABTUG7"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6647,6 +8196,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABVM7P"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6663,6 +8238,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABXEX7"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6705,6 +8306,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABY5MP"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6721,6 +8348,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB2VE7"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6763,6 +8416,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4N5P"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6779,6 +8458,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB6FV7"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6821,6 +8526,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACBKTY"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6837,6 +8568,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACDC3I"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6879,6 +8636,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACF2CY"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6895,6 +8678,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHSKI"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {
@@ -6937,6 +8746,32 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACILRY"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG",
         "type_": "contract",
         "body": {
@@ -6953,6 +8788,32 @@
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"
+              }
+            ],
+            "data": {
+              "i128": "1"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "clawback"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACKDZI"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUF"
               }
             ],
             "data": {

@@ -23,14 +23,15 @@ pub enum SettleError {
     InvalidAmount = 3,
     Overflow = 4,
     EmptyBatch = 5,
+    /// Investor already settled (in this or a previous batch).
     AlreadySettled = 6,
     BatchTooLarge = 7,
     NoDeposit = 8,
-    /// Duplicate investor address in batch — defense against backend dedup bugs.
+    /// Duplicate investor address within the same batch.
     DuplicateInvestor = 9,
-    /// Payout to address holding zero tokens — defense against phantom investor attack.
+    /// Payout to address holding zero tokens.
     PhantomInvestor = 10,
-    /// Fee exceeds the max_fee_bps cap declared at initialization (CVM transparency).
+    /// Fee exceeds the max_fee_bps cap declared at initialization.
     FeeTooHigh = 11,
 }
 
@@ -43,8 +44,12 @@ pub enum DataKey {
     Config,
     /// Tracks USDC deposited by a specific address (typically the company).
     Deposit(Address),
-    /// Set to `true` after settle_batch() succeeds. Prevents double settlement (V-1).
-    Settled,
+    /// Per-investor settlement flag. Set after an investor is settled.
+    /// Stored in persistent storage. Prevents double-payout across batches.
+    InvestorSettled(Address),
+    /// Counter of total investors settled. Used as guard for refund().
+    /// Stored in instance storage (fast access).
+    SettledCount,
 }
 
 /// Immutable configuration set once during initialize().
@@ -67,18 +72,21 @@ pub struct Config {
     pub max_fee_bps: u32,
 }
 
-/// One item in a settlement batch — represents a single investor's payout + clawback.
+/// One item in a settlement batch — represents a single investor's payout.
+///
+/// Clawback is AUTOMATIC: the contract reads the investor's on-chain token
+/// balance and burns ALL of it. No clawback_amount needed — the chain is
+/// the source of truth.
 ///
 /// ```text
 ///   investor ◄── payout USDC ── contract
-///   investor ──► clawback tokens ──► burned (issuer/admin)
+///   investor ──► ALL tokens clawbacked (read from chain)
 /// ```
 #[contracttype]
 #[derive(Clone)]
 pub struct SettleItem {
     pub investor: Address,
     pub payout: i128,
-    pub clawback_amount: i128,
 }
 
 #[contract]
@@ -174,22 +182,17 @@ impl MaturitySettlement {
     }
 
     /// Atomically settle a batch of investors:
-    ///   1. Validate: no duplicate investor addresses (DuplicateInvestor)
-    ///   2. Validate: no phantom investors — if payout > 0 && clawback == 0,
-    ///      verify investor holds tokens on-chain (PhantomInvestor)
-    ///   3. USDC → each investor (payout)
-    ///   4. Clawback security tokens from each investor (burn)
-    ///   5. USDC → treasury (aggregated fee, single transfer)
+    ///   1. Validate: no duplicates, no phantom investors
+    ///   2. USDC → each investor (payout)
+    ///   3. Read on-chain token balance → clawback ALL (burn)
+    ///   4. USDC → treasury (aggregated fee)
     ///
-    /// Guarded by DataKey::Settled — can only be called once per contract (V-1).
-    /// Batch size capped at MAX_BATCH_SIZE (V-6).
-    /// Duplicate investor addresses rejected with DuplicateInvestor (V-R6).
-    /// Phantom investors (0 tokens, nonzero payout) rejected with PhantomInvestor (V-R8).
-    /// Admin auth propagates to SAC clawback (admin = issuer = SAC admin).
+    /// TRUSTLESS: Clawback is automatic. The contract reads each investor's
+    /// token balance from the chain and burns ALL of it. No backend input
+    /// needed for burns — the public ledger is the source of truth.
     ///
-    /// TRUSTLESS DESIGN: The contract validates clawback_amount against the
-    /// investor's actual on-chain token balance via token::Client::balance().
-    /// The contract does NOT blindly trust backend-provided values.
+    /// MULTI-BATCH: Can be called multiple times with different investor sets.
+    /// Per-investor idempotency prevents double-payouts across batches.
     pub fn settle_batch(
         env: Env,
         items: Vec<SettleItem>,
@@ -198,65 +201,55 @@ impl MaturitySettlement {
         let config = load_config(&env)?;
         config.admin.require_auth();
 
-        // V-1: Idempotency guard — settle can only happen once
-        if env.storage().instance().has(&DataKey::Settled) {
-            return Err(SettleError::AlreadySettled);
-        }
-
-        // V-5: Empty batch check
         if items.is_empty() {
             return Err(SettleError::EmptyBatch);
         }
 
-        // V-6: Batch size cap
         if items.len() > MAX_BATCH_SIZE {
             return Err(SettleError::BatchTooLarge);
         }
 
-        // V-3: Validate fee
         if total_fee < 0 {
             return Err(SettleError::InvalidAmount);
         }
 
-        // V-R6: Duplicate investor detection + input validation
+        // ── Validation loop ──────────────────────────────────────────
         let mut seen: Map<Address, bool> = Map::new(&env);
         let sec_token = token::Client::new(&env, &config.token_sac);
 
         for i in 0..items.len() {
             let item = items.get(i).unwrap();
 
-            // V-3: Validate per-item amounts
-            if item.payout < 0 || item.clawback_amount < 0 {
+            if item.payout < 0 {
                 return Err(SettleError::InvalidAmount);
             }
 
-            // Check for duplicate
+            // Within-batch dedup
             if seen.contains_key(item.investor.clone()) {
                 return Err(SettleError::DuplicateInvestor);
             }
             seen.set(item.investor.clone(), true);
 
-            // V-R8: Phantom investor check
-            // If payout > 0 and clawback == 0, investor must hold tokens
-            if item.payout > 0 && item.clawback_amount == 0 {
-                let token_balance = sec_token.balance(&item.investor);
-                if token_balance == 0 {
-                    return Err(SettleError::PhantomInvestor);
-                }
+            // Cross-batch dedup (persistent storage)
+            let settled_key = DataKey::InvestorSettled(item.investor.clone());
+            if env.storage().persistent().has(&settled_key) {
+                return Err(SettleError::AlreadySettled);
+            }
+
+            // Phantom investor: can't pay someone with 0 tokens
+            let balance = sec_token.balance(&item.investor);
+            if balance == 0 && item.payout > 0 {
+                return Err(SettleError::PhantomInvestor);
             }
         }
 
-        // V-CVM: Fee cap enforcement (CVM transparency invariant)
-        // Fee cannot exceed max_fee_bps of total payouts.
-        // e.g. max_fee_bps=200 → fee ≤ 2% of payouts.
-        // Skip when: fee=0, max_fee_bps=0 (uncapped), or payouts=0 (clawback-only).
+        // ── Fee cap (CVM transparency) ───────────────────────────────
         if total_fee > 0 && config.max_fee_bps > 0 {
             let mut sum_payouts: i128 = 0;
             for i in 0..items.len() {
                 let item = items.get(i).unwrap();
                 sum_payouts = sum_payouts.checked_add(item.payout).ok_or(SettleError::Overflow)?;
             }
-            // Only enforce when there are actual payouts (fee as % of payouts)
             if sum_payouts > 0 {
                 let max_allowed = sum_payouts
                     .checked_mul(config.max_fee_bps as i128)
@@ -268,7 +261,7 @@ impl MaturitySettlement {
             }
         }
 
-        // All validation passed — execute transfers atomically
+        // ── Execute atomically ────────────────────────────────────────
         let usdc = token::Client::new(&env, &config.usdc_sac);
         let sac = token::StellarAssetClient::new(&env, &config.token_sac);
         let contract = env.current_contract_address();
@@ -276,24 +269,33 @@ impl MaturitySettlement {
         for i in 0..items.len() {
             let item = items.get(i).unwrap();
 
-            // USDC payout to investor (skip if zero)
+            // Pay investor
             if item.payout > 0 {
                 usdc.transfer(&contract, &item.investor, &item.payout);
             }
 
-            // Clawback security tokens from investor (skip if zero)
-            if item.clawback_amount > 0 {
-                sac.clawback(&item.investor, &item.clawback_amount);
+            // Burn ALL tokens — read balance from chain, clawback everything
+            let balance = sec_token.balance(&item.investor);
+            if balance > 0 {
+                sac.clawback(&item.investor, &balance);
             }
+
+            // Mark settled (persistent — survives across batches)
+            let settled_key = DataKey::InvestorSettled(item.investor.clone());
+            env.storage().persistent().set(&settled_key, &true);
+            env.storage()
+                .persistent()
+                .extend_ttl(&settled_key, TTL_THRESHOLD, TTL_EXTEND);
         }
 
-        // Fee to treasury (skip if zero)
+        // Fee to treasury
         if total_fee > 0 {
             usdc.transfer(&contract, &config.treasury, &total_fee);
         }
 
-        // Mark as settled — prevents re-execution (V-1)
-        env.storage().instance().set(&DataKey::Settled, &true);
+        // Increment settled count (instance storage, fast read for refund guard)
+        let prev_count: u32 = env.storage().instance().get(&DataKey::SettledCount).unwrap_or(0);
+        env.storage().instance().set(&DataKey::SettledCount, &(prev_count + items.len()));
 
         // Extend TTL after state change
         env.storage()
@@ -334,8 +336,9 @@ impl MaturitySettlement {
         let config = load_config(&env)?;
         config.admin.require_auth();
 
-        // Block refunds after settlement
-        if env.storage().instance().has(&DataKey::Settled) {
+        // Block refunds after any settlement has started
+        let settled_count: u32 = env.storage().instance().get(&DataKey::SettledCount).unwrap_or(0);
+        if settled_count > 0 {
             return Err(SettleError::AlreadySettled);
         }
 

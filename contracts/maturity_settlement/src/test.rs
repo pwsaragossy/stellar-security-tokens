@@ -315,7 +315,6 @@ fn test_settle_single_investor() {
         SettleItem {
             investor: investor.clone(),
             payout: 95 * 10_000_000,
-            clawback_amount: 100 * 10_000_000,
         },
     ];
     client.settle_batch(&items, &(5 * 10_000_000i128));
@@ -323,7 +322,7 @@ fn test_settle_single_investor() {
     assert_eq!(usdc.balance(&investor), 95 * 10_000_000);
     assert_eq!(usdc.balance(&treasury), 5 * 10_000_000);
     assert_eq!(usdc.balance(&contract_id), 0);
-    assert_eq!(sec_token.balance(&investor), 900 * 10_000_000); // 1000 - 100
+    assert_eq!(sec_token.balance(&investor), 0); // ALL tokens burned
 }
 
 #[test]
@@ -343,9 +342,9 @@ fn test_settle_three_investors() {
 
     let items = vec![
         &e,
-        SettleItem { investor: inv_a.clone(), payout: 90 * 10_000_000, clawback_amount: 100 * 10_000_000 },
-        SettleItem { investor: inv_b.clone(), payout: 180 * 10_000_000, clawback_amount: 200 * 10_000_000 },
-        SettleItem { investor: inv_c.clone(), payout: 270 * 10_000_000, clawback_amount: 300 * 10_000_000 },
+        SettleItem { investor: inv_a.clone(), payout: 90 * 10_000_000 },
+        SettleItem { investor: inv_b.clone(), payout: 180 * 10_000_000 },
+        SettleItem { investor: inv_c.clone(), payout: 270 * 10_000_000 },
     ];
     let fee: i128 = 60 * 10_000_000; // 600 - 90 - 180 - 270 = 60
     client.settle_batch(&items, &fee);
@@ -380,14 +379,16 @@ fn test_settle_zero_payout_skipped() {
     client.deposit(&company, &(10 * 10_000_000i128));
     let items = vec![
         &e,
-        SettleItem { investor: investor.clone(), payout: 0, clawback_amount: 100 * 10_000_000 },
+        SettleItem { investor: investor.clone(), payout: 0 },
     ];
     client.settle_batch(&items, &(10 * 10_000_000i128));
 
     assert_eq!(usdc.balance(&investor), 0); // no payout
-    assert_eq!(sec_token.balance(&investor), 900 * 10_000_000); // 1000 - 100 clawbacked
+    assert_eq!(sec_token.balance(&investor), 0); // ALL tokens burned from chain
 }
 
+/// Contract always burns all tokens, even when payout = 0.
+/// This is the "clawback without payout" scenario (company default).
 #[test]
 fn test_settle_zero_clawback_skipped() {
     let e = Env::default();
@@ -397,12 +398,12 @@ fn test_settle_zero_clawback_skipped() {
     client.deposit(&company, &(100 * 10_000_000i128));
     let items = vec![
         &e,
-        SettleItem { investor: investor.clone(), payout: 100 * 10_000_000, clawback_amount: 0 },
+        SettleItem { investor: investor.clone(), payout: 100 * 10_000_000 },
     ];
     client.settle_batch(&items, &0);
 
     assert_eq!(usdc.balance(&investor), 100 * 10_000_000);
-    assert_eq!(sec_token.balance(&investor), 1_000 * 10_000_000); // unchanged
+    assert_eq!(sec_token.balance(&investor), 0); // ALL tokens burned from chain
 }
 
 #[test]
@@ -414,7 +415,7 @@ fn test_settle_zero_fee_no_treasury_transfer() {
     client.deposit(&company, &(100 * 10_000_000i128));
     let items = vec![
         &e,
-        SettleItem { investor: investor.clone(), payout: 100 * 10_000_000, clawback_amount: 100 * 10_000_000 },
+        SettleItem { investor: investor.clone(), payout: 100 * 10_000_000 },
     ];
     client.settle_batch(&items, &0);
 
@@ -430,7 +431,7 @@ fn test_settle_marks_as_settled() {
     client.deposit(&company, &(100 * 10_000_000i128));
     let items = vec![
         &e,
-        SettleItem { investor: investor.clone(), payout: 95 * 10_000_000, clawback_amount: 100 * 10_000_000 },
+        SettleItem { investor: investor.clone(), payout: 95 * 10_000_000 },
     ];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 
@@ -449,7 +450,7 @@ fn test_settle_insufficient_balance_panics() {
     client.deposit(&company, &(50 * 10_000_000i128));
     let items = vec![
         &e,
-        SettleItem { investor: investor.clone(), payout: 100 * 10_000_000, clawback_amount: 0 },
+        SettleItem { investor: investor.clone(), payout: 100 * 10_000_000 },
     ];
     client.settle_batch(&items, &0); // 100 > 50 → panic
 }
@@ -465,7 +466,7 @@ fn test_settle_exact_balance_succeeds() {
 
     let items = vec![
         &e,
-        SettleItem { investor: investor.clone(), payout: 100 * 10_000_000, clawback_amount: 100 * 10_000_000 },
+        SettleItem { investor: investor.clone(), payout: 100 * 10_000_000 },
     ];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 
@@ -487,12 +488,12 @@ fn test_settle_clawback_auth_propagation() {
     client.deposit(&company, &(100 * 10_000_000i128));
     let items = vec![
         &e,
-        SettleItem { investor: investor.clone(), payout: 95 * 10_000_000, clawback_amount: 500 * 10_000_000 },
+        SettleItem { investor: investor.clone(), payout: 95 * 10_000_000 },
     ];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 
-    // Investor had 1000 tokens, 500 clawbacked → 500 remaining
-    assert_eq!(sec_token.balance(&investor), 500 * 10_000_000);
+    // All tokens burned from chain
+    assert_eq!(sec_token.balance(&investor), 0);
 }
 
 #[test]
@@ -508,7 +509,6 @@ fn test_settle_batch_max_size_enforced() {
         items_raw.push_back(SettleItem {
             investor: Address::generate(&e),
             payout: 1,
-            clawback_amount: 0,
         });
     }
     let result = client.try_settle_batch(&items_raw, &0);
@@ -530,7 +530,6 @@ fn test_settle_batch_at_max_succeeds() {
         items_raw.push_back(SettleItem {
             investor: inv,
             payout: 1,
-            clawback_amount: 0,
         });
     }
     // Native test env has stricter resource limits than on-chain; disable for large batches
@@ -549,7 +548,7 @@ fn test_settle_negative_fee_rejected() {
 
     let items = vec![
         &e,
-        SettleItem { investor: investor.clone(), payout: 100 * 10_000_000, clawback_amount: 0 },
+        SettleItem { investor: investor.clone(), payout: 100 * 10_000_000 },
     ];
     let result = client.try_settle_batch(&items, &-1);
     assert_eq!(result, Err(Ok(SettleError::InvalidAmount)));
@@ -576,18 +575,16 @@ fn test_financial_invariants_simple() {
     client.deposit(&company, &deposit);
 
     let payout: i128 = 100 * 10_000_000;
-    let clawback: i128 = 100 * 10_000_000;
     let fee: i128 = 10 * 10_000_000;
 
     let inv_usdc_before = usdc.balance(&investor);
-    let inv_tok_before = sec_token.balance(&investor);
     let treas_before = usdc.balance(&treasury);
 
-    let items = vec![&e, SettleItem { investor: investor.clone(), payout, clawback_amount: clawback }];
+    let items = vec![&e, SettleItem { investor: investor.clone(), payout }];
     client.settle_batch(&items, &fee);
 
     assert_eq!(usdc.balance(&investor), inv_usdc_before + payout);
-    assert_eq!(sec_token.balance(&investor), inv_tok_before - clawback);
+    assert_eq!(sec_token.balance(&investor), 0);  // ALL tokens burned from chain
     assert_eq!(usdc.balance(&treasury), treas_before + fee);
     assert_eq!(usdc.balance(&contract_id), 0); // deposit - payout - fee = 0
     assert_eq!(payout + fee, deposit);
@@ -613,8 +610,8 @@ fn test_financial_invariants_multi_investor() {
 
     let items = vec![
         &e,
-        SettleItem { investor: inv_a.clone(), payout: pa, clawback_amount: 200 * 10_000_000 },
-        SettleItem { investor: inv_b.clone(), payout: pb, clawback_amount: 300 * 10_000_000 },
+        SettleItem { investor: inv_a.clone(), payout: pa },
+        SettleItem { investor: inv_b.clone(), payout: pb },
     ];
     client.settle_batch(&items, &fee);
 
@@ -634,7 +631,7 @@ fn test_financial_invariants_zero_fee() {
     let deposit: i128 = 100 * 10_000_000;
     client.deposit(&company, &deposit);
 
-    let items = vec![&e, SettleItem { investor: investor.clone(), payout: deposit, clawback_amount: 100 * 10_000_000 }];
+    let items = vec![&e, SettleItem { investor: investor.clone(), payout: deposit }];
     client.settle_batch(&items, &0);
 
     assert_eq!(usdc.balance(&investor), deposit);
@@ -658,7 +655,7 @@ fn test_financial_invariants_large_amounts() {
 
     let payout: i128 = 950_000 * 10_000_000;
     let fee: i128 = 50_000 * 10_000_000;
-    let items = vec![&e, SettleItem { investor: whale.clone(), payout, clawback_amount: 500_000 * 10_000_000 }];
+    let items = vec![&e, SettleItem { investor: whale.clone(), payout }];
     client.settle_batch(&items, &fee);
 
     assert_eq!(usdc.balance(&whale), payout);
@@ -677,7 +674,7 @@ fn test_financial_invariants_fractional_stroops() {
     let deposit = payout + fee;
     client.deposit(&company, &deposit);
 
-    let items = vec![&e, SettleItem { investor: investor.clone(), payout, clawback_amount: 50 * 10_000_000 }];
+    let items = vec![&e, SettleItem { investor: investor.clone(), payout }];
     client.settle_batch(&items, &fee);
 
     assert_eq!(usdc.balance(&investor), payout);
@@ -708,9 +705,9 @@ fn test_financial_no_rounding_leak() {
 
     let items = vec![
         &e,
-        SettleItem { investor: inv_a.clone(), payout: p1, clawback_amount: 10 * 10_000_000 },
-        SettleItem { investor: inv_b.clone(), payout: p2, clawback_amount: 10 * 10_000_000 },
-        SettleItem { investor: inv_c.clone(), payout: p3, clawback_amount: 10 * 10_000_000 },
+        SettleItem { investor: inv_a.clone(), payout: p1 },
+        SettleItem { investor: inv_b.clone(), payout: p2 },
+        SettleItem { investor: inv_c.clone(), payout: p3 },
     ];
     client.settle_batch(&items, &fee);
 
@@ -732,8 +729,8 @@ fn test_financial_all_tokens_burned() {
     client.deposit(&company, &(300 * 10_000_000i128));
     let items = vec![
         &e,
-        SettleItem { investor: inv_a.clone(), payout: 100 * 10_000_000, clawback_amount: 100 * 10_000_000 },
-        SettleItem { investor: inv_b.clone(), payout: 200 * 10_000_000, clawback_amount: 200 * 10_000_000 },
+        SettleItem { investor: inv_a.clone(), payout: 100 * 10_000_000 },
+        SettleItem { investor: inv_b.clone(), payout: 200 * 10_000_000 },
     ];
     client.settle_batch(&items, &0);
 
@@ -752,12 +749,12 @@ fn test_settle_both_zero_payout_and_clawback() {
     let (client, _, company, investor, _, usdc, _, sec_token, _, _) = setup(&e);
 
     client.deposit(&company, &(10 * 10_000_000i128));
-    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 0, clawback_amount: 0 }];
+    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 0 }];
     client.settle_batch(&items, &(10 * 10_000_000i128));
 
     // Investor balances unchanged
     assert_eq!(usdc.balance(&investor), 0);
-    assert_eq!(sec_token.balance(&investor), 1_000 * 10_000_000);
+    assert_eq!(sec_token.balance(&investor), 0); // ALL tokens burned
 }
 
 #[test]
@@ -769,8 +766,8 @@ fn test_settle_same_investor_twice_in_batch() {
     client.deposit(&company, &(200 * 10_000_000i128));
     let items = vec![
         &e,
-        SettleItem { investor: investor.clone(), payout: 50 * 10_000_000, clawback_amount: 50 * 10_000_000 },
-        SettleItem { investor: investor.clone(), payout: 30 * 10_000_000, clawback_amount: 30 * 10_000_000 },
+        SettleItem { investor: investor.clone(), payout: 50 * 10_000_000 },
+        SettleItem { investor: investor.clone(), payout: 30 * 10_000_000 },
     ];
     // Contract rejects duplicate investor addresses — trustless validation
     let result = client.try_settle_batch(&items, &(120 * 10_000_000i128));
@@ -790,7 +787,7 @@ fn test_settle_investor_is_admin() {
     sec_token_admin.mint(&admin, &(100 * 10_000_000i128));
     client.deposit(&company, &(100 * 10_000_000i128));
 
-    let items = vec![&e, SettleItem { investor: admin.clone(), payout: 95 * 10_000_000, clawback_amount: 100 * 10_000_000 }];
+    let items = vec![&e, SettleItem { investor: admin.clone(), payout: 95 * 10_000_000 }];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 
     assert_eq!(usdc.balance(&admin), 95 * 10_000_000);
@@ -803,24 +800,25 @@ fn test_settle_one_stroop_payout() {
     let (client, _, company, investor, _, usdc, _, sec_token, _, _) = setup(&e);
 
     client.deposit(&company, &1i128);
-    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 1, clawback_amount: 1 }];
+    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 1 }];
     client.settle_batch(&items, &0);
 
     assert_eq!(usdc.balance(&investor), 1);
-    assert_eq!(sec_token.balance(&investor), 1_000 * 10_000_000 - 1);
+    assert_eq!(sec_token.balance(&investor), 0); // ALL tokens burned from chain
 }
 
+/// clawback_exceeds_balance is impossible now — contract reads actual balance.
+/// This test verifies the settle succeeds (contract reads 1000, burns 1000).
 #[test]
-#[should_panic]
 fn test_settle_clawback_exceeds_investor_balance() {
     let e = Env::default();
     e.mock_all_auths();
-    let (client, _, company, investor, _, _, _, _, _, _) = setup(&e);
+    let (client, _, company, investor, _, _, _, sec_token, _, _) = setup(&e);
 
     client.deposit(&company, &(100 * 10_000_000i128));
-    // Investor has 1000 tokens, trying to clawback 2000
-    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 100 * 10_000_000, clawback_amount: 2_000 * 10_000_000 }];
+    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 100 * 10_000_000 }];
     client.settle_batch(&items, &0);
+    assert_eq!(sec_token.balance(&investor), 0); // all 1000 tokens burned
 }
 
 // ═══════════════════════════════════════════════════════
@@ -896,7 +894,7 @@ fn test_refund_after_settlement_blocked() {
     let (client, _, company, investor, _, _, _, _, _, _) = setup(&e);
 
     client.deposit(&company, &(100 * 10_000_000i128));
-    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 95 * 10_000_000, clawback_amount: 100 * 10_000_000 }];
+    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 95 * 10_000_000 }];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 
     let result = client.try_refund(&company);
@@ -960,7 +958,7 @@ fn test_get_balance_reflects_deposits() {
 }
 
 // ═══════════════════════════════════════════════════════
-//  9. IDEMPOTENCY (double-settle guard V-1) — 3 tests
+//  9. IDEMPOTENCY & MULTI-BATCH — 7 tests
 // ═══════════════════════════════════════════════════════
 
 #[test]
@@ -970,7 +968,7 @@ fn test_double_settle_blocked() {
     let (client, _, company, investor, _, _, usdc_admin, _, _, contract_id) = setup(&e);
 
     client.deposit(&company, &(100 * 10_000_000i128));
-    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 95 * 10_000_000, clawback_amount: 100 * 10_000_000 }];
+    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 95 * 10_000_000 }];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 
     // Fund contract again to prove it's not a balance issue
@@ -988,16 +986,16 @@ fn test_settle_then_deposit_then_settle_blocked() {
     let (client, _, company, investor, _, _, usdc_admin, _, sec_token_admin, _) = setup(&e);
 
     client.deposit(&company, &(100 * 10_000_000i128));
-    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 95 * 10_000_000, clawback_amount: 100 * 10_000_000 }];
+    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 95 * 10_000_000 }];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 
     // New deposit after settlement
     usdc_admin.mint(&company, &(500 * 10_000_000i128));
     client.deposit(&company, &(200 * 10_000_000i128));
 
-    // New items
+    // SAME investor again — blocked
     sec_token_admin.mint(&investor, &(50 * 10_000_000i128));
-    let new_items = vec![&e, SettleItem { investor: investor.clone(), payout: 50 * 10_000_000, clawback_amount: 50 * 10_000_000 }];
+    let new_items = vec![&e, SettleItem { investor: investor.clone(), payout: 50 * 10_000_000 }];
     let result = client.try_settle_batch(&new_items, &0);
     assert_eq!(result, Err(Ok(SettleError::AlreadySettled)));
 }
@@ -1009,13 +1007,129 @@ fn test_settled_flag_persists_across_extend_ttl() {
     let (client, _, company, investor, _, _, _, _, _, _) = setup(&e);
 
     client.deposit(&company, &(100 * 10_000_000i128));
-    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 95 * 10_000_000, clawback_amount: 100 * 10_000_000 }];
+    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 95 * 10_000_000 }];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 
     client.extend_ttl();
 
     let result = client.try_settle_batch(&items, &0);
     assert_eq!(result, Err(Ok(SettleError::AlreadySettled)));
+}
+
+/// MULTI-BATCH: settle batch 1 (inv_a), then batch 2 (inv_b) — both succeed.
+/// This is the core >30 investor feature.
+#[test]
+fn test_multi_batch_different_investors_succeeds() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let (client, _, company, _, treasury, usdc, usdc_admin, _, sec_token_admin, contract_id) = setup(&e);
+
+    let inv_a = Address::generate(&e);
+    let inv_b = Address::generate(&e);
+    sec_token_admin.mint(&inv_a, &(100 * 10_000_000i128));
+    sec_token_admin.mint(&inv_b, &(200 * 10_000_000i128));
+
+    // Deposit enough for both batches
+    usdc_admin.mint(&company, &(400 * 10_000_000i128));
+    client.deposit(&company, &(400 * 10_000_000i128));
+
+    // Batch 1: settle inv_a
+    let batch1 = vec![&e, SettleItem { investor: inv_a.clone(), payout: 110 * 10_000_000 }];
+    client.settle_batch(&batch1, &(10 * 10_000_000i128));
+
+    assert_eq!(usdc.balance(&inv_a), 110 * 10_000_000);
+    assert_eq!(sec_token_admin.balance(&inv_a), 0); // ALL tokens burned
+    assert_eq!(usdc.balance(&treasury), 10 * 10_000_000);
+
+    // Batch 2: settle inv_b — MUST succeed
+    let batch2 = vec![&e, SettleItem { investor: inv_b.clone(), payout: 220 * 10_000_000 }];
+    client.settle_batch(&batch2, &(20 * 10_000_000i128));
+
+    assert_eq!(usdc.balance(&inv_b), 220 * 10_000_000);
+    assert_eq!(sec_token_admin.balance(&inv_b), 0); // ALL tokens burned
+    assert_eq!(usdc.balance(&treasury), 30 * 10_000_000); // cumulative fees
+    assert_eq!(usdc.balance(&contract_id), 400 * 10_000_000 - 110 * 10_000_000 - 10 * 10_000_000 - 220 * 10_000_000 - 20 * 10_000_000);
+}
+
+/// MULTI-BATCH: settling same investor in both batches is rejected.
+#[test]
+fn test_multi_batch_same_investor_rejected() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let (client, _, company, _, _, _, usdc_admin, _, sec_token_admin, _) = setup(&e);
+
+    let inv_a = Address::generate(&e);
+    sec_token_admin.mint(&inv_a, &(100 * 10_000_000i128));
+
+    usdc_admin.mint(&company, &(300 * 10_000_000i128));
+    client.deposit(&company, &(300 * 10_000_000i128));
+
+    // Batch 1: settle inv_a
+    let batch1 = vec![&e, SettleItem { investor: inv_a.clone(), payout: 50 * 10_000_000 }];
+    client.settle_batch(&batch1, &0);
+
+    // Batch 2: try inv_a again (even with new tokens) — blocked
+    sec_token_admin.mint(&inv_a, &(100 * 10_000_000i128));
+    let batch2 = vec![&e, SettleItem { investor: inv_a.clone(), payout: 50 * 10_000_000 }];
+    let result = client.try_settle_batch(&batch2, &0);
+    assert_eq!(result, Err(Ok(SettleError::AlreadySettled)));
+}
+
+/// MULTI-BATCH: refund is blocked after first batch settles.
+#[test]
+fn test_refund_blocked_after_partial_settlement() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let (client, _, company, _, _, _, usdc_admin, _, sec_token_admin, _) = setup(&e);
+
+    let inv_a = Address::generate(&e);
+    sec_token_admin.mint(&inv_a, &(100 * 10_000_000i128));
+
+    usdc_admin.mint(&company, &(200 * 10_000_000i128));
+    client.deposit(&company, &(200 * 10_000_000i128));
+
+    // Settle batch 1 only
+    let batch1 = vec![&e, SettleItem { investor: inv_a.clone(), payout: 50 * 10_000_000 }];
+    client.settle_batch(&batch1, &0);
+
+    // Refund blocked — settlement has started
+    let result = client.try_refund(&company);
+    assert_eq!(result, Err(Ok(SettleError::AlreadySettled)));
+}
+
+/// MULTI-BATCH: fee cap enforced per-batch, not globally.
+#[test]
+fn test_multi_batch_fee_cap_per_batch() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let (usdc, usdc_admin) = create_token_contract(&e, &admin);
+    let (sec_token, sec_token_admin) = create_clawback_token_contract(&e, &admin);
+    let treasury = Address::generate(&e);
+    let company = Address::generate(&e);
+
+    let contract_id = e.register(MaturitySettlement, ());
+    let client = MaturitySettlementClient::new(&e, &contract_id);
+    // max_fee_bps = 1000 → 10% cap
+    client.initialize(&admin, &usdc.address, &sec_token.address, &treasury, &1000);
+
+    let inv_a = Address::generate(&e);
+    let inv_b = Address::generate(&e);
+    sec_token_admin.mint(&inv_a, &(100 * 10_000_000i128));
+    sec_token_admin.mint(&inv_b, &(100 * 10_000_000i128));
+
+    usdc_admin.mint(&company, &(300 * 10_000_000i128));
+    client.deposit(&company, &(300 * 10_000_000i128));
+
+    // Batch 1: 100 payout, 10 fee (10%) — exactly at cap
+    let batch1 = vec![&e, SettleItem { investor: inv_a.clone(), payout: 100 * 10_000_000 }];
+    client.settle_batch(&batch1, &(10 * 10_000_000i128));
+
+    // Batch 2: 100 payout, 11 fee (11%) — exceeds cap
+    let batch2 = vec![&e, SettleItem { investor: inv_b.clone(), payout: 100 * 10_000_000 }];
+    let result = client.try_settle_batch(&batch2, &(11 * 10_000_000i128));
+    assert_eq!(result, Err(Ok(SettleError::FeeTooHigh)));
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1084,7 +1198,7 @@ fn test_auth_settle_requires_admin() {
 
     seed_config(&e, &contract_id, &admin);
 
-    let items = vec![&e, SettleItem { investor: Address::generate(&e), payout: 1, clawback_amount: 0 }];
+    let items = vec![&e, SettleItem { investor: Address::generate(&e), payout: 1 }];
     client.settle_batch(&items, &0);
 }
 
@@ -1152,7 +1266,7 @@ fn test_auth_non_admin_cannot_settle() {
     // With mock_all_auths, any address passes auth. This test documents
     // that settle_batch reads config.admin specifically (not any address).
     // True auth enforcement is tested in test_auth_settle_requires_admin above.
-    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 95 * 10_000_000, clawback_amount: 100 * 10_000_000 }];
+    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 95 * 10_000_000 }];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 }
 
@@ -1169,7 +1283,7 @@ fn test_fee_manipulation_total_exceeds_deposit() {
 
     client.deposit(&company, &(100 * 10_000_000i128));
     // payout=90 + fee=20 = 110 > 100 deposit
-    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 90 * 10_000_000, clawback_amount: 0 }];
+    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 90 * 10_000_000 }];
     let result = client.try_settle_batch(&items, &(20 * 10_000_000i128));
     // Should fail — insufficient USDC for the fee transfer after payouts
     assert!(result.is_err());
@@ -1184,7 +1298,7 @@ fn test_rounding_zero_payout_clawback_only() {
     let (client, _, company, investor, _, usdc, _, sec_token, _, _) = setup(&e);
 
     client.deposit(&company, &(5 * 10_000_000i128)); // small deposit for fee only
-    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 0, clawback_amount: 1_000 * 10_000_000 }];
+    let items = vec![&e, SettleItem { investor: investor.clone(), payout: 0 }];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 
     assert_eq!(usdc.balance(&investor), 0);
@@ -1225,7 +1339,6 @@ fn test_fee_cap_at_boundary_succeeds() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &fee);
     // No panic = fee at exact boundary accepted
@@ -1247,7 +1360,6 @@ fn test_fee_cap_exceeded_rejected() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout,
-        clawback_amount: 100 * 10_000_000,
     }];
     let result = client.try_settle_batch(&items, &fee);
     assert_eq!(result, Err(Ok(SettleError::FeeTooHigh)));
@@ -1266,7 +1378,6 @@ fn test_fee_cap_zero_fee_always_allowed() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &0);
     // Zero fee always passes — no FeeTooHigh check triggered
@@ -1298,7 +1409,6 @@ fn test_fee_cap_uncapped_when_zero_bps() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout: 100 * 10_000_000,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &(100 * 10_000_000i128));
     // No panic — uncapped fee allowed
@@ -1329,7 +1439,6 @@ fn test_batch_20_investors_within_budget() {
         items.push_back(SettleItem {
             investor: inv,
             payout: payout_each,
-            clawback_amount: clawback_each,
         });
     }
     // Native test env has stricter resource limits than on-chain; disable for large batches
@@ -1360,7 +1469,6 @@ fn test_batch_25_investors_realistic_max() {
         items.push_back(SettleItem {
             investor: inv,
             payout: payout_each,
-            clawback_amount: clawback_each,
         });
     }
     // Native test env has stricter resource limits than on-chain; disable for large batches
@@ -1377,28 +1485,21 @@ fn test_batch_25_investors_realistic_max() {
 #[test]
 #[should_panic]
 fn test_atomicity_failed_clawback_reverts_payouts() {
-    // If clawback fails (investor has fewer tokens than requested),
-    // the ENTIRE TX reverts — no partial payouts.
+    // Atomicity: if ANY transfer fails, the ENTIRE batch reverts.
+    // Test: contract has enough for payout but fee transfer will fail
+    // because there isn't enough USDC after paying the investor.
     let e = Env::default();
     e.mock_all_auths();
-    let (client, _, company, investor, treasury, usdc, _, sec_token, _, contract_id) = setup(&e);
+    let (client, _, company, investor, _, _, _, _, _, _) = setup(&e);
 
-    let deposit: i128 = 100 * 10_000_000;
-    client.deposit(&company, &deposit);
-
-    // Investor has 1000 tokens but we try to clawback 2000
+    // Deposit 100, try payout=100 + fee=50 = 150 total needed
+    client.deposit(&company, &(100 * 10_000_000i128));
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout: 100 * 10_000_000,
-        clawback_amount: 2_000 * 10_000_000,
     }];
-    client.settle_batch(&items, &0);
-
-    // These lines are unreachable — the panic proves atomicity.
-    // If we somehow get here, these asserts would catch partial state:
-    // assert_eq!(usdc.balance(&investor), 0);     // no partial payout
-    // assert_eq!(usdc.balance(&contract_id), deposit); // funds intact
-    // assert_eq!(usdc.balance(&treasury), 0);      // no partial fee
+    // This should panic: 100 payout + 50 fee = 150, but only 100 deposited
+    client.settle_batch(&items, &(50 * 10_000_000i128));
 }
 
 #[test]
@@ -1414,7 +1515,6 @@ fn test_atomicity_failed_payout_reverts_all() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout: 100 * 10_000_000, // > deposit
-        clawback_amount: 50 * 10_000_000,
     }];
     client.settle_batch(&items, &0);
 }
@@ -1437,8 +1537,8 @@ fn test_atomicity_mixed_success_failure_reverts_all() {
 
     let items = vec![
         &e,
-        SettleItem { investor: inv_a.clone(), payout: 100 * 10_000_000, clawback_amount: 100 * 10_000_000 },
-        SettleItem { investor: inv_b.clone(), payout: 100 * 10_000_000, clawback_amount: 100 * 10_000_000 }, // fails
+        SettleItem { investor: inv_a.clone(), payout: 100 * 10_000_000 },
+        SettleItem { investor: inv_b.clone(), payout: 100 * 10_000_000 }, // fails
     ];
     client.settle_batch(&items, &0);
 }
@@ -1462,7 +1562,7 @@ fn test_settle_negative_payout_in_item() {
     client.deposit(&company, &(100 * 10_000_000i128));
     let items = vec![
         &e,
-        SettleItem { investor: investor.clone(), payout: -1, clawback_amount: 100 * 10_000_000 },
+        SettleItem { investor: investor.clone(), payout: -1 },
     ];
     // MUST return InvalidAmount — contract validates BEFORE calling SAC.
     // Relying on SAC to reject would waste gas and return opaque errors.
@@ -1478,11 +1578,12 @@ fn test_settle_negative_clawback_in_item() {
     let (client, _, company, investor, _, _, _, _, _, _) = setup(&e);
 
     client.deposit(&company, &(100 * 10_000_000i128));
+    // negative clawback_amount no longer exists — test negative payout instead
     let items = vec![
         &e,
-        SettleItem { investor: investor.clone(), payout: 100 * 10_000_000, clawback_amount: -1 },
+        SettleItem { investor: investor.clone(), payout: -1 },
     ];
-    // MUST return InvalidAmount — validated at contract level, not SAC.
+    // MUST return InvalidAmount — validated at contract level.
     let result = client.try_settle_batch(&items, &0);
     assert_eq!(result, Err(Ok(SettleError::InvalidAmount)));
 }
@@ -1501,7 +1602,6 @@ fn test_withdraw_after_settlement() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout: 95 * 10_000_000,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 
@@ -1553,7 +1653,6 @@ fn test_deposit_after_settlement_allowed() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout: 95 * 10_000_000,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 
@@ -1602,7 +1701,6 @@ fn test_settle_before_any_deposit_panics() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout: 100 * 10_000_000,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &0);
 }
@@ -1632,7 +1730,6 @@ fn test_settle_investor_is_treasury() {
     let items = vec![&e, SettleItem {
         investor: treasury.clone(), // investor = treasury
         payout: 100 * 10_000_000,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &(10 * 10_000_000i128));
 
@@ -1672,8 +1769,8 @@ fn test_settle_payout_sum_overflow_panics() {
     let half_plus_one = i128::MAX / 2 + 1;
     let items = vec![
         &e,
-        SettleItem { investor: inv_a.clone(), payout: half_plus_one, clawback_amount: 0 },
-        SettleItem { investor: inv_b.clone(), payout: half_plus_one, clawback_amount: 0 },
+        SettleItem { investor: inv_a.clone(), payout: half_plus_one },
+        SettleItem { investor: inv_b.clone(), payout: half_plus_one },
     ];
     // Must panic from overflow-checks, NOT from insufficient balance
     client.settle_batch(&items, &0);
@@ -1698,13 +1795,12 @@ fn test_deposit_refund_deposit_settle_lifecycle() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout: 100 * 10_000_000,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &(10 * 10_000_000i128));
 
     assert_eq!(usdc.balance(&investor), 100 * 10_000_000);
     assert_eq!(usdc.balance(&treasury), 10 * 10_000_000);
-    assert_eq!(sec_token.balance(&investor), 900 * 10_000_000);
+    assert_eq!(sec_token.balance(&investor), 0); // ALL tokens burned
     assert_eq!(usdc.balance(&contract_id), 0);
 }
 
@@ -1720,7 +1816,6 @@ fn test_settle_fee_equals_entire_deposit() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout: 0,
-        clawback_amount: 1_000 * 10_000_000, // full token balance
     }];
     // Fee = entire deposit → all money to treasury
     client.settle_batch(&items, &(100 * 10_000_000i128));
@@ -1749,7 +1844,6 @@ fn test_settle_investor_is_company() {
     let items = vec![&e, SettleItem {
         investor: company.clone(),
         payout: 450 * 10_000_000,
-        clawback_amount: 200 * 10_000_000,
     }];
     client.settle_batch(&items, &(50 * 10_000_000i128));
 
@@ -1776,7 +1870,6 @@ fn test_settle_investor_is_contract_panics() {
     let items = vec![&e, SettleItem {
         investor: contract_id.clone(),
         payout: 100 * 10_000_000,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &0);
 }
@@ -1829,7 +1922,6 @@ fn test_settle_realistic_bullet_values() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout,
-        clawback_amount: 100 * 10_000_000, // full token balance
     }];
     client.settle_batch(&items, &platform_fee);
 
@@ -1838,7 +1930,7 @@ fn test_settle_realistic_bullet_values() {
     assert!(payout > principal);                        // interest accrued (investorRate > 0)
     assert!(payout < principal * 2);                    // sanity: <100% interest
     assert_eq!(usdc.balance(&treasury), platform_fee);  // platform got the spread
-    assert_eq!(sec_token.balance(&investor), 900 * 10_000_000);  // 1000 - 100 clawbacked
+    assert_eq!(sec_token.balance(&investor), 0);        // ALL tokens burned from chain
     assert_eq!(usdc.balance(&contract_id), 0);          // nothing left
     assert_eq!(payout + platform_fee, deposit);          // sum conservation
 }
@@ -1897,9 +1989,9 @@ fn test_settle_uneven_proportional_split_dual_computation() {
 
     let items = vec![
         &e,
-        SettleItem { investor: inv_a.clone(), payout: pa, clawback_amount: 60 * 10_000_000 },
-        SettleItem { investor: inv_b.clone(), payout: pb, clawback_amount: 30 * 10_000_000 },
-        SettleItem { investor: inv_c.clone(), payout: pc, clawback_amount: 10 * 10_000_000 },
+        SettleItem { investor: inv_a.clone(), payout: pa },
+        SettleItem { investor: inv_b.clone(), payout: pb },
+        SettleItem { investor: inv_c.clone(), payout: pc },
     ];
     client.settle_batch(&items, &fee);
 
@@ -1953,7 +2045,6 @@ fn test_initialize_treasury_equals_admin() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout: 100 * 10_000_000,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &(10 * 10_000_000i128));
 
@@ -1983,7 +2074,7 @@ fn test_all_operations_fail_before_initialize() {
     assert_eq!(dep_result, Err(Ok(SettleError::NotInitialized)));
 
     // settle before init
-    let items = vec![&e, SettleItem { investor: Address::generate(&e), payout: 1, clawback_amount: 0 }];
+    let items = vec![&e, SettleItem { investor: Address::generate(&e), payout: 1 }];
     let settle_result = client.try_settle_batch(&items, &0);
     assert_eq!(settle_result, Err(Ok(SettleError::NotInitialized)));
 
@@ -2041,7 +2132,6 @@ fn test_golden_state_post_settlement() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &fee);
 
@@ -2077,7 +2167,7 @@ fn test_golden_state_post_settlement() {
     assert_eq!(usdc.balance(&investor), payout);
     assert_eq!(usdc.balance(&treasury), fee);
     assert_eq!(usdc.balance(&contract_id), 0);
-    assert_eq!(sec_token.balance(&investor), 900 * 10_000_000);
+    assert_eq!(sec_token.balance(&investor), 0); // ALL tokens burned
 
     // 9. New deposits are still accepted (documented behavior)
     client.deposit(&company, &(1 * 10_000_000i128));
@@ -2105,9 +2195,9 @@ fn test_settle_multi_investor_all_zero_payout() {
 
     let items = vec![
         &e,
-        SettleItem { investor: inv_a.clone(), payout: 0, clawback_amount: 60 * 10_000_000 },
-        SettleItem { investor: inv_b.clone(), payout: 0, clawback_amount: 30 * 10_000_000 },
-        SettleItem { investor: inv_c.clone(), payout: 0, clawback_amount: 10 * 10_000_000 },
+        SettleItem { investor: inv_a.clone(), payout: 0 },
+        SettleItem { investor: inv_b.clone(), payout: 0 },
+        SettleItem { investor: inv_c.clone(), payout: 0 },
     ];
     client.settle_batch(&items, &total_fee);
 
@@ -2192,8 +2282,9 @@ fn test_auth_company_cannot_self_refund() {
 }
 
 /// R4-2: Initialize with usdc_sac == token_sac (same SAC for both tokens).
-/// Degenerate config: settlement would clawback the USDC it just sent.
-/// Document behavior — should work but produce bizarre results.
+/// Degenerate config: settlement sends USDC payout then clawbacks ALL "tokens"
+/// which are actually USDC. With auto-clawback, investor loses everything.
+/// Documents that this config is dangerous and should be prevented by backend.
 #[test]
 fn test_initialize_same_sac_both_tokens() {
     let e = Env::default();
@@ -2201,12 +2292,10 @@ fn test_initialize_same_sac_both_tokens() {
 
     let admin = Address::generate(&e);
     let (usdc, usdc_admin) = create_clawback_token_contract(&e, &admin);
-    // Use USDC SAC as both buy and sell token
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
     client.initialize(&admin, &usdc.address, &usdc.address, &Address::generate(&e), &5000);
 
-    // Setup: investor holds "security tokens" which are actually USDC
     let company = Address::generate(&e);
     let investor = Address::generate(&e);
     usdc_admin.mint(&company, &(200 * 10_000_000i128));
@@ -2214,18 +2303,17 @@ fn test_initialize_same_sac_both_tokens() {
 
     client.deposit(&company, &(110 * 10_000_000i128));
 
-    // Settle: payout 100 USDC then clawback 100 USDC (same token!)
-    // Net effect on investor: +100 - 100 = 0
+    // Settle: payout 100 USDC then auto-clawback ALL investor USDC "tokens"
+    // Investor: starts 100, gets +100 payout (now 200), then contract reads
+    // balance(investor)=200 and clawbacks ALL 200. Net: 0.
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout: 100 * 10_000_000,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &(10 * 10_000_000i128));
 
-    // Investor: started with 100, got +100 payout, got -100 clawback = 100 (unchanged!)
-    assert_eq!(usdc.balance(&investor), 100 * 10_000_000);
-    // This documents the degenerate behavior: investor is neither helped nor harmed
+    // Degenerate: investor ends up with 0 (payout then full clawback of same token)
+    assert_eq!(usdc.balance(&investor), 0);
 }
 
 /// R4-3: get_balance() agrees with on-chain USDC balance after partial settlement.
@@ -2243,7 +2331,6 @@ fn test_get_balance_agrees_with_onchain_after_settlement() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout: 95 * 10_000_000,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 
@@ -2332,7 +2419,6 @@ fn test_batch_35_exceeds_new_max() {
         items.push_back(SettleItem {
             investor: inv,
             payout: 1,
-            clawback_amount: 0,
         });
     }
     let result = client.try_settle_batch(&items, &0);
@@ -2352,7 +2438,6 @@ fn test_settle_batch_emits_settled_event() {
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout: 95 * 10_000_000,
-        clawback_amount: 100 * 10_000_000,
     }];
     client.settle_batch(&items, &(5 * 10_000_000i128));
 
@@ -2452,9 +2537,9 @@ fn test_full_lifecycle_init_deposit_settle_withdraw() {
 
     let items = vec![
         &e,
-        SettleItem { investor: inv_a.clone(), payout: pa, clawback_amount: 60 * 10_000_000 },
-        SettleItem { investor: inv_b.clone(), payout: pb, clawback_amount: 30 * 10_000_000 },
-        SettleItem { investor: inv_c.clone(), payout: pc, clawback_amount: 10 * 10_000_000 },
+        SettleItem { investor: inv_a.clone(), payout: pa },
+        SettleItem { investor: inv_b.clone(), payout: pb },
+        SettleItem { investor: inv_c.clone(), payout: pc },
     ];
     client.settle_batch(&items, &fee);
 
@@ -2522,8 +2607,8 @@ fn test_duplicate_investor_with_clawback_rejected() {
     // Same investor appears twice — both with clawback
     let items = vec![
         &e,
-        SettleItem { investor: investor.clone(), payout: 50 * 10_000_000, clawback_amount: 1_000 * 10_000_000 },
-        SettleItem { investor: investor.clone(), payout: 50 * 10_000_000, clawback_amount: 1_000 * 10_000_000 },
+        SettleItem { investor: investor.clone(), payout: 50 * 10_000_000 },
+        SettleItem { investor: investor.clone(), payout: 50 * 10_000_000 },
     ];
     // Contract detects duplicate BEFORE executing any transfers
     let result = client.try_settle_batch(&items, &0);
@@ -2547,8 +2632,8 @@ fn test_duplicate_investor_without_clawback_rejected() {
     // Same investor twice, no clawback — previously caused silent double-payout
     let items = vec![
         &e,
-        SettleItem { investor: investor.clone(), payout: 50 * 10_000_000, clawback_amount: 0 },
-        SettleItem { investor: investor.clone(), payout: 50 * 10_000_000, clawback_amount: 0 },
+        SettleItem { investor: investor.clone(), payout: 50 * 10_000_000 },
+        SettleItem { investor: investor.clone(), payout: 50 * 10_000_000 },
     ];
     let result = client.try_settle_batch(&items, &0);
     assert_eq!(result, Err(Ok(SettleError::DuplicateInvestor)));
@@ -2586,7 +2671,6 @@ fn test_settle_phantom_investor_rejected() {
     let items = vec![&e, SettleItem {
         investor: phantom.clone(),
         payout: 50 * 10_000_000,
-        clawback_amount: 0,
     }];
     let result = client.try_settle_batch(&items, &0);
     assert_eq!(result, Err(Ok(SettleError::PhantomInvestor)));
@@ -2611,7 +2695,6 @@ fn test_settle_contract_as_investor_no_clawback_rejected() {
     let items = vec![&e, SettleItem {
         investor: contract_id.clone(),
         payout: 50 * 10_000_000,
-        clawback_amount: 0,
     }];
     let result = client.try_settle_batch(&items, &0);
     assert_eq!(result, Err(Ok(SettleError::PhantomInvestor)));
@@ -2620,10 +2703,8 @@ fn test_settle_contract_as_investor_no_clawback_rejected() {
     assert_eq!(usdc.balance(&contract_id), 100 * 10_000_000);
 }
 
-/// R8-3: Legitimate investor with tokens + payout + clawback=0 → ALLOWED.
-/// An investor who holds tokens but the admin chose not to clawback
-/// (e.g., unlocked token that will remain tradable) is NOT a phantom.
-/// The phantom check only fires when tokens == 0 AND clawback == 0.
+/// Contract ALWAYS burns all tokens on settlement.
+/// This is maturity behavior — tokens are the claim, settlement closes it.
 #[test]
 fn test_settle_investor_with_tokens_no_clawback_allowed() {
     let e = Env::default();
@@ -2632,18 +2713,15 @@ fn test_settle_investor_with_tokens_no_clawback_allowed() {
 
     client.deposit(&company, &(100 * 10_000_000i128));
 
-    // Investor holds 1000 tokens (from setup). Payout with no clawback.
-    // This is valid: investor keeps tokens AND gets USDC payout.
     let items = vec![&e, SettleItem {
         investor: investor.clone(),
         payout: 100 * 10_000_000,
-        clawback_amount: 0,
     }];
     client.settle_batch(&items, &0);
 
-    // Investor got paid AND kept tokens
+    // Investor got paid AND ALL tokens burned (maturity = claim settled)
     assert_eq!(usdc.balance(&investor), 100 * 10_000_000);
-    assert_eq!(sec_token.balance(&investor), 1_000 * 10_000_000); // unchanged
+    assert_eq!(sec_token.balance(&investor), 0); // ALL tokens burned
 }
 
 // ═══════════════════════════════════════════════════════
