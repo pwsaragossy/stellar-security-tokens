@@ -165,7 +165,45 @@ export const companyPaymentsApi = {
         const response = await api.get('/company/payments/penalties/all');
         return response.data;
     },
+
+    // ─── Settlement Deposit (Bullet Maturity) ───
+
+    /**
+     * Prepare a settlement deposit TX (server calculates amount + builds Soroban TX)
+     * Returns XDR + full breakdown of what company is paying
+     */
+    prepareDeposit: async (offerId: number): Promise<{
+        success: boolean;
+        data: {
+            xdr: string;
+            networkPassphrase: string;
+            contractId: string;
+            depositAmount: number;
+            breakdown: {
+                investorPrincipal: number;
+                investorInterest: number;
+                platformFee: number;
+                totalOwed: number;
+            };
+            investorCount: number;
+            maturityDate: string;
+        };
+    }> => {
+        const response = await api.post(`/company/payments/${offerId}/prepare-deposit`);
+        return response.data;
+    },
+
+    /**
+     * Submit company-signed Soroban deposit TX (goes directly to Soroban RPC, no admin)
+     */
+    submitDeposit: async (offerId: number, signedXDR: string): Promise<{
+        success: boolean;
+        data: { status: string; transactionHash: string };
+        message: string;
+    }> => {
+        const response = await api.post(`/company/payments/${offerId}/submit-deposit`, { signedXDR });
+        return response.data;
+    },
 };
 
 export default companyPaymentsApi;
-

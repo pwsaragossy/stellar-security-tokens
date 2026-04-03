@@ -188,7 +188,10 @@ export class SorobanSettlementService {
      * @returns {Promise<Object>} { xdr, contractId, amount, networkPassphrase }
      */
     static async buildDepositXdr(offerId, amount) {
-        const offer = await prisma.offer.findUnique({ where: { id: offerId } });
+        const offer = await prisma.offer.findUnique({
+            where: { id: offerId },
+            include: { company: true },
+        });
         if (!offer?.sorobanSettlementContractId) {
             throw new Error('No settlement contract deployed for this offer');
         }

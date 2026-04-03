@@ -173,5 +173,39 @@ export const offersApi = {
     const response = await api.post(`/platform-admins/offers/${offerId}/unlock-token`, { confirm: true });
     return response.data;
   },
+
+  // ─── Settlement Contract (MaturitySettlement Soroban) ───
+
+  /** Deploy settlement contract for a debt offer */
+  deploySettlement: async (offerId: number, maxFeeBps = 500): Promise<ApiResponse> => {
+    const response = await api.post(`/admin/offers/${offerId}/deploy-settlement`, { max_fee_bps: maxFeeBps });
+    return response.data;
+  },
+
+  /** Build deposit TX (company USDC → contract) */
+  buildSettlementDeposit: async (offerId: number, amount: number): Promise<ApiResponse> => {
+    const response = await api.post(`/admin/offers/${offerId}/settlement-deposit`, { amount });
+    return response.data;
+  },
+
+  /** Execute full settlement (multi-batch, returns XDRs) */
+  executeSettlement: async (offerId: number): Promise<ApiResponse> => {
+    const response = await api.post(`/admin/offers/${offerId}/settle`);
+    return response.data;
+  },
+
+  /** Check settlement contract balance and status */
+  getSettlementStatus: async (offerId: number): Promise<ApiResponse<{
+    offerId: number;
+    offerType: string;
+    offerStatus: string;
+    settlementContractId: string | null;
+    contractBalance: number | null;
+    maturityDate: string | null;
+    hasSettlementContract: boolean;
+  }>> => {
+    const response = await api.get(`/admin/offers/${offerId}/settlement-status`);
+    return response.data;
+  },
 };
 

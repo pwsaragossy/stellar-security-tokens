@@ -238,4 +238,117 @@ router.get('/penalties/all', authenticateToken, requireCompanyUser, async (req, 
     });
 });
 
+// ═══════════════════════════════════════════════════════════════
+// SETTLEMENT DEPOSIT (Company → Soroban Contract)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/company/payments/:offerId/prepare-deposit
+ * Calculate deposit amount server-side and build Soroban deposit TX.
+ * Returns XDR for company signature + full breakdown of what they're paying.
+ */
+router.post('/:offerId/prepare-deposit', authenticateToken, requireCompanyUser, async (req, res) => {
+    try {
+        const { offerId } = req.params;
+        const { companyId } = req.user;
+
+        // Verify offer belongs to company
+        const offer = await prisma.offer.findFirst({
+            where: { id: parseInt(offerId), companyId }
+        });
+        if (!offer) return res.status(404).json({ success: false, error: 'Offer not found' });
+        if (offer.paymentType !== 'bullet') {
+            return res.status(400).json({ success: false, error: 'Settlement deposit is only for bullet (maturity) offers' });
+        }
+        if (!offer.sorobanSettlementContractId) {
+            return res.status(400).json({ success: false, error: 'No settlement contract deployed. Contact admin.' });
+        }
+
+        // Calculate bullet payment server-side (source of truth)
+        const bulletDetails = await CompanyPaymentService.calculateBulletPayment(parseInt(offerId));
+
+        // Company pays: totalPayout (investor principal + investorRate interest) + spread (company fee)
+        const round7 = v => Math.round(v * 10_000_000) / 10_000_000;
+        const investorPayout = bulletDetails.totalPayout;
+        const companyInterest = bulletDetails.companyTotalInterest || bulletDetails.totalInterest;
+        const investorInterest = bulletDetails.totalInterest;
+        const platformFee = round7(Math.max(0, companyInterest - investorInterest));
+        const depositAmount = round7(investorPayout + platformFee);
+
+        // Build Soroban deposit TX
+        const { SorobanSettlementService } = await import('../services/sorobanSettlement.service.js');
+        const depositTx = await SorobanSettlementService.buildDepositXdr(parseInt(offerId), depositAmount);
+
+        res.json({
+            success: true,
+            data: {
+                // TX for signing
+                xdr: depositTx.xdr,
+                networkPassphrase: depositTx.networkPassphrase,
+                contractId: depositTx.contractId,
+                // Breakdown for the company UI (shows what they're paying & why)
+                depositAmount,
+                breakdown: {
+                    investorPrincipal: bulletDetails.totalPrincipal,
+                    investorInterest: round7(investorInterest),
+                    platformFee,
+                    totalOwed: depositAmount,
+                },
+                investorCount: bulletDetails.investorCount,
+                maturityDate: bulletDetails.maturityDate,
+            },
+        });
+    } catch (error) {
+        log.error('[prepare-deposit] Failed', { error: error.message });
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/company/payments/:offerId/submit-deposit
+ * Submit company-signed Soroban deposit TX directly to Soroban RPC.
+ * No admin multisig needed — company is just transferring their own USDC.
+ */
+router.post('/:offerId/submit-deposit', authenticateToken, requireCompanyUser, async (req, res) => {
+    try {
+        const { offerId } = req.params;
+        const { signedXDR } = req.body;
+        const { companyId } = req.user;
+
+        if (!signedXDR) {
+            return res.status(400).json({ success: false, error: 'Signed transaction XDR is required' });
+        }
+
+        // Verify offer belongs to company
+        const offer = await prisma.offer.findFirst({
+            where: { id: parseInt(offerId), companyId }
+        });
+        if (!offer) return res.status(404).json({ success: false, error: 'Offer not found' });
+
+        // Submit directly to Soroban RPC — no admin queue
+        const { StellarService: StellarSvc } = await import('../services/stellar.service.js');
+        const result = await StellarSvc.submitTransaction(signedXDR);
+
+        if (result.success) {
+            log.info(`[submit-deposit] Offer ${offerId}: deposit TX submitted`, {
+                hash: result.hash || result.transactionHash,
+            });
+
+            res.json({
+                success: true,
+                data: {
+                    status: 'deposited',
+                    transactionHash: result.hash || result.transactionHash,
+                },
+                message: 'USDC deposited to settlement contract. Admin will trigger settlement.',
+            });
+        } else {
+            throw new Error(result.error || 'Soroban TX submission failed');
+        }
+    } catch (error) {
+        log.error('[submit-deposit] Failed', { error: error.message });
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
+
 export default router;
