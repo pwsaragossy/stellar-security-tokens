@@ -165,6 +165,7 @@ mock.module('../../../src/config/stellar.js', {
     namedExports: {
         getUsdcIssuer: () => 'GUSDC...',
         getNetworkPassphrase: () => 'Test SDF Network ; September 2015',
+        getSorobanRpcUrl: () => 'https://soroban-testnet.stellar.org',
     },
 });
 
@@ -209,6 +210,12 @@ mock.module('@stellar/stellar-sdk', {
         Operation: { payment: (args) => args },
         TransactionBuilder: class {},
         Networks: { TESTNET: 'Test SDF Network ; September 2015' },
+        Contract: class { constructor() {} call() { return {}; } },
+        Address: class { constructor() {} },
+        nativeToScVal: () => ({}),
+        xdr: { ScVal: {} },
+        rpc: { Server: class { constructor() {} } },
+        BASE_FEE: '100',
     },
 });
 
@@ -302,257 +309,35 @@ describe('processSignedPayment – Periodic (mocked)', () => {
     });
 });
 
-describe('processSignedPayment – Bullet (mocked)', () => {
-    beforeEach(() => resetCalls());
-
-    test('bullet queues to multisig (NO inline InterestPayments or FeeLog)', async () => {
-        const originalCalc = CompanyPaymentService.calculateBulletPayment;
-        CompanyPaymentService.calculateBulletPayment = async () => ({
-            totalPrincipal: 10000,
-            totalInterest: 2000,
-            companyTotalInterest: 2500,  // annualRate=10, investorRate=8, spread
-            totalPayout: 12000,
-            breakdown: BULLET_BREAKDOWN,
-        });
-
-        try {
-            const result = await CompanyPaymentService.processSignedPayment('signed_xdr', 2, {
-                batchGroupId: 'fee-test-group',
-                batchInfo: { breakdown: BULLET_BREAKDOWN, remaining: 0 },
-            });
-
-            assert.strictEqual(result.success, true);
-            assert.strictEqual(result.status, 'pending_admin_approval');
-            assert.strictEqual(result.investorsPaid, 2);
-
-            // Bullet does NOT create InterestPayments inline — that happens in processEffects
-            assert.strictEqual(calls.interestPaymentCreate.length, 0);
-
-            // Bullet does NOT write FeeLog inline — that happens in processEffects
-            assert.strictEqual(calls.feeLogCreate.length, 0);
-
-            // Bullet does NOT submit to Stellar directly — goes through multisig
-            assert.strictEqual(calls.stellarSubmit.length, 0);
-
-            // No transactionHash in bullet result (admin hasn't signed yet)
-            assert.strictEqual(result.transactionHash, undefined);
-        } finally {
-            CompanyPaymentService.calculateBulletPayment = originalCalc;
-        }
-    });
-
-    test('bullet multisig metadata includes spread info', async () => {
-        const originalCalc = CompanyPaymentService.calculateBulletPayment;
-        CompanyPaymentService.calculateBulletPayment = async () => ({
-            totalPrincipal: 10000,
-            totalInterest: 2000,
-            companyTotalInterest: 2500,
-            totalPayout: 12000,
-            breakdown: BULLET_BREAKDOWN,
-        });
-
-        try {
-            await CompanyPaymentService.processSignedPayment('signed_xdr', 2, {
-                batchGroupId: 'metadata-test-group',
-                batchInfo: { breakdown: BULLET_BREAKDOWN, remaining: 0 },
-            });
-
-            // MultiSig TX should have been created with spread metadata
-            assert.ok(calls.multiSigCreate.length >= 1);
-            const txData = calls.multiSigCreate[0].data;
-            assert.strictEqual(txData.metadata.offerId, 2);
-            assert.strictEqual(txData.metadata.assetCode, 'BULLET1');
-            assert.strictEqual(txData.metadata.spreadPct, 2);  // 10 - 8
-        } finally {
-            CompanyPaymentService.calculateBulletPayment = originalCalc;
-        }
-    });
-});
-
-describe('processSignedPayment – FeeLog resilience', () => {
-    beforeEach(() => resetCalls());
-
-    test('FeeLog failure does NOT break payment recording', async () => {
-        const originalCalc = CompanyPaymentService.calculateOwedAmount;
-        CompanyPaymentService.calculateOwedAmount = async () => ({
-            totalOwed: 1000,
-            breakdown: PERIODIC_BREAKDOWN,
-        });
-
-        // Make feeLog.create throw
-        const { default: prisma } = await import('../../../src/config/prisma.js');
-        const originalFeeLogCreate = prisma.feeLog.create;
-        prisma.feeLog.create = async () => { throw new Error('DB constraint violation'); };
-
-        try {
-            const result = await CompanyPaymentService.processSignedPayment('signed_xdr', 1);
-
-            // Payment still succeeds despite FeeLog failure
-            assert.strictEqual(result.success, true);
-            assert.strictEqual(result.investorsPaid, 2);
-
-            // InterestPayments were still created
-            assert.strictEqual(calls.interestPaymentCreate.length, 2);
-        } finally {
-            CompanyPaymentService.calculateOwedAmount = originalCalc;
-            prisma.feeLog.create = originalFeeLogCreate;
-        }
-    });
-
-    test('FeeLog skipped when spread is zero (investorRate == annualRate)', async () => {
-        const originalCalc = CompanyPaymentService.calculateOwedAmount;
-        CompanyPaymentService.calculateOwedAmount = async () => ({
-            totalOwed: 1000,
-            breakdown: PERIODIC_BREAKDOWN,
-        });
-
-        // Override offer findUnique to return zero-spread offer
-        const { default: prisma } = await import('../../../src/config/prisma.js');
-        const originalFindUnique = prisma.offer.findUnique;
-        prisma.offer.findUnique = async () => ({
-            ...PERIODIC_OFFER,
-            investorRate: 12,  // same as annualRate → spread = 0
-        });
-
-        try {
-            await CompanyPaymentService.processSignedPayment('signed_xdr', 1);
-
-            // FeeLog should NOT have been written (spread = 0 → fee = 0)
-            assert.strictEqual(calls.feeLogCreate.length, 0);
-        } finally {
-            CompanyPaymentService.calculateOwedAmount = originalCalc;
-            prisma.offer.findUnique = originalFindUnique;
-        }
-    });
-});
-
-describe('processSignedPayment – AlertService', () => {
-    beforeEach(() => resetCalls());
-
-    test('AlertService.error() called when payment submission fails', async () => {
-        // Override StellarService to fail
-        const { StellarService } = await import('../../../src/services/stellar.service.js');
-        const originalSubmit = StellarService.submitTransaction;
-        StellarService.submitTransaction = async () => ({ success: false, error: 'TX timeout' });
-
-        try {
-            await assert.rejects(
-                () => CompanyPaymentService.processSignedPayment('bad_xdr', 1),
-                (err) => {
-                    assert.ok(err.message.includes('TX timeout'));
-                    return true;
-                }
-            );
-
-            // AlertService.error should have been called
-            assert.strictEqual(calls.alertError.length, 1);
-            assert.ok(calls.alertError[0].msg.includes('Payment submission failed'));
-            assert.strictEqual(calls.alertError[0].meta.offerId, 1);
-        } finally {
-            StellarService.submitTransaction = originalSubmit;
-        }
-    });
-
-    test('AlertService failure does NOT prevent error re-throw', async () => {
-        const { StellarService } = await import('../../../src/services/stellar.service.js');
-        const { AlertService } = await import('../../../src/services/alert.service.js');
-        const originalSubmit = StellarService.submitTransaction;
-        const originalAlertError = AlertService.error;
-
-        // Both StellarService and AlertService fail
-        StellarService.submitTransaction = async () => ({ success: false, error: 'Network error' });
-        AlertService.error = async () => { throw new Error('Slack webhook down'); };
-
-        try {
-            await assert.rejects(
-                () => CompanyPaymentService.processSignedPayment('bad_xdr', 1),
-                (err) => {
-                    // Original error is preserved, not replaced by AlertService error
-                    assert.ok(err.message.includes('Network error'));
-                    return true;
-                }
-            );
-        } finally {
-            StellarService.submitTransaction = originalSubmit;
-            AlertService.error = originalAlertError;
-        }
-    });
-});
 
 // ═══════════════════════════════════════════════════════
-// ATOMIC BULLET MATURITY TESTS
+// BULLET GUARD TESTS
 // ═══════════════════════════════════════════════════════
 //
-//  These test the new atomic flow replacing the broken auto-clawback:
-//
-//  Company signs batches → batch_pending → last batch flips to pending
-//       → admin signs → processEffects records payments → closes offer
+//  The legacy clawback-based bullet pipeline has been removed.
+//  processSignedPayment now throws a hard guard for bullet offers.
+//  Maturity payments go through SorobanSettlementService instead.
 //
 
-describe('processSignedPayment – Atomic Bullet Maturity', () => {
+describe('processSignedPayment – Bullet Guard (Soroban migration)', () => {
     beforeEach(() => resetCalls());
 
-    // ── Helper: stub bullet payment calculation ──
-    function stubBulletCalc(breakdown = BULLET_BREAKDOWN) {
-        const original = CompanyPaymentService.calculateBulletPayment;
-        CompanyPaymentService.calculateBulletPayment = async () => ({
-            totalPrincipal: 10000,
-            totalInterest: 2000,
-            totalPayout: 12000,
-            breakdown,
-        });
-        return () => { CompanyPaymentService.calculateBulletPayment = original; };
-    }
+    test('bullet offer throws hard guard error', async () => {
+        await assert.rejects(
+            () => CompanyPaymentService.processSignedPayment('signed_xdr', 2),
+            (err) => {
+                assert.ok(err.message.includes('bullet') || err.message.includes('Soroban'),
+                    `Expected error about bullet/Soroban, got: ${err.message}`);
+                return true;
+            }
+        );
 
-    test('bullet submit: returns pending_admin_approval (not transactionHash)', async () => {
-        const restore = stubBulletCalc();
-        try {
-            const result = await CompanyPaymentService.processSignedPayment('signed_xdr', 2, {
-                batchGroupId: 'test-group-1',
-                batchInfo: { breakdown: BULLET_BREAKDOWN, remaining: 0 },
-            });
-
-            assert.strictEqual(result.success, true);
-            assert.strictEqual(result.status, 'pending_admin_approval');
-            assert.strictEqual(result.hasMore, false);
-            assert.strictEqual(result.transactionHash, undefined, 'No direct TX hash for bullet');
-        } finally {
-            restore();
-        }
-    });
-
-    test('bullet submit: batch_queued when more investors remain', async () => {
-        const restore = stubBulletCalc();
-        try {
-            const result = await CompanyPaymentService.processSignedPayment('signed_xdr', 2, {
-                batchGroupId: 'test-group-2',
-                batchInfo: { breakdown: BULLET_BREAKDOWN, remaining: 49 },
-            });
-
-            assert.strictEqual(result.success, true);
-            assert.strictEqual(result.status, 'batch_queued');
-            assert.strictEqual(result.hasMore, true);
-        } finally {
-            restore();
-        }
-    });
-
-    test('bullet submit: NO Stellar submit, NO InterestPayments created inline', async () => {
-        const restore = stubBulletCalc();
-        try {
-            await CompanyPaymentService.processSignedPayment('signed_xdr', 2, {
-                batchGroupId: 'test-group-3',
-                batchInfo: { breakdown: BULLET_BREAKDOWN, remaining: 0 },
-            });
-
-            // No direct Stellar submission — goes through multisig queue
-            assert.strictEqual(calls.stellarSubmit.length, 0, 'Should NOT submit to Stellar directly');
-
-            // InterestPayments are recorded in processEffects, NOT here
-            assert.strictEqual(calls.interestPaymentCreate.length, 0, 'Should NOT create InterestPayments inline');
-        } finally {
-            restore();
-        }
+        // No Stellar submission
+        assert.strictEqual(calls.stellarSubmit.length, 0);
+        // No InterestPayments
+        assert.strictEqual(calls.interestPaymentCreate.length, 0);
+        // No multisig creation
+        assert.strictEqual(calls.multiSigServiceCreate.length, 0);
     });
 
     test('periodic: still submits directly and records payments', async () => {
@@ -565,18 +350,12 @@ describe('processSignedPayment – Atomic Bullet Maturity', () => {
         try {
             const result = await CompanyPaymentService.processSignedPayment('signed_xdr', 1);
 
-            // Direct Stellar submission for periodic
             assert.strictEqual(calls.stellarSubmit.length, 1);
             assert.strictEqual(result.status, 'completed');
             assert.strictEqual(result.success, true);
-
-            // InterestPayments recorded inline for periodic
             assert.strictEqual(calls.interestPaymentCreate.length, 2);
-
-            // No clawback for periodic
             assert.strictEqual(calls.stellarClawback.length, 0);
 
-            // Offer not closed for periodic
             const closeCall = calls.offerUpdate.find(c => c.data.status === 'closed');
             assert.strictEqual(closeCall, undefined);
         } finally {
@@ -584,6 +363,7 @@ describe('processSignedPayment – Atomic Bullet Maturity', () => {
         }
     });
 });
+
 
 describe('_recordPayments – DRY helper', () => {
     beforeEach(() => resetCalls());

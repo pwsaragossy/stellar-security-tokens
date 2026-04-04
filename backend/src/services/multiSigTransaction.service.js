@@ -48,10 +48,8 @@ export class MultiSigTransactionService {
         initiatorId = null,
         initiatorType = 'platform_admin',
     }) {
-        // Calculate expiration time (8h for maturity, 72h for others)
-        const minutes = operationType === 'maturity_clawback'
-            ? 8 * 60   // 8h — match Stellar TX timebounds
-            : this.DEFAULT_EXPIRATION_MINUTES;
+        // Calculate expiration time
+        const minutes = this.DEFAULT_EXPIRATION_MINUTES;
         const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
 
         const tx = await prisma.multiSigTransaction.create({
@@ -838,33 +836,21 @@ export class MultiSigTransactionService {
                     break;
 
                 case 'maturity_clawback': {
-                    // Atomic bullet maturity: payment + token burn executed on-chain.
-                    // Now record InterestPayments + FeeLog + close offer if all holders burned.
-                    const { offerId, breakdown, spreadPct, assetCode } = metadata;
-                    const { CompanyPaymentService } = await import('./companyPayment.service.js');
-                    const clawbackOffer = await prisma.offer.findUnique({ where: { id: parseInt(offerId) } });
-
-                    if (clawbackOffer && breakdown) {
-                        await CompanyPaymentService._recordPayments(
-                            clawbackOffer, breakdown, txHash, spreadPct || 0, true
-                        );
-                    }
-
-                    // Close offer if ALL holders have zero balance (all batches executed)
-                    const { StellarService: StellarSvc } = await import('./stellar.service.js');
-                    const remaining = await StellarSvc.listAssetHolders(assetCode);
-                    const activeHolders = remaining.filter(h => parseFloat(h.balance) > 0);
-
-                    if (activeHolders.length === 0) {
-                        await prisma.offer.update({
-                            where: { id: parseInt(offerId) },
-                            data: { status: 'closed' },
-                        });
-                        log.info(`Offer #${offerId} CLOSED — all tokens burned (${txHash})`);
-                    } else {
-                        log.info(`Maturity batch complete: offer #${offerId}, ${activeHolders.length} holders remain`);
-                    }
-                    break;
+                    // ⛔ LEGACY PIPELINE DISABLED (Mar 2026)
+                    // Bullet maturity payments now use SorobanSettlementService.
+                    // If this case fires, a pre-migration TX reached 'executed' status — that's a zombie.
+                    log.error(`⛔ LEGACY maturity_clawback TX #${tx.id} reached processEffects. ` +
+                        `This pipeline is disabled. Maturity uses Soroban settlement. ` +
+                        `Marking as failed to prevent silent data corruption.`);
+                    
+                    const AlertService = (await import('./alert.service.js')).default;
+                    AlertService.error('Legacy maturity_clawback TX executed — zombie detected', {
+                        txId: tx.id,
+                        txHash,
+                        offerId: metadata?.offerId,
+                    }).catch(() => {});
+                    
+                    throw new Error(`Legacy maturity_clawback pipeline is disabled. TX #${tx.id} must not execute. Use Soroban settlement.`);
                 }
 
                 case 'sale_deploy': {
@@ -1226,10 +1212,9 @@ export class MultiSigTransactionService {
                     break;
 
                 case 'maturity_clawback':
-                    // Maturity clawback rejected. Company can re-initiate the entire batch.
-                    // Payment was never sent; tokens were never burned. No DB cleanup needed.
-                    log.warn(`Maturity clawback rejected for offer #${metadata?.offerId} (TX #${tx.id}). ` +
-                        `Company must re-initiate. Reason: ${reason}`);
+                    // ⛔ LEGACY PIPELINE DISABLED — rejection is a non-event since this path is dead.
+                    log.warn(`Legacy maturity_clawback TX #${tx.id} rejected. Pipeline disabled — no cleanup needed. ` +
+                        `Reason: ${reason}`);
                     break;
 
                 default:

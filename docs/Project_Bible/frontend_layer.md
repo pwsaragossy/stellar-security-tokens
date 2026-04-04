@@ -126,11 +126,11 @@ All modules export typed object literals wrapping Axios calls.
 |------|-------|---------|
 | `Dashboard` | `/company/dashboard` | Company overview |
 | `Offers` | `/company/offers` | Offer list |
-| `SelectOfferType` | `/company/offers/new` | Collateral vs Sale selection |
-| `CreateOffer` | `/company/offers/create` | Multi-step offer form |
+| `SelectOfferType` | `/company/offers/new` | Collateral (Debt) vs Sale (Equity) selection |
+| `CreateOffer` | `/company/offers/create` | Multi-step form (conditional fields for Debt vs Equity) |
 | `OfferDetails` | `/company/offers/:id` | Offer detail + cap table |
 | `Tokens` | `/company/tokens` | Token lifecycle tracking |
-| `PayInvestors` | `/company/payments/:offerId` | Interest/bullet payment flow |
+| `PayInvestors` | `/company/payments/:offerId` | Dividend / Interest / Bullet payment flow |
 | `Wallet` | `/company/wallet` | Company wallet management |
 | `Documents` | `/company/documents` | Legal document management |
 | `Reports` | `/company/reports` | Financial reports |

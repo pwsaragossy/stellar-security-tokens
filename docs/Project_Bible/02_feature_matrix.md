@@ -53,7 +53,7 @@
 | Offer management | ✅ CRUD in offerRoutes | ✅ Offers + OfferDetails | ✅ |
 | Company offer activation | ✅ offerRoutes /activate | ✅ OfferDetails page | ✅ |
 | Cap table (investors list) | ✅ offerRoutes /investors | ✅ OfferDetails page | ✅ |
-| Interest payments to investors | ✅ companyPaymentRoutes | ✅ PayInvestors page | ✅ |
+| Dividend / Interest payments | ✅ companyPaymentRoutes | ✅ PayInvestors page | ✅ |
 | Bullet (maturity) payments | ✅ CompanyPaymentService | ✅ PayInvestors page | ✅ |
 | Payment history | ✅ companyPaymentRoutes /history | ✅ PayInvestors page | ✅ |
 | Penalties tracking | ✅ companyPaymentRoutes /penalties | ✅ PayInvestors page | ✅ |

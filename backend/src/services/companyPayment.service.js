@@ -403,21 +403,14 @@ export class CompanyPaymentService {
     /**
      * Create a payment transaction for company to sign
      *
-     * ATOMIC BULLET MATURITY FLOW:
-     *   For bullet offers, bundles USDC payments + token clawback ops in one TX.
-     *   Clawback ops use source: issuerPublicKey (needs admin Freighter sig).
-     *   TX capped at 49 investors per batch (Stellar 100-op limit).
-     *
-     *   Company signs all batches in a loop → all go to admin queue together.
+     * PERIODIC YIELD ONLY. Bullet maturity payments use SorobanSettlementService.
      *
      * @param {number} offerId - Offer ID
      * @param {number} companyUserId - Company user initiating payment
-     * @param {Object} [options] - Batch options
-     * @param {string} [options.batchGroupId] - UUID grouping batches for this maturity
-     * @returns {Promise<Object>} Transaction XDR for signing + batchInfo
+     * @param {Object} [options] - Reserved for future use
+     * @returns {Promise<Object>} Transaction XDR for signing
      */
     static async createPaymentTransaction(offerId, companyUserId, options = {}) {
-        const { batchGroupId } = options;
         const offer = await prisma.offer.findUnique({
             where: { id: offerId },
             include: {
@@ -447,138 +440,44 @@ export class CompanyPaymentService {
         //    Periodic: investor gets $1000, treasury $200 spread
         //    Bullet:   investor gets $11,000, treasury $200 spread
         //
-        const isBullet = offer.paymentType === 'bullet';
-        let totalAmount, feeBase, breakdown, bulletDetails;
-
-        if (isBullet) {
-            bulletDetails = await this.calculateBulletPayment(offerId);
-            if (bulletDetails.totalPayout === 0) {
-                throw new Error('No payment owed for this offer');
-            }
-            totalAmount = bulletDetails.totalPayout;
-            feeBase = bulletDetails.totalInterest;  // Fee on YIELD only
-            breakdown = bulletDetails.breakdown;
-        } else {
-            const paymentDetails = await this.calculateOwedAmount(offerId);
-            if (paymentDetails.totalOwed === 0) {
-                throw new Error('No payment owed for this offer');
-            }
-            totalAmount = paymentDetails.totalOwed;
-            feeBase = paymentDetails.totalOwed;      // periodic totalOwed IS interest
-            breakdown = paymentDetails.breakdown;
+        // Bullet payments MUST use Soroban Settlement (deposit → settle_batch → burn)
+        if (offer.paymentType === 'bullet') {
+            throw new Error('Bullet maturity payments must use the Soroban Settlement flow (prepare-deposit → submit-deposit). This classic payment pipeline is for periodic yield only.');
         }
+
+        let totalAmount, feeBase, breakdown;
+
+        const paymentDetails = await this.calculateOwedAmount(offerId);
+        if (paymentDetails.totalOwed === 0) {
+            throw new Error('No payment owed for this offer');
+        }
+        totalAmount = paymentDetails.totalOwed;
+        feeBase = paymentDetails.totalOwed;      // periodic totalOwed IS interest
+        breakdown = paymentDetails.breakdown;
 
         // Yield spread: platform keeps (annualInterestRate - investorRate) × invested × time
         // When investorRate = annualInterestRate (or null), spread = 0
-        //
-        // MONEY FLOW:
-        //   Company pays:      totalAmount = principal + companyInterest
-        //   Platform keeps:    platformFee = companyInterest - investorInterest (the spread)
-        //   Investor receives: netToInvestors = principal + investorInterest
-        //
         let platformFee;
-        if (isBullet) {
-            // Spread = company interest - investor interest
-            platformFee = round7(
-                Math.max(0, (bulletDetails.companyTotalInterest || bulletDetails.totalInterest) - bulletDetails.totalInterest)
-            );
-            // totalAmount = what company pays (investor payout + spread)
-            totalAmount = bulletDetails.totalPayout + platformFee;
-        } else {
-            // Periodic: calculate company-side interest for this period
-            const offer = await prisma.offer.findUnique({ where: { id: offerId } });
+        {
             const annualRate = parseFloat(offer.annualInterestRate || 0);
             const effectiveInvestorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
             const spreadPct = Math.max(0, annualRate - effectiveInvestorRate);
-            // Scale the spread relative to the investor interest
             platformFee = effectiveInvestorRate > 0
                 ? round7(totalAmount * (spreadPct / effectiveInvestorRate))
                 : 0;
-            // totalAmount = what company pays (investor interest + spread)
             totalAmount = totalAmount + platformFee;
         }
         let netToInvestors = round7(totalAmount - platformFee);
 
-        // ─── BULLET: batch guard + clawback ops ──────────────────────────
-        //
-        //  BATCH FLOW (company signs all batches before admin sees any):
-        //
-        //  createPaymentTransaction(batch 1)         ← you are here
-        //       │
-        //  Company signs → processSignedPayment      → batch_pending
-        //       │
-        //  createPaymentTransaction(batch 2)          ← auto-looped by frontend
-        //       │
-        //  Company signs → processSignedPayment      → batch_pending → flip all to 'pending'
-        //       │
-        //  Admin signs all via Freighter              → processEffects per batch
-        //       │
-        //  Last batch → offer 'closed'
-        //
         // Smart wallets (C...) require Soroban SAC transfers (1 invokeHostFunction per TX)
         // Classic wallets (G...) can be batched up to 49 per TX
         const hasSmartWalletInvestors = breakdown.some(b => b.investorWallet?.startsWith('C'));
-        const MAX_INVESTORS_PER_BATCH = hasSmartWalletInvestors ? 1 : 49;
-
-        if (isBullet) {
-            // Guard: block if batches already submitted to admin
-            const adminVisible = await prisma.multiSigTransaction.findFirst({
-                where: {
-                    operationType: 'maturity_clawback',
-                    status: { in: ['pending', 'partially_signed', 'ready'] },
-                    metadata: { path: ['offerId'], equals: offerId },
-                },
-            });
-            if (adminVisible) {
-                throw new Error('Maturity batches already queued for admin approval. Wait for signing or rejection before re-initiating.');
-            }
-
-            // Exclude investors already covered in batch_pending TXs for this batch group
-            if (batchGroupId) {
-                const pendingBatches = await prisma.multiSigTransaction.findMany({
-                    where: {
-                        operationType: 'maturity_clawback',
-                        status: 'batch_pending',
-                        metadata: { path: ['batchGroupId'], equals: batchGroupId },
-                    },
-                });
-                const coveredWallets = new Set();
-                for (const batch of pendingBatches) {
-                    for (const inv of (batch.metadata?.breakdown || [])) {
-                        coveredWallets.add(inv.investorWallet);
-                    }
-                }
-                breakdown = breakdown.filter(b => !coveredWallets.has(b.investorWallet));
-            }
-
-            // Cap at 49 investors per batch
-            if (breakdown.length > MAX_INVESTORS_PER_BATCH) {
-                breakdown = breakdown.slice(0, MAX_INVESTORS_PER_BATCH);
-            }
-
-            if (breakdown.length === 0) {
-                throw new Error('No remaining investors to pay in this batch');
-            }
-
-            // Recalculate spread fee for this batch's subset
-            const batchInvestorInterest = breakdown.reduce((sum, b) => sum + b.interest, 0);
-            const batchInvestorPayout = breakdown.reduce((sum, b) => sum + b.totalPayout, 0);
-            // Spread ratio: if full set had companyInterest=X and investorInterest=Y, batch uses same ratio
-            const spreadRatio = bulletDetails.totalInterest > 0
-                ? (bulletDetails.companyTotalInterest - bulletDetails.totalInterest) / bulletDetails.totalInterest
-                : 0;
-            platformFee = round7(Math.max(0, batchInvestorInterest * spreadRatio));
-            // totalAmount = what company pays (investor payout + spread)
-            totalAmount = batchInvestorPayout + platformFee;
-            netToInvestors = batchInvestorPayout;
-        }
 
         // ─── BUILD PAYMENT TRANSACTION ──────────────────────────────────
         // Two paths: classic (G... wallets) vs Soroban SAC (C... smart wallets)
         const usdcAsset = new Asset(USDC_ASSET_CODE, USDC_ISSUER);
         let transaction;
         let investorOps = [];
-        let clawbackOps = [];
 
         if (hasSmartWalletInvestors) {
             // ─── SOROBAN PATH: SAC transfer for C... addresses ─────────────
@@ -587,9 +486,7 @@ export class CompanyPaymentService {
             if (!usdcSacId) throw new Error('USDC_SAC_CONTRACT_ID not configured');
 
             const inv = breakdown[0]; // batch size = 1
-            const payAmount = isBullet
-                ? Math.max(inv.totalPayout, 0.0000001)
-                : Math.max(inv.interestOwed, 0.0000001);
+            const payAmount = Math.max(inv.interestOwed, 0.0000001);
 
             if (!inv.investorWallet || payAmount <= 0) {
                 throw new Error('No valid investor wallets to pay');
@@ -643,23 +540,13 @@ export class CompanyPaymentService {
             }
 
             // Ops 2+: Investor payments
-            if (isBullet) {
-                investorOps = breakdown
-                    .filter(b => b.investorWallet && b.totalPayout > 0)
-                    .map(b => Operation.payment({
-                        destination: b.investorWallet,
-                        asset: usdcAsset,
-                        amount: Math.max(b.totalPayout, 0.0000001).toFixed(7),
-                    }));
-            } else {
-                investorOps = breakdown
-                    .filter(b => b.investorWallet && b.interestOwed > 0)
-                    .map(b => Operation.payment({
-                        destination: b.investorWallet,
-                        asset: usdcAsset,
-                        amount: Math.max(b.interestOwed, 0.0000001).toFixed(7),
-                    }));
-            }
+            investorOps = breakdown
+                .filter(b => b.investorWallet && b.interestOwed > 0)
+                .map(b => Operation.payment({
+                    destination: b.investorWallet,
+                    asset: usdcAsset,
+                    amount: Math.max(b.interestOwed, 0.0000001).toFixed(7),
+                }));
 
             operations.push(...investorOps);
 
@@ -667,34 +554,17 @@ export class CompanyPaymentService {
                 throw new Error('No valid investor wallets to pay');
             }
 
-            // ─── BULLET: append clawback ops (source: issuer, needs admin sig) ──
-            if (isBullet) {
-                const issuerPublicKey = keyManager.getIssuerPublicKey();
-                const tokenAsset = new Asset(offer.assetCode, issuerPublicKey);
-                const holders = await StellarService.listAssetHolders(offer.assetCode);
 
-                const batchWallets = new Set(breakdown.map(b => b.investorWallet));
-                clawbackOps = holders
-                    .filter(h => parseFloat(h.balance) > 0 && batchWallets.has(h.publicKey))
-                    .map(h => Operation.clawback({
-                        asset: tokenAsset,
-                        from: h.publicKey,
-                        amount: h.balance,
-                        source: issuerPublicKey,
-                    }));
-
-                operations.push(...clawbackOps);
-            }
 
             // Create unsigned classic transaction
             transaction = await StellarService.buildUnsignedTransaction(
                 companyWalletAddress,
                 operations,
-                `${isBullet ? 'Maturity' : 'Yield'} payment for ${offer.assetCode}`
+                `Yield payment for ${offer.assetCode}`
             );
         }
 
-        log.info('Payment transaction prepared', {
+        log.info('Periodic payment transaction prepared', {
             offerId,
             paymentType: offer.paymentType,
             totalAmount,
@@ -702,29 +572,19 @@ export class CompanyPaymentService {
             platformFee,
             netToInvestors,
             investorCount: investorOps.length,
-            clawbackCount: clawbackOps.length,
             txType: hasSmartWalletInvestors ? 'soroban_sac' : 'classic',
         });
-
-        // Calculate remaining investors for batch info
-        const totalInvestors = isBullet
-            ? (await this.calculateBulletPayment(offerId)).breakdown.length
-            : investorOps.length;
 
         return {
             transactionXDR: transaction.toXDR(),
             offerId,
-            isBullet,
+            isBullet: false,
             totalAmount,
             platformFee,
             netToInvestors,
             investorCount: investorOps.length,
             breakdown,
-            batchInfo: isBullet ? {
-                batchGroupId: batchGroupId || null,
-                thisCount: investorOps.length,
-                remaining: Math.max(0, totalInvestors - investorOps.length),
-            } : null,
+            batchInfo: null,
             expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 min frontend display expiry
         };
     }
@@ -732,130 +592,28 @@ export class CompanyPaymentService {
     /**
      * Process a signed payment transaction
      *
-     * PERIODIC: direct submit to Stellar → record payments inline.
-     * BULLET:   store company-signed XDR in multisig queue → admin signs later.
-     *           Payments recorded in processEffects('maturity_clawback') after on-chain success.
+     * PERIODIC YIELD ONLY. Direct submit to Stellar → record payments inline.
+     * Bullet maturity payments use SorobanSettlementService.
      *
      * @param {string} signedXDR - Signed transaction XDR
      * @param {number} offerId - Offer ID
-     * @param {Object} [options] - Batch options
-     * @param {string} [options.batchGroupId] - UUID grouping batches for this maturity
-     * @param {Object} [options.batchInfo] - Batch info from createPaymentTransaction
      * @returns {Promise<Object>} Transaction result
      */
-    static async processSignedPayment(signedXDR, offerId, options = {}) {
-        const { batchGroupId, batchInfo } = options;
-
+    static async processSignedPayment(signedXDR, offerId) {
         try {
             const offer = await prisma.offer.findUnique({ where: { id: offerId } });
-            const isBullet = offer.paymentType === 'bullet';
+
+            // Bullet payments MUST use Soroban Settlement
+            if (offer.paymentType === 'bullet') {
+                throw new Error('Bullet maturity payments must use the Soroban Settlement flow. This classic payment pipeline is for periodic yield only.');
+            }
 
             // Compute spread-based fee
             const annualRate = parseFloat(offer.annualInterestRate || 0);
             const effectiveInvestorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
             const spreadPct = Math.max(0, annualRate - effectiveInvestorRate);
 
-            // ─── BULLET: queue for admin multisig (DO NOT submit to Stellar) ───
-            //
-            //  Company-signed XDR → MultiSigTx(batch_pending) → later: admin signs → submit
-            //                                                         │
-            //                                                         ▼
-            //                                                    processEffects
-            //                                                    records payments
-            //                                                    closes offer
-            //
-            if (isBullet) {
-                const bulletDetails = await this.calculateBulletPayment(offerId);
-                const issuerPublicKey = keyManager.getIssuerPublicKey();
-
-                // Calculate fee breakdown for metadata — use spread
-                const totalFee = round7(
-                    Math.max(0, (bulletDetails.companyTotalInterest || bulletDetails.totalInterest) - bulletDetails.totalInterest)
-                );
-
-                const txData = {
-                    operationType: 'maturity_clawback',
-                    xdr: signedXDR,
-                    requiredSigners: [issuerPublicKey],
-                    thresholdRequired: 1,
-                    metadata: {
-                        batchGroupId: batchGroupId || null,
-                        offerId,
-                        assetCode: offer.assetCode,
-                        breakdown: batchInfo?.breakdown || bulletDetails.breakdown,
-                        spreadPct,
-                        totalFee,
-                        totalPaid: bulletDetails.totalPayout,
-                    },
-                    description: `Maturity batch: pay + burn ${offer.assetCode}`,
-                };
-
-                const hasMore = batchInfo?.remaining > 0;
-
-                if (!hasMore) {
-                    // LAST BATCH: create TX + flip all batches to 'pending' atomically
-                    await prisma.$transaction(async (tx) => {
-                        await tx.multiSigTransaction.create({ data: {
-                            ...txData,
-                            status: 'batch_pending',
-                            networkPassphrase: (await import('../config/stellar.js')).getNetworkPassphrase(),
-                            expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000), // 8h
-                            collectedSignatures: {},
-                        }});
-
-                        // Flip ALL batch_pending → pending (admin can now see them)
-                        if (batchGroupId) {
-                            await tx.multiSigTransaction.updateMany({
-                                where: {
-                                    operationType: 'maturity_clawback',
-                                    status: 'batch_pending',
-                                    metadata: { path: ['batchGroupId'], equals: batchGroupId },
-                                },
-                                data: { status: 'pending' },
-                            });
-                        }
-                    });
-
-                    // Notify admin via Pusher (outside transaction)
-                    try {
-                        const { broadcast } = await import('../config/pusher.js');
-                        const batchCount = batchGroupId
-                            ? await prisma.multiSigTransaction.count({
-                                where: { metadata: { path: ['batchGroupId'], equals: batchGroupId } },
-                            })
-                            : 1;
-                        broadcast('admin-governance', 'new-proposal', {
-                            type: 'maturity_clawback',
-                            offerId,
-                            batchCount,
-                            description: `${batchCount} maturity batch(es) ready for ${offer.assetCode}`,
-                        });
-                    } catch (pusherErr) {
-                        log.warn('Pusher broadcast failed (non-critical)', { error: pusherErr.message });
-                    }
-
-                    return {
-                        success: true,
-                        status: 'pending_admin_approval',
-                        hasMore: false,
-                        investorsPaid: (batchInfo?.breakdown || bulletDetails.breakdown).length,
-                        totalPaid: bulletDetails.totalPayout,
-                    };
-                } else {
-                    // NOT LAST BATCH: create as batch_pending (hidden from admin)
-                    const pendingTx = await MultiSigTransactionService.create(txData);
-
-                    return {
-                        success: true,
-                        status: 'batch_queued',
-                        hasMore: true,
-                        multiSigTransactionId: pendingTx.id,
-                        investorsPaid: (batchInfo?.breakdown || bulletDetails.breakdown).length,
-                    };
-                }
-            }
-
-            // ─── PERIODIC: direct submit to Stellar (unchanged) ─────────────
+            // ─── PERIODIC: direct submit to Stellar ─────────────
             const result = await StellarService.submitTransaction(signedXDR);
 
             if (result.success) {

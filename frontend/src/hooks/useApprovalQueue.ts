@@ -125,17 +125,8 @@ function normalizeTokens(offers: Offer[]): ApprovalItem[] {
 
 function normalizeMultisig(transactions: any[]): ApprovalItem[] {
     const items: ApprovalItem[] = [];
-    const maturityGroups = new Map<string, any[]>();
 
     for (const tx of transactions) {
-        // Group maturity_clawback by batchGroupId
-        if (tx.operationType === 'maturity_clawback' && tx.metadata?.batchGroupId) {
-            const groupId = tx.metadata.batchGroupId;
-            if (!maturityGroups.has(groupId)) maturityGroups.set(groupId, []);
-            maturityGroups.get(groupId)!.push(tx);
-            continue;
-        }
-
         // Normal multisig items
         let label = tx.operationType?.replace(/_/g, ' ') || `Tx #${tx.id}`;
         let subtitle = tx.description || `${tx.signatureStatus?.collected || 0}/${tx.thresholdRequired} signatures`;
@@ -153,42 +144,6 @@ function normalizeMultisig(transactions: any[]): ApprovalItem[] {
             normalizedStatus: normalizeStatus('multisig', tx.status),
             createdAt: tx.createdAt,
             raw: tx,
-        });
-    }
-
-    // Add grouped maturity items
-    for (const [groupId, txs] of maturityGroups) {
-        const assetCode = txs[0]?.metadata?.assetCode || 'Token';
-        const offerId = txs[0]?.metadata?.offerId;
-        const totalInvestors = txs.reduce((sum, tx) =>
-            sum + (tx.metadata?.breakdown?.length || 0), 0
-        );
-
-        // Use the worst status across batches for the group
-        const statuses = txs.map(tx => tx.status);
-        const groupStatus = statuses.includes('pending') ? 'pending'
-            : statuses.includes('partially_signed') ? 'partially_signed'
-            : statuses.every(s => s === 'ready') ? 'ready'
-            : 'pending';
-
-        items.push({
-            id: `multisig-maturity-${groupId}`,
-            originalId: txs[0].id,  // First TX for primary action
-            type: 'multisig' as ApprovalType,
-            label: `🔥 Maturity: ${assetCode} (${txs.length} batch${txs.length > 1 ? 'es' : ''})`,
-            subtitle: `${totalInvestors} investors · Offer #${offerId}`,
-            status: groupStatus,
-            normalizedStatus: normalizeStatus('multisig', groupStatus),
-            createdAt: txs[0].createdAt,
-            raw: {
-                // Expose all batch TXs for the detail panel
-                ...txs[0],
-                isMaturityGroup: true,
-                batchGroupId: groupId,
-                batchTransactions: txs,
-                batchCount: txs.length,
-                totalInvestors,
-            },
         });
     }
 

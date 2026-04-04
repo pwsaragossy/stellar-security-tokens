@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Loader2, CheckCircle, Circle, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { DetailRow, DetailSection } from '../shared';
 import { timeRemaining } from '../constants';
 import { api } from '@/lib/api';
@@ -26,7 +26,7 @@ export function MultisigDetail({ raw }: { raw: any }) {
         account_setup: 'Account Setup',
         sac_deploy: 'SAC Deployment',
         unlock_token: 'Unlock Token',
-        maturity_clawback: '🔥 Bullet Maturity',
+        maturity_clawback: '⛔ Legacy Maturity (Disabled)',
     };
 
     const handleReconcile = async () => {
@@ -284,64 +284,15 @@ export function MultisigDetail({ raw }: { raw: any }) {
                             </div>
                         )}
                         {raw.operationType === 'maturity_clawback' && (
-                            <>
-                                <div className="p-3 bg-orange-500/10 border border-orange-500/25 rounded-lg space-y-1 mb-3">
-                                    <p className="text-xs font-semibold text-orange-300 flex items-center gap-1.5">
-                                        🔥 Bullet Maturity — Pay + Clawback
-                                    </p>
-                                    <p className="text-[11px] text-orange-200/70">
-                                        This transaction pays investors their principal + interest and claws back their security tokens atomically.
-                                    </p>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <DetailRow label="Asset" value={raw.metadata.assetCode || '—'} />
-                                    <DetailRow label="Offer" value={raw.metadata.offerName || `#${raw.metadata.offerId}`} />
-                                    {raw.metadata.breakdown && (
-                                        <DetailRow label="Investors" value={`${raw.metadata.breakdown.length} in this batch`} />
-                                    )}
-                                    {raw.metadata.batch && (
-                                        <DetailRow label="Batch" value={`#${raw.metadata.batch}`} />
-                                    )}
-                                </div>
-                                {/* Batch Group info */}
-                                {raw.isMaturityGroup && raw.batchTransactions && (
-                                    <div className="mt-3 space-y-2">
-                                        <p className="text-xs text-zinc-500 uppercase tracking-wider font-medium">
-                                            Batch Breakdown ({raw.batchCount} batches · {raw.totalInvestors} investors)
-                                        </p>
-                                        {raw.batchTransactions.map((tx: any, i: number) => {
-                                            const collected = Object.keys(tx.collectedSignatures || {}).length;
-                                            const total = tx.thresholdRequired || 2;
-                                            const isDone = collected >= total;
-                                            return (
-                                                <div
-                                                    key={tx.id}
-                                                    className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-xs ${
-                                                        isDone
-                                                            ? 'bg-emerald-500/10 border-emerald-500/20'
-                                                            : 'bg-zinc-800/50 border-zinc-700/20'
-                                                    }`}
-                                                >
-                                                    {isDone ? (
-                                                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                                                    ) : (
-                                                        <Circle className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                                                    )}
-                                                    <span className={isDone ? 'text-emerald-300' : 'text-zinc-400'}>
-                                                        Batch {i + 1}
-                                                    </span>
-                                                    <span className="text-zinc-600">
-                                                        {tx.metadata?.breakdown?.length || '?'} investors
-                                                    </span>
-                                                    <span className="ml-auto text-zinc-600 font-mono">
-                                                        {collected}/{total} sigs
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </>
+                            <div className="p-3 bg-red-500/10 border border-red-500/25 rounded-lg space-y-1">
+                                <p className="text-xs font-semibold text-red-300 flex items-center gap-1.5">
+                                    ⛔ Legacy Pipeline — Disabled
+                                </p>
+                                <p className="text-[11px] text-red-200/70">
+                                    This transaction was created by the old clawback-based maturity flow, which has been
+                                    replaced by the Soroban MaturitySettlement contract. It cannot be executed.
+                                </p>
+                            </div>
                         )}
                         {!['treasury_payment', 'dividend_distribution', 'token_issue', 'token_distribute', 'sac_deploy', 'maturity_clawback'].includes(raw.operationType) && displayKeys.length > 0 && (
                             <pre className="text-xs text-blue-300 bg-black/30 p-2 rounded overflow-x-auto">

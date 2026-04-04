@@ -60,44 +60,6 @@ router.get('/:offerId', authenticateToken, requireCompanyUser, async (req, res) 
 });
 
 /**
- * GET /api/company/payments/:offerId/batch-status
- * Check if there are pending maturity batches for this offer
- */
-router.get('/:offerId/batch-status', authenticateToken, requireCompanyUser, async (req, res) => {
-    const { offerId } = req.params;
-    const { companyId } = req.user;
-
-    const offer = await prisma.offer.findFirst({
-        where: { id: parseInt(offerId), companyId }
-    });
-    if (!offer) return res.status(404).json({ success: false, error: 'Offer not found' });
-
-    const pendingBatches = await prisma.multiSigTransaction.findMany({
-        where: {
-            operationType: 'maturity_clawback',
-            metadata: { path: ['offerId'], equals: parseInt(offerId) },
-            status: { in: ['pending', 'batch_pending', 'partially_signed'] },
-        },
-        select: { id: true, status: true, metadata: true, createdAt: true },
-        orderBy: { createdAt: 'asc' },
-    });
-
-    const batchGroupId = pendingBatches.length > 0
-        ? pendingBatches[0].metadata?.batchGroupId || null
-        : null;
-
-    res.json({
-        success: true,
-        data: {
-            hasPending: pendingBatches.length > 0,
-            batchCount: pendingBatches.length,
-            batchGroupId,
-            statuses: pendingBatches.map(b => ({ id: b.id, status: b.status })),
-        },
-    });
-});
-
-/**
  * POST /api/company/payments/:offerId/prepare
  * Prepare a payment transaction for company signature
  * Returns unsigned XDR for the company to sign
@@ -120,16 +82,13 @@ router.post('/:offerId/prepare', authenticateToken, requireCompanyUser, async (r
 
     const transaction = await CompanyPaymentService.createPaymentTransaction(
         parseInt(offerId),
-        userId,
-        { batchGroupId: req.body.batchGroupId }
+        userId
     );
 
     res.json({
         success: true,
         data: transaction,
-        message: transaction.isBullet
-            ? `Batch prepared (${transaction.investorCount} investors). Sign to continue.`
-            : 'Transaction prepared. Sign with your passkey to complete payment.'
+        message: 'Transaction prepared. Sign with your passkey to complete payment.'
     });
 });
 
@@ -163,24 +122,13 @@ router.post('/:offerId/submit', authenticateToken, requireCompanyUser, async (re
 
     const result = await CompanyPaymentService.processSignedPayment(
         signedXDR,
-        parseInt(offerId),
-        {
-            batchGroupId: req.body.batchGroupId,
-            batchInfo: req.body.batchInfo,
-        }
+        parseInt(offerId)
     );
-
-    // Dynamic message based on status
-    const messages = {
-        completed: 'Payment submitted successfully',
-        batch_queued: 'Batch signed. Continue to next batch.',
-        pending_admin_approval: 'All batches submitted. Awaiting platform admin approval.',
-    };
 
     res.json({
         success: true,
         data: result,
-        message: messages[result.status] || 'Payment processed'
+        message: 'Payment submitted successfully'
     });
 });
 
