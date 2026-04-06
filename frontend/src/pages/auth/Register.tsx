@@ -218,7 +218,12 @@ export function Register() {
             navigate('/registration-success');
         } catch (err: any) {
             console.error(err);
-            setError(err.message || 'Failed to register');
+            // NotAllowedError = user dismissed or didn't interact with the passkey popup
+            if (err.name === 'NotAllowedError' || err.code === 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY' || err.message?.includes('cancelled') || err.message?.includes('timed out')) {
+                setError('The security prompt was closed before completing. Please try again and follow the popup that appears on your screen.');
+            } else {
+                setError(err.message || 'Failed to register');
+            }
         } finally {
             setIsLoading(false);
         }
