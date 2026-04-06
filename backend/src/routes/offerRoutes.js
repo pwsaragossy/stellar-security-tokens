@@ -615,8 +615,48 @@ router.post('/admin/offers/:id/deploy-settlement', requirePlatformAdmin, async (
     try {
         const { SorobanSettlementService } = await import('../services/sorobanSettlement.service.js');
         const offerId = parseInt(req.params.id);
+        const result = await SorobanSettlementService.deployForOffer(offerId);
+        res.json({ success: true, data: result });
+    } catch (error) {
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * @swagger
+ * /api/admin/offers/{id}/init-settlement:
+ *   post:
+ *     summary: "[Admin] Initialize a deployed settlement contract"
+ *     description: Build initialize TX. Must be called AFTER deploy TX is confirmed on-chain.
+ *     tags: [Settlement]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               max_fee_bps:
+ *                 type: integer
+ *                 default: 500
+ *                 description: Maximum platform fee in basis points (500 = 5%)
+ *     responses:
+ *       200:
+ *         description: Initialize XDR ready for signing
+ */
+router.post('/admin/offers/:id/init-settlement', requirePlatformAdmin, async (req, res) => {
+    try {
+        const { SorobanSettlementService } = await import('../services/sorobanSettlement.service.js');
+        const offerId = parseInt(req.params.id);
         const maxFeeBps = req.body.max_fee_bps || 500;
-        const result = await SorobanSettlementService.deployForOffer(offerId, maxFeeBps);
+        const result = await SorobanSettlementService.buildInitializeXdr(offerId, maxFeeBps);
         res.json({ success: true, data: result });
     } catch (error) {
         res.status(400).json({ success: false, error: error.message });

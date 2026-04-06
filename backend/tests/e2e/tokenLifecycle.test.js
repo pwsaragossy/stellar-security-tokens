@@ -80,6 +80,7 @@ const { StellarService } = await import('../../src/services/stellar.service.js')
 const { SorobanSaleService } = await import('../../src/services/sorobanSale.service.js');
 const { PaymentService } = await import('../../src/services/payment.service.js');
 const { CompanyPaymentService } = await import('../../src/services/companyPayment.service.js');
+const { SorobanSettlementService } = await import('../../src/services/sorobanSettlement.service.js');
 const { keyManager } = await import('../../src/services/KeyManager.js');
 const {
   stellarServer, getNetworkPassphrase, getSorobanRpcUrl,
@@ -203,6 +204,52 @@ async function uploadWasm() {
   // Extract WASM hash from the upload result
   const wasmHash = crypto.createHash('sha256').update(wasmBytes).digest('hex');
   return wasmHash;
+}
+
+/**
+ * Upload MaturitySettlement WASM to testnet and return the hash.
+ */
+async function uploadSettlementWasm() {
+  const wasmPath = path.resolve(__dirname, '../../../contracts/maturity_settlement/target/wasm32-unknown-unknown/release/maturity_settlement.wasm');
+  const wasmBytes = fs.readFileSync(wasmPath);
+  console.log(`  Settlement WASM size: ${wasmBytes.length} bytes`);
+
+  const issuerAccount = await StellarService.getAccountRPC(testIssuer.publicKey());
+  const uploadOp = Operation.uploadContractWasm({ wasm: wasmBytes });
+
+  let tx = new TransactionBuilder(issuerAccount, {
+    fee: BASE_FEE,
+    networkPassphrase: getNetworkPassphrase(),
+  })
+    .addOperation(uploadOp)
+    .setTimeout(300)
+    .build();
+
+  tx = await StellarService.prepareSorobanTransaction(tx);
+  tx.sign(testIssuer);
+
+  const rpcServer = new rpc.Server(getSorobanRpcUrl());
+  const sendResult = await rpcServer.sendTransaction(tx);
+
+  let result = sendResult;
+  if (result.status === 'PENDING') {
+    const maxWait = 60000;
+    const interval = 3000;
+    let waited = 0;
+    while (waited < maxWait) {
+      await sleep(interval);
+      waited += interval;
+      result = await rpcServer.getTransaction(sendResult.hash);
+      if (result.status !== 'NOT_FOUND') break;
+    }
+  }
+
+  if (result.status !== 'SUCCESS') {
+    throw new Error(`Settlement WASM upload failed: ${result.status}`);
+  }
+
+  const settlementWasmHash = crypto.createHash('sha256').update(wasmBytes).digest('hex');
+  return settlementWasmHash;
 }
 
 /**
@@ -369,7 +416,7 @@ async function main() {
         unitPrice: 1.0,
         annualInterestRate: ANNUAL_RATE,
         investorRate: INVESTOR_RATE,
-        offerType: 'sale',
+        offerType: 'collateral',
         paymentType: 'bullet',
         maturityDate: yesterday,
         status: 'active',
@@ -742,9 +789,9 @@ async function main() {
       `Tokens preserved after dividend: ${tokensAfterDividend} === ${INVEST_USDC} (no clawback in periodic)`,
     );
 
-    // ─── PHASE 4: BULLET PAYOUT + BURN ────────────────────────
+    // ─── PHASE 4: BULLET PAYOUT + BURN (SOROBAN SETTLEMENT) ───
     console.log('\n╔════════════════════════════════════════════╗');
-    console.log('║  PHASE 4: BULLET PAYOUT + BURN             ║');
+    console.log('║  PHASE 4: BULLET PAYOUT (Soroban Settle)   ║');
     console.log('╚════════════════════════════════════════════╝\n');
 
     // 4a. Mark offer as matured
@@ -755,35 +802,79 @@ async function main() {
     const maturedOffer = await prisma.offer.findUnique({ where: { id: offer.id } });
     assert(maturedOffer.status === 'matured', `Offer status: ${maturedOffer.status} (expected: matured)`);
 
-    // 4b. Build bullet payment TX
-    console.log('\n--- Building bullet payment TX ---');
-    const paymentResult = await CompanyPaymentService.createPaymentTransaction(
-      offer.id, companyUser.id,
-    );
-    assert(!!paymentResult.transactionXDR, 'Bullet payment XDR built');
-    assert(paymentResult.isBullet === true, 'Payment type is bullet');
-    assert(paymentResult.investorCount > 0, `Investors in payout: ${paymentResult.investorCount}`);
-    console.log(`  Total: ${paymentResult.totalAmount} USDC | Fee: ${paymentResult.platformFee} | Net: ${paymentResult.netToInvestors}`);
+    // 4b. Upload settlement WASM + set env
+    console.log('\n--- Uploading settlement contract WASM ---');
+    const settlementWasmHash = await uploadSettlementWasm();
+    assert(!!settlementWasmHash, `Settlement WASM hash: ${settlementWasmHash.slice(0, 16)}…`);
+    process.env.SETTLEMENT_WASM_HASH = settlementWasmHash;
 
-    // 4c. Sign with company + issuer and submit directly
-    // (Bypasses multi-sig admin flow — we're testing financial lifecycle, not governance)
-    console.log('\n--- Signing and submitting bullet TX ---');
+    // 4c. Deploy + initialize settlement contract for this offer
+    console.log('\n--- Deploying settlement contract ---');
+    const deployData = await SorobanSettlementService.deployForOffer(offer.id);
+    assert(!!deployData.contractId, `Settlement contract: ${deployData.contractId.slice(0, 12)}…`);
+    console.log(`  Contract ID: ${deployData.contractId}`);
+
+    // Sign + submit deploy TX
+    await signAndSubmitSoroban(deployData.deployXdr);
+    assert(true, 'Settlement contract deployed on-chain');
+    await sleep(3000);
+
+    // Build + sign + submit initialize TX (AFTER deploy is confirmed)
+    const initData = await SorobanSettlementService.buildInitializeXdr(offer.id);
+    await signAndSubmitSoroban(initData.xdr);
+    assert(true, 'Settlement contract initialized');
+    await sleep(3000);
+
+    // 4d. Authorize settlement contract on USDC SAC
+    console.log('\n--- Authorizing settlement contract on USDC SAC ---');
+    await SorobanSaleService.authorizeBuyerOnSac(usdcSacId, deployData.contractId);
+    assert(true, 'Settlement contract authorized on USDC SAC');
+    await sleep(2000);
+
+    // 4e. Calculate deposit amount (independent + service)
+    console.log('\n--- Calculating bullet payout ---');
+    const bulletCalc = await CompanyPaymentService.calculateBulletPayment(offer.id);
+    assert(bulletCalc.investorCount > 0, `Investors in payout: ${bulletCalc.investorCount}`);
+
+    const investorPayout = bulletCalc.totalPayout;
+    const companyInterestTotal = bulletCalc.companyTotalInterest || bulletCalc.totalInterest;
+    const investorInterestTotal = bulletCalc.totalInterest;
+    const platformFee = round7(Math.max(0, companyInterestTotal - investorInterestTotal));
+    const settlementDepositAmount = round7(investorPayout + platformFee);
+    console.log(`  Deposit: ${settlementDepositAmount} USDC (payout=${investorPayout} + spread=${platformFee})`);
+
+    // 4f. Build + sign + submit deposit TX (OPS source + company auth)
+    console.log('\n--- Depositing USDC into settlement contract ---');
+    const depositData = await SorobanSettlementService.buildDepositXdr(offer.id, settlementDepositAmount);
+    assert(!!depositData.xdr, 'Deposit XDR built');
+
+    // Deposit needs: company as source (require_auth via SourceAccount)
     const { Transaction } = await import('@stellar/stellar-sdk');
-    const bulletTx = new Transaction(paymentResult.transactionXDR, Networks.TESTNET);
-    bulletTx.sign(testCompany);   // Signs USDC payment ops
-    bulletTx.sign(testIssuer);    // Signs clawback ops (issuer = source for clawback)
+    const depositTx = new Transaction(depositData.xdr, Networks.TESTNET);
+    depositTx.sign(testCompany);  // TX source = depositor
 
-    const submitResult = await stellarServer.submitTransaction(bulletTx);
-    assert(submitResult.successful, `Bullet TX submitted on-chain: ${submitResult.hash}`);
-    console.log(`  TX hash: ${submitResult.hash}`);
+    const rpcServerSettle = new rpc.Server(getSorobanRpcUrl());
+    let depositSend = await rpcServerSettle.sendTransaction(depositTx);
+    let depositRes = depositSend;
+    if (depositRes.status === 'PENDING') {
+      let waited = 0;
+      while (waited < 60000) { await sleep(3000); waited += 3000; depositRes = await rpcServerSettle.getTransaction(depositSend.hash); if (depositRes.status !== 'NOT_FOUND') break; }
+    }
+    assert(depositRes.status === 'SUCCESS', `USDC deposited: ${settlementDepositAmount} → contract`);
+    console.log(`  TX hash: ${depositSend.hash}`);
+    await sleep(3000);
 
-    // Update offer status to closed (normally done by processEffects)
-    await prisma.offer.update({
-      where: { id: offer.id },
-      data: { status: 'closed' },
-    });
+    // Verify contract has USDC after deposit
+    const contractBalance = await SorobanSettlementService.getContractBalance(offer.id);
+    assert(contractBalance > 0, `Contract balance: ${contractBalance} USDC (expected > 0)`);
 
-    // 4d. Verify final state
+    // 4g. Execute full settlement (settle_batch + burn + record + close)
+    console.log('\n--- Executing full settlement ---');
+    const settlementResult = await SorobanSettlementService.executeFullSettlement(offer.id);
+    assert(settlementResult.investorCount > 0, `Settled ${settlementResult.investorCount} investors in ${settlementResult.batchCount} batches`);
+    console.log(`  Total paid: ${settlementResult.totalPaid} USDC | Fee: ${settlementResult.totalFee} | Batches: ${settlementResult.batchCount}`);
+
+    // 4h. Verify final state
     console.log('\n--- Verifying final state ---');
     const finalOffer = await prisma.offer.findUnique({ where: { id: offer.id } });
     assert(
@@ -791,11 +882,11 @@ async function main() {
       `Final offer status: ${finalOffer.status} (expected: closed)`,
     );
 
-    // Check investor tokens burned (CLAWBACK INVARIANT)
+    // Check investor tokens burned (SETTLEMENT CONTRACT burns atomically)
     const finalHolders = await StellarService.listAssetHolders(ASSET_CODE);
     const finalBalance = finalHolders.find(h => h.publicKey === testInvestor.publicKey());
     const remainingTokens = finalBalance ? parseFloat(finalBalance.balance) : 0;
-    assert(remainingTokens === 0, `Investor token balance after clawback: ${remainingTokens} (expected: 0)`);
+    assert(remainingTokens === 0, `Investor token balance after settlement: ${remainingTokens} (expected: 0)`);
 
     // ── BULLET PAYOUT INVARIANTS (with independent yield computation) ──
     const investorUsdcFinal = await getUSDCBalance(testInvestor.publicKey());
@@ -816,23 +907,23 @@ async function main() {
     console.log(`  Yield computation: principal=${INVEST_USDC}, companyRate=${ANNUAL_RATE}%, investorRate=${INVESTOR_RATE}%, years=${yearsToMaturity.toFixed(6)}`);
     console.log(`  Independent calc: investorInterest=${independentInvestorInterest}, companyInterest=${independentCompanyInterest}, spread=${independentSpread}`);
     console.log(`  Independent payout to investor: ${independentPayout}`);
-    console.log(`  Service reported: total=${paymentResult.totalAmount}, fee=${paymentResult.platformFee}, net=${paymentResult.netToInvestors}`);
+    console.log(`  Settlement reported: paid=${settlementResult.totalPaid}, fee=${settlementResult.totalFee}`);
 
-    // Service net to investors matches independent investor-rate math
+    // Settlement total paid matches independent investor-rate math
     assert(
-      parseFloat(paymentResult.netToInvestors) === independentPayout,
-      `Dual computation (investor): service net(${paymentResult.netToInvestors}) === independent(${independentPayout})`,
+      Math.abs(settlementResult.totalPaid - independentPayout) < 0.0001,
+      `Dual computation (investor): settlement paid(${settlementResult.totalPaid}) === independent(${independentPayout})`,
     );
 
     // Platform fee matches the spread
     assert(
-      parseFloat(paymentResult.platformFee) === independentSpread,
-      `Yield spread: platformFee(${paymentResult.platformFee}) === spread(${independentSpread})`,
+      Math.abs(settlementResult.totalFee - independentSpread) < 0.0001,
+      `Yield spread: settlementFee(${settlementResult.totalFee}) === spread(${independentSpread})`,
     );
 
     // Investor actually received the payout on-chain (starting from post-dividend balance)
     assert(
-      investorUsdcFinal === investorUsdcAfterDividend + independentPayout,
+      Math.abs(investorUsdcFinal - (investorUsdcAfterDividend + independentPayout)) < 0.0001,
       `Investor got paid: ${investorUsdcFinal} === ${investorUsdcAfterDividend} + ${independentPayout}`,
     );
 
@@ -884,7 +975,7 @@ async function main() {
         unitPrice: 1.0,
         annualInterestRate: ANNUAL_RATE,
         investorRate: INVESTOR_RATE,
-        offerType: 'sale',
+        offerType: 'collateral',
         paymentType: 'bullet',
         maturityDate: yesterday,
         status: 'active',
@@ -1098,12 +1189,63 @@ async function main() {
     console.log(`  Tokens: A=${tokensA}, B=${tokensB}`);
     console.log(`  USDC: A=${aUsdcAfter}, B=${bUsdcAfter}, Company=${compUsdcAfter}, Treasury=${treasUsdcAfter}`);
 
-    // 5f. Bullet payout — proportional split assertions
-    console.log('\n--- Multi-investor bullet payout ---');
-    const multiPayment = await CompanyPaymentService.createPaymentTransaction(multiOffer.id, companyUser.id);
+    // 5f. Bullet payout — Soroban Settlement (proportional split)
+    console.log('\n--- Multi-investor bullet payout (Soroban Settlement) ---');
 
-    assert(multiPayment.investorCount === 2, `investorCount: ${multiPayment.investorCount} === 2`);
-    assert(multiPayment.breakdown.length === 2, `breakdown length: ${multiPayment.breakdown.length} === 2`);
+    // Mark multi-offer as matured
+    await prisma.offer.update({ where: { id: multiOffer.id }, data: { status: 'matured' } });
+
+    // Deploy settlement contract for multi-offer
+    console.log('  Deploying settlement contract for multi-offer...');
+    const multiDeployData = await SorobanSettlementService.deployForOffer(multiOffer.id);
+    assert(!!multiDeployData.contractId, `Multi settlement contract: ${multiDeployData.contractId.slice(0, 12)}…`);
+
+    await signAndSubmitSoroban(multiDeployData.deployXdr);
+    assert(true, 'Multi settlement contract deployed');
+    await sleep(3000);
+    const multiInitData = await SorobanSettlementService.buildInitializeXdr(multiOffer.id);
+    await signAndSubmitSoroban(multiInitData.xdr);
+    assert(true, 'Multi settlement contract initialized');
+    await sleep(3000);
+
+    // Authorize settlement contract on USDC SAC
+    await SorobanSaleService.authorizeBuyerOnSac(usdcSacId, multiDeployData.contractId);
+    assert(true, 'Multi settlement contract authorized on USDC SAC');
+    await sleep(2000);
+
+    // Calculate deposit amount
+    const multiBulletCalc = await CompanyPaymentService.calculateBulletPayment(multiOffer.id);
+    assert(multiBulletCalc.investorCount === 2, `investorCount: ${multiBulletCalc.investorCount} === 2`);
+    assert(multiBulletCalc.breakdown.length === 2, `breakdown length: ${multiBulletCalc.breakdown.length} === 2`);
+
+    const multiInvestorPayout = multiBulletCalc.totalPayout;
+    const multiCompanyInt = multiBulletCalc.companyTotalInterest || multiBulletCalc.totalInterest;
+    const multiInvestorInt = multiBulletCalc.totalInterest;
+    const multiPlatformFee = round7(Math.max(0, multiCompanyInt - multiInvestorInt));
+    const multiDepositAmt = round7(multiInvestorPayout + multiPlatformFee);
+    console.log(`  Deposit: ${multiDepositAmt} USDC (payout=${multiInvestorPayout} + spread=${multiPlatformFee})`);
+
+    // Build + sign + submit deposit TX
+    const multiDepositData = await SorobanSettlementService.buildDepositXdr(multiOffer.id, multiDepositAmt);
+    const { Transaction: TxSettleMulti } = await import('@stellar/stellar-sdk');
+    const multiDepositTx = new TxSettleMulti(multiDepositData.xdr, Networks.TESTNET);
+    multiDepositTx.sign(testCompany);  // TX source = depositor
+
+    const rpcMultiSettle = new rpc.Server(getSorobanRpcUrl());
+    let multiDepSend = await rpcMultiSettle.sendTransaction(multiDepositTx);
+    let multiDepRes = multiDepSend;
+    if (multiDepRes.status === 'PENDING') {
+      let waited = 0;
+      while (waited < 60000) { await sleep(3000); waited += 3000; multiDepRes = await rpcMultiSettle.getTransaction(multiDepSend.hash); if (multiDepRes.status !== 'NOT_FOUND') break; }
+    }
+    assert(multiDepRes.status === 'SUCCESS', `Multi USDC deposited: ${multiDepositAmt}`);
+    await sleep(3000);
+
+    // Execute full settlement
+    console.log('  Executing full settlement...');
+    const multiSettleResult = await SorobanSettlementService.executeFullSettlement(multiOffer.id);
+    assert(multiSettleResult.investorCount === 2, `Settled ${multiSettleResult.investorCount} investors`);
+    console.log(`  Total paid: ${multiSettleResult.totalPaid} | Fee: ${multiSettleResult.totalFee} | Batches: ${multiSettleResult.batchCount}`);
 
     // Independent calculation (round7 precision — matches service)
     const multiYears = (yesterday.getTime() - thirtyDaysAgo.getTime()) / (365 * 24 * 60 * 60 * 1000);
@@ -1123,11 +1265,11 @@ async function main() {
     console.log(`  Independent calc: A interest=${indInterestA}, B interest=${indInterestB}`);
     console.log(`  Independent payouts: A=${indPayoutA}, B=${indPayoutB}`);
     console.log(`  Independent spread: ${indSpread} (company=${indCompanyInterest} - investor=${indTotalInterest})`);
-    console.log(`  Service reported: investors=${multiPayment.investorCount}, fee=${multiPayment.platformFee}, net=${multiPayment.netToInvestors}`);
+    console.log(`  Settlement reported: investors=${multiSettleResult.investorCount}, fee=${multiSettleResult.totalFee}, paid=${multiSettleResult.totalPaid}`);
 
-    // Find each investor in the breakdown
-    const bdA = multiPayment.breakdown.find(b => b.investorWallet === testInvestor.publicKey());
-    const bdB = multiPayment.breakdown.find(b => b.investorWallet === testInvestorB.publicKey());
+    // Find each investor in the breakdown (from calculateBulletPayment)
+    const bdA = multiBulletCalc.breakdown.find(b => b.investorWallet === testInvestor.publicKey());
+    const bdB = multiBulletCalc.breakdown.find(b => b.investorWallet === testInvestorB.publicKey());
     assert(!!bdA, 'Investor A found in breakdown');
     assert(!!bdB, 'Investor B found in breakdown');
 
@@ -1162,13 +1304,26 @@ async function main() {
       `Sum conservation (payout): Σ(${bdA.totalPayout} + ${bdB.totalPayout}) = ${sumPayout} === total ${round7(totalInvested + indTotalInterest)}`,
     );
 
-    // ASSERTION GROUP 3: Platform spread
+    // ASSERTION GROUP 3: Platform spread (from settlement)
     assert(
-      multiPayment.platformFee === indSpread,
-      `Platform spread: service(${multiPayment.platformFee}) === independent(${indSpread})`,
+      Math.abs(multiSettleResult.totalFee - indSpread) < 0.0001,
+      `Platform spread: settlement(${multiSettleResult.totalFee}) === independent(${indSpread})`,
     );
 
-    console.log('  ✅ All multi-investor proportional split assertions passed');
+    // ASSERTION GROUP 4: Token burn (settlement contract burns atomically)
+    const multiHoldersAfter = await StellarService.listAssetHolders(MULTI_ASSET_CODE);
+    const multiTokensA = multiHoldersAfter.find(h => h.publicKey === testInvestor.publicKey());
+    const multiTokensB = multiHoldersAfter.find(h => h.publicKey === testInvestorB.publicKey());
+    const remainingA = multiTokensA ? parseFloat(multiTokensA.balance) : 0;
+    const remainingB = multiTokensB ? parseFloat(multiTokensB.balance) : 0;
+    assert(remainingA === 0, `Investor A tokens burned: ${remainingA} === 0`);
+    assert(remainingB === 0, `Investor B tokens burned: ${remainingB} === 0`);
+
+    // Offer closed by executeFullSettlement
+    const multiOfferFinal = await prisma.offer.findUnique({ where: { id: multiOffer.id } });
+    assert(multiOfferFinal.status === 'closed', `Multi-offer status: ${multiOfferFinal.status} === closed`);
+
+    console.log('  ✅ All multi-investor Soroban settlement assertions passed');
 
     // ═══════════════════════════════════════════════════════════════
     // PHASE 5.5: MULTI-INVESTOR PERIODIC DIVIDEND (60/40 split)

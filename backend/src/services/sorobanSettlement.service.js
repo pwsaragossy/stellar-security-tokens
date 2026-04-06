@@ -81,14 +81,16 @@ export class SorobanSettlementService {
     }
 
     /**
-     * Deploy + initialize a MaturitySettlement contract for a debt offer.
+     * Deploy a MaturitySettlement contract for a debt offer.
      * Stores the contractId on the offer record.
      *
+     * NOTE: Call buildInitializeXdr() AFTER the deploy TX is confirmed on-chain.
+     * The initialize TX requires the contract to exist on-chain for simulation.
+     *
      * @param {number} offerId - Offer ID (must be debt with maturityDate)
-     * @param {number} maxFeeBps - Max platform fee in basis points (default 500 = 5%)
-     * @returns {Promise<Object>} { contractId, deployXdr, initializeXdr }
+     * @returns {Promise<Object>} { contractId, deployXdr, networkPassphrase }
      */
-    static async deployForOffer(offerId, maxFeeBps = 500) {
+    static async deployForOffer(offerId) {
         const offer = await prisma.offer.findUnique({
             where: { id: offerId },
             include: { tokens: true },
@@ -106,8 +108,7 @@ export class SorobanSettlementService {
             return { contractId: offer.sorobanSettlementContractId, alreadyDeployed: true };
         }
 
-        const token = offer.tokens?.[0];
-        if (!token?.sacContractId) {
+        if (!offer.tokens?.[0]?.sacContractId) {
             throw new Error('Token SAC not deployed — deploy SAC before settlement contract');
         }
 
@@ -115,7 +116,7 @@ export class SorobanSettlementService {
         const wasmHash = this.getSettlementWasmHash();
         const salt = Buffer.from(hash(Buffer.from(`settlement-${offerId}-${Date.now()}`)));
 
-        // 1. Build deploy TX
+        // Build deploy TX
         const deployOp = Operation.createCustomContract({
             wasmHash: Buffer.from(wasmHash, 'hex'),
             address: Address.fromString(issuerPublicKey),
@@ -135,12 +136,50 @@ export class SorobanSettlementService {
         // Precompute contract ID
         const contractId = this._precomputeContractId(issuerPublicKey, salt);
 
-        // 2. Build initialize TX
+        // Store contractId on offer
+        await prisma.offer.update({
+            where: { id: offerId },
+            data: { sorobanSettlementContractId: contractId },
+        });
+
+        log.info(`[deployForOffer] Offer ${offerId}: contractId=${contractId}`);
+
+        return {
+            contractId,
+            deployXdr: deployTx.toXDR('base64'),
+            networkPassphrase: getNetworkPassphrase(),
+        };
+    }
+
+    /**
+     * Build initialize TX for a deployed settlement contract.
+     * Must be called AFTER the deploy TX is confirmed on-chain.
+     *
+     * @param {number} offerId - Offer ID
+     * @param {number} maxFeeBps - Max platform fee in basis points (default 500 = 5%)
+     * @returns {Promise<Object>} { xdr, contractId, networkPassphrase }
+     */
+    static async buildInitializeXdr(offerId, maxFeeBps = 500) {
+        const offer = await prisma.offer.findUnique({
+            where: { id: offerId },
+            include: { tokens: true },
+        });
+
+        if (!offer?.sorobanSettlementContractId) {
+            throw new Error('No settlement contract deployed for this offer');
+        }
+
+        const token = offer.tokens?.[0];
+        if (!token?.sacContractId) {
+            throw new Error('Token SAC not deployed');
+        }
+
+        const issuerPublicKey = keyManager.getIssuerPublicKey();
         const usdcSacId = process.env.USDC_SAC_CONTRACT_ID;
         if (!usdcSacId) throw new Error('USDC_SAC_CONTRACT_ID not configured');
         const treasuryPublicKey = keyManager.getTreasuryPublicKey();
 
-        const contract = new Contract(contractId);
+        const contract = new Contract(offer.sorobanSettlementContractId);
         const initCall = contract.call(
             'initialize',
             new Address(issuerPublicKey).toScVal(),            // admin
@@ -160,18 +199,11 @@ export class SorobanSettlementService {
 
         initTx = await StellarService.prepareSorobanTransaction(initTx);
 
-        // Store contractId on offer
-        await prisma.offer.update({
-            where: { id: offerId },
-            data: { sorobanSettlementContractId: contractId },
-        });
-
-        log.info(`[deployForOffer] Offer ${offerId}: contractId=${contractId}, maxFeeBps=${maxFeeBps}`);
+        log.info(`[buildInitializeXdr] Offer ${offerId}: contractId=${offer.sorobanSettlementContractId}, maxFeeBps=${maxFeeBps}`);
 
         return {
-            contractId,
-            deployXdr: deployTx.toXDR('base64'),
-            initializeXdr: initTx.toXDR('base64'),
+            xdr: initTx.toXDR('base64'),
+            contractId: offer.sorobanSettlementContractId,
             networkPassphrase: getNetworkPassphrase(),
         };
     }
@@ -208,9 +240,9 @@ export class SorobanSettlementService {
             usdcToStroops(amount),                  // amount
         );
 
-        const opsKeypair = keyManager.getOperationsKeypair();
+        // Company is TX source → require_auth() satisfied via SourceAccount credentials
         let tx = new TransactionBuilder(
-            await StellarService.getAccountRPC(opsKeypair.publicKey()),
+            await StellarService.getAccountRPC(companyWallet),
             { fee: BASE_FEE, networkPassphrase: getNetworkPassphrase() }
         )
             .addOperation(depositCall)
@@ -219,10 +251,11 @@ export class SorobanSettlementService {
 
         tx = await StellarService.prepareSorobanTransaction(tx);
 
-        log.info(`[buildDepositXdr] Offer ${offerId}: deposit ${amount} USDC → ${offer.sorobanSettlementContractId.slice(0, 12)}…`);
+        log.info(`[buildDepositXdr] Offer ${offerId}: deposit ${amount} USDC → ${offer.sorobanSettlementContractId.slice(0, 12)}… (source: ${companyWallet.slice(0, 8)}…)`);
         return {
             xdr: tx.toXDR('base64'),
             contractId: offer.sorobanSettlementContractId,
+            companyWallet,
             amount,
             networkPassphrase: getNetworkPassphrase(),
         };
@@ -361,15 +394,28 @@ export class SorobanSettlementService {
 
             const { xdr: batchXdr } = await this.buildSettleBatchXdr(offerId, batch, batchFee);
 
-            // Sign with issuer key (contract admin) and submit
+            // Sign with issuer key (contract admin) and submit via Soroban RPC
             const { TransactionBuilder: TxBuilder } = await import('@stellar/stellar-sdk');
             const tx = TxBuilder.fromXDR(batchXdr, getNetworkPassphrase());
             tx.sign(issuerKeypair);
-            const signedXdr = tx.toXDR('base64');
 
-            const submitResult = await StellarService.submitTransaction(signedXdr);
-            if (!submitResult.success) {
-                throw new Error(`Batch ${bIdx + 1} submission failed: ${submitResult.error || 'Unknown error'}`);
+            const rpcServer = new rpc.Server(getSorobanRpcUrl());
+            const sendResult = await rpcServer.sendTransaction(tx);
+
+            // Poll for confirmation
+            let txResult = sendResult;
+            if (txResult.status === 'PENDING') {
+                let waited = 0;
+                while (waited < 60000) {
+                    await new Promise(r => setTimeout(r, 3000));
+                    waited += 3000;
+                    txResult = await rpcServer.getTransaction(sendResult.hash);
+                    if (txResult.status !== 'NOT_FOUND') break;
+                }
+            }
+
+            if (txResult.status !== 'SUCCESS') {
+                throw new Error(`Batch ${bIdx + 1} submission failed: status=${txResult.status}`);
             }
 
             results.push({
@@ -377,7 +423,7 @@ export class SorobanSettlementService {
                 investorCount: batch.length,
                 payout: batchPayout,
                 fee: batchFee,
-                txHash: submitResult.hash || submitResult.transactionHash,
+                txHash: sendResult.hash,
             });
 
             log.info(`[executeFullSettlement] Batch ${bIdx + 1}/${batches.length}: ${batch.length} investors, payout=${batchPayout}, fee=${batchFee}, hash=${results[bIdx].txHash}`);
