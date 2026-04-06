@@ -514,7 +514,7 @@ router.post('/admin/offers/:id/verify', requirePlatformAdmin, OfferController.ve
  * /api/admin/offers/{id}/reconcile-chain:
  *   post:
  *     summary: "[Admin] Reconcile on-chain state with DB"
- *     description: Reads on-chain token holder balances and compares with DB records. Use after maturity batch signing to verify all payments and clawbacks were applied correctly.
+ *     description: Reads on-chain token holder balances and compares with DB records. Useful for verifying state consistency after settlements, distributions, or any on-chain operation.
  *     tags: [Offers]
  *     security:
  *       - bearerAuth: []

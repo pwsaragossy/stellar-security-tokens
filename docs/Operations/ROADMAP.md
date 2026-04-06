@@ -15,19 +15,18 @@
 
 ---
 
-## Phase 1.5 — Bullet Maturity ✅ (Complete)
+## Phase 1.5 — Bullet Maturity ✅ (Complete — Soroban Settlement)
 
-- [x] **Maturity clawback + payout** — E2E tested in `tokenLifecycle.test.js` Phase 4
-- [x] **Multi-investor batching** — 49-investor cap per TX, tested with 30/49/50/100 investors in `paymentBatching.test.js`
-- [x] **Reconciliation results UI** — `MultisigDetail.tsx` has "On-Chain Reconciliation" section with reconcile button
-- [ ] **Persistent batch_pending status** — show "waiting for admin" on PayInvestors if batches exist in pending state (cosmetic, low priority)
+- [x] **Soroban MaturitySettlement contract** — atomic USDC distribution + token burn at maturity
+- [x] **Settlement flow** — `prepare-deposit` → `submit-deposit` → `executeFullSettlement()`
+- [x] **Multi-investor batching** — 49-investor cap per TX for periodic dividends (tested in `paymentBatching.test.js`)
+- [x] **Legacy clawback pipeline purged** — `maturity_clawback` enum + `batch_pending` status + zombie defenses removed (Apr 2026)
 
 > [!CAUTION]
 > **Trading Market Lockout**: Do NOT unlock tokens for secondary trading before maturity date.
-> If tokens are unlocked and traded, the maturity clawback will fail because holder balances
-> won't match the original investment records. This is a known constraint — when a secondary
-> market is implemented, maturity payout must account for current on-chain balances at clawback
-> time, not the original investment amounts.
+> If tokens are unlocked and traded, the settlement burn will target current on-chain holders,
+> not the original investors. When a secondary market is implemented, maturity payout must
+> account for current on-chain balances at settlement time.
 
 ---
 
@@ -213,12 +212,12 @@ Contract validates: sum(payouts) + fee ≤ deposited
 Contract executes: USDC → each investor, fee → treasury, clawback tokens
 ```
 
-- [ ] New Soroban contract: `token_distribution`
+- [ ] New Soroban contract: `token_distribution` (generalized version of MaturitySettlement)
   - `deposit(company, amount)` — company sends USDC to contract
   - `distribute(admin, plan[])` — backend submits the split, contract validates + executes
-  - `clawback_and_close(admin)` — maturity settlement
+  - `settle_and_close(admin)` — maturity settlement (partially implemented via MaturitySettlement contract)
 - [ ] Backend: adapt `companyPayment.service.js` to submit distribution plan to contract
-- [ ] E2E: verify atomic payout + clawback via contract
+- [ ] E2E: verify atomic payout + burn via contract
 - [ ] Subsumes Changes 2-3 by enforcing fee split on-chain
 
 ---
