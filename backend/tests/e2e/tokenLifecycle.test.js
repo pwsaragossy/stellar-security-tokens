@@ -463,7 +463,7 @@ async function main() {
 
     await signAndSubmitSoroban(deployResult.xdr);
     assert(true, 'Sale contract deployed on-chain');
-    await sleep(3000);
+    await sleep(6000); // Testnet RPC propagation delay — 3s insufficient under load
 
     // 2c. Initialize sale (create)
     console.log('\n--- Initializing sale (create) ---');
