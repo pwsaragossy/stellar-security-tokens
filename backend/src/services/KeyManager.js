@@ -128,13 +128,30 @@ class KeyManager {
     }
 
     /**
-     * Read operations secret key from Docker Secrets first, then env var fallback.
+     * Read operations secret key with mode-aware priority:
+     *   - ENV mode:      process.env first (tests inject throwaway keys)
+     *   - MULTISIG mode: Docker Secret first (production hot wallet)
+     *
      * Docker Secrets are mounted at /run/secrets/ as tmpfs (never touches disk).
      * @private
      * @returns {string|null} The secret key or null if not found
      */
     #readOperationsSecret() {
         const DOCKER_SECRET_PATH = '/run/secrets/operations_key';
+
+        // In ENV mode (E2E tests), env var takes priority — tests inject
+        // throwaway keypairs via process.env before importing KeyManager.
+        // The Docker Secret file (tmpfs, read-only) would shadow the test key.
+        if (this.mode === 'env') {
+            const envSecret = process.env.OPERATIONS_SECRET_KEY;
+            if (envSecret) {
+                if (!this._opsSecretLogged) {
+                    log.info('Operations key loaded from environment variable');
+                    this._opsSecretLogged = true;
+                }
+                return envSecret;
+            }
+        }
 
         // 1. Docker Secret (production — tmpfs, never on disk)
         if (existsSync(DOCKER_SECRET_PATH)) {

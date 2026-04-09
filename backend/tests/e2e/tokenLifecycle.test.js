@@ -73,18 +73,8 @@ process.env.OPERATIONS_PUBLIC_KEY = testOps.publicKey();
 // Test USDC: our test issuer is also the USDC issuer (we can mint unlimited)
 process.env.USDC_ISSUER = testIssuer.publicKey();
 // NOTE: Legacy DIVIDEND_FEE_PERCENT removed — replaced by investorRate/annualRate spread model
-
-// Override Docker Secret if running inside a container — KeyManager reads this file
-// BEFORE process.env.OPERATIONS_SECRET_KEY, so env overrides alone are insufficient.
-import { writeFileSync, readFileSync, existsSync } from 'fs';
-const DOCKER_SECRET_PATH = '/run/secrets/operations_key';
-let _originalOpsSecret = null;
-if (existsSync(DOCKER_SECRET_PATH)) {
-  try {
-    _originalOpsSecret = readFileSync(DOCKER_SECRET_PATH, 'utf8');
-    writeFileSync(DOCKER_SECRET_PATH, testOps.secret());
-  } catch { /* read-only mount — KeyManager will use env var fallback */ }
-}
+// NOTE: KeyManager in env mode now prioritizes process.env over Docker Secrets,
+// so no file-level overrides are needed when running inside containers.
 
 // Now import services (they read env at construction)
 const { default: prisma } = await import('../../src/config/prisma.js');
@@ -2196,11 +2186,6 @@ async function main() {
       }
 
       await prisma.$disconnect().catch(() => {});
-    }
-
-    // Restore original Docker Secret if we overwrote it
-    if (_originalOpsSecret) {
-      try { writeFileSync(DOCKER_SECRET_PATH, _originalOpsSecret); } catch { /* noop */ }
     }
   }
 
