@@ -330,7 +330,7 @@ async function main() {
     thresholdTx.sign(testIssuer); // Master key (weight=10) satisfies high threshold
     await stellarServer.submitTransaction(thresholdTx);
     assert(true, 'Issuer thresholds set (OPS weight=2, med=2, high=10)');
-    await sleep(2000);
+    await sleep(5000); // Sequence number propagation — prevents tx_bad_seq on setFlags
 
     // 1c. Set issuer flags
     console.log('\n--- Setting issuer flags ---');
