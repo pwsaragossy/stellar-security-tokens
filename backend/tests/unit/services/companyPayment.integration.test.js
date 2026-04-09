@@ -159,7 +159,7 @@ mock.module('../../../src/services/alert.service.js', {
 });
 
 // ConfigService mock removed — the service uses yield spread (annualRate - investorRate),
-// not ConfigService.getFloat('DIVIDEND_FEE_PERCENT'). That key is deprecated.
+// not ConfigService.getFloat('DIVIDEND_FEE_PERCENT'). That key was removed.
 
 mock.module('../../../src/config/stellar.js', {
     namedExports: {
@@ -314,9 +314,9 @@ describe('processSignedPayment – Periodic (mocked)', () => {
 // BULLET GUARD TESTS
 // ═══════════════════════════════════════════════════════
 //
-//  The legacy clawback-based bullet pipeline has been removed.
+//  The legacy clawback-based bullet pipeline has been removed (Apr 2026).
 //  processSignedPayment now throws a hard guard for bullet offers.
-//  Maturity payments go through SorobanSettlementService instead.
+//  Maturity payments go through SorobanSettlementService.executeFullSettlement().
 //
 
 describe('processSignedPayment – Bullet Guard (Soroban migration)', () => {

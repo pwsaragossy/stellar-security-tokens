@@ -6,7 +6,7 @@
  *   Phase 1: SETUP   — Fund accounts, issue token + SAC, mint test USDC + SAC
  *   Phase 2: DEPLOY  — Upload WASM, deploy sale contract, create sale, deposit, activate
  *   Phase 3: TRADE   — Investor buys tokens via Soroban sale contract
- *   Phase 4: PAYOUT  — Bullet maturity + clawback (token burn)
+ *   Phase 4: PAYOUT  — Bullet maturity (Soroban Settlement + burn)
  *
  * Uses throwaway testnet keypairs — zero interaction with real platform keys.
  * Requires: Docker up (Postgres), internet (testnet), compiled WASM.
@@ -72,7 +72,7 @@ process.env.OPERATIONS_SECRET_KEY = testOps.secret();
 process.env.OPERATIONS_PUBLIC_KEY = testOps.publicKey();
 // Test USDC: our test issuer is also the USDC issuer (we can mint unlimited)
 process.env.USDC_ISSUER = testIssuer.publicKey();
-process.env.DIVIDEND_FEE_PERCENT = '0';  // Legacy env — not used, spread model replaces this
+// NOTE: Legacy DIVIDEND_FEE_PERCENT removed — replaced by investorRate/annualRate spread model
 
 // Now import services (they read env at construction)
 const { default: prisma } = await import('../../src/config/prisma.js');
@@ -333,7 +333,7 @@ async function main() {
     // 1c. Set issuer flags
     console.log('\n--- Setting issuer flags ---');
     const issuerResult = await StellarService.createIssuerAccount();
-    assert(issuerResult.success, 'Issuer flags set (auth_required, auth_revocable, clawback)');
+    assert(issuerResult.success, 'Issuer flags set (auth_required, auth_revocable, auth_clawback_enabled)');
 
     // 1d. Issue security token + deploy SAC
     console.log('\n--- Issuing security token (forSaleContract=true) ---');
@@ -745,7 +745,7 @@ async function main() {
     console.log('\n--- Signing and submitting dividend TX ---');
     const { Transaction: DivTxClass } = await import('@stellar/stellar-sdk');
     const dividendTx = new DivTxClass(dividendResult.transactionXDR, Networks.TESTNET);
-    dividendTx.sign(testCompany);  // Company pays → no issuer sig needed (no clawback in periodic)
+    dividendTx.sign(testCompany);  // Company pays → no issuer sig needed (periodic doesn't burn tokens)
 
     const divSubmitResult = await stellarServer.submitTransaction(dividendTx);
     assert(divSubmitResult.successful, `Dividend TX submitted on-chain: ${divSubmitResult.hash}`);
@@ -780,13 +780,13 @@ async function main() {
       `Company paid: ${companyUsdcAfterDividend} === ${companyUsdcBeforeDividend} - ${expectedCompanyDebit}`,
     );
 
-    // Tokens NOT burned (periodic payments don't clawback)
+    // Tokens NOT burned (periodic payments don't burn)
     const holdersAfterDividend = await StellarService.listAssetHolders(ASSET_CODE);
     const investorAfterDiv = holdersAfterDividend.find(h => h.publicKey === testInvestor.publicKey());
     const tokensAfterDividend = investorAfterDiv ? parseFloat(investorAfterDiv.balance) : 0;
     assert(
       tokensAfterDividend === INVEST_USDC,
-      `Tokens preserved after dividend: ${tokensAfterDividend} === ${INVEST_USDC} (no clawback in periodic)`,
+      `Tokens preserved after dividend: ${tokensAfterDividend} === ${INVEST_USDC} (periodic doesn't burn tokens)`,
     );
 
     // ─── PHASE 4: BULLET PAYOUT + BURN (SOROBAN SETTLEMENT) ───

@@ -58,7 +58,7 @@ process.env.TREASURY_PUBLIC_KEY = testTreasury.publicKey();
 process.env.OPERATIONS_SECRET_KEY = testOps.secret();
 process.env.OPERATIONS_PUBLIC_KEY = testOps.publicKey();
 process.env.USDC_ISSUER = testIssuer.publicKey();
-process.env.DIVIDEND_FEE_PERCENT = '0';
+// NOTE: Legacy DIVIDEND_FEE_PERCENT removed — replaced by investorRate/annualRate spread model
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'e2e-test-jwt-secret-32chars-min!!';
 
 // Load .env for DATABASE_URL and other infra vars (dotenv won't override our overrides above)
@@ -270,7 +270,7 @@ async function main() {
     // 1c. Set issuer flags
     console.log('\n--- Setting issuer flags ---');
     const issuerResult = await StellarService.createIssuerAccount();
-    assert(issuerResult.success, 'Issuer flags set (auth_required, auth_revocable, clawback)');
+    assert(issuerResult.success, 'Issuer flags set (auth_required, auth_revocable, auth_clawback_enabled)');
 
     // 1d. Issue security token + deploy SAC
     console.log('\n--- Issuing security token (forSaleContract=true) ---');
