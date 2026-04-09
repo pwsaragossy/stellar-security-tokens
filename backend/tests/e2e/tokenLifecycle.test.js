@@ -338,6 +338,7 @@ async function main() {
     console.log('\n--- Setting issuer flags ---');
     const issuerResult = await StellarService.createIssuerAccount();
     assert(issuerResult.success, 'Issuer flags set (auth_required, auth_revocable, auth_clawback_enabled)');
+    await sleep(5000); // createIssuerAccount does multiple TXs — wait for sequence propagation
 
     // 1d. Issue security token + deploy SAC
     console.log('\n--- Issuing security token (forSaleContract=true) ---');
