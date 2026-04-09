@@ -160,53 +160,62 @@ async function mintTestUSDC(targetKeypair, amount) {
 }
 
 /**
- * Upload WASM to testnet and return the hash.
+ * Upload WASM to testnet and return the hash. Includes retry logic for testnet flakiness.
  */
 async function uploadWasm() {
   const wasmPath = path.resolve(__dirname, '../../../contracts/token_sale/target/wasm32v1-none/release/token_sale.wasm');
   const wasmBytes = fs.readFileSync(wasmPath);
   console.log(`  WASM size: ${wasmBytes.length} bytes`);
+  return submitWasmUpload(wasmBytes, 'Sale');
+}
 
-  const rpcServer = new rpc.Server(getSorobanRpcUrl());
-  const issuerAccount = await rpcServer.getAccount(testIssuer.publicKey());
+/**
+ * Generic WASM upload with retry. Fetches fresh sequence on each attempt.
+ */
+async function submitWasmUpload(wasmBytes, label, maxRetries = 3) {
+  const rpcServerUpload = new rpc.Server(getSorobanRpcUrl());
   const uploadOp = Operation.uploadContractWasm({ wasm: wasmBytes });
 
-  let tx = new TransactionBuilder(issuerAccount, {
-    fee: BASE_FEE,
-    networkPassphrase: getNetworkPassphrase(),
-  })
-    .addOperation(uploadOp)
-    .setTimeout(300)
-    .build();
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const issuerAccount = await rpcServerUpload.getAccount(testIssuer.publicKey());
+      let tx = new TransactionBuilder(issuerAccount, {
+        fee: '1000000',
+        networkPassphrase: getNetworkPassphrase(),
+      })
+        .addOperation(uploadOp)
+        .setTimeout(300)
+        .build();
 
-  // Simulate and prepare
-  tx = await StellarService.prepareSorobanTransaction(tx);
-  tx.sign(testIssuer);
+      tx = await StellarService.prepareSorobanTransaction(tx);
+      tx.sign(testIssuer);
 
-  // Reuse rpcServer from above
-  const sendResult = await rpcServer.sendTransaction(tx);
+      const sendResult = await rpcServerUpload.sendTransaction(tx);
+      if (sendResult.status === 'ERROR') {
+        throw new Error(`${label} WASM TX rejected: ERROR`);
+      }
 
-  // Poll for completion
-  let result = sendResult;
-  if (result.status === 'PENDING') {
-    const maxWait = 60000;
-    const interval = 3000;
-    let waited = 0;
-    while (waited < maxWait) {
-      await sleep(interval);
-      waited += interval;
-      result = await rpcServer.getTransaction(sendResult.hash);
-      if (result.status !== 'NOT_FOUND') break;
+      let result = sendResult;
+      if (result.status === 'PENDING') {
+        let waited = 0;
+        while (waited < 60000) {
+          await sleep(3000);
+          waited += 3000;
+          result = await rpcServerUpload.getTransaction(sendResult.hash);
+          if (result.status !== 'NOT_FOUND') break;
+        }
+      }
+
+      if (result.status === 'SUCCESS') {
+        return crypto.createHash('sha256').update(wasmBytes).digest('hex');
+      }
+      throw new Error(`${label} WASM status: ${result.status}`);
+    } catch (err) {
+      console.log(`  ⚠️  ${label} WASM attempt ${attempt}/${maxRetries}: ${err.message}`);
+      if (attempt === maxRetries) throw err;
+      await sleep(5000);
     }
   }
-
-  if (result.status !== 'SUCCESS') {
-    throw new Error(`WASM upload failed: ${result.status}`);
-  }
-
-  // Extract WASM hash from the upload result
-  const wasmHash = crypto.createHash('sha256').update(wasmBytes).digest('hex');
-  return wasmHash;
 }
 
 /**
@@ -216,44 +225,7 @@ async function uploadSettlementWasm() {
   const wasmPath = path.resolve(__dirname, '../../../contracts/maturity_settlement/target/wasm32-unknown-unknown/release/maturity_settlement.wasm');
   const wasmBytes = fs.readFileSync(wasmPath);
   console.log(`  Settlement WASM size: ${wasmBytes.length} bytes`);
-
-  const rpcServer = new rpc.Server(getSorobanRpcUrl());
-  const issuerAccount = await rpcServer.getAccount(testIssuer.publicKey());
-  const uploadOp = Operation.uploadContractWasm({ wasm: wasmBytes });
-
-  let tx = new TransactionBuilder(issuerAccount, {
-    fee: BASE_FEE,
-    networkPassphrase: getNetworkPassphrase(),
-  })
-    .addOperation(uploadOp)
-    .setTimeout(300)
-    .build();
-
-  tx = await StellarService.prepareSorobanTransaction(tx);
-  tx.sign(testIssuer);
-
-  // Reuse rpcServer from above
-  const sendResult = await rpcServer.sendTransaction(tx);
-
-  let result = sendResult;
-  if (result.status === 'PENDING') {
-    const maxWait = 60000;
-    const interval = 3000;
-    let waited = 0;
-    while (waited < maxWait) {
-      await sleep(interval);
-      waited += interval;
-      result = await rpcServer.getTransaction(sendResult.hash);
-      if (result.status !== 'NOT_FOUND') break;
-    }
-  }
-
-  if (result.status !== 'SUCCESS') {
-    throw new Error(`Settlement WASM upload failed: ${result.status}`);
-  }
-
-  const settlementWasmHash = crypto.createHash('sha256').update(wasmBytes).digest('hex');
-  return settlementWasmHash;
+  return submitWasmUpload(wasmBytes, 'Settlement');
 }
 
 /**
