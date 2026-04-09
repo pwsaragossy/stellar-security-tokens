@@ -167,7 +167,8 @@ async function uploadWasm() {
   const wasmBytes = fs.readFileSync(wasmPath);
   console.log(`  WASM size: ${wasmBytes.length} bytes`);
 
-  const issuerAccount = await StellarService.getAccountRPC(testIssuer.publicKey());
+  const rpcServer = new rpc.Server(getSorobanRpcUrl());
+  const issuerAccount = await rpcServer.getAccount(testIssuer.publicKey());
   const uploadOp = Operation.uploadContractWasm({ wasm: wasmBytes });
 
   let tx = new TransactionBuilder(issuerAccount, {
@@ -182,7 +183,7 @@ async function uploadWasm() {
   tx = await StellarService.prepareSorobanTransaction(tx);
   tx.sign(testIssuer);
 
-  const rpcServer = new rpc.Server(getSorobanRpcUrl());
+  // Reuse rpcServer from above
   const sendResult = await rpcServer.sendTransaction(tx);
 
   // Poll for completion
@@ -216,7 +217,8 @@ async function uploadSettlementWasm() {
   const wasmBytes = fs.readFileSync(wasmPath);
   console.log(`  Settlement WASM size: ${wasmBytes.length} bytes`);
 
-  const issuerAccount = await StellarService.getAccountRPC(testIssuer.publicKey());
+  const rpcServer = new rpc.Server(getSorobanRpcUrl());
+  const issuerAccount = await rpcServer.getAccount(testIssuer.publicKey());
   const uploadOp = Operation.uploadContractWasm({ wasm: wasmBytes });
 
   let tx = new TransactionBuilder(issuerAccount, {
@@ -230,7 +232,7 @@ async function uploadSettlementWasm() {
   tx = await StellarService.prepareSorobanTransaction(tx);
   tx.sign(testIssuer);
 
-  const rpcServer = new rpc.Server(getSorobanRpcUrl());
+  // Reuse rpcServer from above
   const sendResult = await rpcServer.sendTransaction(tx);
 
   let result = sendResult;
@@ -445,6 +447,9 @@ async function main() {
     console.log('\n╔════════════════════════════════════════════╗');
     console.log('║  PHASE 2: DEPLOY (WASM + contract + sale)  ║');
     console.log('╚════════════════════════════════════════════╝\n');
+
+    // Sequence propagation buffer between Phase 1 (many issuer TXs) and Phase 2
+    await sleep(5000);
 
     // 2a. Upload WASM
     console.log('--- Uploading sale contract WASM ---');
