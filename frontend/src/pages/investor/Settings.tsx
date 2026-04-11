@@ -2,23 +2,16 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, User, Mail, Check, Plus, Trash2, HardDrive, AlertTriangle } from 'lucide-react';
+import { Loader2, User, Mail, Check, Copy, CheckCircle2, ShieldCheck, ExternalLink } from 'lucide-react';
 import { api } from '@/lib/api';
 import { authStorage } from '@/utils/authStorage';
-import { useLedger } from '@/hooks/useLedger';
-import { useRecoverySigners } from '@/hooks/useRecoverySigners';
 
 export function Settings() {
     const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [resending, setResending] = useState(false);
     const [resendMessage, setResendMessage] = useState<string | null>(null);
-
-
-    // Ledger recovery management
-    const { connect: connectLedger, isConnecting: ledgerConnecting, isSupported: ledgerSupported, error: ledgerError, clearError: clearLedgerError } = useLedger();
-    const { signers: recoverySigners, isLoading: signersLoading, addSigner: addRecoverySigner, removeSigner: removeRecoverySigner, isAdding: addingRecovery, isRemoving: removingRecovery } = useRecoverySigners();
-    const [removingSignerId, setRemovingSignerId] = useState<number | null>(null);
+    const [copied, setCopied] = useState(false);
 
     useEffect(() => {
         async function fetchSettings() {
@@ -177,112 +170,81 @@ export function Settings() {
             </Card>
             */}
 
-            {/* Ledger Recovery */}
+            {/* Wallet Recovery */}
             <Card className="glass-panel rounded-2xl animate-fade-in-up animate-delay-4">
                 <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle className="text-xl flex items-center gap-2">
-                                <HardDrive className="w-5 h-5 text-[hsl(43_45%_55%)]" />
-                                Ledger Recovery
-                            </CardTitle>
-                            <CardDescription>Add your Ledger hardware wallet as a backup recovery method</CardDescription>
-                        </div>
-                        {ledgerSupported && (
-                            <Button
-                                size="sm"
-                                onClick={async () => {
-                                    clearLedgerError();
-                                    const connectedDevice = await connectLedger();
-                                    if (connectedDevice?.publicKey) {
-                                        await addRecoverySigner(connectedDevice.publicKey, 'Ledger');
-                                    }
-                                }}
-                                disabled={ledgerConnecting || addingRecovery}
-                                className="bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_50%)] text-white rounded-xl"
-                            >
-                                {ledgerConnecting || addingRecovery ? (
-                                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                ) : (
-                                    <Plus className="w-4 h-4 mr-2" />
-                                )}
-                                Connect Ledger
-                            </Button>
-                        )}
+                    <div>
+                        <CardTitle className="text-xl flex items-center gap-2">
+                            <ShieldCheck className="w-5 h-5 text-[hsl(43_45%_55%)]" />
+                            Wallet Recovery
+                        </CardTitle>
+                        <CardDescription>Your on-chain identity and backup information</CardDescription>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {!ledgerSupported && (
-                        <div className="p-3 rounded-xl text-sm bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-start gap-2">
-                            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                            <span>
-                                Ledger requires <strong>Chrome</strong> or <strong>Edge</strong> browser.
-                                Please switch browsers to add a Ledger recovery key.
-                            </span>
-                        </div>
-                    )}
-
-                    {ledgerError && (
-                        <div className="p-3 rounded-xl text-sm bg-red-500/10 text-red-400 border border-red-500/20">
-                            {ledgerError}
-                        </div>
-                    )}
-
-                    {signersLoading ? (
-                        <div className="flex justify-center py-4">
-                            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                        </div>
-                    ) : recoverySigners.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-4">
-                            No recovery signers registered. Connect your Ledger to add a backup.
-                        </p>
-                    ) : (
-                        <div className="space-y-3">
-                            {recoverySigners.map((signer) => (
-                                <div
-                                    key={signer.id}
-                                    className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-border/50"
+                    {/* Contract ID */}
+                    {user?.stellarContractId && (
+                        <div className="space-y-2">
+                            <p className="text-sm text-muted-foreground">Wallet Contract ID</p>
+                            <div className="flex items-center gap-2">
+                                <code className="flex-1 px-3 py-2 rounded-xl bg-muted/30 border border-border/50 text-xs font-mono break-all">
+                                    {user.stellarContractId}
+                                </code>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-xl shrink-0"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(user.stellarContractId);
+                                        setCopied(true);
+                                        setTimeout(() => setCopied(false), 2000);
+                                    }}
                                 >
-                                    <div className="flex items-center gap-3">
-                                        <HardDrive className="w-5 h-5 text-muted-foreground" />
-                                        <div>
-                                            <p className="font-medium">{signer.name}</p>
-                                            <p className="text-xs text-muted-foreground font-mono">
-                                                {signer.publicKey.slice(0, 8)}...{signer.publicKey.slice(-8)}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                Added {new Date(signer.createdAt).toLocaleDateString()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={async () => {
-                                            setRemovingSignerId(signer.id);
-                                            try {
-                                                await removeRecoverySigner(signer.id);
-                                            } finally {
-                                                setRemovingSignerId(null);
-                                            }
-                                        }}
-                                        disabled={removingSignerId === signer.id || removingRecovery}
-                                        className="text-red-400 hover:text-red-500 hover:bg-red-500/10"
-                                    >
-                                        {removingSignerId === signer.id ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            <Trash2 className="w-4 h-4" />
-                                        )}
-                                    </Button>
-                                </div>
-                            ))}
+                                    {copied ? (
+                                        <CheckCircle2 className="w-4 h-4 text-[hsl(160_60%_40%)]" />
+                                    ) : (
+                                        <Copy className="w-4 h-4" />
+                                    )}
+                                </Button>
+                            </div>
+                            <a
+                                href={`https://stellar.expert/explorer/testnet/contract/${user.stellarContractId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-[hsl(43_45%_55%)] hover:underline"
+                            >
+                                View on Stellar Expert <ExternalLink className="w-3 h-3" />
+                            </a>
                         </div>
                     )}
 
-                    <p className="text-xs text-muted-foreground mt-4">
-                        🔐 Your Ledger's 24-word seed phrase is the true backup. If you lose all passkeys,
-                        you can recover using your Ledger.
+                    {/* Recovery info */}
+                    <div className="space-y-3 pt-2 border-t border-border/50">
+                        <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/20">
+                            <span className="text-lg">🔑</span>
+                            <div>
+                                <p className="text-sm font-medium">Passkey Sync</p>
+                                <p className="text-xs text-muted-foreground">
+                                    Your passkey is synced across your devices via iCloud Keychain (Apple) or Google Password Manager.
+                                    Signing into a new device with the same account restores access automatically.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/20">
+                            <span className="text-lg">🛟</span>
+                            <div>
+                                <p className="text-sm font-medium">Emergency Recovery</p>
+                                <p className="text-xs text-muted-foreground">
+                                    If you lose access to all devices, contact our support team at{' '}
+                                    <a href="mailto:support@radox.net" className="text-[hsl(43_45%_55%)] hover:underline">support@radox.net</a>.
+                                    After identity verification, we can assist with account recovery.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                        🔐 Your passkey's private key never leaves your device's secure enclave. Radox cannot access it.
                     </p>
                 </CardContent>
             </Card>

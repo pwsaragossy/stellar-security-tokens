@@ -60,6 +60,7 @@ export const getInvestorById = async (req, res, next) => {
         email: investor.email,
         document: investor.document,
         stellarPublicKey: investor.stellarPublicKey,
+        stellarContractId: investor.stellarContractId,
         kycStatus: investor.kycStatus,
         emailVerified: investor.emailVerified,
         lastLogin: investor.lastLogin,
