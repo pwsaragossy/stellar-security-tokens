@@ -1,5 +1,5 @@
 ---
-description: Create distinctive, production-grade frontend interfaces with exceptional design quality (ported from Claude Code plugin)
+description: Create distinctive, production-grade frontend interfaces with exceptional design quality (updated from anthropics/skills)
 ---
 
 # Frontend Design Skill
@@ -8,115 +8,44 @@ This workflow guides creation of distinctive, production-grade frontend interfac
 
 ## When To Use
 
-Invoke this workflow with `/frontend-design` when:
-- Building new web components, pages, or applications
-- Redesigning existing UI to be more visually striking
-- Creating landing pages, dashboards, or user interfaces
-- Wanting to avoid generic AI-generated aesthetics
+Invoke this workflow with `/frontend-design` when building web components, pages, artifacts, posters, or applications (examples include websites, landing pages, dashboards, React components, HTML/CSS layouts, or when styling/beautifying any web UI). Generates creative, polished code and UI design that avoids generic AI aesthetics.
 
-## Design Thinking Process
+The user provides frontend requirements: a component, page, application, or interface to build. They may include context about the purpose, audience, or technical constraints.
 
-Before writing any code, understand the context and commit to a **BOLD** aesthetic direction:
+## Design Thinking
 
-### 1. Understand Purpose
-- What problem does this interface solve?
-- Who uses it?
-- What is the context (fintech, creative, enterprise, consumer)?
+Before coding, understand the context and commit to a **BOLD** aesthetic direction:
+- **Purpose**: What problem does this interface solve? Who uses it?
+- **Tone**: Pick an extreme: brutally minimal, maximalist chaos, retro-futuristic, organic/natural, luxury/refined, playful/toy-like, editorial/magazine, brutalist/raw, art deco/geometric, soft/pastel, industrial/utilitarian, etc. There are so many flavors to choose from. Use these for inspiration but design one that is true to the aesthetic direction.
+- **Constraints**: Technical requirements (framework, performance, accessibility).
+- **Differentiation**: What makes this UNFORGETTABLE? What's the one thing someone will remember?
 
-### 2. Choose Aesthetic Tone
-Pick a distinctive direction - avoid generic. Consider:
-- **Brutally Minimal**: Stark, purposeful emptiness
-- **Maximalist Chaos**: Dense, layered, overwhelming in a good way
-- **Retro-Futuristic**: Y2K, vaporwave, CRT aesthetics
-- **Organic/Natural**: Flowing shapes, earthy tones, biomorphic forms
-- **Luxury/Refined**: Gold accents, serif fonts, high-end magazine feel
-- **Playful/Toy-like**: Bold colors, rounded shapes, joyful
-- **Editorial/Magazine**: Grid-based, strong typography, art-directed
-- **Brutalist/Raw**: Exposed structure, bold contrasts, anti-design
-- **Art Deco/Geometric**: Ornate patterns, 1920s elegance
-- **Soft/Pastel**: Gentle gradients, muted colors, calm
-- **Industrial/Utilitarian**: Function-first, exposed mechanics
+**CRITICAL**: Choose a clear conceptual direction and execute it with precision. Bold maximalism and refined minimalism both work - the key is intentionality, not intensity.
 
-### 3. Define The Unforgettable Element
-What's the ONE thing someone will remember about this interface?
-
----
+Then implement working code (HTML/CSS/JS, React, Vue, etc.) that is:
+- Production-grade and functional
+- Visually striking and memorable
+- Cohesive with a clear aesthetic point-of-view
+- Meticulously refined in every detail
 
 ## Frontend Aesthetics Guidelines
 
-### Typography
-- **NEVER** use generic fonts: Inter, Roboto, Arial, system fonts
-- Choose fonts that are beautiful, unique, characterful
-- Pair a distinctive display font with a refined body font
-- Consider: Syne, DM Sans, Space Grotesk, Outfit, Playfair Display, Instrument Sans, Cabinet Grotesk, Clash Display
-- Use Google Fonts or similar for easy implementation
-
-### Color & Theme
-- Commit to a cohesive palette - use CSS custom properties
-- Dominant colors with sharp accents > timid, evenly-distributed palettes
-- **AVOID**: Purple gradients on white (overused AI aesthetic)
-- Vary between light and dark themes across designs
-- Consider: mesh gradients, duotones, monochromatic with one pop color
-
-### Motion & Animation
-- Prioritize CSS-only solutions for simple effects
-- Use Framer Motion for React when available
-- Focus on high-impact moments:
-  - Page load with staggered reveals (`animation-delay`)
-  - Scroll-triggered animations
-  - Hover states that surprise
-- One well-orchestrated entrance > scattered micro-interactions
-
-### Spatial Composition
-- Embrace unexpected layouts
-- Try: Asymmetry, overlap, diagonal flow, grid-breaking elements
-- Use generous negative space OR controlled density (pick one, commit)
-- Avoid predictable component patterns
-
-### Backgrounds & Visual Details
-Create atmosphere, never default to solid colors:
-- Gradient meshes
-- Noise/grain textures
-- Geometric patterns
-- Layered transparencies
-- Dramatic shadows
-- Decorative borders
-- Custom cursors
-
----
+Focus on:
+- **Typography**: Choose fonts that are beautiful, unique, and interesting. Avoid generic fonts like Arial and Inter; opt instead for distinctive choices that elevate the frontend's aesthetics; unexpected, characterful font choices. Pair a distinctive display font with a refined body font.
+- **Color & Theme**: Commit to a cohesive aesthetic. Use CSS variables for consistency. Dominant colors with sharp accents outperform timid, evenly-distributed palettes.
+- **Motion**: Use animations for effects and micro-interactions. Prioritize CSS-only solutions for HTML. Use Motion library for React when available. Focus on high-impact moments: one well-orchestrated page load with staggered reveals (animation-delay) creates more delight than scattered micro-interactions. Use scroll-triggering and hover states that surprise.
+- **Spatial Composition**: Unexpected layouts. Asymmetry. Overlap. Diagonal flow. Grid-breaking elements. Generous negative space OR controlled density.
+- **Backgrounds & Visual Details**: Create atmosphere and depth rather than defaulting to solid colors. Add contextual effects and textures that match the overall aesthetic. Apply creative forms like gradient meshes, noise textures, geometric patterns, layered transparencies, dramatic shadows, decorative borders, custom cursors, and grain overlays.
 
 ## Anti-Patterns (NEVER DO)
 
-1. **Generic Font Stacks**: Inter, Roboto, Arial, system-ui
-2. **Cliché Colors**: Purple-to-pink gradients on white backgrounds
-3. **Predictable Layouts**: Card grids with uniform spacing
-4. **Cookie-Cutter Components**: Bootstrap-style buttons and forms
-5. **Lack of Personality**: No distinctive character for the context
-6. **Same Design Every Time**: Each design should be unique
+- NEVER use generic AI-generated aesthetics like overused font families (Inter, Roboto, Arial, system fonts).
+- NEVER use cliched color schemes (particularly purple gradients on white backgrounds).
+- NEVER use predictable layouts and component patterns.
+- NEVER use cookie-cutter design that lacks context-specific character.
+- NEVER converge on common choices (Space Grotesk, for example) across generations. No design should be the same.
 
----
-
-## Implementation Notes
-
-1. Match implementation complexity to aesthetic vision:
-   - Maximalist designs → elaborate code, extensive animations
-   - Minimalist designs → restraint, precision, perfect spacing
-
-2. Use CSS custom properties for consistency:
-   ```css
-   :root {
-     --primary: #FF6B35;
-     --accent: #FFD23F;
-     --dark: #1A1A2E;
-     --light: #F8F9FA;
-   }
-   ```
-
-3. Always include:
-   - Responsive design considerations
-   - Accessibility basics (contrast, focus states)
-   - Performance (prefer CSS animations over JS)
-   - Proper semantic HTML
+**IMPORTANT**: Match implementation complexity to the aesthetic vision. Maximalist designs need elaborate code with extensive animations and effects. Minimalist or refined designs need restraint, precision, and careful attention to spacing, typography, and subtle details. Elegance comes from executing the vision well.
 
 ---
 
