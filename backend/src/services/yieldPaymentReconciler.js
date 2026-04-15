@@ -108,6 +108,11 @@ export class YieldPaymentReconciler {
                 } catch {}
             }
         } catch (err) {
+            // P2021 = table doesn't exist yet (pre-migration). Skip silently.
+            if (err.code === 'P2021') {
+                log.info('[reconcile] yield_payment_jobs table not found — skipping (migration pending)');
+                return;
+            }
             log.error('[reconcile] Fatal error:', err.message);
         }
     }
