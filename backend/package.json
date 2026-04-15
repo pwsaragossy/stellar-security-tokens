@@ -49,7 +49,7 @@
   "dependencies": {
     "@openzeppelin/relayer-plugin-channels": "^0.17.0",
     "@prisma/adapter-pg": "^7.4.1",
-    "@prisma/client": "^7.6.0",
+    "@prisma/client": "^7.7.0",
     "@sentry/node": "^10.34.0",
     "@simplewebauthn/browser": "^13.2.2",
     "@simplewebauthn/server": "^13.2.2",
@@ -91,7 +91,7 @@
     "esmock": "^2.7.3",
     "nodemon": "^3.0.2",
     "prettier": "^3.2.5",
-    "prisma": "^7.6.0",
+    "prisma": "^7.7.0",
     "supertest": "^7.1.4"
   },
   "engines": {
