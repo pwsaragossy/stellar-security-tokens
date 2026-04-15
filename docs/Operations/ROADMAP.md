@@ -208,8 +208,10 @@ Stateless Soroban contract that batches up to 30 `SAC.transfer()` calls under on
 - [x] Backend service: `yieldDistributor.service.js` (multi-batch XDR, 3x exponential retry, Redis lock)
 - [x] Rewired `companyPayment.service.js` → `buildMultiBatchXdrs()` + `processSignedBatches()`
 - [x] TDD: 65/65 backend unit tests pass
-- [ ] Build WASM + deploy to testnet → set `YIELD_DISTRIBUTOR_CONTRACT_ID` in `.env`
-- [ ] Frontend: multi-batch signing loop in `PayInvestors.tsx` (sign-all-first pattern)
+- [x] SOTA hardening: `YieldPaymentJob` persistence, reconciler, admin retry endpoints, TTL cron, partial failure UI, job recovery
+- [x] Frontend: multi-batch signing loop + `beforeunload` + partial failure card + job status recovery
+- [x] Build WASM + deploy to testnet → `YIELD_DISTRIBUTOR_CONTRACT_ID=CBRIKOD64KWAGYZ22KBY3LXXB6GJ6R6RDDB4SWXM5N2OUFNGD6NPHBXJ`
+- [ ] Testnet E2E validation (manual passkey signing)
 
 **MVP scaling**: 1 passkey prompt per 30 investors. ≤90 investors = 3 prompts. Acceptable for MVP.
 
