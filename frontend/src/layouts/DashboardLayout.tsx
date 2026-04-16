@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { NotificationBell } from '@/components/NotificationBell';
 import { MobileSidebar, MenuToggleButton, useMobileSidebar } from '@/components/MobileSidebar';
 import { authStorage } from '@/utils/authStorage';
+import { passkeyClient } from '@/lib/passkey';
 import { useAuthRefresh } from '@/hooks/useAuthRefresh';
 import { DepositTracker } from '@/components/wallet/DepositTracker';
 
@@ -49,6 +50,7 @@ export function DashboardLayout() {
     const handleLogout = () => {
         // Only clear investor session, preserve other user sessions
         authStorage.clear('investor');
+        passkeyClient.reset(); // Clear cached passkey credential
         navigate('/login');
     };
 

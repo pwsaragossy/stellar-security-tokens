@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { companiesApi } from '@/api/companies';
 import type { Company } from '@/types';
 import { authStorage } from '@/utils/authStorage';
+import { passkeyClient } from '@/lib/passkey';
 import { useAuthRefresh } from '@/hooks/useAuthRefresh';
 
 export function CompanyLayout() {
@@ -67,6 +68,7 @@ export function CompanyLayout() {
     const handleLogout = () => {
         // Only clear company session, preserve other user sessions
         authStorage.clear('company');
+        passkeyClient.reset(); // Clear cached passkey credential
         navigate('/login');
     };
 

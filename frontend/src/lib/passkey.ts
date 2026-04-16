@@ -28,6 +28,17 @@ export class PasskeyClient {
     }
 
     /**
+     * Reset all cached state — call on logout/disconnect.
+     * Without this, switching accounts leaves the old passkey
+     * credential in memory → __check_auth fails on the new wallet.
+     */
+    reset(): void {
+        this.lastCredentialId = null;
+        this.kit = null;
+        this.initPromise = null;
+    }
+
+    /**
      * Initialize the SmartAccountKit with config from backend.
      * Uses promise deduplication so pre-warming via useEffect and
      * the button-click call share one fetch — preserving Chrome's
