@@ -24,6 +24,18 @@ import { offersApi } from "@/api/offers";
 import type { Offer } from '@/types';
 import { cn } from "@/lib/utils";
 
+interface CapTableEntry {
+    investor_id: number;
+    name: string;
+    email: string;
+    wallet_address: string | null;
+    kyc_status: string;
+    registered_at: string;
+    total_tokens: number;
+    total_invested: number;
+    invested_at: string;
+}
+
 export function OfferDetails() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -37,6 +49,7 @@ export function OfferDetails() {
         investorsCount: 0,
         progress: 0
     });
+    const [investors, setInvestors] = useState<CapTableEntry[]>([]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -55,7 +68,7 @@ export function OfferDetails() {
                         const investorsResponse = await offersApi.getInvestors(parseInt(id));
                         if (investorsResponse.success && Array.isArray(investorsResponse.data)) {
                             const raised = investorsResponse.data.reduce((sum: number, inv: any) => {
-                                return sum + parseFloat(inv.token_amount || '0');
+                                return sum + parseFloat(inv.total_tokens || '0');
                             }, 0);
 
                             const totalSupply = parseFloat(offerResponse.data.total_supply || '0');
@@ -66,6 +79,7 @@ export function OfferDetails() {
                                 investorsCount: investorsResponse.data.length,
                                 progress
                             });
+                            setInvestors(investorsResponse.data);
                         }
                     } catch (statsErr) {
                         console.error('Failed to fetch investors stats:', statsErr);
@@ -382,6 +396,69 @@ export function OfferDetails() {
                     </Card>
                 </div>
             </div>
+
+            {/* Cap Table — Investor Purchases */}
+            {investors.length > 0 && (
+                <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in">
+                    <CardHeader>
+                        <CardTitle className="text-lg font-heading flex items-center gap-2">
+                            <Users className="w-5 h-5 text-muted-foreground" />
+                            Cap Table
+                        </CardTitle>
+                        <CardDescription>
+                            {investors.length} investor{investors.length !== 1 ? 's' : ''} — individual purchase records
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-white/10 text-left">
+                                        <th className="pb-3 pr-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Investor</th>
+                                        <th className="pb-3 pr-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">KYC</th>
+                                        <th className="pb-3 pr-4 text-xs font-medium text-muted-foreground uppercase tracking-wider text-right">Tokens</th>
+                                        <th className="pb-3 pr-4 text-xs font-medium text-muted-foreground uppercase tracking-wider text-right">Invested</th>
+                                        <th className="pb-3 text-xs font-medium text-muted-foreground uppercase tracking-wider text-right">Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {investors.map((inv) => (
+                                        <tr key={inv.investor_id} className="hover:bg-white/[0.02] transition-colors">
+                                            <td className="py-3 pr-4">
+                                                <div>
+                                                    <p className="text-white font-medium">{inv.name}</p>
+                                                    <p className="text-xs text-muted-foreground">{inv.email}</p>
+                                                </div>
+                                            </td>
+                                            <td className="py-3 pr-4">
+                                                <span className={cn(
+                                                    'inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border',
+                                                    inv.kyc_status === 'approved'
+                                                        ? 'bg-success/15 text-success border-success/30'
+                                                        : inv.kyc_status === 'rejected'
+                                                            ? 'bg-destructive/15 text-destructive border-destructive/30'
+                                                            : 'bg-warning/15 text-warning border-warning/30'
+                                                )}>
+                                                    {inv.kyc_status}
+                                                </span>
+                                            </td>
+                                            <td className="py-3 pr-4 text-right font-mono text-white">
+                                                {Number(inv.total_tokens).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="py-3 pr-4 text-right font-mono text-emerald-400">
+                                                ${Number(inv.total_invested).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="py-3 text-right text-muted-foreground text-xs">
+                                                {new Date(inv.invested_at).toLocaleDateString()}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
         </div>
     );
 }

@@ -27,7 +27,7 @@ export function CompanyDashboard() {
                         // Calculate sold amount from investments
                         // Note: Investment type has 'token_amount' as string
                         const sold = response.data.reduce((sum: number, inv: any) => {
-                            return sum + parseFloat(inv.token_amount || '0');
+                            return sum + parseFloat(inv.total_tokens || '0');
                         }, 0);
 
                         newStats[offer.id] = {

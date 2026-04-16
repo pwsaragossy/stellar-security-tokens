@@ -56,9 +56,9 @@ export function useCompany(): UseCompanyReturn {
         // Fetch investors for relevant offers to build metrics
         for (const offer of activeOffers) {
             try {
-                const investors = await offersApi.getInvestors(offer.id);
-                if (Array.isArray(investors)) {
-                    allInvestors.push(...investors);
+                const response = await offersApi.getInvestors(offer.id);
+                if (response.success && Array.isArray(response.data)) {
+                    allInvestors.push(...response.data);
                 }
             } catch (e) {
                 console.warn(`Failed to fetch investors for offer ${offer.id}`, e);

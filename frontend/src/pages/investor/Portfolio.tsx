@@ -253,9 +253,9 @@ function HoldingCard({ holding, index }: { holding: PortfolioHolding; index: num
                     let tickDate = new Date(startDate);
                     tickDate.setMonth(tickDate.getMonth() + months);
 
-                    while (tickDate.getTime() < maturity) {
+                    while (tickDate.getTime() <= maturity) {
                         const pos = ((tickDate.getTime() - start) / totalDuration) * 100;
-                        ticks.push(pos);
+                        ticks.push(Math.min(pos, 100)); // clamp final tick to 100%
                         if (tickDate.getTime() > now) remainingPayments++;
                         tickDate = new Date(tickDate);
                         tickDate.setMonth(tickDate.getMonth() + months);
