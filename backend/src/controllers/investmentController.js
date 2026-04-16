@@ -419,19 +419,20 @@ export const submitInvestmentTx = async (req, res, next) => {
       });
     }
 
-    // ─── Idempotent return: if investor already has a completed/in-flight investment ───
-    // Prevents wasted fee-bump fees and duplicate records on browser retries.
+    // ─── Idempotent return: if investor already has an IN-FLIGHT investment ───
+    // Only match 'trade_submitted' (TX sent but not yet confirmed).
+    // Completed ('distributed') investments should NOT block new purchases.
     const existingInvestment = await prisma.investment.findFirst({
       where: {
         investorId: parseInt(investorId, 10),
         offerId: parseInt(offerId, 10),
-        status: { in: ['trade_submitted', 'distributed'] },
+        status: 'trade_submitted',
       },
       orderBy: { createdAt: 'desc' },
     });
 
     if (existingInvestment) {
-      log.info(`[Investment] Idempotent return: investor #${investorId} already has investment #${existingInvestment.id} (${existingInvestment.status})`);
+      log.info(`[Investment] Idempotent return: investor #${investorId} has in-flight investment #${existingInvestment.id}`);
       return res.json({
         success: true,
         idempotent: true,
