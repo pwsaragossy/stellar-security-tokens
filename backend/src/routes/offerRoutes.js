@@ -237,7 +237,7 @@ router.put('/companies/offers/:id', requireCompanyUser, upload.any(), OfferContr
  *       403:
  *         description: Acesso negado
  */
-router.get('/companies/offers/:id/investors', requireRole(['company_user', 'platform_admin']), OfferController.getOfferInvestors);
+router.get('/companies/offers/:id/investors', requireCompanyUser, OfferController.getOfferInvestors);
 
 /**
  * @swagger

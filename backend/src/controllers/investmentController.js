@@ -5,6 +5,7 @@ import { StellarService } from '../services/stellar.service.js';
 import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
 import { SorobanSaleService } from '../services/sorobanSale.service.js';
 import { ConfigService } from '../services/config.service.js';
+import { StrKey } from '@stellar/stellar-sdk';
 import prisma from '../config/prisma.js';
 import crypto from 'crypto';
 import logger from '../utils/logger.js';
@@ -479,7 +480,9 @@ export const submitInvestmentTx = async (req, res, next) => {
     const serverTotalDeduction = serverUsdcAmount;
 
     // Verify the authenticated user matches the investorId in context
-    if (req.user && req.user.userId !== investorId) {
+    // Note: resolvedInvestorId may differ after auth entry parsing (chain truth),
+    // but the JWT user must match the ORIGINAL initiator.
+    if (req.user && req.user.userId !== parseInt(investorId, 10)) {
       log.warn(`[Investment] User mismatch: token userId=${req.user.userId}, context investorId=${investorId}`);
       return res.status(403).json({
         success: false,
@@ -534,6 +537,54 @@ export const submitInvestmentTx = async (req, res, next) => {
     }
 
     log.info(`[Investment] Received signed TX with ${invokeOp.auth?.length || 0} auth entries`);
+
+    // ─── CHAIN TRUTH: Extract actual buyer wallet from signed auth entries ───
+    // The user may have signed with a different passkey than the one associated
+    // with the investor account that initiated the purchase. The auth entry's
+    // credential address tells us which smart wallet actually authorized the TX.
+    let resolvedInvestorId = parseInt(investorId, 10);
+    let actualBuyerWallet = null;
+
+    if (invokeOp.auth?.length > 0) {
+      try {
+        const firstAuth = invokeOp.auth[0];
+        const credentials = firstAuth.credentials();
+
+        if (credentials.switch().name === 'sorobanCredentialsAddress') {
+          const scAddress = credentials.address().address();
+
+          if (scAddress.switch().name === 'scAddressTypeContract') {
+            actualBuyerWallet = StrKey.encodeContract(scAddress.contractId());
+          } else if (scAddress.switch().name === 'scAddressTypeAccount') {
+            actualBuyerWallet = StrKey.encodeEd25519PublicKey(scAddress.accountId().ed25519());
+          }
+        }
+      } catch (authParseErr) {
+        log.warn(`[Investment] Failed to parse auth entry address: ${authParseErr.message}`);
+      }
+    }
+
+    if (actualBuyerWallet) {
+      // Look up who owns this wallet on-chain
+      const walletOwner = await prisma.investor.findFirst({
+        where: { stellarContractId: actualBuyerWallet },
+        select: { id: true, name: true },
+      });
+
+      if (!walletOwner) {
+        // Wallet not found in investors table (e.g., company wallet)
+        log.warn(`[Investment] Auth signer wallet ${actualBuyerWallet.slice(0, 12)}… not found in investors table. Rejecting.`);
+        return res.status(400).json({
+          success: false,
+          error: 'The passkey you used belongs to a wallet not registered as an investor. Please select the correct passkey.',
+        });
+      }
+
+      if (walletOwner.id !== resolvedInvestorId) {
+        log.info(`[Investment] Auth signer differs from initiator: wallet belongs to investor #${walletOwner.id} (${walletOwner.name}), context had #${resolvedInvestorId}. Using chain truth.`);
+        resolvedInvestorId = walletOwner.id;
+      }
+    }
 
     // Rebuild TX with opsKeypair as source (fee-payer pattern from Stellar docs)
     // We need a fresh source account with current sequence number
@@ -606,7 +657,7 @@ export const submitInvestmentTx = async (req, res, next) => {
     // Sign with operations account (TX source)
     tx.sign(opsKeypair);
 
-    log.info(`[Investment] Submitting passkey-signed TX for investor #${investorId}, offer #${offerId}...`);
+    log.info(`[Investment] Submitting passkey-signed TX for investor #${resolvedInvestorId}${resolvedInvestorId !== parseInt(investorId, 10) ? ` (initiated by #${investorId})` : ''}, offer #${offerId}...`);
     const metricsStart = Date.now();
 
     // ─── CAPTURE INNER TX HASH before fee bumping ───
@@ -618,7 +669,7 @@ export const submitInvestmentTx = async (req, res, next) => {
     // SorobanReconciler will find this 'trade_submitted' record and
     // check on-chain status to resolve it.
     const investment = await Investment.create({
-      investor_id: investorId,
+      investor_id: resolvedInvestorId,
       offer_id: offerId,
       asset_code: assetCode,
       usdc_amount: serverTotalDeduction,
@@ -665,7 +716,7 @@ export const submitInvestmentTx = async (req, res, next) => {
     try {
       await prisma.tokenDistribution.create({
         data: {
-          investorId: investorId,
+          investorId: resolvedInvestorId,
           assetCode: assetCode,
           amount: serverTokenAmount,
           transactionHash: innerTxHash,
