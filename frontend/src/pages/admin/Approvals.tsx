@@ -252,18 +252,7 @@ export function Approvals() {
         }
     };
 
-    const handleUnlockToken = async (item: ApprovalItem) => {
-        setActionLoading(true);
-        try {
-            await offersApi.unlockToken(item.originalId);
-            toast.success(`${item.label} unlocked for trading`);
-            await refresh();
-        } catch (err: any) {
-            toast.error(err.response?.data?.error || 'Failed to unlock token');
-        } finally {
-            setActionLoading(false);
-        }
-    };
+
 
     const handleIssueToken = async (item: ApprovalItem) => {
         setActionLoading(true);
@@ -711,7 +700,7 @@ export function Approvals() {
                             onRejectOffer={() => handleReviewOffer(selected, 'rejected')}
                             onIssueToken={() => handleIssueToken(selected)}
                             onVerifyIssuance={() => handleVerifyIssuance(selected)}
-                            onUnlockToken={() => handleUnlockToken(selected)}
+
                             onSignMultisig={() => handleSignMultisig(selected)}
                             onSubmitMultisig={() => handleSubmitMultisig(selected)}
                             onRejectMultisig={() => handleRejectMultisig(selected)}

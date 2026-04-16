@@ -8,7 +8,6 @@ import {
     Rocket,
     DollarSign,
     Clock,
-    Lock,
     Fingerprint,
     Send,
     Loader2,
@@ -20,7 +19,6 @@ import { InvestorDetail } from './details/InvestorDetail';
 import { CompanyDetail } from './details/CompanyDetail';
 import { OfferDetail } from './details/OfferDetail';
 import { IssuanceDetail } from './details/IssuanceDetail';
-import { TokenDetail } from './details/TokenDetail';
 import { MultisigDetail } from './details/MultisigDetail';
 
 interface DetailPanelProps {
@@ -41,7 +39,6 @@ interface DetailPanelProps {
     onRejectOffer: () => void;
     onIssueToken: () => void;
     onVerifyIssuance: () => void;
-    onUnlockToken: () => void;
     onSignMultisig: () => void;
     onSubmitMultisig: () => void;
     onRejectMultisig: () => void;
@@ -64,7 +61,6 @@ export function DetailPanel({
     onRejectOffer,
     onIssueToken,
     onVerifyIssuance,
-    onUnlockToken,
     onConnectFreighter,
     onSignMultisig,
     onSubmitMultisig,
@@ -107,7 +103,6 @@ export function DetailPanel({
                     />
                 )}
                 {item.type === 'issuance' && <IssuanceDetail raw={item.raw} />}
-                {item.type === 'token' && <TokenDetail raw={item.raw} />}
                 {item.type === 'multisig' && <MultisigDetail raw={item.raw} />}
             </div>
 
@@ -265,16 +260,7 @@ export function DetailPanel({
                     </div>
                 )}
 
-                {item.type === 'token' && (
-                    <Button
-                        className="w-full bg-emerald-600 hover:bg-emerald-500"
-                        disabled={actionLoading}
-                        onClick={onUnlockToken}
-                    >
-                        <Lock className="w-4 h-4 mr-2" />
-                        Unlock Token for Trading
-                    </Button>
-                )}
+
 
                 {item.type === 'multisig' && (() => {
                     const collected = item.raw.collectedSignatures || {};

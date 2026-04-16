@@ -164,7 +164,7 @@ export function AdminOffers() {
 
     // Load settlement status when selecting a matured/collateral offer
     useEffect(() => {
-        if (selected && selected.offer_type === 'collateral' && ['matured', 'active'].includes(selected.status)) {
+        if (selected && selected.offer_type === 'collateral' && selected.status === 'matured') {
             loadSettlementStatus(selected.id);
         } else {
             setSettlementStatus(null);
@@ -513,7 +513,7 @@ export function AdminOffers() {
                                 )}
 
                                 {/* ── Settlement Panel (matured debt offers) ── */}
-                                {selected.offer_type === 'collateral' && ['matured', 'active'].includes(selected.status) && (
+                                {selected.offer_type === 'collateral' && selected.status === 'matured' && (
                                     <div className="bg-purple-500/5 rounded-xl border border-purple-500/15 p-4 space-y-3">
                                         <div className="flex items-center gap-2">
                                             <Landmark className="w-4 h-4 text-purple-400" />

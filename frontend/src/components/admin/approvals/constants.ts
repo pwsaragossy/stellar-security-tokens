@@ -34,12 +34,6 @@ export const TYPE_CONFIG: Record<ApprovalType, { icon: typeof Users; label: stri
         color: 'text-blue-400',
         badgeCls: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
     },
-    token: {
-        icon: Lock,
-        label: 'Tokens',
-        color: 'text-emerald-400',
-        badgeCls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-    },
     multisig: {
         icon: Fingerprint,
         label: 'Signatures',

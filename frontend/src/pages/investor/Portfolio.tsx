@@ -12,6 +12,7 @@ import {
 import { api } from '@/lib/api';
 import { authStorage } from '@/utils/authStorage';
 import { usePendingInvestments, type PendingInvestment } from '@/hooks/usePendingInvestments';
+import { devNow, onDevTimeChange } from '@/utils/devTime';
 
 /* ─── Types ─── */
 interface PortfolioHolding {
@@ -49,11 +50,10 @@ function formatCurrency(value: number) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 }
 
-function getMaturityLabel(date: string | null): string | null {
+function getMaturityLabel(date: string | null, now?: number): string | null {
     if (!date) return null;
     const maturity = new Date(date);
-    const now = new Date();
-    const diffMs = maturity.getTime() - now.getTime();
+    const diffMs = maturity.getTime() - (now ?? devNow());
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
     if (diffDays < 0) return 'Matured';
@@ -63,12 +63,12 @@ function getMaturityLabel(date: string | null): string | null {
     return `${(diffDays / 365).toFixed(1)} years`;
 }
 
-function getMaturityAccent(date: string | null): string {
+function getMaturityAccent(date: string | null, now?: number): string {
     if (!date) return 'text-muted-foreground';
-    const diffDays = Math.ceil((new Date(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    if (diffDays < 0) return 'text-muted-foreground';
+    const diffDays = Math.ceil((new Date(date).getTime() - (now ?? devNow())) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return 'text-amber-400';
     if (diffDays <= 30) return 'text-amber-400';
-    return 'text-muted-foreground';
+    return 'text-emerald-400';
 }
 
 
@@ -145,8 +145,13 @@ function PendingInvestmentCard({ investment }: { investment: PendingInvestment }
 /* ─── Investment Holding Card (new rich card) ─── */
 function HoldingCard({ holding, index }: { holding: PortfolioHolding; index: number }) {
     const navigate = useNavigate();
-    const maturityLabel = getMaturityLabel(holding.maturityDate);
-    const maturityAccent = getMaturityAccent(holding.maturityDate);
+    // Dev time support — re-render when offset changes
+    const [, forceRender] = useState(0);
+    useEffect(() => onDevTimeChange(() => forceRender(n => n + 1)), []);
+
+    const now = devNow();
+    const maturityLabel = getMaturityLabel(holding.maturityDate, now);
+    const maturityAccent = getMaturityAccent(holding.maturityDate, now);
     const paymentLabel = PAYMENT_LABELS[holding.paymentType || ''] || holding.paymentType || '—';
     const holdingValue = holding.totalDistributed * holding.unitPrice;
     const effectiveRate = holding.investorRate ?? holding.annualInterestRate;
@@ -222,11 +227,9 @@ function HoldingCard({ holding, index }: { holding: PortfolioHolding; index: num
                 </div>
             </div>
 
-            {/* ── Maturity progress bar ── */}
+            {/* ── Maturity timeline bar with payment ticks ── */}
             {holding.maturityDate && (() => {
                 const maturity = new Date(holding.maturityDate).getTime();
-                const now = Date.now();
-                // Use actual issuance date as start, fall back to 1 year before maturity
                 const start = holding.issuedAt
                     ? new Date(holding.issuedAt).getTime()
                     : maturity - 365 * 24 * 60 * 60 * 1000;
@@ -237,24 +240,65 @@ function HoldingCard({ holding, index }: { holding: PortfolioHolding; index: num
                     : 0;
                 const isMatured = now >= maturity;
 
+                // Calculate payment dates for tick marks
+                const periodMonths: Record<string, number> = {
+                    monthly: 1, quarterly: 3, semi_annual: 6, annual: 12, bullet: 0,
+                };
+                const months = periodMonths[holding.paymentType || ''] || 0;
+                const ticks: number[] = []; // percentage positions
+                let remainingPayments = 0;
+
+                if (months > 0 && totalDuration > 0) {
+                    const startDate = new Date(start);
+                    let tickDate = new Date(startDate);
+                    tickDate.setMonth(tickDate.getMonth() + months);
+
+                    while (tickDate.getTime() < maturity) {
+                        const pos = ((tickDate.getTime() - start) / totalDuration) * 100;
+                        ticks.push(pos);
+                        if (tickDate.getTime() > now) remainingPayments++;
+                        tickDate = new Date(tickDate);
+                        tickDate.setMonth(tickDate.getMonth() + months);
+                    }
+                }
+
+                const daysLeft = Math.max(0, Math.ceil((maturity - now) / (1000 * 60 * 60 * 24)));
+
                 return (
                     <div className="mx-5 mb-4">
                         <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Maturity Progress</span>
-                            <span className={`text-[10px] font-medium ${isMatured ? 'text-emerald-400' : 'text-muted-foreground'}`}>
-                                {isMatured ? 'Matured' : `${Math.round(progress)}%`}
+                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                {isMatured ? 'Matured' : `${daysLeft}d to maturity`}
+                            </span>
+                            <span className="text-[10px] font-medium text-muted-foreground">
+                                {isMatured
+                                    ? <span className="text-amber-400">Settlement pending</span>
+                                    : remainingPayments > 0
+                                        ? <span className="text-emerald-400">{remainingPayments} payment{remainingPayments !== 1 ? 's' : ''} left</span>
+                                        : holding.paymentType === 'bullet'
+                                            ? <span className="text-emerald-400">Bullet at maturity</span>
+                                            : <span>{Math.round(progress)}%</span>
+                                }
                             </span>
                         </div>
-                        <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                        <div className="relative h-2 rounded-full bg-white/5 overflow-hidden">
+                            {/* Fill bar */}
                             <div
                                 className={`h-full rounded-full transition-all duration-500 ${isMatured
-                                    ? 'bg-emerald-400'
-                                    : progress > 75
-                                        ? 'bg-amber-400'
-                                        : 'bg-[hsl(43_45%_55%)]'
+                                    ? 'bg-amber-400'
+                                    : 'bg-emerald-500'
                                     }`}
                                 style={{ width: `${isMatured ? 100 : progress}%` }}
                             />
+                            {/* Payment tick marks */}
+                            {ticks.map((pos, i) => (
+                                <div
+                                    key={i}
+                                    className="absolute top-0 h-full w-px bg-white/20"
+                                    style={{ left: `${pos}%` }}
+                                    title={`Payment ${i + 1}`}
+                                />
+                            ))}
                         </div>
                     </div>
                 );

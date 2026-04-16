@@ -7,7 +7,7 @@ import type { Offer } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
-export type ApprovalType = 'investor' | 'company' | 'offer' | 'issuance' | 'token' | 'multisig';
+export type ApprovalType = 'investor' | 'company' | 'offer' | 'issuance' | 'multisig';
 
 export interface ApprovalItem {
     id: string;            // composite: `${type}-${originalId}`
@@ -27,7 +27,6 @@ export interface ApprovalCounts {
     company: number;
     offer: number;
     issuance: number;
-    token: number;
     multisig: number;
 }
 
@@ -39,7 +38,6 @@ function normalizeStatus(type: ApprovalType, status: string): ApprovalItem['norm
         company: ['pending'],
         offer: ['pending_review', 'under_review'],
         issuance: ['needs_issue', 'needs_verify'],
-        token: ['locked'],
         multisig: ['pending'],
     };
 
@@ -48,7 +46,6 @@ function normalizeStatus(type: ApprovalType, status: string): ApprovalItem['norm
         company: [],
         offer: [],
         issuance: ['issuing'],
-        token: [],
         multisig: ['partially_signed', 'ready'],
     };
 
@@ -107,21 +104,7 @@ function normalizeOffers(offers: Offer[]): ApprovalItem[] {
         }));
 }
 
-function normalizeTokens(offers: Offer[]): ApprovalItem[] {
-    return offers
-        .filter((o) => o.isTokenLocked === true && o.status === 'active')
-        .map((offer) => ({
-            id: `token-${offer.id}`,
-            originalId: offer.id,
-            type: 'token' as ApprovalType,
-            label: offer.asset_code,
-            subtitle: `${offer.offer_name} · Locked`,
-            status: 'locked',
-            normalizedStatus: normalizeStatus('token', 'locked'),
-            createdAt: offer.created_at,
-            raw: offer,
-        }));
-}
+
 
 function normalizeMultisig(transactions: any[]): ApprovalItem[] {
     const items: ApprovalItem[] = [];
@@ -188,11 +171,10 @@ export function useApprovalQueue() {
                 merged.push(...normalizeMultisig(txData));
             }
 
-            // Offers: pending review + token locks
+            // Offers: pending review only (token unlock is in Tokens page)
             if (offersRes.status === 'fulfilled' && offersRes.value?.data) {
                 const allOffers = offersRes.value.data;
                 merged.push(...normalizeOffers(allOffers));
-                merged.push(...normalizeTokens(allOffers));
             }
 
             // Sort: pending first, then by creation date (oldest first within group)
@@ -216,7 +198,7 @@ export function useApprovalQueue() {
     }, [fetchAll]);
 
     const counts = useMemo<ApprovalCounts>(() => {
-        const c: ApprovalCounts = { all: 0, investor: 0, company: 0, offer: 0, issuance: 0, token: 0, multisig: 0 };
+        const c: ApprovalCounts = { all: 0, investor: 0, company: 0, offer: 0, issuance: 0, multisig: 0 };
         for (const item of items) {
             if (item.normalizedStatus !== 'resolved') {
                 c.all++;

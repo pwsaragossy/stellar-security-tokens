@@ -210,6 +210,20 @@ export class OfferService {
       throw new Error('Asset code already exists');
     }
 
+    // Collateral (debt) offers MUST have a maturity date — it's a financial instrument
+    if (offerData.offer_type === 'collateral') {
+      if (!offerData.maturity_date) {
+        throw new Error('maturity_date is required for all collateral (debt) offers');
+      }
+      const maturity = new Date(offerData.maturity_date);
+      if (isNaN(maturity.getTime())) {
+        throw new Error('maturity_date must be a valid date');
+      }
+      if (maturity <= new Date()) {
+        throw new Error('maturity_date must be in the future');
+      }
+    }
+
     // Setup/issuance fee is handled off-chain via service contract — no on-chain fee log here
     return await prisma.offer.create({
       data: {

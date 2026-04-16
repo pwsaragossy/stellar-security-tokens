@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import { lazy, Suspense } from 'react';
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
 import { CompanyRegister } from './pages/auth/CompanyRegister';
@@ -49,9 +50,15 @@ import { EmergencyControls } from './pages/admin/EmergencyControls';
 import { TokensPage } from './pages/admin/TokensPage';
 import { Approvals } from './pages/admin/Approvals';
 
+// Dev-only time control — lazy loaded, tree-shaken in production
+const DevTimeTool = import.meta.env.DEV
+    ? lazy(() => import('./components/dev/DevTimeTool').then(m => ({ default: m.DevTimeTool })))
+    : () => null;
+
 function App() {
   return (
     <>
+      {import.meta.env.DEV && <Suspense><DevTimeTool /></Suspense>}
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />

@@ -517,7 +517,7 @@ export const submitInvestmentTx = async (req, res, next) => {
     // Auth entry signatures use ENVELOPE_TYPE_SOROBAN_AUTHORIZATION preimage
     // (independent of TX body hash), so re-simulation + assemble won't
     // invalidate them.
-    const { TransactionBuilder, xdr: stellarXdr, Operation } = await import('@stellar/stellar-sdk');
+    const { TransactionBuilder, xdr: stellarXdr, Operation, BASE_FEE } = await import('@stellar/stellar-sdk');
     const rpc = await import('@stellar/stellar-sdk/rpc');
     const { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl } = await import('../config/stellar.js');
 
@@ -539,8 +539,13 @@ export const submitInvestmentTx = async (req, res, next) => {
     // We need a fresh source account with current sequence number
     const opsAccount = await rpcServer.getAccount(opsKeypair.publicKey());
 
+    // Use BASE_FEE (not signedTx.fee) — the signed TX carries a 5× boosted fee
+    // from boostResources (rough frontend estimate). assembleTransaction picks
+    // max(existingFee, simMinResourceFee), so passing the inflated fee would
+    // leak the boost into the final TX. BASE_FEE lets the Enforcing Mode
+    // simulation set the correct fee.
     const rebuiltTx = new TransactionBuilder(opsAccount, {
-      fee: signedTx.fee,
+      fee: BASE_FEE,
       networkPassphrase,
     })
       .setTimeout(30)
