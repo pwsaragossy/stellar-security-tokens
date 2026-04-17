@@ -520,7 +520,7 @@ async discoverLogin(): Promise<AuthResponse> {
 
 - **Delete** `utils/passkeyWallet.ts` — confirmed zero imports, dead code
 - **Keep** `hooks/usePasskey.ts` — thin wrapper, imports same `passkeyClient` export
-- **Keep** `hooks/usePasskeys.ts` — SDK-agnostic (raw WebAuthn + backend API calls)
+- **Deleted** `hooks/usePasskeys.ts` — zero importers, called broken backend routes (removed Apr 2026)
 
 ---
 

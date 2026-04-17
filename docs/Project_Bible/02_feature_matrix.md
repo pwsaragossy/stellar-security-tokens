@@ -24,8 +24,8 @@
 | JWT + refresh tokens | ✅ httpOnly cookies | ✅ client.ts auto-refresh | — | ✅ |
 | Freighter login (admin) | ✅ platformAdminRoutes | ✅ FreighterConnect | — | ✅ |
 | Admin passkey login | ✅ platformAdminRoutes | ✅ AdminLogin | — | ✅ |
-| Multi-device passkeys | ✅ securityRoutes | ✅ Settings/usePasskeys | — | ✅ |
-| Ledger recovery signers | ✅ securityRoutes | ✅ LedgerConnect/useRecoverySigners | — | ✅ |
+| Multi-device passkeys | 🔴 Routes removed | 🔴 Hooks removed | — | 🔴 REMOVED — backend used wrong auth key, needs frontend-initiated flow |
+| Ledger recovery signers | 🔴 Routes removed | 🔴 LedgerConnect orphaned | — | 🔴 REMOVED — same auth issue |
 | Legacy password login | ❌ Dead code in auth.ts | ❌ Dead code in authApi | — | Dead code |
 
 ## Investor Portal

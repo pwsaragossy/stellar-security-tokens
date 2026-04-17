@@ -102,9 +102,9 @@ submit(opts) → KeyManager mode === 'multisig'
 | `sendSorobanTransaction` | Channels submitSorobanTransaction (func+auth — auto footprint) |
 | `submitWithdrawalTx` | Validates contract allowlist before sponsoring |
 | `buildWithdrawalTx` / `buildWithdrawalTxForCompany` | Build SAC transfer from smart wallet |
-| `addPasskeySigner` / `removePasskeySigner` | Multi-device passkey management (OZ add_signer/remove_signer + DB) |
-| `addEd25519Signer` / `removeEd25519Signer` | Ledger recovery signer management (Delegated type) |
-| `listUserPasskeys` / `listEd25519Signers` | List all signers |
+| ~~`addPasskeySigner` / `removePasskeySigner`~~ | ⚠️ **REMOVED** — required passkey auth, backend used wrong key |
+| ~~`addEd25519Signer` / `removeEd25519Signer`~~ | ⚠️ **REMOVED** — same issue, signer management needs frontend-initiated flow |
+| `listUserPasskeys` / `listEd25519Signers` | List all signers (DB read-only, active) |
 
 **Architecture notes:**
 - 2-tier submission: Channels → fee-bump fallback
