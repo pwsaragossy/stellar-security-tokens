@@ -15,16 +15,28 @@ export interface AuthResponse {
     };
 }
 
+const CRED_STORAGE_KEY = 'radox_passkey_credential';
+
 export class PasskeyClient {
     private kit: SmartAccountKit | null = null;
     private baseUrl: string;
-    /** Cached from the most recent login WebAuthn ceremony */
-    private lastCredentialId: string | null = null;
     /** Deduplicates concurrent init() calls — critical for Chrome activation window */
     private initPromise: Promise<void> | null = null;
 
     constructor() {
         this.baseUrl = API_URL;
+    }
+
+    /** Persist credential across page refreshes (sessionStorage = tab-scoped) */
+    private get lastCredentialId(): string | null {
+        try { return sessionStorage.getItem(CRED_STORAGE_KEY); }
+        catch { return null; }
+    }
+    private set lastCredentialId(value: string | null) {
+        try {
+            if (value) sessionStorage.setItem(CRED_STORAGE_KEY, value);
+            else sessionStorage.removeItem(CRED_STORAGE_KEY);
+        } catch { /* private browsing */ }
     }
 
     /**
