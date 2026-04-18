@@ -138,11 +138,9 @@ export function Settings() {
             return;
         }
 
-        // Check for duplicates
-        if (backupSigners.some(s => s.publicKey === pubKey)) {
-            setAddingError('This signer is already registered');
-            return;
-        }
+        // Note: we don't block duplicate keys here — the contract will reject
+        // true duplicates. The same key on the shared multisig rule (id 0) is
+        // useless for recovery, so we allow creating a dedicated recovery rule.
 
         setAddingError(null);
 
