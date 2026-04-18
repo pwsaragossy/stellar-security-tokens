@@ -33,6 +33,7 @@ services:
       args:
         VITE_API_URL: /api
         VITE_ENABLE_TEST_LOGIN: "true"
+        VITE_DEV_TOOLS: "true"
     environment:
       NODE_ENV: development
     # For frontend hot-reload, you may want to run `npm run dev` locally instead

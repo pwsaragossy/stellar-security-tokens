@@ -50,15 +50,16 @@ import { EmergencyControls } from './pages/admin/EmergencyControls';
 import { TokensPage } from './pages/admin/TokensPage';
 import { Approvals } from './pages/admin/Approvals';
 
-// Dev-only time control — lazy loaded, tree-shaken in production
-const DevTimeTool = import.meta.env.DEV
+// Dev-only time control — lazy loaded, tree-shaken in production builds without VITE_DEV_TOOLS
+const isDevTools = import.meta.env.DEV || import.meta.env.VITE_DEV_TOOLS === 'true';
+const DevTimeTool = isDevTools
     ? lazy(() => import('./components/dev/DevTimeTool').then(m => ({ default: m.DevTimeTool })))
     : () => null;
 
 function App() {
   return (
     <>
-      {import.meta.env.DEV && <Suspense><DevTimeTool /></Suspense>}
+      {isDevTools && <Suspense><DevTimeTool /></Suspense>}
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
