@@ -6,7 +6,7 @@ import { Register } from './pages/auth/Register';
 import { CompanyRegister } from './pages/auth/CompanyRegister';
 import { CompanyPendingApproval } from './pages/auth/CompanyPendingApproval';
 import { RegistrationSuccess } from './pages/auth/RegistrationSuccess';
-import { VerifyEmail } from './pages/auth/VerifyEmail';
+
 import { DashboardLayout } from './layouts/DashboardLayout';
 
 import { Marketplace } from './pages/investor/Marketplace';
@@ -67,7 +67,7 @@ function App() {
           <Route path="/company/register" element={<CompanyRegister />} />
           <Route path="/company/pending-approval" element={<CompanyPendingApproval />} />
           <Route path="/registration-success" element={<RegistrationSuccess />} />
-          <Route path="/investor/verify-email" element={<VerifyEmail />} />
+
 
           {/* Investor Dashboard Routes */}
           <Route path="/" element={<DashboardLayout />}>
