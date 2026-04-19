@@ -28,16 +28,6 @@ export interface Company {
   updated_at: string;
 }
 
-export interface CompanyUser {
-  id: number;
-  company_id: number;
-  email: string;
-  name: string;
-  role: 'user' | 'admin';
-  is_active: boolean;
-  created_at: string;
-}
-
 export interface PlatformAdmin {
   id: number;
   email: string;
