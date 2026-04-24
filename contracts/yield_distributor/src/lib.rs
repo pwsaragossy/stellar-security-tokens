@@ -37,7 +37,7 @@ pub enum DistributeError {
     InvalidAmount = 3,
     Overflow = 4,
     MismatchedArrays = 5,
-    /// Fee exceeds 20% of total payout — safety cap
+    /// Fee exceeds 70% of total payout — safety cap
     FeeTooHigh = 6,
     /// Contract already initialized
     AlreadyInitialized = 7,
@@ -245,9 +245,9 @@ impl YieldDistributor {
                 .ok_or(DistributeError::Overflow)?;
         }
 
-        // Fee safety cap: fee ≤ 20% of total payout
+        // Fee safety cap: fee ≤ 70% of total payout
         if fee_amount > 0 && total_payout > 0 {
-            let max_fee = total_payout / 5; // 20%
+            let max_fee = total_payout * 7 / 10; // 70%
             if fee_amount > max_fee {
                 return Err(DistributeError::FeeTooHigh);
             }

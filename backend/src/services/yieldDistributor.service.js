@@ -45,7 +45,7 @@ const DISTRIBUTE_ERRORS = {
     3: { code: 'InvalidAmount', message: 'Invalid amount (negative or zero)' },
     4: { code: 'Overflow', message: 'Arithmetic overflow' },
     5: { code: 'MismatchedArrays', message: 'Recipients/amounts array length mismatch' },
-    6: { code: 'FeeTooHigh', message: 'Fee exceeds 20% safety cap' },
+    6: { code: 'FeeTooHigh', message: 'Fee exceeds 70% safety cap' },
 };
 
 /** Convert USDC amount (float) to stroops (i128 ScVal) */
