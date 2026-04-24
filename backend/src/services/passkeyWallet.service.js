@@ -420,6 +420,9 @@ export class PasskeyWalletService {
         throw new Error(`Sponsorship failed: ${detail} Codes: ${JSON.stringify(resultCodes)}`);
       }
       throw new Error(`Sponsorship failed: ${error.message}`);
+    } catch (error) {
+      log.error('Self-sponsorship error:', error);
+      throw error;
     }
   }
 
