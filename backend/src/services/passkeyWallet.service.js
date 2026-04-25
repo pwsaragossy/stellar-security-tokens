@@ -552,7 +552,8 @@ export class PasskeyWalletService {
           stellarContractId: deployResult.contractId,
           passkeyCredentialId: credentialId,
           passkeyPublicKey: publicKeyBuffer,
-          stellarPublicKey: deployResult.contractId,
+          // Only CompanyUser still has stellarPublicKey; Investor model removed it
+          ...(userType !== UserType.INVESTOR && { stellarPublicKey: deployResult.contractId }),
         },
       });
 

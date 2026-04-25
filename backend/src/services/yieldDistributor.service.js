@@ -16,6 +16,7 @@ import {
     Contract,
     Address,
     TransactionBuilder,
+    Operation,
     nativeToScVal,
     xdr,
     rpc,
@@ -180,17 +181,93 @@ export class YieldDistributorService {
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * Submit a single signed batch XDR with auto-retry for retryable errors.
+     * Submit a single batch using the relay pattern.
      *
-     * @param {string} signedXdr - Signed transaction XDR
-     * @returns {Promise<{status: string, txHash?: string, error?: string}>}
+     * The frontend sends an XDR with passkey-signed auth entries but stale
+     * Soroban resource estimates (simulation happened before auth signing).
+     *
+     * Relay pattern:
+     *   1. Extract func + signedAuth from the frontend XDR
+     *   2. Build a FRESH TX with OPS as source
+     *   3. Simulate with signed auth → accurate resource estimate
+     *   4. Manually apply simulation resources, preserving signed auth
+     *   5. Sign envelope with OPS key
+     *   6. Submit to Horizon
      */
     static async submitSingleBatch(signedXdr) {
+        // ── Step 1: Extract func + signed auth from the frontend XDR ──
+        const networkPassphrase = getNetworkPassphrase();
+        const frontendTx = TransactionBuilder.fromXDR(signedXdr, networkPassphrase);
+        const op = frontendTx.operations[0];
+        const signedFunc = op.func;
+        const signedAuth = op.auth || [];
+
         let lastError;
 
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             try {
-                const result = await StellarService.submitTransaction(signedXdr);
+                const opsKeypair = keyManager.getOperationsKeypair();
+                const rpcServer = new rpc.Server(getSorobanRpcUrl());
+
+                // ── Step 2: Build fresh TX with signed auth ──
+                const sourceAccount = await rpcServer.getAccount(opsKeypair.publicKey());
+                const freshTx = new TransactionBuilder(sourceAccount, {
+                    fee: BASE_FEE,
+                    networkPassphrase,
+                })
+                    .addOperation(Operation.invokeHostFunction({
+                        func: signedFunc,
+                        auth: signedAuth,
+                    }))
+                    .setTimeout(300)
+                    .build();
+
+                // ── Step 3: Simulate with signed auth → correct resources ──
+                const simulation = await rpcServer.simulateTransaction(freshTx);
+
+                if (rpc.Api.isSimulationError(simulation)) {
+                    throw new Error(`Soroban simulation failed: ${simulation.error}`);
+                }
+
+                // ── Step 4: Apply simulation resources, preserve signed auth ──
+                // assembleTransaction replaces auth entries with simulation's unsigned ones.
+                // We manually apply only the resource footprint (sorobanData) and fee,
+                // then rebuild with our signed auth preserved.
+                //
+                // IMPORTANT: freshTx.build() already incremented sourceAccount.sequence.
+                // We must rewind to the original sequence for the final TX so Horizon
+                // sees the correct (original + 1) sequence number.
+                const { Account } = await import('@stellar/stellar-sdk');
+                const resourceFee = parseInt(simulation.minResourceFee || '0');
+                const totalFee = (parseInt(BASE_FEE) + resourceFee).toString();
+                const sorobanData = simulation.transactionData.build();
+                const rewoundSource = new Account(
+                    opsKeypair.publicKey(),
+                    (BigInt(freshTx.sequence) - 1n).toString()
+                );
+
+                const finalTx = new TransactionBuilder(rewoundSource, {
+                    fee: totalFee,
+                    networkPassphrase,
+                })
+                    .addOperation(Operation.invokeHostFunction({
+                        func: signedFunc,
+                        auth: signedAuth, // Preserved — NOT from simulation
+                    }))
+                    .setSorobanData(sorobanData)
+                    .setTimeout(300)
+                    .build();
+
+                // ── Step 5: Sign envelope with OPS ──
+                finalTx.sign(opsKeypair);
+
+                // ── Step 6: Submit ──
+                log.info('Submitting relay-assembled TX', {
+                    fee: finalTx.fee,
+                    source: opsKeypair.publicKey().slice(0, 8) + '...',
+                    authEntries: signedAuth.length,
+                });
+                const result = await StellarService.submitTransaction(finalTx.toXDR());
 
                 if (result.success) {
                     return { status: 'confirmed', txHash: result.transactionHash };
@@ -211,7 +288,7 @@ export class YieldDistributorService {
                     return { status: 'failed', error: `${classified.type}: ${err.message}` };
                 }
 
-                // Retryable — wait and retry with same signed XDR
+                // Retryable — wait and retry (fresh sequence on next iteration)
                 lastError = err;
                 if (attempt < MAX_RETRIES) {
                     const delay = BASE_DELAY_MS * Math.pow(2, attempt);

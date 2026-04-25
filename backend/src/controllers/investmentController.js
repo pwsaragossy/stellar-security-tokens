@@ -97,7 +97,7 @@ export const purchaseInvestment = async (req, res, next) => {
     }
 
     // Resolve wallet address: Soroban contract (C...) or classic account (G...)
-    const investorWallet = investor.stellarContractId || investor.stellarPublicKey;
+    const investorWallet = investor.stellarContractId;
     if (!investorWallet) {
       return res.status(400).json({
         success: false,

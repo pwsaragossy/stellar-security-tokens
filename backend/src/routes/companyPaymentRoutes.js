@@ -202,10 +202,10 @@ router.post('/:offerId/submit', authenticateToken, requireCompanyUser, async (re
         // (smart wallet investors use C... addresses → Soroban path)
         const investments = await prisma.investment.findMany({
             where: { offerId: parseInt(offerId), status: 'distributed' },
-            include: { investor: { select: { stellarContractId: true, stellarPublicKey: true } } },
+            include: { investor: { select: { stellarContractId: true } } },
         });
         const hasSmartWallet = investments.some(inv =>
-            (inv.investor.stellarContractId || inv.investor.stellarPublicKey)?.startsWith('C')
+            inv.investor.stellarContractId?.startsWith('C')
         );
 
         if (hasSmartWallet) {
@@ -223,11 +223,33 @@ router.post('/:offerId/submit', authenticateToken, requireCompanyUser, async (re
         }
     }
 
-    res.json({
-        success: true,
-        data: result,
-        message: 'Payment submitted successfully'
-    });
+    // Propagate actual on-chain result to frontend
+    if (result.success) {
+        res.json({
+            success: true,
+            data: result,
+            message: 'Payment submitted successfully'
+        });
+    } else if (result.partial) {
+        // Some batches succeeded, some failed
+        res.json({
+            success: true,
+            data: { ...result, partial: true },
+            message: 'Partial payment — some batches failed'
+        });
+    } else {
+        // Complete failure — no money moved
+        log.error('Payment submission failed on-chain', {
+            offerId,
+            results: result.results,
+            error: result.results?.[0]?.error,
+        });
+        res.status(502).json({
+            success: false,
+            error: result.results?.[0]?.error || 'Transaction failed on-chain',
+            data: result,
+        });
+    }
 });
 
 /**

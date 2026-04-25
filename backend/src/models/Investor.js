@@ -92,18 +92,16 @@ export class Investor {
    * @param {string} [investorData.name] - Novo nome
    * @param {string} [investorData.email] - Novo email
    * @param {string} [investorData.document] - Novo documento
-   * @param {string} [investorData.stellarPublicKey] - Nova chave pública
    * @param {string} [investorData.kycStatus] - Novo status KYC
    * @returns {Promise<Object|null>} Investidor atualizado ou null se não encontrado
    */
   static async update(id, investorData) {
-    const { name, email, document, stellarPublicKey, kycStatus } = investorData;
+    const { name, email, document, kycStatus } = investorData;
 
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (email !== undefined) updateData.email = email;
     if (document !== undefined) updateData.document = document;
-    if (stellarPublicKey !== undefined) updateData.stellarPublicKey = stellarPublicKey;
     if (kycStatus !== undefined) updateData.kycStatus = kycStatus.toLowerCase();
 
     if (Object.keys(updateData).length === 0) {

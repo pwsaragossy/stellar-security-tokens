@@ -360,8 +360,8 @@ export class PaymentService {
       const investorsWithOnChainBalances = await Promise.all(
         dbResult.map(async (investor) => {
           try {
-            // Use stellarContractId (Smart Wallet) if available, otherwise stellarPublicKey
-            const walletAddress = investor.stellarContractId || investor.stellarPublicKey;
+            // Smart Wallet contract address (C...)
+            const walletAddress = investor.stellarContractId;
 
             if (!walletAddress) {
               logger.warn(`Investor ${investor.id} has no wallet address`);

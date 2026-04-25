@@ -25,7 +25,7 @@ import { usePasskey } from "@/hooks/usePasskey";
 function PaymentHistorySection({ offerId }: { offerId: number }) {
     const [history, setHistory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [expanded, setExpanded] = useState(false);
+    const [expanded, setExpanded] = useState(true);
 
     useEffect(() => {
         companyPaymentsApi.getPaymentHistory(offerId)
@@ -143,7 +143,15 @@ export function PayInvestors() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
     const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | BulletPaymentDetails | null>(null);
-    const [preparedTx, setPreparedTx] = useState<{ transactionXDR: string; batchXDRs?: string[]; batchCount?: number; expiresAt: string } | null>(null);
+    const [preparedTx, setPreparedTx] = useState<{
+        transactionXDR: string;
+        batchXDRs?: string[];
+        batchCount?: number;
+        expiresAt: string;
+        platformFee?: number;
+        totalAmount?: number;
+        netToInvestors?: number;
+    } | null>(null);
 
     // Multi-batch signing progress
     const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
@@ -399,25 +407,7 @@ export function PayInvestors() {
         );
     }
 
-    // ── Periodic success (direct on-chain) ──
-    if (success) {
-        return (
-            <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
-                <Card className="glass-panel border-success/20 bg-success/5">
-                    <CardContent className="p-8 text-center">
-                        <CheckCircle className="w-16 h-16 text-success mx-auto mb-4" />
-                        <h2 className="text-2xl font-bold text-white mb-2 font-heading">Payment Successful!</h2>
-                        <p className="text-muted-foreground mb-6">
-                            All investors have been paid successfully.
-                        </p>
-                        <Button onClick={() => navigate('/company/offers')} className="bg-primary hover:bg-primary/90 text-primary-foreground btn-glow">
-                            Back to Offers
-                        </Button>
-                    </CardContent>
-                </Card>
-            </div>
-        );
-    }
+    // ── Periodic success: rendered inline below (no early return) ──
 
     // ── Partial failure (some batches succeeded, some failed) ──
     if (partialResult) {
@@ -471,6 +461,24 @@ export function PayInvestors() {
                 <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive animate-fade-in">
                     <AlertTriangle className="w-4 h-4 inline mr-2" />
                     {error}
+                </div>
+            )}
+
+            {success && (
+                <div className="p-4 bg-success/10 border border-success/20 rounded-lg animate-fade-in flex items-center gap-3">
+                    <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
+                    <div className="flex-1">
+                        <p className="text-success font-medium">Payment Successful</p>
+                        <p className="text-success/70 text-sm">All investors have been paid. Check the payment history below for details.</p>
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate('/company/offers')}
+                        className="border-success/30 text-success hover:bg-success/10 flex-shrink-0"
+                    >
+                        Back to Offers
+                    </Button>
                 </div>
             )}
 
@@ -753,15 +761,112 @@ export function PayInvestors() {
                     </Button>
                 ) : (
                     /* ── Periodic: sign & submit ── */
-                    <div className="flex-1 space-y-3">
-                        <div className="p-4 bg-warning/10 border border-warning/20 rounded-lg">
-                            <p className="text-warning text-sm">
-                                {preparedTx.batchXDRs && preparedTx.batchXDRs.length > 1
-                                    ? `Transaction prepared — ${preparedTx.batchXDRs.length} batches. You'll sign each batch with your passkey.`
-                                    : 'Transaction prepared. Sign with your passkey to complete the payment.'
-                                }
-                            </p>
-                        </div>
+                    <div className="flex-1 space-y-4">
+                        {/* Payment Confirmation Card */}
+                        <Card className="border-primary/20 bg-primary/5">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-base font-heading flex items-center gap-2">
+                                    <ShieldAlert className="w-5 h-5 text-primary" />
+                                    Confirm Payment Details
+                                </CardTitle>
+                                <CardDescription>
+                                    Review the details below before signing.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {/* Period Context */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="p-3 bg-white/5 rounded-lg">
+                                        <p className="text-xs text-muted-foreground mb-1">Payment Type</p>
+                                        <p className="text-white font-medium capitalize">
+                                            {(paymentDetails as PaymentDetails)?.paymentType || '—'} Yield
+                                        </p>
+                                    </div>
+                                    <div className="p-3 bg-white/5 rounded-lg">
+                                        <p className="text-xs text-muted-foreground mb-1">Interest Rate</p>
+                                        <p className="text-white font-medium">
+                                            {(paymentDetails as PaymentDetails)?.investorRate
+                                                ?? (paymentDetails as PaymentDetails)?.annualInterestRate
+                                                ?? 0}% APY
+                                        </p>
+                                    </div>
+                                    <div className="p-3 bg-white/5 rounded-lg">
+                                        <p className="text-xs text-muted-foreground mb-1">Last Payment</p>
+                                        <p className="text-white font-medium">
+                                            {(paymentDetails as PaymentDetails)?.lastPaymentDate
+                                                ? new Date((paymentDetails as PaymentDetails).lastPaymentDate!).toLocaleDateString()
+                                                : 'Never — first payment'}
+                                        </p>
+                                    </div>
+                                    <div className="p-3 bg-white/5 rounded-lg">
+                                        <p className="text-xs text-muted-foreground mb-1">Next Due</p>
+                                        <p className="text-white font-medium">
+                                            {(paymentDetails as PaymentDetails)?.nextPaymentDue
+                                                ? new Date((paymentDetails as PaymentDetails).nextPaymentDue!).toLocaleDateString()
+                                                : '—'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Amount Summary */}
+                                <div className="p-3 bg-white/5 rounded-lg space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">Investors</span>
+                                        <span className="text-white font-mono">{paymentDetails?.investorCount || 0}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">Total Invested</span>
+                                        <span className="text-white font-mono">
+                                            ${((paymentDetails as PaymentDetails)?.totalInvested || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </div>
+                                    <div className="h-px bg-white/10 my-1" />
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">Yield to Investors ({(paymentDetails as PaymentDetails)?.investorRate ?? (paymentDetails as PaymentDetails)?.annualInterestRate ?? 0}% APY)</span>
+                                        <span className="text-emerald-400 font-mono">
+                                            ${(preparedTx?.netToInvestors ?? totalOwed).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </div>
+                                    {(preparedTx?.platformFee ?? 0) > 0 && (
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">Platform Fee (spread)</span>
+                                            <span className="text-purple-400 font-mono">
+                                                ${(preparedTx?.platformFee ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                            </span>
+                                        </div>
+                                    )}
+                                    <div className="h-px bg-white/10 my-1" />
+                                    <div className="flex justify-between text-base font-bold">
+                                        <span className="text-white">Total Company Cost</span>
+                                        <span className="text-white font-mono">
+                                            ${(preparedTx?.totalAmount ?? totalOwed).toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Duplicate Warning */}
+                                {(paymentDetails as PaymentDetails)?.paymentDueStatus === 'current' && (
+                                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-2">
+                                        <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                                        <div>
+                                            <p className="text-amber-400 text-sm font-medium">Already Up to Date</p>
+                                            <p className="text-amber-400/70 text-xs mt-0.5">
+                                                The last payment was on {new Date((paymentDetails as PaymentDetails).lastPaymentDate!).toLocaleDateString()}.
+                                                Proceeding will create a duplicate payment for this period.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Batch info */}
+                                {preparedTx.batchXDRs && preparedTx.batchXDRs.length > 1 && (
+                                    <p className="text-xs text-muted-foreground">
+                                        This payment is split into {preparedTx.batchXDRs.length} batches. You'll sign each batch with your passkey.
+                                    </p>
+                                )}
+                            </CardContent>
+                        </Card>
+
                         {batchProgress && (
                             <div className="space-y-2">
                                 <div className="flex justify-between text-sm">

@@ -104,7 +104,7 @@ export class CompanyPaymentService {
             return {
                 investorId: inv.investorId,
                 investorName: inv.investor.name,
-                investorWallet: inv.investor.stellarContractId || inv.investor.stellarPublicKey,
+                investorWallet: inv.investor.stellarContractId,
                 tokenBalance: investedAmount, // For locked tokens, invested = balance
                 interestOwed: round7(interestOwed),
             };
@@ -121,6 +121,7 @@ export class CompanyPaymentService {
             investorCount: breakdown.length,
             paymentType: offer.paymentType,
             annualInterestRate: annualRate,
+            investorRate: effectiveInvestorRate,
             periodRate: periodRate * 100, // As percentage
             nextPaymentDue: offer.nextPaymentDue,
             lastPaymentDate: offer.lastPaymentDate,
@@ -166,7 +167,7 @@ export class CompanyPaymentService {
                 return {
                     investorId: inv.id,
                     investorName: inv.name,
-                    investorWallet: inv.stellarContractId || inv.stellarPublicKey,
+                    investorWallet: inv.stellarContractId,
                     tokenBalance,
                     interestOwed: round7(interestOwed),
                 };
@@ -263,7 +264,7 @@ export class CompanyPaymentService {
             return {
                 investorId: inv.investorId,
                 investorName: inv.investor.name,
-                investorWallet: inv.investor.stellarContractId || inv.investor.stellarPublicKey,
+                investorWallet: inv.investor.stellarContractId,
                 principal: principalReturn,
                 interest: round7(interestEarned),
                 totalPayout: round7(principalReturn + interestEarned),
@@ -334,7 +335,7 @@ export class CompanyPaymentService {
                 return {
                     investorId: inv.id,
                     investorName: inv.name,
-                    investorWallet: inv.stellarContractId || inv.stellarPublicKey,
+                    investorWallet: inv.stellarContractId,
                     principal: principalReturn,
                     interest: round7(interestEarned),
                     totalPayout: round7(principalReturn + interestEarned),

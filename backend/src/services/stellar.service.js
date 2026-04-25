@@ -87,17 +87,25 @@ export class StellarService {
         ledger: response.ledger,
       };
     } catch (error) {
-      const respData = error.response?.data || error.response?.detail;
-      const extras = respData?.extras || error.response?.extras;
+      // Horizon SDK uses Axios — error shape: error.response.data.extras.result_codes
+      const respData = error.response?.data;
+      const extras = respData?.extras;
       const resultCodes = extras?.result_codes;
-      log.error('[StellarService] submitTransaction failed:', {
-        error: error.message,
-        resultCodes,
+      const errorMessage = error.message || respData?.title || 'Transaction submission failed';
+
+      console.error('[StellarService] submitTransaction failed:', {
+        message: errorMessage,
+        resultCodes: JSON.stringify(resultCodes),
+        extras: JSON.stringify(extras?.result_codes),
+        status: respData?.status,
+        detail: respData?.detail,
       });
+
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
         resultCodes,
+        detail: respData?.detail,
       };
     }
   }
@@ -1912,10 +1920,15 @@ export class StellarService {
       // 2. Assemble (applies resources to footprint/auth/etc)
       let preparedTx = rpc.assembleTransaction(transaction, simulation);
 
-      // ULTRATHINK FIX: assembleTransaction might return a TransactionBuilder instead of a Transaction
-      // We must build it to get the signable Transaction object
+      // assembleTransaction returns a TransactionBuilder with tight timeBounds
+      // from the simulation. We must extend maxTime to give the user enough time
+      // to sign with their passkey before the TX expires (tx_too_late).
+      // NOTE: setTimeout() throws if timeBounds already set, so we override the
+      // internal `timebounds` property directly (lowercase, per SDK source).
       if (preparedTx instanceof TransactionBuilder) {
-        log.info('[StellarService] assembleTransaction returned a Builder. Building transaction...');
+        log.info('[StellarService] assembleTransaction returned a Builder. Extending time bounds...');
+        const maxTime = Math.floor(Date.now() / 1000) + 300; // 5 minutes from now
+        preparedTx.timebounds = { minTime: 0, maxTime };
         preparedTx = preparedTx.build();
       }
 

@@ -546,7 +546,7 @@ router.post('/admin/offers/:id/reconcile-chain', requirePlatformAdmin, async (re
 
     const discrepancies = [];
     for (const inv of investments) {
-        const wallet = inv.investor?.stellarPublicKey || inv.investor?.sorobanContractId;
+        const wallet = inv.investor?.stellarContractId;
         const onChain = holders.find(h => h.publicKey === wallet);
         const dbTokens = parseFloat(inv.tokenAmount || '0');
         const chainTokens = onChain ? parseFloat(onChain.balance) : 0;
