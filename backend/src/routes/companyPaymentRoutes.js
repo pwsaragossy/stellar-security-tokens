@@ -198,11 +198,29 @@ router.post('/:offerId/submit', authenticateToken, requireCompanyUser, async (re
             parseInt(offerId)
         );
     } else {
-        // Single TX (classic or 1-batch Soroban)
-        result = await CompanyPaymentService.processSignedPayment(
-            signedXDR,
-            parseInt(offerId)
+        // Single XDR — check if this is a Soroban YieldDistributor TX
+        // (smart wallet investors use C... addresses → Soroban path)
+        const investments = await prisma.investment.findMany({
+            where: { offerId: parseInt(offerId), status: 'distributed' },
+            include: { investor: { select: { stellarContractId: true, stellarPublicKey: true } } },
+        });
+        const hasSmartWallet = investments.some(inv =>
+            (inv.investor.stellarContractId || inv.investor.stellarPublicKey)?.startsWith('C')
         );
+
+        if (hasSmartWallet) {
+            // Route through batch path (wrapping single XDR in array)
+            result = await CompanyPaymentService.processSignedBatches(
+                [signedXDR],
+                parseInt(offerId)
+            );
+        } else {
+            // Classic G... wallet path
+            result = await CompanyPaymentService.processSignedPayment(
+                signedXDR,
+                parseInt(offerId)
+            );
+        }
     }
 
     res.json({

@@ -70,6 +70,39 @@ export class StellarService {
   }
 
   /**
+   * Submit a pre-signed transaction XDR directly to Horizon.
+   * Used for passkey-signed transactions that bypass TransactionManager.
+   *
+   * @param {string} signedXdr - Base64-encoded signed transaction XDR
+   * @returns {Promise<Object>} Result with { success, transactionHash, ledger, error }
+   */
+  static async submitTransaction(signedXdr) {
+    try {
+      const tx = TransactionBuilder.fromXDR(signedXdr, getNetworkPassphrase());
+      const server = createFreshServer();
+      const response = await server.submitTransaction(tx);
+      return {
+        success: true,
+        transactionHash: response.hash,
+        ledger: response.ledger,
+      };
+    } catch (error) {
+      const respData = error.response?.data || error.response?.detail;
+      const extras = respData?.extras || error.response?.extras;
+      const resultCodes = extras?.result_codes;
+      log.error('[StellarService] submitTransaction failed:', {
+        error: error.message,
+        resultCodes,
+      });
+      return {
+        success: false,
+        error: error.message,
+        resultCodes,
+      };
+    }
+  }
+
+  /**
    * Cria conta emissora com flags de compliance
    * Configura AuthRequiredFlag, AuthRevocableFlag e AuthClawbackEnabledFlag
    * @returns {Promise<Object>} Resultado da criação da conta
