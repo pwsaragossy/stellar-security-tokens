@@ -778,24 +778,17 @@ export class CompanyPaymentService {
 
         // Record payments for confirmed batches
         if (submitResult.completedBatches > 0) {
+            const annualRate = parseFloat(offer.annualInterestRate || 0);
+            const effectiveInvestorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
+            const spreadPct = Math.max(0, annualRate - effectiveInvestorRate);
+
+            // ─── F-33: Counter increment is the CRITICAL safety state ───
+            // Do it FIRST, in its own try/catch, so a _recordPayments failure
+            // cannot skip the maturity guard update and allow overpayment.
+            const nowDate = new Date();
+            const updatedOffer = { ...offer, lastPaymentDate: nowDate };  // F-24
+
             try {
-                const annualRate = parseFloat(offer.annualInterestRate || 0);
-                const effectiveInvestorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
-                const spreadPct = Math.max(0, annualRate - effectiveInvestorRate);
-
-                const paymentDetails = await this.calculateOwedAmount(offerId);
-                await this._recordPayments(
-                    offer,
-                    paymentDetails.breakdown,
-                    submitResult.txHashes.join(','),
-                    spreadPct,
-                    false
-                );
-
-                // Update offer payment status — F-24: fresh lastPaymentDate, F-25: conditional increment
-                const nowDate = new Date();
-                const updatedOffer = { ...offer, lastPaymentDate: nowDate };  // F-24
-
                 const dbOffer = await prisma.offer.update({
                     where: { id: offerId },
                     data: {
@@ -809,7 +802,6 @@ export class CompanyPaymentService {
                     }
                 });
 
-                // Change 12: Structured logging
                 if (submitResult.success) {
                     log.info('PAYMENT_COUNTER_INCREMENT', {
                         offerId,
@@ -819,15 +811,64 @@ export class CompanyPaymentService {
                         txHashes: submitResult.txHashes,
                     });
                 }
+            } catch (counterErr) {
+                // Counter increment failed after on-chain success — CRITICAL
+                log.error('CRITICAL: Counter increment failed after on-chain success', {
+                    offerId, txHashes: submitResult.txHashes, error: counterErr.message,
+                });
+                AlertService.critical('COUNTER_INCREMENT_FAILURE', {
+                    type: 'COUNTER_INCREMENT_FAILURE',
+                    offerId,
+                    txHashes: submitResult.txHashes,
+                    message: 'Yield payments confirmed on-chain but counter increment failed. Manual reconciliation required.',
+                    error: counterErr.message,
+                }).catch(() => {});
+            }
+
+            // ─── F-30: Record payments for CONFIRMED batch investors only ───
+            // On partial failure, only create InterestPayment records for investors
+            // whose batches actually succeeded on-chain, preventing phantom records.
+            try {
+                const paymentDetails = await this.calculateOwedAmount(offerId);
+
+                let recordBreakdown = paymentDetails.breakdown;
+                if (!submitResult.success && submitResult.results) {
+                    // Partial failure — filter to confirmed-batch investors
+                    const confirmedInvestorIds = new Set(
+                        submitResult.results
+                            .filter(r => r.status === 'confirmed')
+                            .flatMap(r => r.investorIds || [])
+                    );
+                    if (confirmedInvestorIds.size > 0) {
+                        recordBreakdown = paymentDetails.breakdown.filter(
+                            b => confirmedInvestorIds.has(b.investorId)
+                        );
+                    } else {
+                        // No investorId tracking available — skip to prevent phantom records
+                        log.warn('Partial failure with no investorId tracking — skipping _recordPayments', { offerId });
+                        recordBreakdown = [];
+                    }
+                }
+
+                if (recordBreakdown.length > 0) {
+                    await this._recordPayments(
+                        offer,
+                        recordBreakdown,
+                        submitResult.txHashes.join(','),
+                        spreadPct,
+                        false
+                    );
+                }
 
                 log.info('Multi-batch payment recorded', {
                     offerId,
-                    investorsPaid: submitResult.investorsPaid,
+                    investorsPaid: recordBreakdown.length,
                     totalPaid: submitResult.totalPaid,
                     txHashes: submitResult.txHashes,
                 });
             } catch (dbError) {
                 // R1: DB failure after on-chain success — CRITICAL
+                // Counter was already incremented above, so maturity guard is safe.
                 log.error('CRITICAL: Payment confirmed on-chain but DB record failed', {
                     offerId,
                     txHashes: submitResult.txHashes,
@@ -843,7 +884,6 @@ export class CompanyPaymentService {
                     error: dbError.message,
                 }).catch(() => {});
 
-                // Return success=true with warning (money is safe)
                 return {
                     ...submitResult,
                     warning: 'PAYMENT_RECORD_FAILURE',

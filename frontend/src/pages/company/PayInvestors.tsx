@@ -352,7 +352,12 @@ export function PayInvestors() {
             }
         } catch (err: any) {
             setBatchProgress(null);
-            setError(err.message || 'Failed to sign or submit payment');
+            const msg = err?.response?.data?.error || err.message || 'Failed to sign or submit payment';
+            if (msg.includes('PAYMENT_SCHEDULE_COMPLETE') || msg.includes('E_MATURITY_REACHED')) {
+                setError('All yield payments are complete. Use Settlement to return principal.');
+            } else {
+                setError(msg);
+            }
         } finally {
             setSubmitting(false);
         }
@@ -552,6 +557,7 @@ export function PayInvestors() {
                 const isLastPeriod = (details as any).isLastPeriod;
                 const maturityReached = (details as any).maturityReached;
                 const maturityDate = (details as any).maturityDate;
+                const offerCreatedAt = (details as any).offerCreatedAt;
 
                 // Perpetual offers: totalExpected === null
                 const isPerpetual = totalExpected === null;
