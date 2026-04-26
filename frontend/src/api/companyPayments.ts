@@ -150,6 +150,14 @@ export const companyPaymentsApi = {
     },
 
     /**
+     * Get all payment history for the company across all offers
+     */
+    getAllPaymentHistory: async (): Promise<{ success: boolean; data: any[] }> => {
+        const response = await api.get('/company/payments/history/all');
+        return response.data;
+    },
+
+    /**
      * Get all penalties for the company
      */
     getPenalties: async (): Promise<{ success: boolean; data: CompanyPenalty[] }> => {

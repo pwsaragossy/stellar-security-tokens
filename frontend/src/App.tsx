@@ -38,6 +38,7 @@ import { Wallet as CompanyWallet } from './pages/company/Wallet';
 import { Tokens as CompanyTokens } from './pages/company/Tokens';
 import { SelectOfferType } from './pages/company/SelectOfferType';
 import { Documents } from './pages/company/Documents';
+import { PaymentHistory } from './pages/company/PaymentHistory';
 import { IPFSInfo } from './pages/company/IPFSInfo';
 import { DefaultCases } from './pages/admin/DefaultCases';
 
@@ -94,6 +95,7 @@ function App() {
             <Route path="payments/:offerId" element={<PayInvestors />} />
             <Route path="wallet" element={<CompanyWallet />} />
             <Route path="documents" element={<Documents />} />
+            <Route path="payment-history" element={<PaymentHistory />} />
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<CompanySettings />} />
             <Route path="ipfs-info" element={<IPFSInfo />} />

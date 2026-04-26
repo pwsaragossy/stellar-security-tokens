@@ -27,6 +27,46 @@ router.get('/', authenticateToken, requireCompanyUser, async (req, res) => {
 });
 
 /**
+ * GET /api/company/payments/history/all
+ * Get full payment history for the company across all offers
+ */
+router.get('/history/all', authenticateToken, requireCompanyUser, async (req, res) => {
+    const { companyId } = req.user;
+
+    // Get all offers for this company
+    const offers = await prisma.offer.findMany({
+        where: { companyId },
+        select: { id: true, offerName: true, assetCode: true, paymentType: true },
+    });
+
+    const offerIds = offers.map(o => o.id);
+    const offerMap = Object.fromEntries(offers.map(o => [o.id, o]));
+
+    const payments = await prisma.interestPayment.findMany({
+        where: { offerId: { in: offerIds } },
+        orderBy: { paymentDate: 'desc' },
+        include: {
+            investor: {
+                select: { id: true, name: true, email: true }
+            }
+        }
+    });
+
+    // Attach offer metadata to each payment
+    const enriched = payments.map(p => ({
+        ...p,
+        offerName: offerMap[p.offerId]?.offerName || '—',
+        offerAssetCode: offerMap[p.offerId]?.assetCode || '—',
+        offerPaymentType: offerMap[p.offerId]?.paymentType || '—',
+    }));
+
+    res.json({
+        success: true,
+        data: enriched
+    });
+});
+
+/**
  * GET /api/company/payments/:offerId
  * Get payment details for a specific offer
  */

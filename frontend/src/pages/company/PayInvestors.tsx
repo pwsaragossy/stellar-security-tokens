@@ -18,21 +18,25 @@ import {
 } from "lucide-react";
 import { companyPaymentsApi, type PaymentDetails, type BulletPaymentDetails } from "@/api/companyPayments";
 import { usePasskey } from "@/hooks/usePasskey";
+import { api } from '@/lib/api';
+import { authStorage } from '@/utils/authStorage';
+import { Wallet as WalletIcon } from 'lucide-react';
 
 
 // ─── Payment History Sub-Component ────────────────────────────────────────
 
-function PaymentHistorySection({ offerId }: { offerId: number }) {
+function PaymentHistorySection({ offerId, refreshKey = 0 }: { offerId: number; refreshKey?: number }) {
     const [history, setHistory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [expanded, setExpanded] = useState(true);
 
     useEffect(() => {
+        setLoading(true);
         companyPaymentsApi.getPaymentHistory(offerId)
             .then((res) => setHistory(res.data || []))
             .catch(() => setHistory([]))
             .finally(() => setLoading(false));
-    }, [offerId]);
+    }, [offerId, refreshKey]);
 
     if (loading || history.length === 0) return null;
 
@@ -156,6 +160,12 @@ export function PayInvestors() {
     // Multi-batch signing progress
     const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
 
+    // Wallet balance
+    const [walletBalance, setWalletBalance] = useState<string | null>(null);
+
+    // History refresh counter — incremented after successful payment
+    const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+
 
 
     // Settlement contract state (bullet maturity — new Soroban flow)
@@ -187,7 +197,21 @@ export function PayInvestors() {
 
     useEffect(() => {
         if (offerId) loadPaymentDetails();
+        fetchWalletBalance();
     }, [offerId]);
+
+    const fetchWalletBalance = async () => {
+        try {
+            const storedUser = authStorage.getUser<any>('company') || {};
+            const companyId = storedUser.companyId || storedUser.id;
+            if (!companyId) return;
+            const response = await api.get(`/companies/${companyId}/wallet-status`);
+            const data = response.data || response;
+            if (data.balances?.usdc !== undefined) {
+                setWalletBalance(data.balances.usdc);
+            }
+        } catch { /* non-critical */ }
+    };
 
     // Prevent navigation during signing/submission
     useEffect(() => {
@@ -227,6 +251,8 @@ export function PayInvestors() {
                             const { status } = jobRes.data;
                             if (status === 'confirmed') {
                                 setSuccess(true);
+                                setHistoryRefreshKey(k => k + 1);
+                                fetchWalletBalance();
                             } else if (status === 'partial_failure') {
                                 setPartialResult({
                                     completedBatches: jobRes.data.batchProgress.completed,
@@ -299,6 +325,8 @@ export function PayInvestors() {
                     setPreparedTx(null);
                 } else if (response.success) {
                     setSuccess(true);
+                    setHistoryRefreshKey(k => k + 1);
+                    fetchWalletBalance();
                     setPreparedTx(null);
                 } else {
                     setError('Failed to submit batch payment');
@@ -309,6 +337,8 @@ export function PayInvestors() {
                 const response = await companyPaymentsApi.submitPayment(parseInt(offerId!), signedXDR);
                 if (response.success) {
                     setSuccess(true);
+                    setHistoryRefreshKey(k => k + 1);
+                    fetchWalletBalance();
                     setPreparedTx(null);
                 } else {
                     setError('Failed to submit payment');
@@ -457,6 +487,30 @@ export function PayInvestors() {
                 {getStatusBadge()}
             </div>
 
+            {/* Wallet Balance */}
+            {walletBalance !== null && (
+                <div className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-lg animate-fade-in">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                        <WalletIcon className="w-4 h-4" />
+                        <span className="text-sm">Company Wallet</span>
+                    </div>
+                    <div className="text-right">
+                        <span className={`font-mono font-medium ${
+                            Number(walletBalance) < totalOwed
+                                ? 'text-red-400'
+                                : 'text-emerald-400'
+                        }`}>
+                            ${Number(walletBalance).toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC
+                        </span>
+                        {Number(walletBalance) < totalOwed && totalOwed > 0 && (
+                            <p className="text-xs text-red-400/70 mt-0.5">
+                                Insufficient — need ${totalOwed.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </p>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {error && (
                 <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive animate-fade-in">
                     <AlertTriangle className="w-4 h-4 inline mr-2" />
@@ -482,6 +536,96 @@ export function PayInvestors() {
                 </div>
             )}
 
+
+            {/* Payment Schedule Progress */}
+            {paymentDetails && !isBulletPayment && (() => {
+                const details = paymentDetails as PaymentDetails;
+                const paymentsMade = (details as any).paymentsMade ?? 0;
+                const maturityDate = (details as any).maturityDate;
+                const offerCreatedAt = (details as any).offerCreatedAt;
+
+                // Calculate total expected payments from dates + frequency
+                const periodsPerYear = details.paymentType === 'monthly' ? 12
+                    : details.paymentType === 'quarterly' ? 4
+                    : details.paymentType === 'semi_annual' ? 2
+                    : details.paymentType === 'annual' ? 1 : 12;
+
+                let totalExpected = 0;
+                if (maturityDate && offerCreatedAt) {
+                    const start = new Date(offerCreatedAt);
+                    const end = new Date(maturityDate);
+                    const diffMs = end.getTime() - start.getTime();
+                    const diffYears = diffMs / (1000 * 60 * 60 * 24 * 365.25);
+                    totalExpected = Math.ceil(diffYears * periodsPerYear);
+                }
+
+                const remaining = Math.max(0, totalExpected - paymentsMade);
+                const progressPct = totalExpected > 0 ? Math.min(100, (paymentsMade / totalExpected) * 100) : 0;
+
+                return (
+                    <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in-up">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base font-heading flex items-center gap-2">
+                                <Calendar className="w-5 h-5 text-primary" />
+                                Payment Schedule
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {/* Progress bar */}
+                            {totalExpected > 0 && (
+                                <div className="space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">
+                                            {paymentsMade} of {totalExpected} payments completed
+                                        </span>
+                                        <span className="text-white font-mono">{Math.round(progressPct)}%</span>
+                                    </div>
+                                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-gradient-to-r from-primary to-emerald-400 rounded-full transition-all duration-500"
+                                            style={{ width: `${progressPct}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                        <span>{remaining} remaining</span>
+                                        <span className="capitalize">{details.paymentType}</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Key dates */}
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="p-3 bg-white/5 rounded-lg">
+                                    <p className="text-xs text-muted-foreground mb-1">First Payment</p>
+                                    <p className="text-sm text-white font-medium">
+                                        {details.lastPaymentDate && paymentsMade > 0
+                                            ? offerCreatedAt
+                                                ? new Date(offerCreatedAt).toLocaleDateString()
+                                                : '—'
+                                            : 'Pending'}
+                                    </p>
+                                </div>
+                                <div className="p-3 bg-white/5 rounded-lg">
+                                    <p className="text-xs text-muted-foreground mb-1">Next Due</p>
+                                    <p className="text-sm text-white font-medium">
+                                        {details.nextPaymentDue
+                                            ? new Date(details.nextPaymentDue).toLocaleDateString()
+                                            : '—'}
+                                    </p>
+                                </div>
+                                <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
+                                    <p className="text-xs text-emerald-400/80 mb-1">Maturity</p>
+                                    <p className="text-sm text-emerald-400 font-medium">
+                                        {maturityDate
+                                            ? new Date(maturityDate).toLocaleDateString()
+                                            : 'No maturity set'}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                );
+            })()}
 
             {/* Payment Summary Card */}
             <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in-up animate-delay-1">
@@ -573,11 +717,18 @@ export function PayInvestors() {
                                             <Clock className="w-4 h-4" />
                                             {isBulletPayment ? 'Days to Maturity' : 'Rate'}
                                         </div>
-                                        <p className="text-lg font-medium text-white">
-                                            {isBulletPayment
-                                                ? `${(paymentDetails as BulletPaymentDetails).daysUntilMaturity} days`
-                                                : `${investorRate}% APY`}
-                                        </p>
+                                        {isBulletPayment ? (
+                                            <p className="text-lg font-medium text-white">
+                                                {(paymentDetails as BulletPaymentDetails).daysUntilMaturity} days
+                                            </p>
+                                        ) : (
+                                            <div>
+                                                <p className="text-lg font-medium text-white">{annualRate}% APY</p>
+                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                    {investorRate}% to investors · {spreadPct}% platform
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -775,19 +926,11 @@ export function PayInvestors() {
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 {/* Period Context */}
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-3 gap-3">
                                     <div className="p-3 bg-white/5 rounded-lg">
                                         <p className="text-xs text-muted-foreground mb-1">Payment Type</p>
                                         <p className="text-white font-medium capitalize">
                                             {(paymentDetails as PaymentDetails)?.paymentType || '—'} Yield
-                                        </p>
-                                    </div>
-                                    <div className="p-3 bg-white/5 rounded-lg">
-                                        <p className="text-xs text-muted-foreground mb-1">Interest Rate</p>
-                                        <p className="text-white font-medium">
-                                            {(paymentDetails as PaymentDetails)?.investorRate
-                                                ?? (paymentDetails as PaymentDetails)?.annualInterestRate
-                                                ?? 0}% APY
                                         </p>
                                     </div>
                                     <div className="p-3 bg-white/5 rounded-lg">
@@ -822,14 +965,26 @@ export function PayInvestors() {
                                     </div>
                                     <div className="h-px bg-white/10 my-1" />
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Yield to Investors ({(paymentDetails as PaymentDetails)?.investorRate ?? (paymentDetails as PaymentDetails)?.annualInterestRate ?? 0}% APY)</span>
+                                        <span className="text-muted-foreground">
+                                            Net to Investors
+                                            <span className="text-xs ml-1 text-zinc-500">
+                                                ({(paymentDetails as PaymentDetails)?.investorRate
+                                                    ?? (paymentDetails as PaymentDetails)?.annualInterestRate
+                                                    ?? 0}% APY)
+                                            </span>
+                                        </span>
                                         <span className="text-emerald-400 font-mono">
                                             ${(preparedTx?.netToInvestors ?? totalOwed).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                         </span>
                                     </div>
                                     {(preparedTx?.platformFee ?? 0) > 0 && (
                                         <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">Platform Fee (spread)</span>
+                                            <span className="text-muted-foreground">
+                                                Platform Fee
+                                                <span className="text-xs ml-1 text-zinc-500">
+                                                    ({((paymentDetails as PaymentDetails)?.annualInterestRate ?? 0) - ((paymentDetails as PaymentDetails)?.investorRate ?? (paymentDetails as PaymentDetails)?.annualInterestRate ?? 0)}% spread)
+                                                </span>
+                                            </span>
                                             <span className="text-purple-400 font-mono">
                                                 ${(preparedTx?.platformFee ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                             </span>
@@ -837,7 +992,12 @@ export function PayInvestors() {
                                     )}
                                     <div className="h-px bg-white/10 my-1" />
                                     <div className="flex justify-between text-base font-bold">
-                                        <span className="text-white">Total Company Cost</span>
+                                        <span className="text-white">
+                                            Company Pays
+                                            <span className="text-xs ml-1 font-normal text-zinc-500">
+                                                ({(paymentDetails as PaymentDetails)?.annualInterestRate ?? 0}% APY)
+                                            </span>
+                                        </span>
                                         <span className="text-white font-mono">
                                             ${(preparedTx?.totalAmount ?? totalOwed).toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC
                                         </span>
@@ -916,7 +1076,7 @@ export function PayInvestors() {
 
             {/* ── Payment History ── */}
             {offerId && (
-                <PaymentHistorySection offerId={Number(offerId)} />
+                <PaymentHistorySection offerId={Number(offerId)} refreshKey={historyRefreshKey} />
             )}
 
         </div>

@@ -58,6 +58,11 @@ export class CompanyPaymentService {
                 interestPayments: {
                     orderBy: { paymentDate: 'desc' },
                     take: 1
+                },
+                _count: {
+                    select: {
+                        interestPayments: { where: { status: 'completed' } }
+                    }
                 }
             }
         });
@@ -126,6 +131,9 @@ export class CompanyPaymentService {
             nextPaymentDue: offer.nextPaymentDue,
             lastPaymentDate: offer.lastPaymentDate,
             paymentDueStatus: offer.paymentDueStatus,
+            maturityDate: offer.maturityDate,
+            offerCreatedAt: offer.createdAt,
+            paymentsMade: offer._count?.interestPayments ?? 0,
             balanceSource: 'database',
             breakdown
         };

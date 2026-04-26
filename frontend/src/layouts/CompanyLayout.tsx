@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, BarChart3, Settings, LogOut, Building2, Wallet, Files, Coins, Loader2 } from 'lucide-react';
+import { LayoutDashboard, FileText, BarChart3, Settings, LogOut, Building2, Wallet, Files, Coins, Loader2, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -59,6 +59,7 @@ export function CompanyLayout() {
         { id: 'tokens', label: 'My Tokens', icon: Coins, path: '/company/tokens' },
         { id: 'wallet', label: 'Wallet', icon: Wallet, path: '/company/wallet' },
         { id: 'documents', label: 'Documents', icon: Files, path: '/company/documents' },
+        { id: 'payment-history', label: 'Payment History', icon: History, path: '/company/payment-history' },
         { id: 'reports', label: 'Reports', icon: BarChart3, path: '/company/reports' },
         { id: 'settings', label: 'Settings', icon: Settings, path: '/company/settings' },
     ];
