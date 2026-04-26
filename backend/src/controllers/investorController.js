@@ -630,7 +630,7 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
 
           const opsKeypair = getOperationsKeypair();
           const rpcServer = new rpcMod.Server(getSorobanRpcUrl());
-          const AMOUNT = 2_0000000n; // 2 USDC (7 decimals)
+          const AMOUNT = 12_0000000n; // 12 USDC (7 decimals)
 
           const sac = new Contract(sacContractId);
           const op = sac.call('transfer',
