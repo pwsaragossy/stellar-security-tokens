@@ -120,16 +120,26 @@ router.post('/:offerId/prepare', authenticateToken, requireCompanyUser, async (r
         });
     }
 
-    const transaction = await CompanyPaymentService.createPaymentTransaction(
-        parseInt(offerId),
-        userId
-    );
+    try {
+        const transaction = await CompanyPaymentService.createPaymentTransaction(
+            parseInt(offerId),
+            userId
+        );
 
-    res.json({
-        success: true,
-        data: transaction,
-        message: 'Transaction prepared. Sign with your passkey to complete payment.'
-    });
+        res.json({
+            success: true,
+            data: transaction,
+            message: 'Transaction prepared. Sign with your passkey to complete payment.'
+        });
+    } catch (err) {
+        const status = err.status || err.httpStatus || 500;
+        log.error('Prepare payment failed', { offerId, error: err.message, code: err.code });
+        return res.status(status).json({
+            success: false,
+            error: err.message,
+            code: err.code || undefined,
+        });
+    }
 });
 
 /**
@@ -231,36 +241,47 @@ router.post('/:offerId/submit', authenticateToken, requireCompanyUser, async (re
     }
 
     let result;
-    if (signedXDRs && signedXDRs.length > 0) {
-        // Multi-batch YieldDistributor path
-        result = await CompanyPaymentService.processSignedBatches(
-            signedXDRs,
-            parseInt(offerId)
-        );
-    } else {
-        // Single XDR — check if this is a Soroban YieldDistributor TX
-        // (smart wallet investors use C... addresses → Soroban path)
-        const investments = await prisma.investment.findMany({
-            where: { offerId: parseInt(offerId), status: 'distributed' },
-            include: { investor: { select: { stellarContractId: true } } },
-        });
-        const hasSmartWallet = investments.some(inv =>
-            inv.investor.stellarContractId?.startsWith('C')
-        );
-
-        if (hasSmartWallet) {
-            // Route through batch path (wrapping single XDR in array)
+    try {
+        if (signedXDRs && signedXDRs.length > 0) {
+            // Multi-batch YieldDistributor path
             result = await CompanyPaymentService.processSignedBatches(
-                [signedXDR],
+                signedXDRs,
                 parseInt(offerId)
             );
         } else {
-            // Classic G... wallet path
-            result = await CompanyPaymentService.processSignedPayment(
-                signedXDR,
-                parseInt(offerId)
+            // Single XDR — check if this is a Soroban YieldDistributor TX
+            // (smart wallet investors use C... addresses → Soroban path)
+            const investments = await prisma.investment.findMany({
+                where: { offerId: parseInt(offerId), status: 'distributed' },
+                include: { investor: { select: { stellarContractId: true } } },
+            });
+            const hasSmartWallet = investments.some(inv =>
+                inv.investor.stellarContractId?.startsWith('C')
             );
+
+            if (hasSmartWallet) {
+                // Route through batch path (wrapping single XDR in array)
+                result = await CompanyPaymentService.processSignedBatches(
+                    [signedXDR],
+                    parseInt(offerId)
+                );
+            } else {
+                // Classic G... wallet path
+                result = await CompanyPaymentService.processSignedPayment(
+                    signedXDR,
+                    parseInt(offerId)
+                );
+            }
         }
+    } catch (err) {
+        // ─── E_MATURITY_REACHED and other service errors ───
+        const status = err.status || err.httpStatus || 500;
+        log.error('Payment submission failed', { offerId, error: err.message, code: err.code });
+        return res.status(status).json({
+            success: false,
+            error: err.message,
+            code: err.code || undefined,
+        });
     }
 
     // Propagate actual on-chain result to frontend

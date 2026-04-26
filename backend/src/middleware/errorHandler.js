@@ -41,9 +41,10 @@ export const errorHandler = (err, req, res, next) => {
     });
   }
 
-  res.status(err.status || 500).json({
+  res.status(err.status || err.httpStatus || 500).json({
     success: false,
     error: isDev ? (err.message || 'Internal Server Error') : 'Internal server error',
+    code: err.code || undefined,
     details: isDev ? err.stack : undefined,
     errorId,
   });

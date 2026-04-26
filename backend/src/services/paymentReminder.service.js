@@ -14,6 +14,7 @@
  */
 import cron from 'node-cron';
 import prisma from '../config/prisma.js';
+import { CompanyPaymentService } from './companyPayment.service.js';
 import { EmailService } from './email.service.js';
 import { NotificationService } from './notification.service.js';
 import logger from '../utils/logger.js';
@@ -104,6 +105,15 @@ export class PaymentReminderService {
         for (const offer of offers) {
             if (!offer.nextPaymentDue || offer.investments.length === 0) {
                 continue;
+            }
+
+            // ─── MATURITY GUARD: skip offers that completed all payments ─── SB-3
+            if (offer.paymentType !== 'bullet') {
+                const totalExpected = CompanyPaymentService.computeTotalExpectedPayments(offer);
+                if (totalExpected !== null && offer.periodicPaymentsCompleted >= totalExpected) {
+                    log.info(`[PaymentReminder] Skipping maturity-completed offer ${offer.id} (${offer.periodicPaymentsCompleted}/${totalExpected} payments done)`);
+                    continue;
+                }
             }
 
             const dueDate = new Date(offer.nextPaymentDue);
