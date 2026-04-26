@@ -147,6 +147,33 @@ app.listen(PORT, async () => {
     console.error('Failed to start daily payment cron:', error.message);
   }
 
+  // F-39: Startup reconciliation — verify counter ↔ InterestPayment consistency
+  try {
+    const prisma = (await import('./config/prisma.js')).default;
+    const offers = await prisma.offer.findMany({
+      where: { paymentType: { not: 'bullet' }, status: 'active' },
+      select: { id: true, offerName: true, periodicPaymentsCompleted: true },
+    });
+    let mismatches = 0;
+    for (const offer of offers) {
+      const rounds = await prisma.interestPayment.groupBy({
+        by: ['paymentDate'],
+        where: { offerId: offer.id, status: 'completed' },
+      });
+      if (rounds.length !== offer.periodicPaymentsCompleted) {
+        mismatches++;
+        console.warn(`[Reconciliation] MISMATCH: Offer ${offer.id} (${offer.offerName}) — counter=${offer.periodicPaymentsCompleted}, actual=${rounds.length}`);
+      }
+    }
+    if (mismatches === 0 && offers.length > 0) {
+      console.log(`[Reconciliation] All ${offers.length} periodic offers OK — counter matches InterestPayment records`);
+    } else if (mismatches > 0) {
+      console.warn(`[Reconciliation] ${mismatches} offer(s) have counter mismatches — run scripts/backfill-periodic-counter.mjs`);
+    }
+  } catch (error) {
+    console.warn('[Reconciliation] Startup check failed (non-blocking):', error.message);
+  }
+
   // Start MultiSig Expiry Checker (runs once daily at midnight UTC)
   try {
     const cron = await import('node-cron');

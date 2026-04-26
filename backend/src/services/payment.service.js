@@ -440,6 +440,15 @@ export class PaymentService {
 
         for (const offer of periodicOffers) {
           try {
+            // F-37: Skip offers that have completed all periodic payments.
+            // nextPaymentDue = null with a maturityDate set means calculateNextPaymentDate
+            // returned null (next date exceeds maturity). Don't send false notifications
+            // or overwrite the status for completed offers.
+            if (offer.maturityDate && offer.nextPaymentDue === null) {
+              logger.debug(`[MVP] Skipping completed offer ${offer.assetCode} — all yields paid`);
+              continue;
+            }
+
             const frequency = offer.paymentFrequency || 1;
 
             // Lógica simplificada: notificar se (mês atual - 1) % frequência == 0
