@@ -22,7 +22,7 @@ import {
   initiateDeposit,
   getInvestorDeposits,
 } from '../controllers/investorController.js';
-import { requireInvestor, requireOwnData } from '../middleware/authorize.js';
+import { requireInvestor, requireOwnData, requirePlatformAdmin } from '../middleware/authorize.js';
 
 const router = express.Router();
 
@@ -230,7 +230,8 @@ router.get('/passkey/config', getPasskeyConfig);
  *                   items:
  *                     $ref: '#/components/schemas/Investor'
  */
-router.get('/', authenticateToken, getInvestors);
+// SECURITY: Restricted to platform admins (F-03). Frontend uses /api/admin/investors instead.
+router.get('/', requirePlatformAdmin, getInvestors);
 
 /**
  * @swagger
@@ -256,7 +257,8 @@ router.get('/', authenticateToken, getInvestors);
  *       404:
  *         description: Investidor não encontrado
  */
-router.get('/:id', authenticateToken, getInvestorById);
+// SECURITY: Investor can only read their own profile (F-02 IDOR fix)
+router.get('/:id', requireInvestor, requireOwnData, getInvestorById);
 
 /**
  * @swagger
@@ -391,7 +393,8 @@ router.get('/:investorId/wallet-status', requireInvestor, requireOwnData, getWal
  *       200:
  *         description: Transaction built successfully
  */
-router.post('/:investorId/withdraw/propose', authenticateToken, proposeWithdrawal);
+// SECURITY: requireOwnData replaces broken inline guard (F-01/F-04 — req.user.id vs req.user.userId)
+router.post('/:investorId/withdraw/propose', requireInvestor, requireOwnData, proposeWithdrawal);
 
 /**
  * @swagger

@@ -185,8 +185,8 @@ router.post('/create-wallet', authenticateToken, [
  *         description: Status da wallet
  */
 // Get wallet creation status
-// SECURITY: Requires auth to prevent wallet enumeration (CWE-200)
-router.get('/:userId/wallet-status', authenticateToken, CompanyUserController.getWalletStatus);
+// SECURITY: requireCompanyUser blocks cross-tenant enumeration (F-05/F-06 IDOR fix)
+router.get('/:userId/wallet-status', requireCompanyUser, CompanyUserController.getWalletStatus);
 
 /**
  * @swagger

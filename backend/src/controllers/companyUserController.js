@@ -469,6 +469,14 @@ export class CompanyUserController {
     try {
       const { userId } = req.params;
 
+      // SECURITY: Ownership check — requesting user must be the wallet owner (F-06 IDOR fix)
+      if (parseInt(userId, 10) !== req.user?.userId) {
+        return res.status(403).json({
+          success: false,
+          error: 'Unauthorized access to wallet',
+        });
+      }
+
       const status = await PasskeyWalletService.getWalletStatus(
         UserType.COMPANY_USER,
         parseInt(userId, 10)

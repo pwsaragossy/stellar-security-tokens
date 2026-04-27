@@ -180,7 +180,7 @@ export const WalletController = {
     createTransactionProposal: async (req, res) => {
         try {
             const { sourceWallet, destination, amount, assetCode, memo, description } = req.body;
-            const adminId = req.user.id;
+            const adminId = req.user.userId;
 
             // Resolve source wallet to public key only (no secret key needed for proposal building)
             let sourcePublicKey;

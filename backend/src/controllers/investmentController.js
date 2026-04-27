@@ -340,6 +340,18 @@ export const getInvestmentStatus = async (req, res, next) => {
       });
     }
 
+    // SECURITY: Ownership check — investors can only view their own investments (ADJ-v3 fix)
+    const isAdmin = req.user?.userType === 'platform_admin' ||
+      req.user?.role === 'platform_admin' ||
+      req.user?.role === 'super_admin';
+
+    if (!isAdmin && investment.investorId !== req.user?.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. You can only view your own investments.',
+      });
+    }
+
 
     res.json({
       success: true,
