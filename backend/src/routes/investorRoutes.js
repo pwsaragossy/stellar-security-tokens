@@ -353,7 +353,7 @@ router.get('/:investorId/payments', requireInvestor, requireOwnData, getInvestor
  *       200:
  *         description: Status da wallet
  */
-router.get('/:investorId/wallet-status', getWalletStatus);
+router.get('/:investorId/wallet-status', requireInvestor, requireOwnData, getWalletStatus);
 
 /**
  * @swagger
