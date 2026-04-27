@@ -2,6 +2,8 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useOffer } from '@/hooks/useOffer';
 import { InvestmentDialog } from '@/components/invest/InvestmentDialog';
+import { InvestmentCalculator } from '@/components/invest/InvestmentCalculator';
+import { YieldTimeline } from '@/components/invest/YieldTimeline';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -11,15 +13,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useInvestmentFees } from '@/hooks/useInvestmentFees';
-
-/* ─── Labels ─── */
-const PAYMENT_LABELS: Record<string, string> = {
-    monthly: 'Monthly',
-    quarterly: 'Quarterly',
-    semi_annual: 'Semi-Annual',
-    annual: 'Annual',
-    bullet: 'Bullet (At Maturity)',
-};
+import { PAYMENT_LABELS } from '@/utils/offerCalculations';
 
 const COLLATERAL_LABELS: Record<string, string> = {
     real_estate: 'Real Estate',
@@ -280,6 +274,11 @@ export function OfferDetails() {
                 )}
             </div>
 
+            {/* ═══ INVESTMENT CALCULATOR ═══ */}
+            <div className="my-6 animate-fade-in-up animate-delay-2">
+                <InvestmentCalculator offer={offer} />
+            </div>
+
             {/* ═══ DESCRIPTION ═══ */}
             {offer.description && (
                 <>
@@ -319,6 +318,9 @@ export function OfferDetails() {
                     )}
                 </div>
             </div>
+
+            {/* ═══ YIELD TIMELINE ═══ */}
+            <YieldTimeline offerId={offer.id} />
 
             {/* ═══ COLLATERAL & SECURITY ═══ */}
             {hasCollateral && (

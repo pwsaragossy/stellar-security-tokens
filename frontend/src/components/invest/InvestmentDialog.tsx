@@ -18,6 +18,12 @@ import { useInvestmentFees } from '@/hooks/useInvestmentFees';
 import { AlertTriangle, Settings, Wallet, ExternalLink, CheckCircle2, Loader2, Shield, Copy, Check, Rocket } from 'lucide-react';
 import { authStorage } from '@/utils/authStorage';
 import { passkeyClient } from '@/lib/passkey';
+import {
+    getEffectiveRate,
+    computePeriodicYield,
+    computeTotalReturn,
+    PERIOD_LABELS,
+} from '@/utils/offerCalculations';
 
 interface InvestmentDialogProps {
     offer: {
@@ -30,6 +36,9 @@ interface InvestmentDialogProps {
         tokens_sold?: number;
         maturity_date?: string;
         investment_cutoff_date?: string;
+        investor_rate?: number | null;
+        annual_interest_rate?: number | null;
+        payment_type?: string | null;
     };
     trigger?: React.ReactNode;
 }
@@ -825,6 +834,48 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
                                             <span className="text-slate-500">${(usdcBalance - totalDeduction).toFixed(2)}</span>
                                         </div>
                                     )}
+
+                                    {/* Yield projection rows */}
+                                    {(() => {
+                                        const rate = getEffectiveRate(offer.investor_rate ?? null, offer.annual_interest_rate ?? null);
+                                        const paymentType = offer.payment_type || 'monthly';
+                                        const isBulletPayment = paymentType === 'bullet';
+                                        if (rate === 0) return null;
+
+                                        const yieldAmt = computePeriodicYield(parsedAmount, rate, paymentType);
+                                        const totalRet = computeTotalReturn(parsedAmount, rate, offer.maturity_date);
+                                        const periodSuffix = PERIOD_LABELS[paymentType] || '/yr';
+
+                                        return (
+                                            <>
+                                                <div className="border-t border-white/8 pt-1.5 mt-1.5" />
+                                                {!isBulletPayment && yieldAmt > 0 && (
+                                                    <div className="flex justify-between text-xs">
+                                                        <span className="text-muted-foreground">Projected yield</span>
+                                                        <span className="text-emerald-400 font-medium">
+                                                            ${yieldAmt.toFixed(2)}{periodSuffix}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {isBulletPayment && totalRet && (
+                                                    <div className="flex justify-between text-xs">
+                                                        <span className="text-muted-foreground">Bullet payout at maturity</span>
+                                                        <span className="text-emerald-400 font-medium">
+                                                            +${totalRet.totalInterest.toFixed(2)}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {!isBulletPayment && totalRet && (
+                                                    <div className="flex justify-between text-xs">
+                                                        <span className="text-muted-foreground">At maturity</span>
+                                                        <span className="text-emerald-400 font-medium">
+                                                            +${totalRet.totalInterest.toFixed(2)} ({((totalRet.totalInterest / parsedAmount) * 100).toFixed(1)}%)
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             )}
 

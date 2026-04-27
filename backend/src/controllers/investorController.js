@@ -77,7 +77,7 @@ export const getInvestorById = async (req, res, next) => {
 export const getInvestorPayments = async (req, res, next) => {
   try {
     const { investorId } = req.params;
-    const { assetCode, type, limit = 100, offset = 0 } = req.query;
+    const { assetCode, type, limit = 100, offset = 0, offerId } = req.query;
 
     const parsedId = parseInt(investorId, 10);
     const investor = await Investor.findById(parsedId);
@@ -91,14 +91,17 @@ export const getInvestorPayments = async (req, res, next) => {
     const baseWhere = { investorId: parsedId };
     if (assetCode) baseWhere.assetCode = assetCode;
 
+    // offerId filter — applied per-query (Deposit has no offerId field)
+    const offerFilter = offerId ? { offerId: parseInt(offerId, 10) } : {};
+
     // Fetch all 4 sources in parallel
     const [interestPayments, investments, deposits, distributions] = await Promise.all([
       (!type || type === 'interest') ? prisma.interestPayment.findMany({
-        where: baseWhere,
+        where: { ...baseWhere, ...offerFilter },
         orderBy: [{ paymentDate: 'desc' }, { createdAt: 'desc' }],
       }) : [],
       (!type || type === 'purchase') ? prisma.investment.findMany({
-        where: baseWhere,
+        where: { ...baseWhere, ...offerFilter },
         include: { offer: { select: { offerName: true } } },
         orderBy: { createdAt: 'desc' },
       }) : [],
@@ -107,7 +110,7 @@ export const getInvestorPayments = async (req, res, next) => {
         orderBy: { createdAt: 'desc' },
       }) : [],
       (!type || type === 'distribution') ? prisma.tokenDistribution.findMany({
-        where: baseWhere,
+        where: { ...baseWhere, ...offerFilter },
         orderBy: { createdAt: 'desc' },
       }) : [],
     ]);

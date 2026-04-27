@@ -333,7 +333,7 @@ router.get('/:id/investments', requireInvestor, requireOwnData, getInvestorInves
  *       200:
  *         description: Histórico de pagamentos
  */
-router.get('/:investorId/payments', authenticateToken, getInvestorPayments);
+router.get('/:investorId/payments', requireInvestor, requireOwnData, getInvestorPayments);
 
 /**
  * @swagger
