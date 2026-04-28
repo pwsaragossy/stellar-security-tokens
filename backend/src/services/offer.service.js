@@ -253,6 +253,8 @@ export class OfferService {
         longitude: offerData.longitude || null,
         locationAddress: offerData.location_address || null,
         assetMetadata: offerData.asset_metadata || {},
+        // Phase 3: Asset lifecycle stage
+        assetStage: offerData.asset_stage || null,
         status: 'pending_review',
       },
       include: {

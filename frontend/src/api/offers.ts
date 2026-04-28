@@ -68,6 +68,8 @@ export const offersApi = {
     longitude?: number;
     location_address?: string;
     asset_metadata?: Record<string, any>;
+    // Phase 3
+    asset_stage?: string;
   }): Promise<ApiResponse<Offer>> => {
     const formData = new FormData();
 
@@ -128,6 +130,10 @@ export const offersApi = {
     }
     if (data.asset_metadata && Object.keys(data.asset_metadata).length > 0) {
       formData.append('asset_metadata', JSON.stringify(data.asset_metadata));
+    }
+    // Phase 3: Asset lifecycle stage
+    if (data.asset_stage) {
+      formData.append('asset_stage', data.asset_stage);
     }
 
     // Allow appending custom extra fields if needed for test

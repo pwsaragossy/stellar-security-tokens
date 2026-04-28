@@ -74,3 +74,73 @@ export function computeTotalReturn(
     const totalInterest = round7(amount * (ratePercent / 100) * yearsRemaining);
     return { totalInterest, yearsRemaining };
 }
+
+/**
+ * Compute annualized IRR via Newton-Raphson.
+ *
+ * Only meaningful for debt/collateral offers with maturity (where IRR ≠ APY).
+ * Returns null for: equity/sale, perpetual, zero-rate, or non-convergence.
+ * Formulas verified against tokenomics-expert SKILL.md v3.2.
+ *
+ * @param unitPrice     Price per token in USDC
+ * @param ratePercent   Annual yield rate (investor-facing, from getEffectiveRate)
+ * @param paymentType   'monthly' | 'quarterly' | 'semi_annual' | 'annual' | 'bullet'
+ * @param maturityDate  ISO date string
+ * @param offerType     'collateral' | 'sale'
+ */
+export function computeIRR(
+    unitPrice: number,
+    ratePercent: number,
+    paymentType: string,
+    maturityDate: string | null,
+    offerType: 'collateral' | 'sale',
+): number | null {
+    // Guard: only meaningful for debt with maturity
+    if (offerType !== 'collateral' || !maturityDate || ratePercent <= 0 || unitPrice <= 0) return null;
+
+    const periods = PERIODS_PER_YEAR[paymentType] || 0;
+    const matDate = new Date(maturityDate);
+    const yearsToMaturity = (matDate.getTime() - Date.now()) / (365.25 * 24 * 60 * 60 * 1000);
+    if (yearsToMaturity <= 0) return null; // matured
+
+    // Build cash flow array
+    const cfs: number[] = [-unitPrice]; // t=0: pay unit price
+
+    if (periods === 0) {
+        // Bullet: no periodic payments, lump sum at maturity
+        const totalPayout = unitPrice * (1 + (ratePercent / 100) * yearsToMaturity);
+        cfs.push(totalPayout);
+    } else {
+        // Periodic: yield per period + principal return at end
+        const totalPeriods = Math.round(yearsToMaturity * periods);
+        if (totalPeriods <= 0) return null;
+        const periodicYield = unitPrice * (ratePercent / 100) / periods;
+        for (let i = 1; i < totalPeriods; i++) {
+            cfs.push(periodicYield);
+        }
+        cfs.push(periodicYield + unitPrice); // last period: yield + principal
+    }
+
+    // Newton-Raphson: solve Σ CF_t / (1+r)^t = 0
+    let r = ratePercent / 100 / (periods || 1); // seed: periodic rate for faster convergence (F-12)
+    for (let iter = 0; iter < 100; iter++) {
+        let npv = 0, dnpv = 0;
+        for (let t = 0; t < cfs.length; t++) {
+            const disc = Math.pow(1 + r, t);
+            npv += cfs[t] / disc;
+            dnpv -= t * cfs[t] / Math.pow(1 + r, t + 1);
+        }
+        if (Math.abs(dnpv) < 1e-12) break; // derivative too small
+        const step = npv / dnpv;
+        r -= step;
+        if (Math.abs(step) < 1e-7) {
+            // Converged — convert periodic rate to annual
+            const annualIRR = periods > 0
+                ? (Math.pow(1 + r, periods) - 1) * 100
+                : r * 100;
+            if (!isFinite(annualIRR) || annualIRR < 0) return null;
+            return Math.round(annualIRR * 10) / 10; // 1 decimal place
+        }
+    }
+    return null; // didn't converge
+}

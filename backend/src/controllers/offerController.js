@@ -127,6 +127,9 @@ export class OfferController {
       location_address: offer.locationAddress ?? null,
       assetMetadata: offer.assetMetadata ?? {},
       asset_metadata: offer.assetMetadata ?? {},
+      // Phase 3: Asset Stage
+      assetStage: offer.assetStage ?? null,
+      asset_stage: offer.assetStage ?? null,
       // Formatted JSONB fields
       legalDocuments: OfferController.formatLegalDocuments(legalDocuments),
       legal_documents: OfferController.formatLegalDocuments(legalDocuments),
@@ -196,6 +199,8 @@ export class OfferController {
         longitude,
         location_address,
         asset_metadata,
+        // Phase 3: Asset lifecycle stage
+        asset_stage,
       } = req.body;
 
       // Sanitize Brazilian number format ("1.000.000,50" → "1000000.50") before parseFloat
@@ -256,6 +261,15 @@ export class OfferController {
         return res.status(400).json({
           success: false,
           error: 'Invalid offer_type. Must be "collateral" or "sale"',
+        });
+      }
+
+      // Phase 3: Validate asset_stage if provided
+      const VALID_ASSET_STAGES = ['under_development', 'completed', 'income_producing'];
+      if (asset_stage && !VALID_ASSET_STAGES.includes(asset_stage)) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid asset_stage. Must be one of: ${VALID_ASSET_STAGES.join(', ')}`,
         });
       }
 
@@ -493,6 +507,15 @@ export class OfferController {
         total_supply,
         annual_interest_rate,
         offer_rules,
+        // Phase 2
+        rental_yield_rate,
+        value_growth_rate,
+        latitude,
+        longitude,
+        location_address,
+        asset_metadata,
+        // Phase 3
+        asset_stage,
       } = req.body;
 
       // Handle file uploads (merge with existing)
@@ -561,8 +584,16 @@ export class OfferController {
         annual_interest_rate: updatedInterestRate,
         offer_rules: updatedRules,
         legal_documents: currentDocuments,
-        status: newStatus, // Reset status to prompt re-review
+        status: newStatus,
         updatedAt: new Date(),
+        // Phase 2 + 3
+        rental_yield_rate,
+        value_growth_rate,
+        latitude,
+        longitude,
+        location_address,
+        asset_metadata,
+        asset_stage,
       });
 
       res.json({

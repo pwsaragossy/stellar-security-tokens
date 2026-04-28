@@ -89,6 +89,15 @@ export interface Offer {
   payment_due_status?: string;
   lastPaymentDate?: string;
   last_payment_date?: string;
+  // Phase 2: Asset Intelligence
+  rental_yield_rate?: number;
+  value_growth_rate?: number;
+  latitude?: number;
+  longitude?: number;
+  location_address?: string;
+  asset_metadata?: Record<string, any>;
+  // Phase 3: Institutional Grade
+  asset_stage?: 'under_development' | 'completed' | 'income_producing';
 }
 
 // Token Types

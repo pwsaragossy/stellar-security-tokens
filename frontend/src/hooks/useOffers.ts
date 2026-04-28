@@ -65,6 +65,17 @@ export interface Offer {
 
     // Maturity cutoff (computed by backend: maturity_date - 90 days)
     investment_cutoff_date?: string;
+
+    // Phase 2: Asset Intelligence
+    rental_yield_rate?: number;
+    value_growth_rate?: number;
+    latitude?: number;
+    longitude?: number;
+    location_address?: string;
+    asset_metadata?: Record<string, any>;
+
+    // Phase 3: Institutional Grade
+    asset_stage?: 'under_development' | 'completed' | 'income_producing';
 }
 
 export function useOffers() {

@@ -141,11 +141,11 @@ export function OfferDetails() {
     const stellarExplorerBase = 'https://stellar.expert/explorer/testnet';
 
     // Phase 2: Asset Intelligence
-    const assetMeta = (offer as any).asset_metadata || {};
+    const assetMeta = offer.asset_metadata || {};
     const hasAssetMetadata = Object.values(assetMeta).some((v: any) => v);
-    const hasLocation = (offer as any).latitude && (offer as any).longitude;
-    const rentalYield = (offer as any).rental_yield_rate ? parseFloat((offer as any).rental_yield_rate) : null;
-    const growthYield = (offer as any).value_growth_rate ? parseFloat((offer as any).value_growth_rate) : null;
+    const hasLocation = offer.latitude && offer.longitude;
+    const rentalYield = offer.rental_yield_rate ? Number(offer.rental_yield_rate) : null;
+    const growthYield = offer.value_growth_rate ? Number(offer.value_growth_rate) : null;
     const hasYieldBreakdown = rentalYield !== null || growthYield !== null;
     const PROPERTY_TYPE_LABELS: Record<string, string> = { house: 'House', apartment: 'Apartment', townhouse: 'Townhouse', land: 'Land', commercial: 'Commercial' };
 
@@ -197,6 +197,11 @@ export function OfferDetails() {
                             <ShieldCheck className="h-3 w-3 mr-1" /> LTV {Number(offer.collateral_ltv).toFixed(0)}%
                         </Badge>
                     )}
+                    {offer.asset_stage && ({
+                        under_development: <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20">🏗 Under Development</Badge>,
+                        completed: <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">✅ Completed</Badge>,
+                        income_producing: <Badge className="bg-emerald-500/15 text-emerald-300 border border-emerald-400/25">💰 Income Producing</Badge>,
+                    } as Record<string, React.ReactNode>)[offer.asset_stage]}
                 </div>
             </div>
 
@@ -337,15 +342,15 @@ export function OfferDetails() {
             {hasLocation && (
                 <>
                     <SectionDivider label="Location" icon={<MapPin className="h-3.5 w-3.5" />} />
-                    {(offer as any).location_address && (
+                    {offer.location_address && (
                         <p className="text-muted-foreground text-sm mb-3">
                             <MapPin className="h-3.5 w-3.5 inline mr-1.5 text-[hsl(43_45%_55%)]" />
-                            {(offer as any).location_address}
+                            {offer.location_address}
                         </p>
                     )}
                     <div className="rounded-xl overflow-hidden border border-white/10">
                         <img
-                            src={`https://staticmap.openstreetmap.de/staticmap.php?center=${(offer as any).latitude},${(offer as any).longitude}&zoom=15&size=600x250&markers=${(offer as any).latitude},${(offer as any).longitude},red-pushpin`}
+                            src={`https://staticmap.openstreetmap.de/staticmap.php?center=${offer.latitude},${offer.longitude}&zoom=15&size=600x250&markers=${offer.latitude},${offer.longitude},red-pushpin`}
                             alt="Asset location map"
                             className="w-full h-auto"
                             loading="lazy"
@@ -443,6 +448,9 @@ export function OfferDetails() {
                             )}
                             {offer.collateral_value && (
                                 <DetailRow label="Collateral Value" value={`$${Number(offer.collateral_value).toLocaleString()}`} />
+                            )}
+                            {offer.collateral_value && Number(offer.total_supply) > 0 && (
+                                <DetailRow label="NAV per Token" value={`$${(Number(offer.collateral_value) / Number(offer.total_supply)).toFixed(2)}`} />
                             )}
                         </div>
                     </div>

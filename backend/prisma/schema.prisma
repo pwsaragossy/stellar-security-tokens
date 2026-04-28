@@ -83,6 +83,12 @@ enum DepositStatus {
   rejected          // Multisig relay rejected by admin
 }
 
+enum AssetStage {
+  under_development   // Planning or construction phase
+  completed           // Built/ready, not yet income-generating
+  income_producing    // Active rental/lease/yield
+}
+
 // ============================================
 // CORE MODELS
 // ============================================
@@ -379,6 +385,8 @@ model Offer {
 
   // Structured property metadata (polymorphic per asset type)
   assetMetadata        Json?       @default("{}") @map("asset_metadata")
+  // Phase 3: Asset lifecycle stage
+  assetStage           AssetStage? @map("asset_stage")
 
   offerType           OfferType   @map("offer_type")
   offerRules          Json        @default("{}") @map("offer_rules")

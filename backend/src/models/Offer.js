@@ -343,6 +343,8 @@ export class Offer {
       longitude,
       location_address,
       asset_metadata,
+      // Phase 3: Asset lifecycle stage
+      asset_stage,
     } = offerData;
 
     const updateData = {};
@@ -358,6 +360,8 @@ export class Offer {
     if (longitude !== undefined) updateData.longitude = longitude;
     if (location_address !== undefined) updateData.locationAddress = location_address;
     if (asset_metadata !== undefined) updateData.assetMetadata = asset_metadata;
+    // Phase 3: Asset lifecycle stage
+    if (asset_stage !== undefined) updateData.assetStage = asset_stage;
 
     if (Object.keys(updateData).length === 0) {
       return await this.findById(id);

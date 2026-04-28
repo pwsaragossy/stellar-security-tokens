@@ -35,6 +35,8 @@ interface OfferFormData {
     longitude: string;
     location_address: string;
     asset_metadata: AssetMetadata;
+    // Phase 3: Asset lifecycle stage
+    asset_stage: string;
     // Legal documents
     legal_documents: {
         contract?: { name: string; file?: File };
@@ -63,6 +65,7 @@ const initialFormData: OfferFormData = {
     longitude: '',
     location_address: '',
     asset_metadata: {},
+    asset_stage: '',
     legal_documents: {},
 };
 
@@ -237,6 +240,8 @@ export function CreateOffer() {
                 longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
                 location_address: formData.location_address || undefined,
                 asset_metadata: Object.keys(formData.asset_metadata).length > 0 ? formData.asset_metadata : undefined,
+                // Phase 3: Asset lifecycle stage
+                asset_stage: formData.asset_stage || undefined,
                 legal_documents: {}, // Metadata is optional, relying on file fields
                 contract: formData.legal_documents.contract?.file,
                 terms: formData.legal_documents.terms?.file,
@@ -1001,6 +1006,21 @@ export function CreateOffer() {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Phase 3: Asset Stage */}
+                            <div className="space-y-1.5 pt-4 border-t border-white/5">
+                                <label className="text-sm font-medium text-white">Asset Stage</label>
+                                <select
+                                    value={formData.asset_stage}
+                                    onChange={(e) => updateFormData({ asset_stage: e.target.value })}
+                                    className="w-full h-10 px-3 rounded-md bg-black/20 border border-white/10 focus:border-teal-500/50 focus:outline-none text-white text-sm"
+                                >
+                                    <option value="">Select stage (optional)</option>
+                                    <option value="under_development">Under Development</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="income_producing">Income Producing</option>
+                                </select>
+                            </div>
 
                             <p className="text-xs text-muted-foreground/60 pt-2">
                                 All fields on this step are optional during beta. They will be required at production launch.

@@ -5,6 +5,7 @@ import {
     getEffectiveRate,
     computePeriodicYield,
     computeTotalReturn,
+    computeIRR,
     PERIOD_LABELS,
 } from '@/utils/offerCalculations';
 
@@ -17,6 +18,7 @@ interface InvestmentCalculatorProps {
         maturity_date?: string | null;
         unit_price?: number;
         asset_code?: string;
+        offer_type?: 'collateral' | 'sale';
     };
 }
 
@@ -82,6 +84,13 @@ export function InvestmentCalculator({ offer }: InvestmentCalculatorProps) {
     const totalReturn = computeTotalReturn(parsedAmount, effectiveRate, offer.maturity_date);
     const tokensReceived = parsedAmount / unitPrice;
     const periodLabel = PERIOD_LABELS[paymentType] || '/yr';
+
+    // Phase 3: IRR — only for debt/collateral with maturity
+    const irr = computeIRR(
+        unitPrice, effectiveRate, paymentType,
+        offer.maturity_date ?? null,
+        offer.offer_type || 'sale',
+    );
 
     return (
         <div className="rounded-xl bg-white/[0.02] border border-white/8 p-5 animate-fade-in-up">
@@ -188,6 +197,14 @@ export function InvestmentCalculator({ offer }: InvestmentCalculatorProps) {
                             </div>
                         )}
                     </div>
+                    {irr !== null && (
+                        <div className="flex items-center gap-1.5">
+                            <span className="w-1 h-1 rounded-full bg-emerald-400/40" />
+                            <span className="text-muted-foreground">IRR:</span>
+                            <span className="text-emerald-400 font-medium">{irr}%</span>
+                            <span className="text-muted-foreground/50 text-[10px]">(accounts for cash flow timing)</span>
+                        </div>
+                    )}
 
                     {/* Disclaimer */}
                     <div className="flex items-start gap-2 pt-2 border-t border-white/5">
