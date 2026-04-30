@@ -36,7 +36,8 @@
     "multisig:setup": "node --import tsx scripts/setup-multisig.js",
     "test:e2e:lifecycle": "sh -c 'test -f ../.env && . ../.env; NODE_ENV=development STELLAR_NETWORK=testnet node --import tsx tests/e2e/tokenLifecycle.test.js'",
     "test:e2e:contracts": "STELLAR_NETWORK=testnet node --import tsx tests/e2e/contractManagement.test.js",
-    "audit:security": "npm audit --audit-level=high"
+    "audit:security": "npm audit --audit-level=high",
+    "docs:services": "node ../scripts/generate-service-docs.mjs"
   },
   "keywords": [
     "stellar",
