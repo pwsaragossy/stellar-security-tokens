@@ -259,6 +259,8 @@ main, .footer { position: relative; z-index: 2; }
 @media (min-width: 768px) {
   .navbar-links { display: flex; }
   .navbar-right { display: flex; }
+}
+
 /* ==========================================================================
    HERO
    ========================================================================== */
