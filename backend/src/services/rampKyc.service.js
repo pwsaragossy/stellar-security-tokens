@@ -115,11 +115,18 @@ export class RampKycService {
     const efBase = process.env.ETHERFUSE_API_BASE_URL || '';
     const sandbox = efBase.includes('.sand.') || process.env.NODE_ENV !== 'production';
 
+    // `offrampEnabled` reflects the backend-side ENABLE_OFFRAMP flag so the
+    // WithdrawDialog can render the PIX destination only when the routes are
+    // actually mounted. Per the global "no build-time env" memory, the
+    // frontend reads this from /api/ramp/readiness — never `import.meta.env`.
+    const offrampEnabled = process.env.ENABLE_OFFRAMP === 'true';
+
     return {
       isReady: blockedReason == null,
       blockedReason,
       missingFields,
       sandbox,
+      offrampEnabled,
       customer: customer
         ? { etherfuseCustomerId: customer.etherfuseCustomerId, kycStatus: customer.kycStatus, kycRejectionReason: customer.kycRejectionReason }
         : null,

@@ -190,15 +190,26 @@ export class RampOrderService {
     const efResponse = await EtherFuseClient.Orders.create(payload);
 
     // Response shape: { onramp: {...} } or { offramp: {...} } — unwrap.
-    const innerKey = quote.orderType === 'onramp' ? 'onramp' : 'offramp';
+    const isOnramp = quote.orderType === 'onramp';
+    const innerKey = isOnramp ? 'onramp' : 'offramp';
     const inner = efResponse?.[innerKey] ?? efResponse ?? {};
 
     // PIX-specific fields (BR flow) — exact keys still being verified live;
     // store the entire inner object as pixInstructions for forward compat.
-    const pixInstructions = quote.orderType === 'onramp' ? inner : null;
+    const pixInstructions = isOnramp ? inner : null;
     const pixExpiresAt = inner.depositExpiresAt
       ? new Date(inner.depositExpiresAt)
       : new Date(Date.now() + 30 * 60_000); // 30-minute fallback
+
+    // Direction-aware amount mapping:
+    //   On-ramp:  source=BRL (fiat), destination=TESOURO (tokens)
+    //   Off-ramp: source=TESOURO|USDC (tokens), destination=BRL (fiat)
+    const amountInFiat = isOnramp
+      ? String(quote.sourceAmount)
+      : (quote.destinationAmount != null ? String(quote.destinationAmount) : null);
+    const amountInTokens = isOnramp
+      ? (quote.destinationAmount != null ? String(quote.destinationAmount) : null)
+      : String(quote.sourceAmount);
 
     const order = await prisma.rampOrder.create({
       data: {
@@ -209,12 +220,12 @@ export class RampOrderService {
         bankAccountId: bankAccount.id,
         orderType: quote.orderType,
         status: 'created',
-        amountInFiat: quote.sourceAsset === 'BRL' || quote.sourceAsset === 'MXN' ? String(quote.sourceAmount) : null,
-        amountInTokens: quote.destinationAmount,
+        amountInFiat,
+        amountInTokens,
         sourceAsset: quote.sourceAsset,
         targetAsset: quote.targetAsset,
         pixInstructions,
-        pixExpiresAt: quote.orderType === 'onramp' ? pixExpiresAt : null,
+        pixExpiresAt: isOnramp ? pixExpiresAt : null,
         burnTransaction: inner.burnTransaction ?? null,
         withdrawAnchorAccount: inner.withdrawAnchorAccount ?? null,
         withdrawMemo: inner.withdrawMemo ?? null,

@@ -1,22 +1,15 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Loader2, Shield, Check, ArrowUpRight, ArrowDownLeft, ExternalLink, Coins, ArrowRight } from 'lucide-react';
+import { Loader2, ArrowUpRight, ArrowDownLeft, ExternalLink, Coins, ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api';
-import { passkeyClient } from '@/lib/passkey';
 import {
     Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
     DialogTrigger,
-    DialogFooter,
 } from "@/components/ui/dialog";
 import { DepositDialog } from '@/components/wallet/DepositDialog';
+import { WithdrawDialog } from '@/components/wallet/WithdrawDialog';
 import { authStorage } from '@/utils/authStorage';
 
 interface WalletStatus {
@@ -28,6 +21,11 @@ interface WalletStatus {
         usdc: string;
         tesouro?: string; // EtherFuse BR/PIX delivery — yield-bearing BR treasury position
     };
+    tesouroMarket?: {
+        priceBrl: string | null; // BRL per TESOURO at fetch time
+        yieldPctYear: number | null; // Selic meta target (BCB), proxy for treasury yield
+        asOf: string;
+    } | null;
     explorer?: string;
     depositMemo?: string;
 }
@@ -50,13 +48,9 @@ export function Wallet() {
     const [balanceError, setBalanceError] = useState(false);
     const [tokenizedAssets, setTokenizedAssets] = useState<TokenizedAsset[]>([]);
 
-    // Withdrawal State
+    // Dialog open state — WithdrawDialog owns its own internal flow.
     const [withdrawOpen, setWithdrawOpen] = useState(false);
     const [depositOpen, setDepositOpen] = useState(false);
-    const [withdrawStep, setWithdrawStep] = useState<'form' | 'review' | 'processing' | 'success'>('form');
-    const [withdrawData, setWithdrawData] = useState({ amount: '', destination: '', asset: 'USDC' });
-    const [withdrawTx, setWithdrawTx] = useState<{ xdr: string; networkPassphrase: string } | null>(null);
-    const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
     // Cache key for localStorage
     const getCacheKey = (userId: number | string) => `investor_wallet_cache_${userId}`;
@@ -113,6 +107,7 @@ export function Wallet() {
                             walletAddress: data.contractId || data.walletAddress,
                             passkeyRegistered: data.passkeyRegistered !== false,
                             balances: data.balances,
+                            tesouroMarket: data.tesouroMarket ?? null,
                             explorer: data.explorer,
                             depositMemo: data.depositMemo,
                         });
@@ -168,40 +163,12 @@ export function Wallet() {
         fetchWalletStatus();
     }, []);
 
-    const handleProposeWithdrawal = async () => {
-        if (!user?.id || !withdrawData.amount || !withdrawData.destination) return;
-
-        setWithdrawStep('processing');
-        setWithdrawError(null);
-
+    // Refetch wallet status after a withdrawal completes (either path —
+    // on-chain to Stellar or off-ramp to PIX). WithdrawDialog calls this
+    // through the onCompleted prop.
+    const refreshWalletStatus = useCallback(async () => {
+        if (!user?.id) return;
         try {
-            const response = await api.post(`/investors/${user.id}/withdraw/propose`, {
-                amount: withdrawData.amount,
-                destination: withdrawData.destination,
-                assetCode: withdrawData.asset
-            });
-
-            const { data } = response;
-            setWithdrawTx(data);
-            setWithdrawStep('review');
-        } catch (err: any) {
-            setWithdrawError(err.message || 'Failed to propose withdrawal');
-            setWithdrawStep('form');
-        }
-    };
-
-    const handleSubmitWithdrawal = async () => {
-        if (!withdrawTx) return;
-
-        setWithdrawStep('processing');
-        setWithdrawError(null);
-
-        try {
-            const signedXdr = await passkeyClient.signTransaction(withdrawTx.xdr);
-            await api.post('/investors/withdraw/submit', { signedXdr });
-
-            setWithdrawStep('success');
-            // Refresh wallet status
             const statusResponse = await api.get(`/investors/${user.id}/wallet-status`);
             const statusData = statusResponse.data || statusResponse;
             setWalletStatus({
@@ -209,22 +176,14 @@ export function Wallet() {
                 walletAddress: statusData.contractId || statusData.walletAddress,
                 passkeyRegistered: statusData.passkeyRegistered !== false,
                 balances: statusData.balances,
+                tesouroMarket: statusData.tesouroMarket ?? null,
                 explorer: statusData.explorer,
+                depositMemo: statusData.depositMemo,
             });
-        } catch (err: any) {
-            console.error('Withdrawal failed:', err);
-            setWithdrawError(err.message || 'Failed to process withdrawal');
-            setWithdrawStep('review');
+        } catch (err) {
+            console.error('Failed to refresh wallet status:', err);
         }
-    };
-
-    const resetWithdrawal = () => {
-        setWithdrawOpen(false);
-        setWithdrawStep('form');
-        setWithdrawData({ amount: '', destination: '', asset: 'USDC' });
-        setWithdrawTx(null);
-        setWithdrawError(null);
-    };
+    }, [user?.id]);
 
     if (loading) {
         return (
@@ -297,9 +256,18 @@ export function Wallet() {
                         <div className="relative">
                             <p className="text-[11px] uppercase tracking-wider text-[hsl(43_45%_70%)] mb-1 flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-[hsl(43_45%_55%)]" /> TESOURO
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-[hsl(43_45%_55%/0.15)] border border-[hsl(43_45%_55%/0.3)] text-[hsl(43_45%_75%)] ml-auto uppercase tracking-wider">
-                                    Yield-bearing
-                                </span>
+                                {walletStatus.tesouroMarket?.yieldPctYear != null ? (
+                                    <span
+                                        className="text-[9px] px-1.5 py-0.5 rounded bg-[hsl(43_45%_55%/0.15)] border border-[hsl(43_45%_55%/0.3)] text-[hsl(43_45%_75%)] ml-auto uppercase tracking-wider"
+                                        title={`Selic meta · BCB · ${new Date(walletStatus.tesouroMarket.asOf).toLocaleDateString('pt-BR')}`}
+                                    >
+                                        ~{walletStatus.tesouroMarket.yieldPctYear.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% a.a.
+                                    </span>
+                                ) : (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-[hsl(43_45%_55%/0.15)] border border-[hsl(43_45%_55%/0.3)] text-[hsl(43_45%_75%)] ml-auto uppercase tracking-wider">
+                                        Yield-bearing
+                                    </span>
+                                )}
                             </p>
                             <p className="text-2xl font-bold text-white" style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.01em' }}>
                                 {renderBalance(
@@ -310,7 +278,12 @@ export function Wallet() {
                                     !!walletStatus.balances
                                 )}
                             </p>
-                            <p className="text-[10px] text-white/45 mt-1">Brazilian treasury · accrues yield on-chain</p>
+                            <p className="text-[10px] text-white/45 mt-1">
+                                Tesouro Direto tokenizado
+                                {walletStatus.tesouroMarket?.priceBrl ? (
+                                    <span className="text-white/35"> · cotação R$ {Number(walletStatus.tesouroMarket.priceBrl).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</span>
+                                ) : null}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -336,132 +309,18 @@ export function Wallet() {
                         <DialogTrigger asChild>
                             <Button
                                 className="flex-1 h-12 bg-[hsl(217_91%_60%)] hover:bg-[hsl(217_91%_55%)] text-white rounded-xl shadow-lg shadow-[hsl(217_91%_60%/0.2)]"
-                                onClick={() => setWithdrawStep('form')}
                             >
                                 <ArrowUpRight className="w-4 h-4 mr-2" />
                                 Withdraw
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-md bg-slate-900 border-white/10 text-white">
-                            <DialogHeader>
-                                <DialogTitle>Withdraw Funds</DialogTitle>
-                                <DialogDescription>
-                                    Send assets from your wallet to another Stellar address.
-                                </DialogDescription>
-                            </DialogHeader>
-
-                            {withdrawStep === 'form' && (
-                                <div className="space-y-4 py-4">
-                                    <div className="space-y-2">
-                                        <Label>Asset</Label>
-                                        <div className="flex gap-2">
-                                            <Button
-                                                variant="default"
-                                                className="bg-[hsl(217_91%_60%)]"
-                                            >
-                                                USDC
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="amount">Amount</Label>
-                                        <Input
-                                            id="amount"
-                                            type="number"
-                                            placeholder="0.00"
-                                            value={withdrawData.amount}
-                                            onChange={(e) => setWithdrawData({ ...withdrawData, amount: e.target.value })}
-                                            className="bg-white/5 border-white/10 rounded-xl"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="destination">Destination Address</Label>
-                                        <Input
-                                            id="destination"
-                                            placeholder="G..."
-                                            value={withdrawData.destination}
-                                            onChange={(e) => setWithdrawData({ ...withdrawData, destination: e.target.value })}
-                                            className="bg-white/5 border-white/10 rounded-xl"
-                                        />
-                                        <p className="text-xs text-muted-foreground">Ensure the address accepts {withdrawData.asset}.</p>
-                                    </div>
-                                    {withdrawError && (
-                                        <p className="text-sm text-red-400">{withdrawError}</p>
-                                    )}
-                                </div>
-                            )}
-
-                            {withdrawStep === 'review' && (
-                                <div className="space-y-4 py-4">
-                                    <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3">
-                                        <div className="flex justify-between">
-                                            <span className="text-sm text-muted-foreground">Asset</span>
-                                            <span className="font-medium">{withdrawData.asset}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-sm text-muted-foreground">Amount</span>
-                                            <span className="font-medium text-lg">{withdrawData.amount}</span>
-                                        </div>
-                                        <div className="pt-3 border-t border-white/10">
-                                            <span className="text-sm text-muted-foreground block mb-1">Destination</span>
-                                            <span className="text-xs font-mono break-all text-gray-300">{withdrawData.destination}</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 p-3 bg-[hsl(217_91%_60%/0.1)] text-[hsl(217_91%_60%)] rounded-xl text-sm">
-                                        <Shield className="w-4 h-4" />
-                                        You will be asked to sign with your Passkey.
-                                    </div>
-                                    {withdrawError && (
-                                        <p className="text-sm text-red-400">{withdrawError}</p>
-                                    )}
-                                </div>
-                            )}
-
-                            {withdrawStep === 'processing' && (
-                                <div className="py-8 flex flex-col items-center justify-center space-y-4">
-                                    <Loader2 className="w-10 h-10 animate-spin text-[hsl(217_91%_60%)]" />
-                                    <p className="text-center text-muted-foreground">Processing withdrawal...</p>
-                                </div>
-                            )}
-
-                            {withdrawStep === 'success' && (
-                                <div className="py-8 flex flex-col items-center justify-center space-y-4">
-                                    <div className="w-14 h-14 rounded-full bg-[hsl(160_60%_40%/0.2)] flex items-center justify-center">
-                                        <Check className="w-7 h-7 text-[hsl(160_60%_40%)]" />
-                                    </div>
-                                    <div className="text-center">
-                                        <h3 className="font-medium text-lg">Withdrawal Successful</h3>
-                                        <p className="text-sm text-muted-foreground">Your funds have been sent.</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            <DialogFooter className="gap-2 sm:gap-0">
-                                {withdrawStep === 'form' && (
-                                    <>
-                                        <Button variant="ghost" onClick={() => setWithdrawOpen(false)}>Cancel</Button>
-                                        <Button
-                                            onClick={handleProposeWithdrawal}
-                                            disabled={!withdrawData.amount || !withdrawData.destination}
-                                            className="bg-[hsl(217_91%_60%)] hover:bg-[hsl(217_91%_55%)]"
-                                        >
-                                            Review
-                                        </Button>
-                                    </>
-                                )}
-                                {withdrawStep === 'review' && (
-                                    <>
-                                        <Button variant="ghost" onClick={() => setWithdrawStep('form')}>Back</Button>
-                                        <Button onClick={handleSubmitWithdrawal} className="bg-[hsl(217_91%_60%)] hover:bg-[hsl(217_91%_55%)]">
-                                            Confirm & Sign
-                                        </Button>
-                                    </>
-                                )}
-                                {withdrawStep === 'success' && (
-                                    <Button onClick={resetWithdrawal} className="w-full">Close</Button>
-                                )}
-                            </DialogFooter>
-                        </DialogContent>
+                        <WithdrawDialog
+                            investorId={user?.id}
+                            walletAddress={walletStatus.walletAddress || ''}
+                            balances={walletStatus.balances}
+                            onCompleted={refreshWalletStatus}
+                            onClose={() => setWithdrawOpen(false)}
+                        />
                     </Dialog>
 
                     <Button

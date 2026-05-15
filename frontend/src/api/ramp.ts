@@ -55,6 +55,13 @@ export interface RampReadiness {
   missingFields: string[];
   /** True when backend points at EtherFuse sandbox — enables testnet-only UI affordances. */
   sandbox: boolean;
+  /**
+   * True when `ENABLE_OFFRAMP=true` on the backend. The off-ramp routes are
+   * unmounted otherwise, so the WithdrawDialog hides the PIX destination
+   * entirely. Per memory: never read `import.meta.env` for feature flags —
+   * the production frontend is a static build, this MUST come from the API.
+   */
+  offrampEnabled: boolean;
   customer: null | {
     etherfuseCustomerId: string;
     kycStatus: RampWalletKycStatus;
@@ -220,6 +227,64 @@ export const rampApi = {
   /** Sandbox-only: simulate the PIX deposit. 404 in production. */
   simulateFiatReceived: async (orderId: number): Promise<ApiResponse<unknown>> => {
     const res = await api.post(`/ramp/dev/fiat-received/${orderId}`);
+    return res.data;
+  },
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Off-ramp (Tokens → BRL via PIX, EtherFuse Anchor Mode)
+  //
+  // These endpoints only exist when ENABLE_OFFRAMP=true on the backend. Check
+  // `readiness.offrampEnabled` before showing the off-ramp UI; the routes 404
+  // otherwise. See plans/we-have-just-made-fancy-token.md for the full flow.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** Off-ramp quote: TESOURO|USDC → BRL. */
+  createOfframpQuote: async (data: {
+    sourceAsset: 'TESOURO' | 'USDC';
+    sourceAmount: string | number;
+  }): Promise<ApiResponse<{ quote: RampQuote; etherfuseResponse: unknown }>> => {
+    const res = await api.post('/ramp/offramp/quotes', {
+      sourceAsset: data.sourceAsset,
+      sourceAmount: String(data.sourceAmount),
+    });
+    return res.data;
+  },
+
+  /** Execute an off-ramp quote — creates the EtherFuse order in Anchor Mode. */
+  createOfframpOrder: async (data: {
+    quoteId: number;
+    bankAccountId: number;
+  }): Promise<ApiResponse<{ order: RampOrder; etherfuseResponse: unknown }>> => {
+    const res = await api.post('/ramp/offramp/orders', data);
+    return res.data;
+  },
+
+  /**
+   * Build the unsigned SAC transfer XDR with Memo.hash for an off-ramp order.
+   * The investor's passkey signs the returned XDR; the signed envelope goes
+   * to submitOfframpTx.
+   */
+  prepareOfframpTx: async (orderId: number): Promise<ApiResponse<{
+    xdr: string;
+    networkPassphrase: string;
+    walletId: string;
+  }>> => {
+    const res = await api.post(`/ramp/offramp/orders/${orderId}/prepare-tx`);
+    return res.data;
+  },
+
+  /** Submit the passkey-signed XDR. Status flips to `created → funded` on webhook. */
+  submitOfframpTx: async (
+    orderId: number,
+    signedXdr: string
+  ): Promise<ApiResponse<{ hash: string; status: string }>> => {
+    const res = await api.post(`/ramp/offramp/orders/${orderId}/submit-tx`, { signedXdr });
+    return res.data;
+  },
+
+  /** Cancel an off-ramp order. Only valid while status=created. */
+  cancelOfframpOrder: async (orderId: number): Promise<ApiResponse<{ ok: true }>> => {
+    const res = await api.post(`/ramp/offramp/orders/${orderId}/cancel`);
     return res.data;
   },
 };
