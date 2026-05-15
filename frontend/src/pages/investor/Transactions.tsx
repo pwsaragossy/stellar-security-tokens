@@ -1,14 +1,16 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, ArrowDownLeft, ShoppingCart, Wallet, Coins, Clock, Receipt, ExternalLink } from 'lucide-react';
+import { Loader2, ArrowDownLeft, ShoppingCart, Wallet, Coins, Clock, Receipt, ExternalLink, Banknote } from 'lucide-react';
 import { api } from '@/lib/api';
 import { authStorage } from '@/utils/authStorage';
+import { rampApi } from '@/api/ramp';
 
 interface Transaction {
     id: string;
-    type: 'Interest Payment' | 'Token Purchase' | 'USDC Deposit' | 'Token Distribution';
+    type: 'Interest Payment' | 'Token Purchase' | 'USDC Deposit' | 'Token Distribution' | 'BRL → TESOURO';
     amount: number;
+    currency?: 'USD' | 'BRL';
     date: string;
     status: string;
     assetCode?: string;
@@ -21,12 +23,13 @@ interface Transaction {
     } | null;
 }
 
-type FilterType = 'all' | 'interest' | 'purchase' | 'deposit' | 'distribution';
+type FilterType = 'all' | 'interest' | 'purchase' | 'deposit' | 'distribution' | 'ramp';
 
 const FILTER_OPTIONS: { value: FilterType; label: string }[] = [
     { value: 'all', label: 'All' },
     { value: 'purchase', label: 'Purchases' },
     { value: 'deposit', label: 'Deposits' },
+    { value: 'ramp', label: 'BRL deposits' },
     { value: 'interest', label: 'Interest' },
     { value: 'distribution', label: 'Distributions' },
 ];
@@ -56,6 +59,12 @@ const TYPE_CONFIG: Record<string, { icon: typeof ArrowDownLeft; color: string; b
         bg: 'bg-[hsl(280_60%_60%/0.15)]',
         sign: '+',
     },
+    'BRL → TESOURO': {
+        icon: Banknote,
+        color: 'text-[hsl(43_45%_70%)]',
+        bg: 'bg-[hsl(43_45%_55%/0.15)]',
+        sign: '+',
+    },
 };
 
 const EXPLORER_BASE = 'https://stellar.expert/explorer/testnet/tx/';
@@ -72,16 +81,51 @@ export function Transactions() {
                 const user = authStorage.getUser<{ id: number }>('investor');
                 if (!user?.id) throw new Error('User not found');
 
+                // For non-ramp filters, the backend supports server-side filtering.
+                // For the 'ramp' filter, we skip the legacy payments call entirely.
+                const wantsLegacy = activeFilter !== 'ramp';
+                const wantsRamp = activeFilter === 'all' || activeFilter === 'ramp' || activeFilter === 'deposit';
+
                 const params = new URLSearchParams({ limit: '100' });
-                if (activeFilter !== 'all') params.set('type', activeFilter);
+                if (activeFilter !== 'all' && activeFilter !== 'ramp') params.set('type', activeFilter);
 
-                const response = await api.get(`/investors/${user.id}/payments?${params}`);
+                const [legacyResult, rampResult] = await Promise.allSettled([
+                    wantsLegacy
+                        ? api.get(`/investors/${user.id}/payments?${params}`)
+                        : Promise.resolve(null),
+                    wantsRamp
+                        ? rampApi.listOrders(100).catch(() => null)
+                        : Promise.resolve(null),
+                ]);
 
-                // Unwrap the envelope: axios gives { data: { success, data: { transactions } } }
-                const envelope = response.data;
-                const txList = envelope?.data?.transactions ?? envelope?.transactions ?? [];
+                const legacyList: Transaction[] = (() => {
+                    if (legacyResult.status !== 'fulfilled' || !legacyResult.value) return [];
+                    const envelope = legacyResult.value.data;
+                    return envelope?.data?.transactions ?? envelope?.transactions ?? [];
+                })();
 
-                setTransactions(txList);
+                const rampList: Transaction[] = (() => {
+                    if (rampResult.status !== 'fulfilled' || !rampResult.value || !rampResult.value.success) return [];
+                    return (rampResult.value.data ?? []).map((o) => ({
+                        id: `ramp-${o.id}`,
+                        type: 'BRL → TESOURO' as const,
+                        amount: o.amountInFiat ? Number(o.amountInFiat) : 0,
+                        currency: 'BRL' as const,
+                        date: o.completedAt ?? o.fundedAt ?? o.updatedAt ?? o.createdAt,
+                        status: o.status,
+                        assetCode: 'TESOURO',
+                        txHash: o.confirmedTxSignature ?? null,
+                        details: o.amountInTokens
+                            ? { tokenAmount: Number(o.amountInTokens) }
+                            : null,
+                    }));
+                })();
+
+                const merged = [...legacyList, ...rampList].sort(
+                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                );
+
+                setTransactions(merged);
             } catch (err: any) {
                 console.error('Failed to fetch transactions:', err);
                 setError(err.message);
@@ -96,23 +140,32 @@ export function Transactions() {
 
     const stats = useMemo(() => {
         const total = transactions.length;
+        // The "received" total is USD-denominated; BRL ramp inflows aren't summed
+        // into it because they're in a different currency. Future: convert via
+        // the order's exchangeRate to a single canonical unit.
         const totalAmount = transactions
-            .filter(t => t.type !== 'Token Purchase')
+            .filter(t => t.type !== 'Token Purchase' && (t.currency ?? 'USD') === 'USD')
             .reduce((s, t) => s + t.amount, 0);
         return { total, totalAmount };
     }, [transactions]);
 
     const getStatusColor = (status: string) => {
         const s = status.toLowerCase().replace(/_/g, ' ');
-        if (['completed', 'distributed', 'confirmed'].includes(s))
+        if (['completed', 'finalized', 'distributed', 'confirmed'].includes(s))
             return 'text-[hsl(160_60%_40%)] bg-[hsl(160_60%_40%/0.1)] border border-[hsl(160_60%_40%/0.3)]';
-        if (['pending', 'pending payment', 'pending distribution'].includes(s))
+        if (['pending', 'pending payment', 'pending distribution', 'created'].includes(s))
             return 'text-[hsl(35_90%_50%)] bg-[hsl(35_90%_50%/0.1)] border border-[hsl(35_90%_50%/0.3)]';
-        if (['failed', 'expired', 'cancelled'].includes(s))
+        if (['failed', 'expired', 'cancelled', 'canceled', 'refunded'].includes(s))
             return 'text-red-400 bg-red-500/10 border border-red-500/30';
-        if (['payment received', 'payment_received'].includes(s))
+        if (['funded', 'payment received', 'payment_received'].includes(s))
             return 'text-[hsl(217_91%_60%)] bg-[hsl(217_91%_60%/0.1)] border border-[hsl(217_91%_60%/0.3)]';
         return 'text-muted-foreground bg-muted/50 border border-white/10';
+    };
+
+    const formatAmount = (tx: Transaction) => {
+        const currency = tx.currency ?? 'USD';
+        const locale = currency === 'BRL' ? 'pt-BR' : 'en-US';
+        return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(tx.amount);
     };
 
     if (loading) {
@@ -220,11 +273,11 @@ export function Transactions() {
                                         </div>
                                         <div className="text-right shrink-0 ml-4">
                                             <p className={`font-semibold ${cfg.sign === '+' ? 'value-success' : ''}`}>
-                                                {cfg.sign}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(tx.amount)}
+                                                {cfg.sign}{formatAmount(tx)}
                                             </p>
                                             {tx.details?.tokenAmount ? (
                                                 <p className="text-xs text-muted-foreground">
-                                                    {tx.details.tokenAmount.toLocaleString()} {tx.assetCode} tokens
+                                                    {tx.details.tokenAmount.toLocaleString(undefined, { maximumFractionDigits: 6 })} {tx.assetCode}
                                                 </p>
                                             ) : tx.assetCode && tx.assetCode !== 'USDC' ? (
                                                 <p className="text-xs text-muted-foreground">{tx.assetCode}</p>

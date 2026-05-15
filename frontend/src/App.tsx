@@ -16,6 +16,8 @@ import { Portfolio } from './pages/investor/Portfolio';
 import { Transactions } from './pages/investor/Transactions';
 import { Settings } from './pages/investor/Settings';
 import { Wallet } from './pages/investor/Wallet';
+import { RampKyc } from './pages/investor/RampKyc';
+import { BankAccounts } from './pages/investor/BankAccounts';
 
 // Admin imports
 import { AdminLayout } from './layouts/AdminLayout';
@@ -80,6 +82,8 @@ function App() {
             <Route path="market/:id" element={<OfferDetails />} />
             <Route path="transactions" element={<Transactions />} />
             <Route path="wallet" element={<Wallet />} />
+            <Route path="ramp-kyc" element={<RampKyc />} />
+            <Route path="bank-accounts" element={<BankAccounts />} />
             <Route path="settings" element={<Settings />} />
           </Route>
 
