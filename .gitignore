@@ -23,3 +23,6 @@ docs/ADMIN_CREDENTIALS.md
 
 # Rust/Soroban build artifacts
 **/target/
+Radox-Pitch-v2-EN.pdf
+.gitignore
+Radox-Pitch-v2-EN.pptx
