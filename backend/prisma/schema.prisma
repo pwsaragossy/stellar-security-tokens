@@ -30,7 +30,7 @@ enum OfferStatus {
   approved
   rejected
   active
-  paused  // Emergency pause by admin
+  paused // Emergency pause by admin
   closed
   matured // Bullet offer reached maturity, awaiting company payment
 }
@@ -55,16 +55,16 @@ enum PaymentStatus {
 }
 
 enum PaymentDueStatus {
-  current       // Payments up to date
-  upcoming      // Payment due within 30 days
-  due           // Payment due today
-  overdue       // Past due but within grace period
-  defaulted     // Past grace period, collateral liquidated
+  current // Payments up to date
+  upcoming // Payment due within 30 days
+  due // Payment due today
+  overdue // Past due but within grace period
+  defaulted // Past grace period, collateral liquidated
 }
 
 enum InvestmentStatus {
   pending_payment
-  trade_submitted     // Soroban trade() TX sent, awaiting confirmation
+  trade_submitted // Soroban trade() TX sent, awaiting confirmation
   payment_received
   pending_distribution
   distributed
@@ -73,20 +73,59 @@ enum InvestmentStatus {
 }
 
 enum DepositStatus {
-  pending           // Awaiting payment
-  received          // USDC received at treasury
-  forwarding        // SAC transfer in progress
-  pending_approval  // Awaiting multisig admin approval
-  completed         // USDC in user's wallet
-  expired           // Memo expired (24h timeout)
-  failed            // SAC transfer failed
-  rejected          // Multisig relay rejected by admin
+  pending // Awaiting payment
+  received // USDC received at treasury
+  forwarding // SAC transfer in progress
+  pending_approval // Awaiting multisig admin approval
+  completed // USDC in user's wallet
+  expired // Memo expired (24h timeout)
+  failed // SAC transfer failed
+  rejected // Multisig relay rejected by admin
+}
+
+// EtherFuse anchor — fiat ramp order status. Matches the wire-level enum
+// returned by EtherFuse webhooks (`status` inside `order_updated` payload).
+// `expired` is local-only — emitted by our reconciler when an on-ramp PIX
+// instruction passes its TTL without `funded`.
+enum RampOrderStatus {
+  created
+  funded
+  completed
+  finalized // off-ramp only: reversal window passed
+  failed
+  refunded
+  canceled
+  expired // local-only
+}
+
+enum RampOrderType {
+  onramp
+  offramp
+}
+
+// EtherFuse bank-account verification status. Mirrors EtherFuse's
+// `bank_account_updated` payload `status` field.
+enum RampBankAccountStatus {
+  pending
+  awaiting_deposit_verification
+  active
+  inactive
+}
+
+// Per-wallet KYC status on EtherFuse. Mirrors `kyc_updated` payload statuses.
+// `approved_chain_deploying` is Solana-only; left in for completeness.
+enum RampWalletKycStatus {
+  not_started
+  proposed
+  approved
+  approved_chain_deploying
+  rejected
 }
 
 enum AssetStage {
-  under_development   // Planning or construction phase
-  completed           // Built/ready, not yet income-generating
-  income_producing    // Active rental/lease/yield
+  under_development // Planning or construction phase
+  completed // Built/ready, not yet income-generating
+  income_producing // Active rental/lease/yield
 }
 
 // ============================================
@@ -112,27 +151,42 @@ enum PlatformAdminRole {
 
 // Models
 model Investor {
-  id               Int       @id @default(autoincrement())
-  name             String    @db.VarChar(255)
-  email            String    @unique @db.VarChar(255)
-  document         String    @unique @db.VarChar(100)
+  id       Int    @id @default(autoincrement())
+  name     String @db.VarChar(255)
+  email    String @unique @db.VarChar(255)
+  document String @unique @db.VarChar(100)
 
-  kycStatus        KYCStatus @default(pending) @map("kyc_status")
-  passwordHash     String?   @map("password_hash") @db.VarChar(255)
-  lastLogin        DateTime? @map("last_login") @db.Timestamp
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp
-  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+  kycStatus    KYCStatus @default(pending) @map("kyc_status")
+  passwordHash String?   @map("password_hash") @db.VarChar(255)
+  lastLogin    DateTime? @map("last_login") @db.Timestamp
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp
 
   // Smart Wallet (Passkey Kit) fields - REQUIRED for all new investors
-  stellarContractId       String    @map("stellar_contract_id") @db.VarChar(56)
-  passkeyCredentialId     String    @map("passkey_credential_id") @db.Text
-  passkeyPublicKey        Bytes?    @map("passkey_public_key")
-  passkeyEcosystem        String?   @map("passkey_ecosystem") @db.VarChar(20) // apple, google, windows_local, other
+  stellarContractId   String  @map("stellar_contract_id") @db.VarChar(56)
+  passkeyCredentialId String  @map("passkey_credential_id") @db.Text
+  passkeyPublicKey    Bytes?  @map("passkey_public_key")
+  passkeyEcosystem    String? @map("passkey_ecosystem") @db.VarChar(20) // apple, google, windows_local, other
 
   // Email verification fields
   emailVerified           Boolean   @default(false) @map("email_verified")
   emailVerificationToken  String?   @map("email_verification_token") @db.VarChar(64)
   emailVerificationExpiry DateTime? @map("email_verification_expiry") @db.Timestamp
+
+  // Extended KYC — required by the EtherFuse anchor for fiat ramps.
+  // Captured via /investor/ramp-kyc before first on-ramp, then pushed to
+  // EtherFuse via POST /ramp/customer/{id}/kyc.
+  givenName    String?   @map("given_name") @db.VarChar(120)
+  familyName   String?   @map("family_name") @db.VarChar(120)
+  dateOfBirth  DateTime? @map("date_of_birth") @db.Date
+  phone        String?   @db.VarChar(32)
+  occupation   String?   @db.VarChar(120)
+  addressLine1 String?   @map("address_line1") @db.VarChar(255)
+  addressLine2 String?   @map("address_line2") @db.VarChar(255)
+  city         String?   @db.VarChar(120)
+  region       String?   @db.VarChar(120) // BR state code (UF) or free-text region
+  postalCode   String?   @map("postal_code") @db.VarChar(20)
+  country      String?   @default("BR") @db.VarChar(2)
 
   // Relations
   tokenDistributions  TokenDistribution[]
@@ -141,10 +195,14 @@ model Investor {
   deposits            Deposit[]
   webauthnCredentials InvestorWebauthnCredential[]
   ed25519Signers      InvestorEd25519Signer[]
+  rampCustomer        RampCustomer?
+  rampWallets         RampWallet[]
+  rampBankAccounts    RampBankAccount[]
+  rampQuotes          RampQuote[]
+  rampOrders          RampOrder[]
 
   @@index([email])
   @@index([document])
-
   @@index([stellarContractId])
   @@index([emailVerified])
   @@index([kycStatus, createdAt(sort: Desc)])
@@ -152,18 +210,18 @@ model Investor {
 }
 
 model Token {
-  id                 Int      @id @default(autoincrement())
-  assetCode          String   @unique @map("asset_code") @db.VarChar(12)
-  issuerPublicKey    String   @map("issuer_public_key") @db.VarChar(56)
-  totalSupply        Decimal  @map("total_supply") @db.Decimal(20, 7)
-  description        String?  @db.Text
-  annualInterestRate Decimal? @default(10.0) @map("annual_interest_rate") @db.Decimal(10, 7)
-  offerId            Int?     @map("offer_id")
-  issuedBy           Int?     @map("issued_by")
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamp
-  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp
-  sacContractId      String?  @map("sac_contract_id") @db.VarChar(56)
-  issuanceTransactionHash String? @map("issuance_transaction_hash") @db.VarChar(64)
+  id                      Int      @id @default(autoincrement())
+  assetCode               String   @unique @map("asset_code") @db.VarChar(12)
+  issuerPublicKey         String   @map("issuer_public_key") @db.VarChar(56)
+  totalSupply             Decimal  @map("total_supply") @db.Decimal(20, 7)
+  description             String?  @db.Text
+  annualInterestRate      Decimal? @default(10.0) @map("annual_interest_rate") @db.Decimal(10, 7)
+  offerId                 Int?     @map("offer_id")
+  issuedBy                Int?     @map("issued_by")
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt               DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+  sacContractId           String?  @map("sac_contract_id") @db.VarChar(56)
+  issuanceTransactionHash String?  @map("issuance_transaction_hash") @db.VarChar(64)
 
   // Relations
   offer            Offer?              @relation(fields: [offerId], references: [id], onDelete: SetNull)
@@ -213,27 +271,27 @@ model TokenDistribution {
 }
 
 model InterestPayment {
-  id              Int           @id @default(autoincrement())
-  investorId      Int           @map("investor_id")
-  assetCode       String        @map("asset_code") @db.VarChar(12)
-  tokenBalance    Decimal       @map("token_balance") @db.Decimal(20, 7)
-  interestRate    Decimal       @map("interest_rate") @db.Decimal(10, 7)
-  interestAmount  Decimal       @map("interest_amount") @db.Decimal(20, 7)
-  usdcAmount      Decimal       @map("usdc_amount") @db.Decimal(20, 7)
-  transactionHash String        @map("transaction_hash") @db.VarChar(64)
-  paymentDate     DateTime      @map("payment_date") @db.Date
-  emailSent       Boolean       @default(false) @map("email_sent")
-  emailSentAt     DateTime?     @map("email_sent_at") @db.Timestamp
-  retryCount      Int           @default(0) @map("retry_count")
-  status          PaymentStatus @default(pending)
-  errorMessage    String?       @map("error_message") @db.Text
-  offerId         Int?          @map("offer_id")
-  paymentType     PaymentType   @default(monthly) @map("payment_type")
-  isBulletPayment Boolean       @default(false) @map("is_bullet_payment")
-  grossAmount     Decimal?      @map("gross_amount") @db.Decimal(20, 7)      // Pre-fee amount owed to investor
-  netAmount       Decimal?      @map("net_amount") @db.Decimal(20, 7)        // Post-fee amount investor received on-chain
-  platformFeeAmount Decimal?    @map("platform_fee_amount") @db.Decimal(20, 7) // Platform's cut (grossAmount - netAmount)
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamp
+  id                Int           @id @default(autoincrement())
+  investorId        Int           @map("investor_id")
+  assetCode         String        @map("asset_code") @db.VarChar(12)
+  tokenBalance      Decimal       @map("token_balance") @db.Decimal(20, 7)
+  interestRate      Decimal       @map("interest_rate") @db.Decimal(10, 7)
+  interestAmount    Decimal       @map("interest_amount") @db.Decimal(20, 7)
+  usdcAmount        Decimal       @map("usdc_amount") @db.Decimal(20, 7)
+  transactionHash   String        @map("transaction_hash") @db.VarChar(64)
+  paymentDate       DateTime      @map("payment_date") @db.Date
+  emailSent         Boolean       @default(false) @map("email_sent")
+  emailSentAt       DateTime?     @map("email_sent_at") @db.Timestamp
+  retryCount        Int           @default(0) @map("retry_count")
+  status            PaymentStatus @default(pending)
+  errorMessage      String?       @map("error_message") @db.Text
+  offerId           Int?          @map("offer_id")
+  paymentType       PaymentType   @default(monthly) @map("payment_type")
+  isBulletPayment   Boolean       @default(false) @map("is_bullet_payment")
+  grossAmount       Decimal?      @map("gross_amount") @db.Decimal(20, 7) // Pre-fee amount owed to investor
+  netAmount         Decimal?      @map("net_amount") @db.Decimal(20, 7) // Post-fee amount investor received on-chain
+  platformFeeAmount Decimal?      @map("platform_fee_amount") @db.Decimal(20, 7) // Platform's cut (grossAmount - netAmount)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamp
 
   // Relations
   investor Investor @relation(fields: [investorId], references: [id], onDelete: Cascade)
@@ -256,7 +314,7 @@ model InterestPayment {
 model Company {
   id                  Int           @id @default(autoincrement())
   name                String        @db.VarChar(255)
-  cnpj                String?       @unique @db.VarChar(18)  // Optional - collected during KYC
+  cnpj                String?       @unique @db.VarChar(18) // Optional - collected during KYC
   email               String        @unique @db.VarChar(255)
   emailVerified       Boolean       @default(false) @map("email_verified")
   legalRepresentative String?       @map("legal_representative") @db.VarChar(255) // Optional - collected during KYC
@@ -300,9 +358,9 @@ model CompanyUser {
   createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamp
 
   // Smart Wallet (Passkey Kit) fields
-  stellarContractId       String?   @map("stellar_contract_id") @db.VarChar(56)
-  passkeyCredentialId     String?   @map("passkey_credential_id") @db.Text
-  passkeyPublicKey        Bytes?    @map("passkey_public_key")
+  stellarContractId   String? @map("stellar_contract_id") @db.VarChar(56)
+  passkeyCredentialId String? @map("passkey_credential_id") @db.Text
+  passkeyPublicKey    Bytes?  @map("passkey_public_key")
 
   // Email verification fields
   emailVerified           Boolean   @default(false) @map("email_verified")
@@ -352,83 +410,83 @@ model PlatformAdmin {
 }
 
 model Offer {
-  id                  Int         @id @default(autoincrement())
-  companyId           Int         @map("company_id")
-  requestedBy         Int         @map("requested_by")
-  assetCode           String      @unique @map("asset_code") @db.VarChar(12)
-  offerName           String      @map("offer_name") @db.VarChar(255)
-  description         String      @db.Text
+  id          Int    @id @default(autoincrement())
+  companyId   Int    @map("company_id")
+  requestedBy Int    @map("requested_by")
+  assetCode   String @unique @map("asset_code") @db.VarChar(12)
+  offerName   String @map("offer_name") @db.VarChar(255)
+  description String @db.Text
 
   // Real Estate Collateral
-  collateralType        String?   @default("real_estate") @map("collateral_type")
-  collateralDescription String?   @map("collateral_description") @db.Text
-  collateralValue       Decimal?  @map("collateral_value") @db.Decimal(20, 2)
-  collateralLTV         Decimal?  @map("collateral_ltv") @db.Decimal(5, 2)
-  totalSupply         Decimal     @map("total_supply") @db.Decimal(20, 7)
-  unitPrice           Decimal     @default(1.0) @map("unit_price") @db.Decimal(20, 7)
-  annualInterestRate  Decimal?    @map("annual_interest_rate") @db.Decimal(10, 7)
+  collateralType        String?  @default("real_estate") @map("collateral_type")
+  collateralDescription String?  @map("collateral_description") @db.Text
+  collateralValue       Decimal? @map("collateral_value") @db.Decimal(20, 2)
+  collateralLTV         Decimal? @map("collateral_ltv") @db.Decimal(5, 2)
+  totalSupply           Decimal  @map("total_supply") @db.Decimal(20, 7)
+  unitPrice             Decimal  @default(1.0) @map("unit_price") @db.Decimal(20, 7)
+  annualInterestRate    Decimal? @map("annual_interest_rate") @db.Decimal(10, 7)
 
   // Investor-facing yield rate. Company pays annualInterestRate, investor receives investorRate.
   // Spread (annualInterestRate - investorRate) → platform treasury revenue.
   // null = no spread (investorRate defaults to annualInterestRate).
-  investorRate         Decimal?    @map("investor_rate") @db.Decimal(10, 7)
+  investorRate Decimal? @map("investor_rate") @db.Decimal(10, 7)
 
   // ── Phase 2: Asset Intelligence ──
   // Yield decomposition: investor sees where yield comes from (informational, no constraint)
-  rentalYieldRate      Decimal?    @map("rental_yield_rate") @db.Decimal(10, 7)
-  valueGrowthRate      Decimal?    @map("value_growth_rate") @db.Decimal(10, 7)
+  rentalYieldRate Decimal? @map("rental_yield_rate") @db.Decimal(10, 7)
+  valueGrowthRate Decimal? @map("value_growth_rate") @db.Decimal(10, 7)
 
   // Location (for map pin + address display)
-  latitude             Decimal?    @map("latitude") @db.Decimal(10, 7)
-  longitude            Decimal?    @map("longitude") @db.Decimal(10, 7)
-  locationAddress      String?     @map("location_address") @db.VarChar(500)
+  latitude        Decimal? @map("latitude") @db.Decimal(10, 7)
+  longitude       Decimal? @map("longitude") @db.Decimal(10, 7)
+  locationAddress String?  @map("location_address") @db.VarChar(500)
 
   // Structured property metadata (polymorphic per asset type)
-  assetMetadata        Json?       @default("{}") @map("asset_metadata")
+  assetMetadata Json?       @default("{}") @map("asset_metadata")
   // Phase 3: Asset lifecycle stage
-  assetStage           AssetStage? @map("asset_stage")
+  assetStage    AssetStage? @map("asset_stage")
 
-  offerType           OfferType   @map("offer_type")
-  offerRules          Json        @default("{}") @map("offer_rules")
-  status              OfferStatus @default(pending_review)
-  rejectionReason     String?     @map("rejection_reason") @db.Text
-  reviewedBy          Int?        @map("reviewed_by")
-  reviewedAt          DateTime?   @map("reviewed_at") @db.Timestamp
-  legalDocuments      Json        @default("{}") @map("legal_documents")
-  dueDiligenceNotes   String?     @map("due_diligence_notes") @db.Text
-  paymentType         PaymentType @default(monthly) @map("payment_type")
-  maturityDate        DateTime?   @map("maturity_date")
-  bulletPaymentAmount Decimal?    @map("bullet_payment_amount") @db.Decimal(20, 7)
-  paymentFrequency    Int         @default(1) @map("payment_frequency")
-  paymentDay          Int         @default(1) @map("payment_day") // Day of month/period for payments (1-28)
-  nextPaymentDue      DateTime?   @map("next_payment_due")
-  lastPaymentDate     DateTime?   @map("last_payment_date")
+  offerType           OfferType        @map("offer_type")
+  offerRules          Json             @default("{}") @map("offer_rules")
+  status              OfferStatus      @default(pending_review)
+  rejectionReason     String?          @map("rejection_reason") @db.Text
+  reviewedBy          Int?             @map("reviewed_by")
+  reviewedAt          DateTime?        @map("reviewed_at") @db.Timestamp
+  legalDocuments      Json             @default("{}") @map("legal_documents")
+  dueDiligenceNotes   String?          @map("due_diligence_notes") @db.Text
+  paymentType         PaymentType      @default(monthly) @map("payment_type")
+  maturityDate        DateTime?        @map("maturity_date")
+  bulletPaymentAmount Decimal?         @map("bullet_payment_amount") @db.Decimal(20, 7)
+  paymentFrequency    Int              @default(1) @map("payment_frequency")
+  paymentDay          Int              @default(1) @map("payment_day") // Day of month/period for payments (1-28)
+  nextPaymentDue      DateTime?        @map("next_payment_due")
+  lastPaymentDate     DateTime?        @map("last_payment_date")
   paymentDueStatus    PaymentDueStatus @default(current) @map("payment_due_status")
 
   // Atomic counter: incremented once per successful payment round.
   // Source of truth for maturity progress. Never derived from dates or records.
-  periodicPaymentsCompleted  Int  @default(0)  @map("periodic_payments_completed")
+  periodicPaymentsCompleted Int @default(0) @map("periodic_payments_completed")
 
   // Token Lifecycle: Locked = AUTH_REQUIRED set on Issuer, all transfers require platform approval
   // When unlocked, the token is freely tradable on DEXes and on-chain balance becomes source of truth
-  isTokenLocked       Boolean   @default(true) @map("is_token_locked")
-  tokenUnlockedAt     DateTime? @map("token_unlocked_at") @db.Timestamp
+  isTokenLocked   Boolean   @default(true) @map("is_token_locked")
+  tokenUnlockedAt DateTime? @map("token_unlocked_at") @db.Timestamp
 
   // Soroban token_sale contract (set after offer approval + contract deploy)
-  sorobanContractId   String?   @map("soroban_contract_id") @db.VarChar(56)
-  sorobanInitStatus   String?   @map("soroban_init_status") @db.VarChar(20)
-  sorobanInitError    String?   @map("soroban_init_error") @db.Text
+  sorobanContractId String? @map("soroban_contract_id") @db.VarChar(56)
+  sorobanInitStatus String? @map("soroban_init_status") @db.VarChar(20)
+  sorobanInitError  String? @map("soroban_init_error") @db.Text
 
   // Soroban MaturitySettlement contract (for debt offers with maturity)
   // Deployed at offer approval. Handles atomic payout + token burn at maturity.
-  sorobanSettlementContractId  String?  @map("soroban_settlement_contract_id") @db.VarChar(56)
+  sorobanSettlementContractId String? @map("soroban_settlement_contract_id") @db.VarChar(56)
 
   // Fixed processing fee per trade in USDC. Deducted from investor's trade amount → treasury.
   // 5.0 = $5 USDC per trade. 0 = no processing fee. Globally configurable via ConfigService.
-  processingFee       Decimal   @default(5.0) @map("processing_fee") @db.Decimal(20, 7)
+  processingFee Decimal @default(5.0) @map("processing_fee") @db.Decimal(20, 7)
 
-  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamp
-  updatedAt           DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp
 
   // Relations
   company          Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -560,7 +618,6 @@ model CompanyUserEd25519Signer {
   @@map("company_user_ed25519_signers")
 }
 
-
 model PlatformAdminWebauthnCredential {
   id              Int       @id @default(autoincrement())
   platformAdminId Int       @map("platform_admin_id")
@@ -645,36 +702,36 @@ enum MultiSigOperationType {
 }
 
 model MultiSigTransaction {
-  id                 Int                   @id @default(autoincrement())
-  operationType      MultiSigOperationType @default(other) @map("operation_type")
-  xdr                String                @db.Text
-  networkPassphrase  String                @map("network_passphrase") @db.VarChar(100)
-  description        String?               @db.VarChar(255)
-  status             MultiSigTxStatus      @default(pending)
-  
-  // Signers configuration  
-  requiredSigners    String[]              @map("required_signers") // Array of public keys
-  thresholdRequired  Int                   @default(1) @map("threshold_required")
-  collectedSignatures Json                 @default("{}") @map("collected_signatures") // { publicKey: signatureBase64 }
-  
-  // Tracking
-  initiatorId        Int?                  @map("initiator_id")
-  initiatorType      String?               @map("initiator_type") @db.VarChar(50) // 'platform_admin', 'company_user'
-  
-  // Metadata for context
-  metadata           Json                  @default("{}") // offerId, investorId, amount, assetCode, etc.
-  
-  // Lifecycle
-  expiresAt          DateTime              @map("expires_at") @db.Timestamp
-  submittedAt        DateTime?             @map("submitted_at") @db.Timestamp
-  txHash             String?               @map("tx_hash") @db.VarChar(64)
-  ledger             Int?
-  errorMessage       String?               @map("error_message") @db.Text
-  
-  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamp
-  updatedAt          DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+  id                Int                   @id @default(autoincrement())
+  operationType     MultiSigOperationType @default(other) @map("operation_type")
+  xdr               String                @db.Text
+  networkPassphrase String                @map("network_passphrase") @db.VarChar(100)
+  description       String?               @db.VarChar(255)
+  status            MultiSigTxStatus      @default(pending)
 
-  initiator          PlatformAdmin?        @relation(fields: [initiatorId], references: [id], onDelete: SetNull)
+  // Signers configuration  
+  requiredSigners     String[] @map("required_signers") // Array of public keys
+  thresholdRequired   Int      @default(1) @map("threshold_required")
+  collectedSignatures Json     @default("{}") @map("collected_signatures") // { publicKey: signatureBase64 }
+
+  // Tracking
+  initiatorId   Int?    @map("initiator_id")
+  initiatorType String? @map("initiator_type") @db.VarChar(50) // 'platform_admin', 'company_user'
+
+  // Metadata for context
+  metadata Json @default("{}") // offerId, investorId, amount, assetCode, etc.
+
+  // Lifecycle
+  expiresAt    DateTime  @map("expires_at") @db.Timestamp
+  submittedAt  DateTime? @map("submitted_at") @db.Timestamp
+  txHash       String?   @map("tx_hash") @db.VarChar(64)
+  ledger       Int?
+  errorMessage String?   @map("error_message") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+
+  initiator PlatformAdmin? @relation(fields: [initiatorId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([operationType])
@@ -685,15 +742,15 @@ model MultiSigTransaction {
 }
 
 model Notification {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @map("user_id")
-  userType  String   @map("user_type") // 'investor', 'company_user', 'platform_admin'
-  type      String   // 'info', 'success', 'warning', 'error'
-  title     String   @db.VarChar(255)
-  message   String   @db.Text
-  actionLink String? @map("action_link") @db.VarChar(255)
-  isRead    Boolean  @default(false) @map("is_read")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  userType   String   @map("user_type") // 'investor', 'company_user', 'platform_admin'
+  type       String // 'info', 'success', 'warning', 'error'
+  title      String   @db.VarChar(255)
+  message    String   @db.Text
+  actionLink String?  @map("action_link") @db.VarChar(255)
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp
 
   @@index([userId, userType])
   @@index([isRead])
@@ -703,20 +760,20 @@ model Notification {
 
 // Payment reminder tracking for company payments
 model PaymentReminder {
-  id              Int       @id @default(autoincrement())
-  offerId         Int       @map("offer_id")
-  companyId       Int       @map("company_id")
-  reminderType    String    @map("reminder_type") // '30_day', '21_day', '14_day', '7_day', '3_day', '1_day', 'due_day', 'overdue'
-  dueDate         DateTime  @map("due_date") @db.Date
-  amountDue       Decimal   @map("amount_due") @db.Decimal(20, 7)
-  sentAt          DateTime  @default(now()) @map("sent_at") @db.Timestamp
-  sentVia         String    @default("email") @map("sent_via") // 'email', 'notification', 'both'
-  acknowledged    Boolean   @default(false)
-  acknowledgedAt  DateTime? @map("acknowledged_at") @db.Timestamp
+  id             Int       @id @default(autoincrement())
+  offerId        Int       @map("offer_id")
+  companyId      Int       @map("company_id")
+  reminderType   String    @map("reminder_type") // '30_day', '21_day', '14_day', '7_day', '3_day', '1_day', 'due_day', 'overdue'
+  dueDate        DateTime  @map("due_date") @db.Date
+  amountDue      Decimal   @map("amount_due") @db.Decimal(20, 7)
+  sentAt         DateTime  @default(now()) @map("sent_at") @db.Timestamp
+  sentVia        String    @default("email") @map("sent_via") // 'email', 'notification', 'both'
+  acknowledged   Boolean   @default(false)
+  acknowledgedAt DateTime? @map("acknowledged_at") @db.Timestamp
 
   // Relations
-  offer           Offer     @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  offer   Offer   @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([offerId, reminderType, dueDate])
   @@index([offerId])
@@ -728,21 +785,21 @@ model PaymentReminder {
 
 // Company penalties for late/defaulted payments
 model CompanyPenalty {
-  id              Int       @id @default(autoincrement())
-  companyId       Int       @map("company_id")
-  offerId         Int       @map("offer_id")
-  penaltyType     String    @map("penalty_type") // 'late_fee', 'default_fee', 'platform_ban'
-  description     String    @db.Text
-  amount          Decimal?  @db.Decimal(20, 7) // In USDC
-  percentageRate  Decimal?  @map("percentage_rate") @db.Decimal(5, 4) // e.g., 0.005 for 0.5% per day
-  daysLate        Int?      @map("days_late")
-  status          String    @default("pending") // 'pending', 'paid', 'waived', 'enforced'
-  enforcedAt      DateTime? @map("enforced_at") @db.Timestamp
-  paidAt          DateTime? @map("paid_at") @db.Timestamp
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamp
+  id             Int       @id @default(autoincrement())
+  companyId      Int       @map("company_id")
+  offerId        Int       @map("offer_id")
+  penaltyType    String    @map("penalty_type") // 'late_fee', 'default_fee', 'platform_ban'
+  description    String    @db.Text
+  amount         Decimal?  @db.Decimal(20, 7) // In USDC
+  percentageRate Decimal?  @map("percentage_rate") @db.Decimal(5, 4) // e.g., 0.005 for 0.5% per day
+  daysLate       Int?      @map("days_late")
+  status         String    @default("pending") // 'pending', 'paid', 'waived', 'enforced'
+  enforcedAt     DateTime? @map("enforced_at") @db.Timestamp
+  paidAt         DateTime? @map("paid_at") @db.Timestamp
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp
 
   // Relations
-  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([offerId])
@@ -752,21 +809,21 @@ model CompanyPenalty {
 }
 
 model Deposit {
-  id              Int           @id @default(autoincrement())
-  investorId      Int           @map("investor_id")
-  memo            String        @unique @db.VarChar(28)
-  expectedAmount  Decimal?      @map("expected_amount") @db.Decimal(20, 7)
-  actualAmount    Decimal?      @map("actual_amount") @db.Decimal(20, 7)
-  status          DepositStatus @default(pending)
-  incomingTxHash  String?       @map("incoming_tx_hash") @db.VarChar(64)
-  outgoingTxHash  String?       @map("outgoing_tx_hash") @db.VarChar(64)
-  errorMessage    String?       @map("error_message") @db.Text
-  expiresAt       DateTime      @map("expires_at") @db.Timestamp
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamp
-  updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+  id             Int           @id @default(autoincrement())
+  investorId     Int           @map("investor_id")
+  memo           String        @unique @db.VarChar(28)
+  expectedAmount Decimal?      @map("expected_amount") @db.Decimal(20, 7)
+  actualAmount   Decimal?      @map("actual_amount") @db.Decimal(20, 7)
+  status         DepositStatus @default(pending)
+  incomingTxHash String?       @map("incoming_tx_hash") @db.VarChar(64)
+  outgoingTxHash String?       @map("outgoing_tx_hash") @db.VarChar(64)
+  errorMessage   String?       @map("error_message") @db.Text
+  expiresAt      DateTime      @map("expires_at") @db.Timestamp
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamp
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamp
 
   investor Investor @relation(fields: [investorId], references: [id], onDelete: Cascade)
-  
+
   @@index([memo])
   @@index([investorId])
   @@index([status])
@@ -778,14 +835,14 @@ model Deposit {
 // ============================================
 
 model RefreshToken {
-  id          Int       @id @default(autoincrement())
-  tokenHash   String    @unique @map("token_hash") @db.VarChar(64)
-  userType    String    @map("user_type") @db.VarChar(20) // 'investor', 'company', 'platform_admin'
-  userId      Int       @map("user_id")
-  expiresAt   DateTime  @map("expires_at") @db.Timestamp
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp
-  revokedAt   DateTime? @map("revoked_at") @db.Timestamp
-  replacedBy  String?   @map("replaced_by") @db.VarChar(64) // Hash of successor token (rotation chain)
+  id         Int       @id @default(autoincrement())
+  tokenHash  String    @unique @map("token_hash") @db.VarChar(64)
+  userType   String    @map("user_type") @db.VarChar(20) // 'investor', 'company', 'platform_admin'
+  userId     Int       @map("user_id")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamp
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamp
+  replacedBy String?   @map("replaced_by") @db.VarChar(64) // Hash of successor token (rotation chain)
 
   @@index([userId, userType])
   @@index([expiresAt])
@@ -807,14 +864,204 @@ model YieldPaymentJob {
   totalFee       Decimal   @map("total_fee") @db.Decimal(20, 7)
   txHashes       String?   @map("tx_hashes") @db.Text
   error          String?   @db.Text
-  metadata       Json?                                     // full batch details for reconciliation
+  metadata       Json? // full batch details for reconciliation
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp
   completedAt    DateTime? @map("completed_at") @db.Timestamp
 
-  offer          Offer     @relation(fields: [offerId], references: [id])
+  offer Offer @relation(fields: [offerId], references: [id])
 
   @@index([offerId])
   @@index([status])
   @@index([companyId])
   @@map("yield_payment_jobs")
+}
+
+// ============================================
+// ETHERFUSE ANCHOR: BRL/PIX → TESOURO on-ramp
+// (off-ramp models will be added in Phase 2)
+// ============================================
+
+// Per-investor EtherFuse customer (child organization).
+// Created on first on-ramp KYC submission. The `etherfuseCustomerId` is the
+// UUID we generate locally and pass to EtherFuse via POST /ramp/organization;
+// it doubles as the customerId field on quotes and orders.
+model RampCustomer {
+  id                  Int                 @id @default(autoincrement())
+  investorId          Int                 @unique @map("investor_id")
+  etherfuseCustomerId String              @unique @map("etherfuse_customer_id") @db.Uuid
+  accountType         String              @default("personal") @map("account_type") @db.VarChar(20) // personal | business
+  kycStatus           RampWalletKycStatus @default(not_started) @map("kyc_status")
+  kycRejectionReason  String?             @map("kyc_rejection_reason") @db.Text
+  lastSyncedAt        DateTime?           @map("last_synced_at") @db.Timestamp
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamp
+  updatedAt           DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+
+  investor Investor @relation(fields: [investorId], references: [id], onDelete: Cascade)
+
+  @@index([etherfuseCustomerId])
+  @@index([kycStatus])
+  @@map("ramp_customers")
+}
+
+// Per-investor wallet registered with EtherFuse.
+// `publicKey` is whatever address EtherFuse holds for delivery — for Path A
+// this is the Soroban C-address; for Path C this is a custodial G-address.
+// EtherFuse enforces 1:1 binding between (publicKey, customerId).
+model RampWallet {
+  id                Int                 @id @default(autoincrement())
+  investorId        Int                 @map("investor_id")
+  etherfuseWalletId String              @unique @map("etherfuse_wallet_id") @db.Uuid
+  publicKey         String              @map("public_key") @db.VarChar(64)
+  blockchain        String              @default("stellar") @db.VarChar(20)
+  kycStatus         RampWalletKycStatus @default(not_started) @map("kyc_status")
+  claimedOwnership  Boolean             @default(false) @map("claimed_ownership")
+  isAuthenticated   Boolean             @default(false) @map("is_authenticated")
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamp
+  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+
+  investor Investor    @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  orders   RampOrder[]
+
+  @@unique([investorId, publicKey])
+  @@index([publicKey])
+  @@index([kycStatus])
+  @@map("ramp_wallets")
+}
+
+// EtherFuse bank account record — BR/PIX. Stored locally for display but
+// authoritative state lives at EtherFuse and is mirrored via webhooks.
+// PIX-specific fields (pixKey, pixKeyType) are kept nullable for forward
+// compatibility with the MX flow (CLABE-based) — the active flow for Radox
+// is BR/PIX. Probe the sandbox to confirm exact wire field names before
+// shipping; the EtherFuse public docs are MX-centric and stale on BR.
+model RampBankAccount {
+  id                     Int                   @id @default(autoincrement())
+  investorId             Int                   @map("investor_id")
+  etherfuseBankAccountId String                @unique @map("etherfuse_bank_account_id") @db.Uuid
+  label                  String?               @db.VarChar(120)
+  pixKey                 String?               @map("pix_key") @db.VarChar(255)
+  pixKeyType             String?               @map("pix_key_type") @db.VarChar(20) // cpf | cnpj | email | phone | evp
+  abbrPixKey             String?               @map("abbr_pix_key") @db.VarChar(64) // last-4 / abbreviated for UI
+  status                 RampBankAccountStatus @default(pending)
+  isDefault              Boolean               @default(false) @map("is_default")
+  deletedAt              DateTime?             @map("deleted_at") @db.Timestamp
+  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamp
+  updatedAt              DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+
+  investor Investor    @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  orders   RampOrder[]
+
+  @@index([investorId, deletedAt])
+  @@index([status])
+  @@map("ramp_bank_accounts")
+}
+
+// Short-lived quote cache. EtherFuse quotes expire after 2 minutes; we keep
+// the row for audit and reconciliation. `etherfuseQuoteId` is the UUID we
+// generate and pass to POST /ramp/quote.
+model RampQuote {
+  id                Int           @id @default(autoincrement())
+  investorId        Int           @map("investor_id")
+  etherfuseQuoteId  String        @unique @map("etherfuse_quote_id") @db.Uuid
+  orderType         RampOrderType @map("order_type")
+  blockchain        String        @default("stellar") @db.VarChar(20)
+  sourceAsset       String        @map("source_asset") @db.VarChar(120) // "BRL" or "USDC:G..."
+  targetAsset       String        @map("target_asset") @db.VarChar(120)
+  sourceAmount      Decimal       @map("source_amount") @db.Decimal(20, 7)
+  destinationAmount Decimal?      @map("destination_amount") @db.Decimal(20, 7)
+  feeBps            Int?          @map("fee_bps")
+  feeAmount         Decimal?      @map("fee_amount") @db.Decimal(20, 7)
+  exchangeRate      String?       @map("exchange_rate") @db.VarChar(64) // string preserves precision
+  walletAddress     String?       @map("wallet_address") @db.VarChar(64)
+  expiresAt         DateTime      @map("expires_at") @db.Timestamp
+  rawResponse       Json?         @map("raw_response")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamp
+
+  investor Investor    @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  orders   RampOrder[]
+
+  @@index([investorId, createdAt(sort: Desc)])
+  @@index([expiresAt])
+  @@map("ramp_quotes")
+}
+
+// Materialized ramp order. State machine is driven by `order_updated`
+// webhook events; the reconciler fills gaps if webhooks are missed.
+// `pixInstructions` (JSONB) holds whatever EtherFuse returns for the BR/PIX
+// flow — exact shape discovered empirically during the sandbox probe.
+model RampOrder {
+  id               Int    @id @default(autoincrement())
+  investorId       Int    @map("investor_id")
+  etherfuseOrderId String @unique @map("etherfuse_order_id") @db.Uuid
+  quoteId          Int    @map("quote_id")
+  walletId         Int    @map("wallet_id")
+  bankAccountId    Int    @map("bank_account_id")
+
+  orderType      RampOrderType   @map("order_type")
+  status         RampOrderStatus @default(created)
+  amountInFiat   Decimal?        @map("amount_in_fiat") @db.Decimal(20, 7)
+  amountInTokens Decimal?        @map("amount_in_tokens") @db.Decimal(20, 7)
+  sourceAsset    String?         @map("source_asset") @db.VarChar(120)
+  targetAsset    String?         @map("target_asset") @db.VarChar(120)
+
+  // On-ramp PIX deposit instructions (returned from POST /ramp/order).
+  // Stored as JSONB so the BR-specific fields can be added without migrations.
+  pixInstructions Json?     @map("pix_instructions")
+  pixExpiresAt    DateTime? @map("pix_expires_at") @db.Timestamp
+
+  // Final delivery
+  confirmedTxSignature      String? @map("confirmed_tx_signature") @db.VarChar(128)
+  stellarClaimableBalanceId String? @map("stellar_claimable_balance_id") @db.VarChar(80)
+  stellarClaimTransaction   String? @map("stellar_claim_transaction") @db.Text
+
+  // Off-ramp anchor mode (Phase 2 — fields reserved so the schema doesn't
+  // churn when off-ramp lands)
+  burnTransaction       String? @map("burn_transaction") @db.Text
+  withdrawAnchorAccount String? @map("withdraw_anchor_account") @db.VarChar(64)
+  withdrawMemo          String? @map("withdraw_memo") @db.VarChar(128)
+  withdrawMemoType      String? @map("withdraw_memo_type") @db.VarChar(16)
+
+  statusPage    String? @map("status_page") @db.VarChar(512)
+  failureReason String? @map("failure_reason") @db.Text
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+  fundedAt    DateTime? @map("funded_at") @db.Timestamp
+  completedAt DateTime? @map("completed_at") @db.Timestamp
+
+  investor    Investor        @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  quote       RampQuote       @relation(fields: [quoteId], references: [id])
+  wallet      RampWallet      @relation(fields: [walletId], references: [id])
+  bankAccount RampBankAccount @relation(fields: [bankAccountId], references: [id])
+
+  @@index([investorId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([orderType, status])
+  @@index([pixExpiresAt])
+  @@map("ramp_orders")
+}
+
+// Idempotency log + audit trail for incoming EtherFuse webhooks. The unique
+// constraint on (eventType, resourceId, resourceStatus) means delivery
+// retries for the same state transition are deduped at the DB layer.
+//
+// EtherFuse does NOT publish an event_id header; the resource state is the
+// idempotency anchor. State machine in rampOrder.service.js rejects backward
+// transitions, so out-of-order deliveries are safely idempotent.
+model RampWebhookEvent {
+  id              Int       @id @default(autoincrement())
+  eventType       String    @map("event_type") @db.VarChar(40) // order_updated, customer_updated, ...
+  resourceId      String    @map("resource_id") @db.VarChar(64) // orderId, customerId, bankAccountId, walletId
+  resourceStatus  String    @map("resource_status") @db.VarChar(40)
+  payloadHash     String    @map("payload_hash") @db.VarChar(64) // sha256 of canonicalized body
+  payload         Json
+  signatureValid  Boolean   @map("signature_valid")
+  processedAt     DateTime? @map("processed_at") @db.Timestamp
+  processingError String?   @map("processing_error") @db.Text
+  receivedAt      DateTime  @default(now()) @map("received_at") @db.Timestamp
+
+  @@unique([eventType, resourceId, resourceStatus])
+  @@index([resourceId])
+  @@index([receivedAt])
+  @@map("ramp_webhook_events")
 }
