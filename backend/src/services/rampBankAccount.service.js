@@ -123,21 +123,34 @@ export class RampBankAccountService {
       : ['pending', 'active', 'inactive'].includes(efStatus) ? efStatus
       : 'pending';
 
-    // If no other default exists yet, this one becomes default.
+    // EtherFuse deduplicates bank-account registrations server-side and can
+    // return the same bankAccountId for a retried submission — upsert locally
+    // so the second call is idempotent instead of throwing P2002.
     const existingDefault = await prisma.rampBankAccount.findFirst({
       where: { investorId, isDefault: true, deletedAt: null },
     });
-    const shouldBeDefault = makeDefault === true || (makeDefault !== false && !existingDefault);
+    const existingForId = await prisma.rampBankAccount.findUnique({
+      where: { etherfuseBankAccountId },
+    });
+    const shouldBeDefault =
+      makeDefault === true ||
+      (makeDefault !== false && !existingDefault) ||
+      (existingForId?.isDefault ?? false);
 
     const row = await prisma.$transaction(async (tx) => {
-      if (shouldBeDefault && existingDefault) {
+      if (
+        shouldBeDefault &&
+        existingDefault &&
+        existingDefault.etherfuseBankAccountId !== etherfuseBankAccountId
+      ) {
         await tx.rampBankAccount.update({
           where: { id: existingDefault.id },
           data: { isDefault: false },
         });
       }
-      return tx.rampBankAccount.create({
-        data: {
+      return tx.rampBankAccount.upsert({
+        where: { etherfuseBankAccountId },
+        create: {
           investorId,
           etherfuseBankAccountId,
           label: label ?? null,
@@ -146,6 +159,15 @@ export class RampBankAccountService {
           abbrPixKey: abbreviatePixKey(pixKey, pixKeyType),
           status: mappedStatus,
           isDefault: shouldBeDefault,
+        },
+        update: {
+          label: label ?? existingForId?.label ?? null,
+          pixKey,
+          pixKeyType,
+          abbrPixKey: abbreviatePixKey(pixKey, pixKeyType),
+          status: mappedStatus,
+          isDefault: shouldBeDefault,
+          deletedAt: null,
         },
       });
     });

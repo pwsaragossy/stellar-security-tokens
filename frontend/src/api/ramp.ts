@@ -116,16 +116,26 @@ export interface RampOrder {
 }
 
 /**
- * Shape of `pixInstructions` returned from POST /api/ramp/orders. The exact
- * field names returned by EtherFuse for BR/PIX are still being verified —
- * keep this generous and let the UI fall back gracefully.
+ * Shape of `pixInstructions` returned from POST /api/ramp/orders.
+ *
+ * Canonical BR/PIX field names confirmed via Elliot's Regional Starter Pack
+ * client (src/lib/anchors/etherfuse/client.ts): `depositPixCode`,
+ * `depositPixKey`, `depositPixKeyType`, `beneficiary`. Legacy MX/BR field
+ * names retained as defensive fallbacks.
  */
 export interface PixInstructions {
-  depositClabe?: string; // legacy MX field name; may carry the PIX BR code in BR mode
+  // BR/PIX (canonical)
+  depositPixCode?: string;
+  depositPixKey?: string;
+  depositPixKeyType?: 'cpf' | 'cnpj' | 'email' | 'phone' | 'evp' | string;
+  beneficiary?: string;
+  // Generic
   depositAmount?: string | number;
   depositBankName?: string;
   depositAccountHolder?: string;
-  brcode?: string; // hoped-for canonical BR field
+  // Fallbacks / legacy
+  depositClabe?: string;
+  brcode?: string;
   qrCode?: string;
   dynamicKey?: string;
   expiresAt?: string;

@@ -55,10 +55,17 @@ function handleError(res, err, context) {
     });
   }
   if (err instanceof EtherFuseApiError) {
-    log.warn(`${context}: EtherFuse ${err.status}`, { path: err.path, body: err.body });
+    // Propagate the upstream human-readable message into `error` so the
+    // frontend doesn't need to dig into etherfuseBody to display it.
+    // Sandbox-specific limits (e.g. `SandboxAmountExceeded`) surface here.
+    const upstream =
+      (err.body && typeof err.body === 'object' && (err.body.message || err.body.error))
+      || (typeof err.body === 'string' ? err.body : null)
+      || `EtherFuse upstream error (status ${err.status})`;
+    log.warn(`${context}: EtherFuse ${err.status} — ${upstream}`, { path: err.path, body: err.body });
     return send(res, 502, {
       success: false,
-      error: 'upstream_etherfuse_error',
+      error: String(upstream),
       etherfuseStatus: err.status,
       etherfuseBody: err.body,
     });
