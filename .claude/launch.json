@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Backend API (node --watch)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "Frontend (Vite)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "frontend:dev"],
+      "port": 5173
+    },
+    {
+      "name": "Docker dev stack (full)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "docker:dev"],
+      "port": 3000
+    }
+  ]
+}

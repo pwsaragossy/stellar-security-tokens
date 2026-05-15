@@ -22,6 +22,7 @@
  *   node --env-file=.env scripts/etherfuse-sandbox-probe.mjs assets [g-or-c-address-for-fee-quote]
  *   node --env-file=.env scripts/etherfuse-sandbox-probe.mjs register-c-address <c-address>
  *   node --env-file=.env scripts/etherfuse-sandbox-probe.mjs all <c-address>
+ *   node --env-file=.env scripts/etherfuse-sandbox-probe.mjs onramp-e2e <c-address> [amount-brl]
  *
  * Each mode is idempotent in terms of side-effects on Radox; it ONLY touches
  * EtherFuse sandbox state. It creates ephemeral child organizations on
@@ -178,6 +179,248 @@ async function stageRegisterCAddress(cAddress) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STAGE D: end-to-end on-ramp delivery probe
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Answers the load-bearing question: when EtherFuse completes a BRL→TESOURO
+// on-ramp targeting a Soroban C-address, does it
+//   (a) populate `stellarClaimTransaction` (i.e. classic-tx claim flow,
+//       which a Soroban contract cannot sign → Path C forced), or
+//   (b) deliver via a direct SAC transfer (no claim tx, contract receives
+//       tokens straight away → Path A works end-to-end)?
+//
+// Walks the full programmatic flow: fresh customer org → KYC (auto-approves
+// in sandbox) → PIX bank account → BRL→TESOURO quote → order → simulated
+// fiat received → final order state inspection.
+
+/**
+ * Submit programmatic KYC for a probe customer. In sandbox this auto-approves
+ * the customer and fires `kyc_updated`. Returns the raw response so the
+ * caller can read the new status.
+ */
+async function probeSubmitKyc(customerId, cAddress, email) {
+  header(`STAGE D2: submit KYC (POST /ramp/customer/${customerId}/kyc)`);
+  const payload = {
+    pubkey: cAddress,
+    identity: {
+      id: cAddress,
+      email,
+      phoneNumber: '+5511999990000',
+      occupation: 'Software Engineer',
+      name: { givenName: 'Radox', familyName: 'Probe' },
+      dateOfBirth: '1990-01-01',
+      address: {
+        street: 'Av. Paulista 1000',
+        city: 'São Paulo',
+        region: 'SP',
+        postalCode: '01310-100',
+        country: 'BR',
+      },
+      // BR ID number: CPF. Format guess; sandbox is lax. If 400, dump and re-shape.
+      idNumbers: [{ value: '12345678901', type: 'CPF' }],
+    },
+  };
+  const res = await call('POST', `/ramp/customer/${customerId}/kyc`, payload);
+  return res;
+}
+
+/**
+ * Register a BR PIX bank account. The EtherFuse public docs describe a
+ * MX/CLABE schema only; BR PIX schema is empirically discovered here. We
+ * try a PIX-shaped account first; the error response (if any) tells us
+ * the real expected fields.
+ */
+async function probeRegisterPixBankAccount(customerId) {
+  header(`STAGE D3: register PIX bank account (POST /ramp/customer/${customerId}/bank-account)`);
+  const payload = {
+    account: {
+      transactionId: crypto.randomUUID(),
+      firstName: 'Radox',
+      paternalLastName: 'Probe',
+      birthDate: '19900101',
+      birthCountryIsoCode: 'BR',
+      // BR identifier — sending CPF in both common field names; sandbox
+      // ignores what it doesn't recognize.
+      cpf: '12345678901',
+      pixKey: `probe+${customerId.slice(0, 8)}@radox.test`,
+      pixKeyType: 'email',
+      countryIsoCode: 'BR',
+    },
+  };
+  const res = await call('POST', `/ramp/customer/${customerId}/bank-account`, payload);
+  return res;
+}
+
+/**
+ * Create a BRL → TESOURO quote. Passing walletAddress so EtherFuse can
+ * include any one-time onboarding fee for a wallet that's not yet on-chain.
+ */
+async function probeCreateOnrampQuote(customerId, cAddress, tesouroIdentifier, amountBrl) {
+  header(`STAGE D4: create BRL→TESOURO quote (POST /ramp/quote)`);
+  const quoteId = crypto.randomUUID();
+  const payload = {
+    quoteId,
+    customerId,
+    blockchain: 'stellar',
+    quoteAssets: {
+      type: 'onramp',
+      sourceAsset: 'BRL', // try uppercase; assets endpoint returned lowercase but quote enum may differ
+      targetAsset: tesouroIdentifier,
+    },
+    sourceAmount: String(amountBrl),
+    walletAddress: cAddress,
+  };
+  const res = await call('POST', '/ramp/quote', payload);
+  return { quoteId, response: res };
+}
+
+/**
+ * Execute the quote. Returns the order's PIX deposit instructions plus the
+ * etherfuseOrderId we generated.
+ */
+async function probeCreateOrder(orderId, bankAccountId, quoteId, cAddress) {
+  header(`STAGE D5: create on-ramp order (POST /ramp/order)`);
+  const payload = {
+    orderId,
+    bankAccountId,
+    publicKey: cAddress,
+    quoteId,
+  };
+  const res = await call('POST', '/ramp/order', payload);
+  return res;
+}
+
+/** Sandbox-only: simulate the PIX deposit. */
+async function probeSimulateFiatReceived(orderId, amountBrl) {
+  header(`STAGE D6: simulate PIX received (POST /ramp/order/fiat_received)`);
+  return call('POST', '/ramp/order/fiat_received', { orderId, amount: amountBrl });
+}
+
+/**
+ * Poll the order until completion (or timeout). Returns the final state so
+ * the caller can inspect `stellarClaimTransaction` / `stellarClaimableBalanceId`.
+ */
+async function probePollUntilComplete(orderId, { maxAttempts = 20, intervalMs = 3000 } = {}) {
+  header(`STAGE D7: poll order until terminal (GET /ramp/order/${orderId})`);
+  for (let i = 1; i <= maxAttempts; i++) {
+    // Per docs, freshly created orders have a 3–10s indexing delay before
+    // the GET endpoint sees them — first attempts may 404.
+    const res = await call('GET', `/ramp/order/${orderId}`);
+    const status = res.data?.status;
+    if (status && ['completed', 'finalized', 'failed', 'refunded', 'canceled'].includes(status)) {
+      console.log(`\n✅ Terminal state reached: ${status} (after ${i} polls)`);
+      return res.data;
+    }
+    if (i < maxAttempts) {
+      console.log(`  …status=${status ?? '(404)'} — sleeping ${intervalMs}ms`);
+      await new Promise(r => setTimeout(r, intervalMs));
+    }
+  }
+  console.warn(`\n⚠ Timed out waiting for terminal state on order ${orderId}`);
+  return null;
+}
+
+/**
+ * Full end-to-end on-ramp probe. Returns a decision verdict and the relevant
+ * fields from the completed order for the user/Claude to inspect.
+ */
+async function stageOnrampEndToEnd(cAddress, amountBrl) {
+  // D1: create fresh probe customer with embedded wallet
+  header('STAGE D1: create fresh probe customer with C-address wallet');
+  const customerId = crypto.randomUUID();
+  const email = `probe+${customerId.slice(0, 8)}@radox.test`;
+  const orgPayload = {
+    id: customerId,
+    displayName: `radox-probe-d-${Date.now().toString(36)}`,
+    accountType: 'personal',
+    wallets: [{ publicKey: cAddress, blockchain: 'stellar' }],
+    userInfo: { email, displayName: 'Radox Probe D' },
+  };
+  const orgRes = await call('POST', '/ramp/organization', orgPayload);
+  if (!orgRes.ok) {
+    console.error('❌ D1 failed — cannot proceed.');
+    return { verdict: 'failed', stage: 'D1', error: orgRes.data };
+  }
+
+  // D2: submit KYC (sandbox auto-approves on success)
+  const kycRes = await probeSubmitKyc(customerId, cAddress, email);
+  if (!kycRes.ok) {
+    console.error('❌ D2 failed — KYC schema rejected. Inspect error and re-shape identity payload.');
+    return { verdict: 'failed', stage: 'D2', error: kycRes.data };
+  }
+
+  // D3: register PIX bank account — schema empirically probed
+  const bankRes = await probeRegisterPixBankAccount(customerId);
+  if (!bankRes.ok) {
+    console.error('❌ D3 failed — PIX bank-account schema rejected.');
+    console.error('   → Inspect error above; the docs are MX/CLABE-centric.');
+    console.error('   → Try different field names (clabe vs pixKey, pixKeyType variants).');
+    return { verdict: 'failed', stage: 'D3', error: bankRes.data };
+  }
+  const bankAccountId = bankRes.data?.bankAccountId ?? bankRes.data?.id;
+
+  // D4: BRL → TESOURO quote
+  const tesouroIdentifier = process.env.ETHERFUSE_TESOURO_ASSET_IDENTIFIER
+    || 'TESOURO:GC3CW7EDYRTWQ635VDIGY6S4ZUF5L6TQ7AA4MWS7LEQDBLUSZXV7UPS4';
+  const quoteRes = await probeCreateOnrampQuote(customerId, cAddress, tesouroIdentifier, amountBrl);
+  if (!quoteRes.response?.ok) {
+    console.error('❌ D4 failed — quote rejected.');
+    return { verdict: 'failed', stage: 'D4', error: quoteRes.response?.data };
+  }
+
+  // D5: create order
+  const orderId = crypto.randomUUID();
+  const orderRes = await probeCreateOrder(orderId, bankAccountId, quoteRes.quoteId, cAddress);
+  if (!orderRes.ok) {
+    console.error('❌ D5 failed — order creation rejected.');
+    return { verdict: 'failed', stage: 'D5', error: orderRes.data };
+  }
+
+  // D6: simulate PIX received
+  // Allow a few seconds for the order to be indexed before the simulator fires.
+  await new Promise(r => setTimeout(r, 4000));
+  const fiatRes = await probeSimulateFiatReceived(orderId, amountBrl);
+  if (!fiatRes.ok) {
+    console.error('❌ D6 failed — fiat_received simulator rejected. Order may not be indexed yet.');
+    return { verdict: 'failed', stage: 'D6', error: fiatRes.data };
+  }
+
+  // D7: poll for terminal
+  const finalOrder = await probePollUntilComplete(orderId);
+  if (!finalOrder) {
+    return { verdict: 'timeout', stage: 'D7', orderId };
+  }
+
+  // D8: read out the load-bearing fields
+  header('STAGE D8: delivery-path inspection');
+  const claimBalance = finalOrder.stellarClaimableBalanceId ?? null;
+  const claimTx = finalOrder.stellarClaimTransaction ?? null;
+  const txSig = finalOrder.confirmedTxSignature ?? null;
+  console.log(`\n  status:                     ${finalOrder.status}`);
+  console.log(`  confirmedTxSignature:       ${txSig ?? '(null)'}`);
+  console.log(`  stellarClaimableBalanceId:  ${claimBalance ?? '(null)'}`);
+  console.log(`  stellarClaimTransaction:    ${claimTx ? '(present, ' + claimTx.length + ' chars)' : '(null)'}`);
+
+  let verdict;
+  if (claimTx || claimBalance) {
+    verdict = 'path-c-forced';
+    console.log('\n❌ Delivery uses Stellar Classic claimable balance + claim transaction.');
+    console.log('   → A Soroban C-address cannot sign this classic tx the same way a G-address would.');
+    console.log('   → Path A is NOT viable end-to-end. Commit to Path C (custodial G-address).');
+  } else if (finalOrder.status === 'completed' && txSig) {
+    verdict = 'path-a-viable';
+    console.log('\n✅ Delivery uses a direct on-chain transfer (no claim transaction).');
+    console.log('   → Path A is end-to-end viable. The C-address receives TESOURO directly.');
+    console.log('   → Confirm via Horizon: https://horizon-testnet.stellar.org/transactions/' + txSig);
+  } else {
+    verdict = 'inconclusive';
+    console.log('\n⚠ Order reached terminal but neither claim-tx nor confirmedTxSignature is populated.');
+    console.log('   → Inspect the full order body above and re-run before committing to a path.');
+  }
+  return { verdict, stage: 'complete', orderId, finalOrder };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CLI
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -226,12 +469,34 @@ const arg = process.argv[3];
       }
       break;
     }
+    case 'onramp-e2e': {
+      if (!arg) {
+        console.error('Pass the C-address as the second arg.\n  e.g. node scripts/etherfuse-sandbox-probe.mjs onramp-e2e C... [amount-brl]');
+        process.exit(1);
+      }
+      const amountBrl = process.argv[4] ? Number(process.argv[4]) : 100;
+      await stageAuth();
+      const verdict = await stageOnrampEndToEnd(arg, amountBrl);
+      header('SUMMARY');
+      console.log(`Verdict: ${verdict.verdict}  (stage reached: ${verdict.stage})`);
+      if (verdict.verdict === 'path-a-viable') {
+        console.log('\n→ Proceed with Path A: register C-addresses directly, no custodial keys.');
+      } else if (verdict.verdict === 'path-c-forced') {
+        console.log('\n→ Switch to Path C: per-investor G-address ramp + SAC forwarder + AES-256-GCM key custody.');
+      } else if (verdict.verdict === 'failed') {
+        console.log('\n→ Re-run after fixing the schema mismatch printed above.');
+      } else {
+        console.log('\n→ Inspect the order body and decide manually.');
+      }
+      break;
+    }
     default:
       console.log('Usage:');
       console.log('  node scripts/etherfuse-sandbox-probe.mjs auth');
       console.log('  node scripts/etherfuse-sandbox-probe.mjs assets [wallet-for-fee-quote]');
       console.log('  node scripts/etherfuse-sandbox-probe.mjs register-c-address <c-address>');
       console.log('  node scripts/etherfuse-sandbox-probe.mjs all <c-address>');
+      console.log('  node scripts/etherfuse-sandbox-probe.mjs onramp-e2e <c-address> [amount-brl]');
       process.exit(1);
   }
 })().catch(err => {
