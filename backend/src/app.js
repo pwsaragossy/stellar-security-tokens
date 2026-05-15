@@ -20,6 +20,8 @@ import walletRoutes from './routes/walletRoutes.js';
 import companyPaymentRoutes from './routes/companyPaymentRoutes.js';
 import adminTransactionRoutes from './routes/adminTransactionRoutes.js';
 import securityRoutes from './routes/securityRoutes.js';
+import rampWebhookRoutes from './routes/rampWebhookRoutes.js';
+import rampRoutes from './routes/rampRoutes.js';
 import { swaggerUi, swaggerSpec } from './config/swagger.js';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -108,6 +110,14 @@ app.use(cors({
 app.use(hpp()); // HTTP Parameter Pollution protection
 app.use(cookieParser());
 app.use(morgan('combined'));
+
+// EtherFuse webhooks MUST be mounted before express.json() — HMAC verification
+// requires the raw body for RFC 8785 JCS canonicalization. The route's own
+// express.raw() parser scopes to application/json.
+if (process.env.ENABLE_ETHERFUSE_ANCHOR === 'true') {
+    app.use('/api/webhooks', rampWebhookRoutes);
+}
+
 app.use(express.json({ limit: '2mb' })); // Soroban passkey-signed XDRs can be 200-500kb
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
@@ -222,6 +232,12 @@ app.use('/api', apiLimiter, offerRoutes);
 // Notification routes
 import notificationRoutes from './routes/notificationRoutes.js';
 app.use('/api/notifications', apiLimiter, notificationRoutes);
+
+// EtherFuse anchor — BRL/PIX on-ramp routes (investor-facing).
+// Webhook receiver is mounted earlier (before express.json) for raw-body HMAC.
+if (process.env.ENABLE_ETHERFUSE_ANCHOR === 'true') {
+    app.use('/api/ramp', apiLimiter, rampRoutes);
+}
 
 // Admin multisig transaction routes (strict limiting for security)
 app.use('/api/admin/transactions', strictLimiter, adminTransactionRoutes);
