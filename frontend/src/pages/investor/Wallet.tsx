@@ -26,6 +26,7 @@ interface WalletStatus {
     balances?: {
         xlm: string;
         usdc: string;
+        tesouro?: string; // EtherFuse BR/PIX delivery — yield-bearing BR treasury position
     };
     explorer?: string;
     depositMemo?: string;
@@ -74,7 +75,7 @@ export function Wallet() {
     };
 
     // Save balance to localStorage cache
-    const setCachedBalance = (userId: number | string, balances: { xlm: string; usdc: string }) => {
+    const setCachedBalance = (userId: number | string, balances: { xlm: string; usdc: string; tesouro?: string }) => {
         try {
             localStorage.setItem(getCacheKey(userId), JSON.stringify({
                 balances,
@@ -262,7 +263,8 @@ export function Wallet() {
 
             {/* ═══ BALANCE STATS ═══ */}
             {walletStatus?.walletAddress && (
-            <div className="animate-fade-in-up">
+                <div className="animate-fade-in-up grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* USDC */}
                     <div className="rounded-xl bg-white/[0.03] border border-white/8 p-5">
                         <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
                             <Coins className="h-3 w-3" /> USDC Balance
@@ -280,6 +282,36 @@ export function Wallet() {
                             )}
                         </p>
                         <p className="text-[10px] text-muted-foreground mt-1">Available for investment</p>
+                    </div>
+
+                    {/* TESOURO — BR yield-bearing treasury position */}
+                    <div className="relative rounded-xl bg-gradient-to-br from-[hsl(43_45%_55%/0.10)] to-[hsl(43_45%_55%/0.02)] border border-[hsl(43_45%_55%/0.25)] p-5 overflow-hidden">
+                        <div
+                            className="absolute inset-0 pointer-events-none opacity-30"
+                            style={{
+                                background:
+                                    'radial-gradient(120% 60% at 100% 0%, hsl(43 45% 55% / 0.12), transparent 60%)',
+                            }}
+                            aria-hidden
+                        />
+                        <div className="relative">
+                            <p className="text-[11px] uppercase tracking-wider text-[hsl(43_45%_70%)] mb-1 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[hsl(43_45%_55%)]" /> TESOURO
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-[hsl(43_45%_55%/0.15)] border border-[hsl(43_45%_55%/0.3)] text-[hsl(43_45%_75%)] ml-auto uppercase tracking-wider">
+                                    Yield-bearing
+                                </span>
+                            </p>
+                            <p className="text-2xl font-bold text-white" style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.01em' }}>
+                                {renderBalance(
+                                    walletStatus.balances?.tesouro !== undefined
+                                        ? Number(walletStatus.balances.tesouro).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
+                                        : undefined,
+                                    balanceLoading,
+                                    !!walletStatus.balances
+                                )}
+                            </p>
+                            <p className="text-[10px] text-white/45 mt-1">Brazilian treasury · accrues yield on-chain</p>
+                        </div>
                     </div>
                 </div>
             )}

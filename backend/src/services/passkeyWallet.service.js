@@ -11,6 +11,7 @@ import {
   hash,
   Address,
   Account,
+  Asset,
   Keypair,
   Transaction,
   FeeBumpTransaction,
@@ -704,11 +705,27 @@ export class PasskeyWalletService {
 
     const balances = {
       xlm: '0',
-      usdc: '0'
+      usdc: '0',
+      tesouro: '0',
     };
 
     const xlmSacContractId = process.env.XLM_SAC_CONTRACT_ID;
     const usdcSacContractId = process.env.USDC_SAC_CONTRACT_ID;
+
+    // TESOURO (EtherFuse BR/PIX on-ramp delivery asset). The SAC contract ID
+    // is deterministic from CODE:ISSUER, so we compute it on the fly from
+    // ETHERFUSE_TESOURO_ASSET_IDENTIFIER ("TESOURO:G...") if the env var
+    // is set. Falls through to '0' if not configured or asset doesn't exist.
+    let tesouroSacContractId = null;
+    const tesouroAssetId = process.env.ETHERFUSE_TESOURO_ASSET_IDENTIFIER;
+    if (tesouroAssetId && tesouroAssetId.includes(':')) {
+      try {
+        const [code, issuer] = tesouroAssetId.split(':');
+        tesouroSacContractId = new Asset(code, issuer).contractId(getNetworkPassphrase());
+      } catch (err) {
+        log.debug(`Failed to compute TESOURO SAC: ${err.message}`);
+      }
+    }
 
     const querySacBalance = async (sacContractId, walletAddress) => {
       log.debug(`Querying SAC: ${sacContractId} for wallet ${walletAddress}`);
@@ -750,13 +767,15 @@ export class PasskeyWalletService {
       return '0';
     };
 
-    const [xlmBalance, usdcBalance] = await Promise.all([
+    const [xlmBalance, usdcBalance, tesouroBalance] = await Promise.all([
       querySacBalance(xlmSacContractId, walletContractId),
-      querySacBalance(usdcSacContractId, walletContractId)
+      querySacBalance(usdcSacContractId, walletContractId),
+      querySacBalance(tesouroSacContractId, walletContractId),
     ]);
 
     balances.xlm = xlmBalance;
     balances.usdc = usdcBalance;
+    balances.tesouro = tesouroBalance;
 
     return balances;
   }

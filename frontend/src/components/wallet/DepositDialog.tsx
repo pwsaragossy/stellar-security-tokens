@@ -640,11 +640,33 @@ function OrderInProgress({
     const beneficiary = order.pixInstructions?.beneficiary || order.pixInstructions?.depositAccountHolder || 'EtherFuse';
     const pixExpiresIn = useCountdown(order.pixExpiresAt);
 
+    const isSandbox = import.meta.env.MODE !== 'production';
+    const [simulating, setSimulating] = useState(false);
+    const [simError, setSimError] = useState<string | null>(null);
+
+    async function handleSimulate() {
+        setSimError(null);
+        setSimulating(true);
+        try {
+            const res = await rampApi.simulateFiatReceived(order.id);
+            if (!res.success) throw new Error(res.error ?? 'Simulator rejected the call');
+        } catch (err: any) {
+            setSimError(err?.response?.data?.error ?? err?.message ?? 'Simulator failed');
+        } finally {
+            setSimulating(false);
+        }
+    }
+
+    const explorerUrl = order.confirmedTxSignature
+        ? `https://stellar.expert/explorer/testnet/tx/${order.confirmedTxSignature}`
+        : null;
+    const isComplete = order.status === 'completed' || order.status === 'finalized';
+
     return (
         <div className="py-2 space-y-5">
             <StatusPill status={order.status} />
 
-            {brcode ? (
+            {brcode && !isComplete ? (
                 <div className="flex flex-col items-center gap-3">
                     <div className="bg-white rounded-xl p-3">
                         <QRCode value={brcode} size={180} />
@@ -669,15 +691,73 @@ function OrderInProgress({
                         </p>
                     )}
                 </div>
+            ) : isComplete ? (
+                <div className="px-5 py-6 rounded-xl bg-gradient-to-br from-[hsl(160_60%_40%/0.10)] to-[hsl(160_60%_40%/0.02)] border border-[hsl(160_60%_40%/0.3)] text-center">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-[hsl(160_60%_55%)]">Delivered</p>
+                    <p
+                        className="mt-2 text-3xl font-bold text-white"
+                        style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.01em' }}
+                    >
+                        {order.amountInTokens
+                            ? Number(order.amountInTokens).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
+                            : '—'}{' '}
+                        <span className="text-[hsl(43_45%_70%)] text-xl">TESOURO</span>
+                    </p>
+                    {order.amountInFiat && (
+                        <p className="text-[12px] text-white/50 mt-1">
+                            from R$ {Number(order.amountInFiat).toFixed(2)}
+                        </p>
+                    )}
+                </div>
             ) : (
                 <div className="px-4 py-6 rounded-xl border border-dashed border-white/10 text-center text-[12px] text-white/50">
                     Waiting for PIX instructions…
                 </div>
             )}
 
-            <div className="text-[11px] text-white/45 space-y-1.5 px-1">
-                <p>Pay the PIX to <span className="text-white/70 font-mono">{beneficiary}</span> from your bank app. TESOURO lands in your wallet seconds after the PIX clears.</p>
-            </div>
+            {!isComplete && (
+                <div className="text-[11px] text-white/45 space-y-1.5 px-1">
+                    <p>
+                        Pay the PIX to <span className="text-white/70 font-mono">{beneficiary}</span> from your bank app.
+                        TESOURO lands in your wallet seconds after the PIX clears.
+                    </p>
+                </div>
+            )}
+
+            {/* Sandbox-only: skip the bank app and short-circuit the deposit */}
+            {isSandbox && order.status === 'created' && (
+                <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 space-y-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-amber-300">Sandbox · skip the bank app</p>
+                        <span className="text-[10px] text-amber-200/60">testnet only</span>
+                    </div>
+                    <Button
+                        onClick={handleSimulate}
+                        disabled={simulating}
+                        className="w-full h-9 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 border border-amber-500/30 text-[12px] font-medium disabled:opacity-50"
+                    >
+                        {simulating ? (
+                            <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Simulating…</>
+                        ) : (
+                            <>Simulate PIX paid</>
+                        )}
+                    </Button>
+                    {simError && (
+                        <p className="text-[11px] text-red-300/90">{simError}</p>
+                    )}
+                </div>
+            )}
+
+            {explorerUrl && (
+                <a
+                    href={explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full text-center text-[11px] text-[hsl(43_45%_70%)] hover:text-[hsl(43_45%_85%)] underline-offset-4 hover:underline transition-colors"
+                >
+                    View on-chain delivery →
+                </a>
+            )}
 
             {order.failureReason && (
                 <InlineError message={order.failureReason} />
