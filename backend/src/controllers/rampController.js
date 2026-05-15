@@ -17,6 +17,7 @@ import logger from '../utils/logger.js';
 import RampKycService, { RampReadinessError } from '../services/rampKyc.service.js';
 import RampBankAccountService from '../services/rampBankAccount.service.js';
 import RampOrderService from '../services/rampOrder.service.js';
+import RampOfframpService, { RampOfframpError } from '../services/rampOfframp.service.js';
 import EtherFuseClient, { EtherFuseApiError } from '../services/etherfuse.service.js';
 import prisma from '../config/prisma.js';
 
@@ -51,6 +52,17 @@ function handleError(res, err, context) {
       success: false,
       error: `gated:${err.reason}`,
       reason: err.reason,
+      details: err.details,
+    });
+  }
+  if (err instanceof RampOfframpError) {
+    // Off-ramp-specific errors carry a structured `code` + optional `details`
+    // for the frontend (e.g. `insufficient_balance` → show "Max" + balance).
+    log.warn(`${context}: ${err.code ?? 'offramp'} — ${err.message}`, { details: err.details });
+    return send(res, err.status ?? 400, {
+      success: false,
+      error: err.message,
+      code: err.code,
       details: err.details,
     });
   }
@@ -363,6 +375,111 @@ export async function simulateFiatReceived(req, res) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// OFF-RAMP (Tokens → BRL via PIX, EtherFuse Anchor Mode)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/ramp/offramp/quotes — TESOURO|USDC → BRL quote.
+ *
+ * Body: { sourceAsset: "TESOURO"|"USDC", sourceAmount: number|string }
+ *
+ * Gates on readiness AND balance pre-flight. The whitelist of source assets
+ * is enforced in RampOfframpService — only the two stablecoin/stablebond
+ * positions an investor can realistically hold in their Soroban wallet.
+ */
+export async function createOfframpQuote(req, res) {
+  try {
+    const investorId = investorIdFromReq(req);
+    const { sourceAsset, sourceAmount } = req.body ?? {};
+    const result = await RampOfframpService.createQuote(investorId, { sourceAsset, sourceAmount });
+    return send(res, 201, { success: true, data: result });
+  } catch (err) {
+    return handleError(res, err, 'createOfframpQuote');
+  }
+}
+
+/**
+ * POST /api/ramp/offramp/orders — execute an off-ramp quote with useAnchor=true.
+ *
+ * Body: { quoteId: number, bankAccountId: number }
+ *
+ * Response includes the anchor account + memo that the frontend will use to
+ * call /prepare-tx for the on-chain signing step.
+ */
+export async function createOfframpOrder(req, res) {
+  try {
+    const investorId = investorIdFromReq(req);
+    const { quoteId, bankAccountId } = req.body ?? {};
+    const result = await RampOfframpService.createOrder(investorId, { quoteId, bankAccountId });
+    return send(res, 201, { success: true, data: result });
+  } catch (err) {
+    return handleError(res, err, 'createOfframpOrder');
+  }
+}
+
+/**
+ * POST /api/ramp/offramp/orders/:id/prepare-tx — build the unsigned SAC
+ * transfer XDR with Memo.hash. Frontend takes this XDR, runs passkey signing,
+ * and calls /submit-tx with the signed envelope.
+ */
+export async function prepareOfframpTx(req, res) {
+  try {
+    const investorId = investorIdFromReq(req);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return send(res, 400, { success: false, error: 'invalid order id' });
+    }
+    const result = await RampOfframpService.prepareSigningTx(investorId, id);
+    return send(res, 200, { success: true, data: result });
+  } catch (err) {
+    return handleError(res, err, 'prepareOfframpTx');
+  }
+}
+
+/**
+ * POST /api/ramp/offramp/orders/:id/submit-tx — submit the passkey-signed XDR.
+ *
+ * Body: { signedXdr: string }
+ *
+ * After submit, the order stays in `created` until EtherFuse's anchor monitor
+ * detects the credit and fires `order_updated` with status=funded. Frontend
+ * polls GET /api/ramp/orders/:id (lazy reconcile applies) for progression.
+ */
+export async function submitOfframpTx(req, res) {
+  try {
+    const investorId = investorIdFromReq(req);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return send(res, 400, { success: false, error: 'invalid order id' });
+    }
+    const { signedXdr } = req.body ?? {};
+    const result = await RampOfframpService.submitSignedTx(investorId, id, signedXdr);
+    return send(res, 200, { success: true, data: result });
+  } catch (err) {
+    return handleError(res, err, 'submitOfframpTx');
+  }
+}
+
+/**
+ * POST /api/ramp/offramp/orders/:id/cancel — cancel a `created` order before
+ * the investor has submitted the on-chain transfer. EtherFuse rejects cancel
+ * attempts on funded/completed orders with 4xx, which surfaces as 502.
+ */
+export async function cancelOfframpOrder(req, res) {
+  try {
+    const investorId = investorIdFromReq(req);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return send(res, 400, { success: false, error: 'invalid order id' });
+    }
+    const result = await RampOfframpService.cancelOrder(investorId, id);
+    return send(res, 200, { success: true, data: result });
+  } catch (err) {
+    return handleError(res, err, 'cancelOfframpOrder');
+  }
+}
+
 export default {
   getReadiness,
   submitKyc,
@@ -374,4 +491,9 @@ export default {
   listOrders,
   getOrder,
   simulateFiatReceived,
+  createOfframpQuote,
+  createOfframpOrder,
+  prepareOfframpTx,
+  submitOfframpTx,
+  cancelOfframpOrder,
 };

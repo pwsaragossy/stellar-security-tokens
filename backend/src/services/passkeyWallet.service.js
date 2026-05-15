@@ -13,6 +13,7 @@ import {
   Account,
   Asset,
   Keypair,
+  Memo,
   Transaction,
   FeeBumpTransaction,
   nativeToScVal,
@@ -665,8 +666,12 @@ export class PasskeyWalletService {
         const isContractAddress = user.stellarContractId.startsWith('C');
 
         if (isContractAddress) {
-          const balances = await this.getSorobanWalletBalances(user.stellarContractId);
+          const [balances, tesouroMarket] = await Promise.all([
+            this.getSorobanWalletBalances(user.stellarContractId),
+            this.getTesouroMarketData(),
+          ]);
           result.balances = balances;
+          result.tesouroMarket = tesouroMarket; // { priceBrl, yieldPctYear, asOf } | null
           result.explorer = `https://stellar.expert/explorer/${isTestnet() ? 'testnet' : 'public'}/contract/${user.stellarContractId}`;
         } else {
           const { StellarService } = await import('./stellar.service.js');
@@ -699,6 +704,61 @@ export class PasskeyWalletService {
    * Query Soroban token balances for a smart wallet contract.
    * Uses Soroban RPC to simulate balance() calls on SAC token contracts.
    */
+  /**
+   * Fetch the TESOURO "market" data: current BRL-per-token price (from
+   * EtherFuse's public stablebonds lookup) and a yield rate proxy (Selic
+   * meta target, from Banco Central do Brasil).
+   *
+   * Both calls are public, no auth. Cached for 1h in-process to avoid hitting
+   * either endpoint on every wallet-status call. Returns `null` shape-fields
+   * gracefully if either upstream fails — UI just hides the chip.
+   */
+  static async getTesouroMarketData() {
+    const CACHE_TTL_MS = 60 * 60 * 1000; // 1h
+    const now = Date.now();
+    if (this._tesouroCache && (now - this._tesouroCache.at) < CACHE_TTL_MS) {
+      return this._tesouroCache.value;
+    }
+
+    const value = { priceBrl: null, yieldPctYear: null, asOf: new Date().toISOString() };
+
+    // EtherFuse stablebonds → TESOURO tokenPriceDecimal
+    try {
+      const sbBase = process.env.ETHERFUSE_API_BASE_URL || 'https://api.sand.etherfuse.com';
+      const res = await fetch(`${sbBase}/lookup/stablebonds`, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        const body = await res.json();
+        const list = Array.isArray(body) ? body : (body.stablebonds ?? []);
+        const tesouro = list.find((b) => (b.symbol ?? '').toUpperCase() === 'TESOURO' && (b.bondCurrency ?? '').toUpperCase() === 'BRL');
+        if (tesouro?.tokenPriceDecimal) {
+          value.priceBrl = String(tesouro.tokenPriceDecimal);
+        }
+      }
+    } catch (err) {
+      log.debug(`Skipping TESOURO price (EtherFuse upstream): ${err.message}`);
+    }
+
+    // BCB Selic meta (series 432) — proxy for treasury yield
+    try {
+      const res = await fetch(
+        'https://api.bcb.gov.br/dados/serie/bcdata.sgs.432/dados/ultimos/1?formato=json',
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (res.ok) {
+        const body = await res.json();
+        const last = Array.isArray(body) ? body[0] : null;
+        if (last?.valor) {
+          value.yieldPctYear = Number(last.valor);
+        }
+      }
+    } catch (err) {
+      log.debug(`Skipping Selic fetch (BCB upstream): ${err.message}`);
+    }
+
+    this._tesouroCache = { at: now, value };
+    return value;
+  }
+
   static async getSorobanWalletBalances(walletContractId) {
     const { scValToNative } = await import('@stellar/stellar-sdk');
     const server = this.getRpcServer();
@@ -791,7 +851,7 @@ export class PasskeyWalletService {
    * func+auth submission method, so we no longer need the 170-line manual
    * footprint hack from passkey-kit.
    */
-  static async buildWithdrawalTx(userId, destinationAddress, amount, assetCode = 'USDC', userType = UserType.INVESTOR) {
+  static async buildWithdrawalTx(userId, destinationAddress, amount, assetCode = 'USDC', userType = UserType.INVESTOR, options = {}) {
     const server = this.getRpcServer();
     const model = this.#getPrismaModel(userType);
 
@@ -825,16 +885,7 @@ export class PasskeyWalletService {
       throw new Error(`${userType === UserType.INVESTOR ? 'Investor' : 'Company user'} wallet not found`);
     }
 
-    let tokenContractId;
-    if (assetCode === 'USDC') {
-      tokenContractId = process.env.USDC_CONTRACT_ID;
-      if (!tokenContractId) throw new Error('USDC_CONTRACT_ID not configured');
-    } else if (assetCode === 'XLM') {
-      tokenContractId = process.env.XLM_CONTRACT_ID;
-      if (!tokenContractId) throw new Error('XLM_CONTRACT_ID not configured');
-    } else {
-      throw new Error('Unsupported asset for withdrawal');
-    }
+    const tokenContractId = this.#resolveAssetSacContractId(assetCode);
 
     const networkPassphrase = getNetworkPassphrase();
     const opsKeypair = getOperationsKeypair();
@@ -851,13 +902,25 @@ export class PasskeyWalletService {
       xdr.ScVal.scvI128(xdr.Int128Parts.fromBigInt(amountBigInt))
     );
 
-    let tx = new TransactionBuilder(
+    const builder = new TransactionBuilder(
       await server.getAccount(opsKeypair.publicKey()),
       { fee: BASE_FEE, networkPassphrase }
     )
       .addOperation(transferOp)
-      .setTimeout(180)
-      .build();
+      .setTimeout(180);
+
+    // Off-ramp anchor mode: attach the EtherFuse-issued memo so the anchor's
+    // monitor can correlate this incoming credit to the order it issued.
+    // EtherFuse delivers the memo as base64 — callers decode to hex before
+    // passing here. Without the memo, the anchor will auto-refund.
+    if (options.memoHashHex) {
+      if (!/^[0-9a-f]{64}$/i.test(options.memoHashHex)) {
+        throw new Error('memoHashHex must be a 32-byte hex string (64 hex chars)');
+      }
+      builder.addMemo(Memo.hash(options.memoHashHex));
+    }
+
+    let tx = builder.build();
 
     // Simulate & prepare
     log.info('Simulating withdrawal transaction...');
@@ -871,6 +934,39 @@ export class PasskeyWalletService {
       networkPassphrase,
       walletId: user.stellarContractId
     };
+  }
+
+  /**
+   * Resolve a Radox asset code to its Stellar Asset Contract (SAC) contract ID.
+   *
+   * USDC / XLM are configured via env (`USDC_CONTRACT_ID` / `XLM_CONTRACT_ID`).
+   * TESOURO is computed deterministically from `ETHERFUSE_TESOURO_ASSET_IDENTIFIER`
+   * via the SAC derivation (Asset.contractId), so no separate env var is needed.
+   *
+   * @private
+   * @param {string} assetCode  - 'USDC' | 'XLM' | 'TESOURO'
+   * @returns {string} The SAC contract ID (C…)
+   */
+  static #resolveAssetSacContractId(assetCode) {
+    if (assetCode === 'USDC') {
+      const id = process.env.USDC_CONTRACT_ID;
+      if (!id) throw new Error('USDC_CONTRACT_ID not configured');
+      return id;
+    }
+    if (assetCode === 'XLM') {
+      const id = process.env.XLM_CONTRACT_ID;
+      if (!id) throw new Error('XLM_CONTRACT_ID not configured');
+      return id;
+    }
+    if (assetCode === 'TESOURO') {
+      const assetId = process.env.ETHERFUSE_TESOURO_ASSET_IDENTIFIER;
+      if (!assetId || !assetId.includes(':')) {
+        throw new Error('ETHERFUSE_TESOURO_ASSET_IDENTIFIER not configured (expected CODE:ISSUER)');
+      }
+      const [code, issuer] = assetId.split(':');
+      return new Asset(code, issuer).contractId(getNetworkPassphrase());
+    }
+    throw new Error(`Unsupported asset for withdrawal: ${assetCode}`);
   }
 
   /**
@@ -996,11 +1092,25 @@ export class PasskeyWalletService {
       const invokeArgs = op.func?.value?.();
       if (invokeArgs && typeof invokeArgs.contractAddress === 'function') {
         const contractId = Address.fromScAddress(invokeArgs.contractAddress()).toString();
+
+        // TESOURO SAC is derived deterministically from CODE:ISSUER so we compute
+        // it on the fly and add to the allowlist. Falls through silently when the
+        // env var is unset (off-ramp routes will 404 in that case anyway).
+        let tesouroSacContractId = null;
+        const tesouroAssetId = process.env.ETHERFUSE_TESOURO_ASSET_IDENTIFIER;
+        if (tesouroAssetId && tesouroAssetId.includes(':')) {
+          try {
+            const [code, issuer] = tesouroAssetId.split(':');
+            tesouroSacContractId = new Asset(code, issuer).contractId(getNetworkPassphrase());
+          } catch { /* derivation failed — leave null */ }
+        }
+
         const allowedContracts = [
           process.env.USDC_SAC_CONTRACT_ID,
           process.env.USDC_CONTRACT_ID,
           process.env.XLM_SAC_CONTRACT_ID,
           process.env.XLM_CONTRACT_ID,
+          tesouroSacContractId,
         ].filter(Boolean);
 
         if (allowedContracts.length > 0 && !allowedContracts.includes(contractId)) {
