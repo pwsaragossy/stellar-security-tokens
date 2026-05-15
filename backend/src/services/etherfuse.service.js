@@ -275,6 +275,30 @@ export const Onboarding = {
   },
 };
 
+/**
+ * Legal agreement acceptance (production-only). Sandbox auto-approves KYC
+ * without these; production requires all three before the customer is
+ * order-eligible. Paths confirmed via Elliot's Regional Starter Pack client —
+ * plural `agreements`, NOT singular `agreement`.
+ */
+export const Agreements = {
+  async electronicSignature(presignedUrl) {
+    return request('POST', '/ramp/agreements/electronic-signature', { body: { presignedUrl } });
+  },
+  async termsAndConditions(presignedUrl) {
+    return request('POST', '/ramp/agreements/terms-and-conditions', { body: { presignedUrl } });
+  },
+  async customerAgreement(presignedUrl) {
+    return request('POST', '/ramp/agreements/customer-agreement', { body: { presignedUrl } });
+  },
+  /** Accept all three in sequence (resolves to the final response). */
+  async acceptAll(presignedUrl) {
+    await Agreements.electronicSignature(presignedUrl);
+    await Agreements.termsAndConditions(presignedUrl);
+    return Agreements.customerAgreement(presignedUrl);
+  },
+};
+
 /** Webhook subscription management. */
 export const Webhooks = {
   /**
@@ -301,6 +325,7 @@ export default {
   Auth,
   Organizations,
   Customers,
+  Agreements,
   Wallets,
   Assets,
   Quotes,

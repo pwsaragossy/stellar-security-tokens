@@ -425,9 +425,14 @@ function PixPanel({
         return (
             <div className="py-2 space-y-5">
                 <div className="space-y-2">
-                    <label className="text-[10px] font-medium uppercase tracking-wider text-gray-500 px-1">
-                        Amount in BRL
-                    </label>
+                    <div className="flex items-baseline justify-between px-1">
+                        <label className="text-[10px] font-medium uppercase tracking-wider text-gray-500">
+                            Amount in BRL
+                        </label>
+                        <span className="text-[10px] text-amber-400/80 uppercase tracking-wider">
+                            Sandbox cap · R$ 500
+                        </span>
+                    </div>
                     <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">R$</span>
                         <Input
@@ -438,6 +443,7 @@ function PixPanel({
                             onChange={(e) => setAmount(e.target.value)}
                             className="pl-10 bg-white/5 border-white/10 rounded-xl h-12 text-lg font-mono"
                             min="1"
+                            max="500"
                             step="0.01"
                             autoFocus
                         />
@@ -625,8 +631,13 @@ function OrderInProgress({
 }) {
     const brcode = useMemo(() => {
         const p = order.pixInstructions ?? {};
-        return p.brcode || p.qrCode || p.depositClabe || '';
+        // EtherFuse canonical BR fields (per Elliot's starter pack client):
+        // depositPixCode is the BR-Code copy-paste string the user pays from
+        // their bank app; depositPixKey is the underlying key. Fall back
+        // through legacy names defensively.
+        return p.depositPixCode || p.depositPixKey || p.brcode || p.qrCode || p.depositClabe || '';
     }, [order]);
+    const beneficiary = order.pixInstructions?.beneficiary || order.pixInstructions?.depositAccountHolder || 'EtherFuse';
     const pixExpiresIn = useCountdown(order.pixExpiresAt);
 
     return (
@@ -665,8 +676,7 @@ function OrderInProgress({
             )}
 
             <div className="text-[11px] text-white/45 space-y-1.5 px-1">
-                <p>Pay the PIX from <span className="text-white/70 font-mono">{order.pixInstructions?.depositAccountHolder ?? 'EtherFuse'}</span> using your bank app.</p>
-                <p>TESOURO will land in your wallet seconds after the PIX clears.</p>
+                <p>Pay the PIX to <span className="text-white/70 font-mono">{beneficiary}</span> from your bank app. TESOURO lands in your wallet seconds after the PIX clears.</p>
             </div>
 
             {order.failureReason && (

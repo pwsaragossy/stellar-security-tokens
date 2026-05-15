@@ -93,14 +93,20 @@ export class RampKycService {
     }
 
     const missingFields = REQUIRED_KYC_FIELDS.filter((f) => investor[f] == null);
-    const activeBank = bankAccounts.find((b) => b.status === 'active');
+    // EtherFuse marks bank accounts as `awaiting_deposit_verification` in sandbox
+    // (and sometimes prod) while the org is KYB-approved — `compliant: true` on
+    // EtherFuse's side makes them order-eligible even before final activation.
+    // We treat anything other than `inactive` (and a non-deleted row) as usable.
+    const usableBank = bankAccounts.find(
+      (b) => b.status === 'active' || b.status === 'awaiting_deposit_verification' || b.status === 'pending'
+    );
 
     let blockedReason = null;
     if (missingFields.length > 0) blockedReason = 'missing_fields';
     else if (!customer) blockedReason = 'customer_not_provisioned';
     else if (customer.kycStatus === 'rejected') blockedReason = 'kyc_rejected';
     else if (customer.kycStatus !== 'approved') blockedReason = 'kyc_pending';
-    else if (!activeBank) blockedReason = 'no_active_bank_account';
+    else if (!usableBank) blockedReason = 'no_active_bank_account';
 
     return {
       isReady: blockedReason == null,
@@ -205,11 +211,8 @@ export class RampKycService {
       return cust;
     });
 
-    // Update Investor.etherfuseCustomerId pointer (denormalized for fast lookup).
-    await prisma.investor.update({
-      where: { id: investorId },
-      data: { etherfuseCustomerId },
-    });
+    // No denormalized Investor.etherfuseCustomerId pointer — the mapping lives
+    // on RampCustomer (1:1 with Investor); look it up via rampCustomer instead.
 
     return customer;
   }
