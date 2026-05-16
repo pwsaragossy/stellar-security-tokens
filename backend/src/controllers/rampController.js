@@ -113,7 +113,7 @@ function handleError(res, err, context) {
   if (err.status && err.status >= 400 && err.status < 500) {
     return send(res, err.status, { success: false, error: err.message });
   }
-  log.error(`${context}: unexpected error`, { error: err.message, stack: err.stack });
+  log.errorFromException(`${context}: unexpected error`, err);
   return send(res, 500, { success: false, error: 'internal_error' });
 }
 
