@@ -26,6 +26,13 @@ interface DepositDialogProps {
     investorId?: number;
     walletAddress: string;
     network?: 'testnet' | 'mainnet';
+    /**
+     * When set (typically from `?ramp=<id>` URL handoff), the dialog skips
+     * the source picker and the amount input, opens directly on the PIX
+     * tracking screen with the order rehydrated. Lets the user recover the
+     * PIX BR-code after accidentally closing the modal mid-flow.
+     */
+    resumeOrderId?: number | null;
 }
 
 interface DepositInfo {
@@ -36,12 +43,12 @@ interface DepositInfo {
 
 type DepositSource = 'exchange' | 'wallet' | 'pix' | null;
 
-export function DepositDialog({ investorId, walletAddress }: DepositDialogProps) {
+export function DepositDialog({ investorId, walletAddress, resumeOrderId }: DepositDialogProps) {
     const [copied, setCopied] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [deposit, setDeposit] = useState<DepositInfo | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [source, setSource] = useState<DepositSource>(null);
+    const [source, setSource] = useState<DepositSource>(resumeOrderId ? 'pix' : null);
 
     const handleCopy = async (text: string, id: string) => {
         await navigator.clipboard.writeText(text);
@@ -230,7 +237,7 @@ export function DepositDialog({ investorId, walletAddress }: DepositDialogProps)
 
                 /* Step 2: PIX — real on-ramp via EtherFuse */
             ) : source === 'pix' ? (
-                <PixPanel onCopy={handleCopy} copied={copied} />
+                <PixPanel onCopy={handleCopy} copied={copied} resumeOrderId={resumeOrderId} />
             ) : null}
         </DialogContent>
     );
@@ -293,9 +300,11 @@ const POLL_INTERVAL_MS = 4_000;
 function PixPanel({
     onCopy,
     copied,
+    resumeOrderId,
 }: {
     onCopy: (text: string, id: string) => Promise<void>;
     copied: string | null;
+    resumeOrderId?: number | null;
 }) {
     const navigate = useNavigate();
     const { readiness, isReady, loading: readinessLoading } = useRampReadiness();
@@ -305,10 +314,29 @@ function PixPanel({
     const [quote, setQuote] = useState<RampQuote | null>(null);
     const [order, setOrder] = useState<RampOrder | null>(null);
     const [selectedBankId, setSelectedBankId] = useState<number | null>(null);
-    const [stage, setStage] = useState<'input' | 'reviewing' | 'submitted'>('input');
+    const [stage, setStage] = useState<'input' | 'reviewing' | 'submitted'>(resumeOrderId ? 'submitted' : 'input');
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const pollHandle = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // Resume from URL handoff: fetch the order and jump straight to the
+    // tracking ('submitted') stage. Polling effect picks up from there.
+    useEffect(() => {
+        if (!resumeOrderId) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await rampApi.getOrder(resumeOrderId);
+                if (!cancelled && res.success && res.data) {
+                    setOrder(res.data);
+                    setStage('submitted');
+                }
+            } catch {
+                /* If the fetch fails, the user falls back to the input stage */
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [resumeOrderId]);
 
     // Pre-select the default usable bank account.
     // Sandbox leaves accounts in `awaiting_deposit_verification` indefinitely
