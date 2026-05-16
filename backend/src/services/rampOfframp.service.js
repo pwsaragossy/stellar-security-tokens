@@ -236,13 +236,29 @@ export class RampOfframpService {
       });
     }
 
-    log.info(`Creating off-ramp order: investor=${investorId} quote=${quoteId}`);
+    // EtherFuse requires `feePayer` when the source wallet is a Soroban
+    // C-address — without it the order creation rejects with 400
+    // "C-wallet offramp requires fee_payer". We use the ops keypair G as
+    // the fee payer because it's the same account that fee-bumps every
+    // Soroban TX on this platform, and it's the source of the relayer-bridge
+    // TX 2's fee bump anyway.
+    const isCAddress = (wallet.publicKey || '').startsWith('C');
+    const feePayer = isCAddress ? process.env.OPERATIONS_PUBLIC_KEY : undefined;
+    if (isCAddress && !feePayer) {
+      throw new RampOfframpError(
+        'OPERATIONS_PUBLIC_KEY not configured — required for C-wallet off-ramp',
+        { status: 500, code: 'fee_payer_not_configured' }
+      );
+    }
+
+    log.info(`Creating off-ramp order: investor=${investorId} quote=${quoteId} feePayer=${feePayer ? feePayer.slice(0, 8) + '…' : 'none'}`);
     return RampOrderService.createOrder({
       investorId,
       quoteId: Number(quoteId),
       walletId: wallet.id,
       bankAccountId: Number(bankAccountId),
       useAnchor: true,
+      feePayer,
     });
   }
 
