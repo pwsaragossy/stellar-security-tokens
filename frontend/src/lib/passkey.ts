@@ -51,6 +51,66 @@ export class PasskeyClient {
     }
 
     /**
+     * Pre-flight: verify the smart account contract is deployed on-chain
+     * for this credential, with retries and verbose logging. The kit's own
+     * check throws a generic "contract not found" without exposing the
+     * underlying RPC error (CORS, timeout, sync lag, etc.), making
+     * debugging painful. We mirror the kit's derivation and run the same
+     * RPC call ourselves first.
+     *
+     * Throws with a specific reason if the contract genuinely can't be
+     * found after retries. Returns silently on success (kit takes over).
+     */
+    private async preflightContractCheck(credentialId: string): Promise<void> {
+        if (!this.kit) return;
+        const { Keypair, hash, StrKey, Address, xdr } = await import('@stellar/stellar-sdk');
+        const { rpc } = await import('@stellar/stellar-sdk');
+        const credBuf = (() => {
+            const fixed = credentialId.replace(/-/g, '+').replace(/_/g, '/');
+            const padded = fixed + '='.repeat((4 - fixed.length % 4) % 4);
+            return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
+        })();
+        // Mirror smart-account-kit's hardcoded deployer derivation.
+        const deployer = Keypair.fromRawEd25519Seed(hash(Buffer.from('openzeppelin-smart-account-kit')));
+        const networkPassphrase = this.kit.networkPassphrase;
+        const preimage = xdr.HashIdPreimage.envelopeTypeContractId(
+            new xdr.HashIdPreimageContractId({
+                networkId: hash(Buffer.from(networkPassphrase)),
+                contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAddress(
+                    new xdr.ContractIdPreimageFromAddress({
+                        address: Address.fromString(deployer.publicKey()).toScAddress(),
+                        salt: hash(Buffer.from(credBuf)),
+                    }),
+                ),
+            }),
+        );
+        const contractId = StrKey.encodeContract(hash(preimage.toXDR()));
+        const server = new rpc.Server((this.kit as any).rpcUrl ?? 'https://soroban-testnet.stellar.org');
+        // Up to 3 attempts with a small backoff — handles transient RPC blips
+        // and read-replica sync lag right after a fresh deployment.
+        const attempts = 3;
+        let lastErr: unknown = null;
+        for (let i = 0; i < attempts; i++) {
+            try {
+                const res = await server.getContractData(contractId, xdr.ScVal.scvLedgerKeyContractInstance());
+                if (res) {
+                    console.log(`[SmartAccount] Pre-flight OK (${contractId.slice(0, 8)}… on attempt ${i + 1})`);
+                    return;
+                }
+            } catch (err) {
+                lastErr = err;
+                console.warn(`[SmartAccount] Pre-flight attempt ${i + 1}/${attempts} failed:`, err);
+                if (i < attempts - 1) await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+            }
+        }
+        const reason = (lastErr instanceof Error ? lastErr.message : String(lastErr ?? 'unknown'));
+        throw new Error(
+            `Wallet contract ${contractId.slice(0, 10)}… not reachable on-chain after ${attempts} attempts. ` +
+            `RPC said: "${reason}". Try a hard refresh; if it persists the Soroban RPC may be having issues.`
+        );
+    }
+
+    /**
      * Initialize the SmartAccountKit with config from backend.
      * Uses promise deduplication so pre-warming via useEffect and
      * the button-click call share one fetch — preserving Chrome's
@@ -260,7 +320,13 @@ export class PasskeyClient {
         // Ensure wallet is connected with a credential (needed for signAuthEntry)
         if (!this.kit.credentialId) {
             if (this.lastCredentialId) {
-                // Use cached credential from login — silent connect, no prompt
+                // Pre-flight: verify the derived contract is actually on-chain
+                // BEFORE delegating to kit.connectWallet, which swallows the
+                // underlying RPC error in a generic "contract not found" string.
+                // If our own check fails, surface the real reason; if it succeeds
+                // but the kit still throws, we know the kit's RPC client itself
+                // is flaky (and can retry).
+                await this.preflightContractCheck(this.lastCredentialId);
                 console.log('[SmartAccount] Silent connect with cached credential');
                 await this.kit.connectWallet({ credentialId: this.lastCredentialId });
             } else {
