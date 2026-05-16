@@ -200,6 +200,7 @@ model Investor {
   rampBankAccounts    RampBankAccount[]
   rampQuotes          RampQuote[]
   rampOrders          RampOrder[]
+  offrampRelayer      InvestorRelayerWallet?
 
   @@index([email])
   @@index([document])
@@ -877,8 +878,9 @@ model YieldPaymentJob {
 }
 
 // ============================================
-// ETHERFUSE ANCHOR: BRL/PIX → TESOURO on-ramp
-// (off-ramp models will be added in Phase 2)
+// ETHERFUSE ANCHOR: BRL/PIX ↔ TESOURO/USDC ramps
+// (on-ramp models below; off-ramp models reuse Quote/Order and add the
+//  per-investor relayer wallet at the end of this section)
 // ============================================
 
 // Per-investor EtherFuse customer (child organization).
@@ -1064,4 +1066,35 @@ model RampWebhookEvent {
   @@index([resourceId])
   @@index([receivedAt])
   @@map("ramp_webhook_events")
+}
+
+// Per-investor classic Stellar G-account used as the relayer hop in the
+// off-ramp two-TX bridge:
+//   TX 1: investor C-address SAC.transfer → this G  (passkey-signed)
+//   TX 2: this G classic payment → EtherFuse anchor (this G signs, with the
+//         keypair we recover by decrypting `encryptedSeed`)
+//
+// The keypair is generated server-side at first-off-ramp time, the seed is
+// encrypted with AES-256-GCM using OFFRAMP_KEYRING_SECRET, and the public key
+// is funded + has trustlines established via a sponsored multi-op TX. See
+// docs/Operations/OFFRAMP_RUNBOOK.md for the key-rotation + recovery procedures.
+//
+// `encryptionVersion` allows future re-keying (e.g. v2 = KMS-managed envelope
+// encryption). Migration script reads version, decrypts under the old scheme,
+// re-encrypts under the new, and bumps the version.
+model InvestorRelayerWallet {
+  id                    Int      @id @default(autoincrement())
+  investorId            Int      @unique @map("investor_id")
+  publicKey             String   @unique @map("public_key") @db.VarChar(56) // G-address
+  encryptedSeed         String   @map("encrypted_seed") @db.Text // base64(IV || authTag || ciphertext)
+  encryptionVersion     Int      @default(1) @map("encryption_version")
+  trustlinesEstablished Boolean  @default(false) @map("trustlines_established")
+  provisioningTxHash    String?  @map("provisioning_tx_hash") @db.VarChar(64)
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp
+
+  investor Investor @relation(fields: [investorId], references: [id], onDelete: Cascade)
+
+  @@index([publicKey])
+  @@map("investor_relayer_wallets")
 }

@@ -14,6 +14,7 @@ import {
   Asset,
   Keypair,
   Memo,
+  Operation,
   Transaction,
   FeeBumpTransaction,
   nativeToScVal,
@@ -967,6 +968,127 @@ export class PasskeyWalletService {
       return new Asset(code, issuer).contractId(getNetworkPassphrase());
     }
     throw new Error(`Unsupported asset for withdrawal: ${assetCode}`);
+  }
+
+  /**
+   * Resolve a Radox asset code to its classic Stellar Asset (CODE:ISSUER).
+   *
+   * Used by the off-ramp relayer bridge — the relayer-to-anchor payment is a
+   * CLASSIC `payment` op (not a SAC invocation), so it needs the classic
+   * Asset shape with a known issuer. USDC's mainnet issuer is the canonical
+   * Circle account; override via `USDC_ISSUER` for testnet.
+   *
+   * @param {string} assetCode  - 'USDC' | 'TESOURO'
+   * @returns {Asset} A @stellar/stellar-sdk Asset instance
+   */
+  static resolveClassicAsset(assetCode) {
+    if (assetCode === 'TESOURO') {
+      const assetId = process.env.ETHERFUSE_TESOURO_ASSET_IDENTIFIER;
+      if (!assetId || !assetId.includes(':')) {
+        throw new Error('ETHERFUSE_TESOURO_ASSET_IDENTIFIER not configured (expected CODE:ISSUER)');
+      }
+      const [code, issuer] = assetId.split(':');
+      return new Asset(code, issuer);
+    }
+    if (assetCode === 'USDC') {
+      // Stellar mainnet USDC issuer (Circle). Override via USDC_ISSUER for testnet.
+      const issuer = process.env.USDC_ISSUER || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
+      return new Asset('USDC', issuer);
+    }
+    throw new Error(`No classic Asset configured for code: ${assetCode}`);
+  }
+
+  /**
+   * Build + submit the second half of the off-ramp relayer bridge: a CLASSIC
+   * Stellar `payment` op from a **per-investor relayer G-account** to the
+   * EtherFuse anchor, with `Memo.hash` so the anchor monitor correlates this
+   * credit to the order it issued.
+   *
+   * Custody model — each investor has their own classic G-account (sidecar to
+   * their Soroban smart wallet). The keypair is platform-held but per-user,
+   * managed by `InvestorRelayerWalletService`. The investor's signing keypair
+   * is loaded by the caller (after passkey-authenticated decryption) and
+   * passed in here. This service is keypair-agnostic.
+   *
+   * Fee model — the inner TX (per-investor G → anchor) is signed by the
+   * investor's relayer keypair, then wrapped in a **fee bump** signed by the
+   * ops keypair. Investor relayer Gs don't hold XLM; ops fee-sponsors them
+   * the same way it sponsors Soroban TXs.
+   *
+   * Preconditions:
+   *   - `signingKeypair` is the investor's per-investor relayer G (matching
+   *     the row in `investor_relayer_wallets`).
+   *   - That G has classic trustlines for `assetCode` (established at
+   *     `InvestorRelayerWalletService.ensureProvisioned()` time).
+   *   - That G has just received `amount` of the asset from the investor's
+   *     SAC `transfer()` (TX 1 of the bridge).
+   *
+   * @param {object} args
+   * @param {string} args.anchorAccountId  - EtherFuse anchor G-address
+   * @param {string} args.assetCode        - 'TESOURO' | 'USDC'
+   * @param {string|number} args.amount    - decimal string, 7-decimal SAC precision
+   * @param {string} args.memoHashHex      - 32-byte hex string for Memo.hash
+   * @param {Keypair} args.signingKeypair  - the per-investor relayer G keypair
+   * @returns {Promise<{hash: string, status: string}>}
+   */
+  static async submitRelayerAnchorPayment({ anchorAccountId, assetCode, amount, memoHashHex, signingKeypair }) {
+    if (!anchorAccountId || !anchorAccountId.match(/^G[A-Z0-9]{55}$/)) {
+      throw new Error(`Invalid anchor account: ${anchorAccountId}`);
+    }
+    if (!memoHashHex || !/^[0-9a-f]{64}$/i.test(memoHashHex)) {
+      throw new Error('memoHashHex must be a 32-byte hex string (64 hex chars)');
+    }
+    const parsedAmount = parseFloat(amount);
+    if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
+      throw new Error('Amount must be a positive number');
+    }
+    if (!signingKeypair || typeof signingKeypair.publicKey !== 'function') {
+      throw new Error('signingKeypair (Keypair instance) is required');
+    }
+
+    const asset = this.resolveClassicAsset(assetCode);
+    const networkPassphrase = getNetworkPassphrase();
+    const opsKeypair = getOperationsKeypair();
+    const server = this.getRpcServer();
+
+    // Classic payments use a decimal-string amount with up to 7 fractional
+    // digits — matches the SAC precision we used in TX 1 exactly. The trailing
+    // `|| '0.0000001'` is a defensive floor; never trips for real amounts.
+    const stellarAmount = parsedAmount.toFixed(7).replace(/\.?0+$/, '') || '0.0000001';
+
+    // Inner TX: per-investor relayer G → anchor, signed by the investor's
+    // relayer keypair. The investor's G is the source-of-funds.
+    const sourceAccount = await server.getAccount(signingKeypair.publicKey());
+    const innerTx = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase,
+    })
+      .addOperation(Operation.payment({
+        destination: anchorAccountId,
+        asset,
+        amount: stellarAmount,
+      }))
+      .addMemo(Memo.hash(memoHashHex))
+      .setTimeout(180)
+      .build();
+    innerTx.sign(signingKeypair);
+
+    // Outer fee bump: ops pays the fee. The per-investor G is never required
+    // to hold XLM. Inner-tx semantics (source, ops, memo) are preserved.
+    const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
+      opsKeypair,
+      String(BASE_FEE * 2),
+      innerTx,
+      networkPassphrase,
+    );
+    feeBumpTx.sign(opsKeypair);
+
+    log.info(`Relayer→anchor payment: ${stellarAmount} ${assetCode} from ${signingKeypair.publicKey().slice(0, 6)}… → ${anchorAccountId.slice(0, 6)}… memo=${memoHashHex.slice(0, 8)}…`);
+    const result = await this.sendTransaction(feeBumpTx);
+    if (!result || !result.hash) {
+      throw new Error('Failed to submit relayer→anchor payment');
+    }
+    return { hash: result.hash, status: result.status };
   }
 
   /**
