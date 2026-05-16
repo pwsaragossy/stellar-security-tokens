@@ -30,6 +30,8 @@
  * RampKycService.saveKycFields() captures these from the form the user
  * submits before this service runs.
  */
+import { randomUUID } from 'node:crypto';
+
 import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
 import EtherFuseClient from './etherfuse.service.js';
@@ -83,10 +85,16 @@ export class RampBankAccountService {
     }
 
     // Canonical BR/PIX shape — see file header for schema reference.
+    // `transactionId` is REQUIRED for the untagged enum to deserialize on
+    // EtherFuse's side, even though it's not in Elliot Friend's PIX type def
+    // and EtherFuse generates its own `bankAccountId` in the response. Without
+    // it the request 400s with "data did not match any variant of untagged
+    // enum AccountRegistration". Verified against sandbox 2026-05-16.
     const firstName = investor.givenName ?? investor.name?.split(' ')[0] ?? 'Investor';
     const lastName = investor.familyName ?? investor.name?.split(' ').slice(-1)[0] ?? 'Radox';
     const efPayload = {
       account: {
+        transactionId: randomUUID(),
         pixKey,
         pixKeyType,
         firstName,
