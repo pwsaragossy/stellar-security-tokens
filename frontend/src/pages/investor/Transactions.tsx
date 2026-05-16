@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, ArrowDownLeft, ArrowUpRight, ShoppingCart, Wallet, Coins, Clock, Receipt, ExternalLink, Banknote } from 'lucide-react';
+import { Loader2, ArrowDownLeft, ArrowUpRight, ShoppingCart, Wallet, Coins, Clock, Receipt, ExternalLink, Banknote, Lock } from 'lucide-react';
 import { api } from '@/lib/api';
 import { authStorage } from '@/utils/authStorage';
 import { rampApi } from '@/api/ramp';
@@ -331,8 +331,14 @@ export function Transactions() {
                                             ) : tx.assetCode && tx.assetCode !== 'USDC' ? (
                                                 <p className="text-xs text-muted-foreground">{tx.assetCode}</p>
                                             ) : null}
-                                            <span className={`text-xs px-2 py-0.5 rounded-full capitalize inline-block mt-1 ${getStatusColor(tx.status)}`}>
+                                            <span className={`text-xs px-2 py-0.5 rounded-full capitalize inline-flex items-center gap-1 mt-1 ${getStatusColor(tx.status)}`}>
                                                 {formattedStatus}
+                                                {tx.status === 'finalized' && (
+                                                    <Lock
+                                                        className="w-2.5 h-2.5 opacity-70"
+                                                        aria-label="Settlement finalized — reversal window closed"
+                                                    />
+                                                )}
                                             </span>
                                         </div>
                                     </div>

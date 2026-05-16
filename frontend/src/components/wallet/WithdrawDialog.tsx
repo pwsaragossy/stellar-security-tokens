@@ -974,11 +974,15 @@ function OfframpTracker({ order, asset }: { order: RampOrder; asset: OfframpAsse
     const isComplete = order.status === 'completed' || order.status === 'finalized';
     const isFailed = order.status === 'failed' || order.status === 'refunded' || order.status === 'canceled' || order.status === 'expired';
 
+    // 3-step user-facing progression. `finalized` is hidden because it's a
+    // legal reversal-window marker (24–48h passive wait) that the EtherFuse
+    // sandbox often never advances to — surfacing it as a pending step made
+    // every completed off-ramp look stuck. We treat `completed` as success
+    // and expose the reversal window as a passive note below the steps.
     const steps: Array<{ key: RampOrder['status']; label: string }> = [
         { key: 'created', label: 'Order created' },
         { key: 'funded', label: 'On-chain transfer detected' },
-        { key: 'completed', label: 'PIX sent' },
-        { key: 'finalized', label: 'Settlement final' },
+        { key: 'completed', label: 'PIX sent · funds in your bank' },
     ];
 
     const statusIndex = steps.findIndex((s) => s.key === order.status);
