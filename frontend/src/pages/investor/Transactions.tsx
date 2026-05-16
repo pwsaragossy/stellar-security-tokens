@@ -1,14 +1,14 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, ArrowDownLeft, ShoppingCart, Wallet, Coins, Clock, Receipt, ExternalLink, Banknote } from 'lucide-react';
+import { Loader2, ArrowDownLeft, ArrowUpRight, ShoppingCart, Wallet, Coins, Clock, Receipt, ExternalLink, Banknote } from 'lucide-react';
 import { api } from '@/lib/api';
 import { authStorage } from '@/utils/authStorage';
 import { rampApi } from '@/api/ramp';
 
 interface Transaction {
     id: string;
-    type: 'Interest Payment' | 'Token Purchase' | 'USDC Deposit' | 'Token Distribution' | 'BRL → TESOURO';
+    type: 'Interest Payment' | 'Token Purchase' | 'USDC Deposit' | 'Token Distribution' | 'BRL → TESOURO' | 'TESOURO → BRL';
     amount: number;
     currency?: 'USD' | 'BRL';
     date: string;
@@ -29,7 +29,7 @@ const FILTER_OPTIONS: { value: FilterType; label: string }[] = [
     { value: 'all', label: 'All' },
     { value: 'purchase', label: 'Purchases' },
     { value: 'deposit', label: 'Deposits' },
-    { value: 'ramp', label: 'BRL deposits' },
+    { value: 'ramp', label: 'BRL ramps' },
     { value: 'interest', label: 'Interest' },
     { value: 'distribution', label: 'Distributions' },
 ];
@@ -64,6 +64,12 @@ const TYPE_CONFIG: Record<string, { icon: typeof ArrowDownLeft; color: string; b
         color: 'text-[hsl(43_45%_70%)]',
         bg: 'bg-[hsl(43_45%_55%/0.15)]',
         sign: '+',
+    },
+    'TESOURO → BRL': {
+        icon: ArrowUpRight,
+        color: 'text-[hsl(217_91%_70%)]',
+        bg: 'bg-[hsl(217_91%_60%/0.15)]',
+        sign: '-',
     },
 };
 
@@ -106,19 +112,26 @@ export function Transactions() {
 
                 const rampList: Transaction[] = (() => {
                     if (rampResult.status !== 'fulfilled' || !rampResult.value || !rampResult.value.success) return [];
-                    return (rampResult.value.data ?? []).map((o) => ({
-                        id: `ramp-${o.id}`,
-                        type: 'BRL → TESOURO' as const,
-                        amount: o.amountInFiat ? Number(o.amountInFiat) : 0,
-                        currency: 'BRL' as const,
-                        date: o.completedAt ?? o.fundedAt ?? o.updatedAt ?? o.createdAt,
-                        status: o.status,
-                        assetCode: 'TESOURO',
-                        txHash: o.confirmedTxSignature ?? null,
-                        details: o.amountInTokens
-                            ? { tokenAmount: Number(o.amountInTokens) }
-                            : null,
-                    }));
+                    return (rampResult.value.data ?? []).map((o) => {
+                        // Same shape for both directions; orderType drives the
+                        // label, the icon, and the sign on the amount column.
+                        // amountInFiat is always the BRL leg, amountInTokens
+                        // is always the TESOURO leg, regardless of direction.
+                        const isOfframp = o.orderType === 'offramp';
+                        return {
+                            id: `ramp-${o.id}`,
+                            type: (isOfframp ? 'TESOURO → BRL' : 'BRL → TESOURO') as Transaction['type'],
+                            amount: o.amountInFiat ? Number(o.amountInFiat) : 0,
+                            currency: 'BRL' as const,
+                            date: o.completedAt ?? o.fundedAt ?? o.updatedAt ?? o.createdAt,
+                            status: o.status,
+                            assetCode: 'TESOURO',
+                            txHash: o.confirmedTxSignature ?? null,
+                            details: o.amountInTokens
+                                ? { tokenAmount: Number(o.amountInTokens) }
+                                : null,
+                        };
+                    });
                 })();
 
                 const merged = [...legacyList, ...rampList].sort(
