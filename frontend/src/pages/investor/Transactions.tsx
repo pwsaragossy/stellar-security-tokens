@@ -15,6 +15,8 @@ interface Transaction {
     status: string;
     assetCode?: string;
     txHash?: string | null;
+    explorerUrl?: string | null;
+    explorerLabel?: string;
     details?: {
         offerName?: string;
         tokenAmount?: number;
@@ -118,6 +120,15 @@ export function Transactions() {
                         // amountInFiat is always the BRL leg, amountInTokens
                         // is always the TESOURO leg, regardless of direction.
                         const isOfframp = o.orderType === 'offramp';
+                        // Off-ramps consistently populate confirmedTxSignature.
+                        // On-ramps to C-addresses often don't (EtherFuse webhook
+                        // gap) — fall back to the EtherFuse-hosted status page so
+                        // the user always has a "View" affordance.
+                        const stellarHash = o.confirmedTxSignature ?? null;
+                        const explorerUrl = stellarHash
+                            ? `${EXPLORER_BASE}${stellarHash}`
+                            : o.statusPage ?? null;
+                        const explorerLabel = stellarHash ? 'View' : 'Status';
                         return {
                             id: `ramp-${o.id}`,
                             type: (isOfframp ? 'TESOURO → BRL' : 'BRL → TESOURO') as Transaction['type'],
@@ -126,7 +137,9 @@ export function Transactions() {
                             date: o.completedAt ?? o.fundedAt ?? o.updatedAt ?? o.createdAt,
                             status: o.status,
                             assetCode: 'TESOURO',
-                            txHash: o.confirmedTxSignature ?? null,
+                            txHash: stellarHash,
+                            explorerUrl,
+                            explorerLabel,
                             details: o.amountInTokens
                                 ? { tokenAmount: Number(o.amountInTokens) }
                                 : null,
@@ -269,18 +282,23 @@ export function Transactions() {
                                                     <span className="truncate">
                                                         {new Date(tx.date).toLocaleDateString()} at {new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                     </span>
-                                                    {tx.txHash && (
-                                                        <a
-                                                            href={`${EXPLORER_BASE}${tx.txHash}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1 text-[hsl(217_91%_60%)] hover:underline shrink-0"
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        >
-                                                            <ExternalLink className="w-3 h-3" />
-                                                            <span className="hidden sm:inline">View</span>
-                                                        </a>
-                                                    )}
+                                                    {(() => {
+                                                        const href = tx.explorerUrl ?? (tx.txHash ? `${EXPLORER_BASE}${tx.txHash}` : null);
+                                                        if (!href) return null;
+                                                        const label = tx.explorerLabel ?? 'View';
+                                                        return (
+                                                            <a
+                                                                href={href}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex items-center gap-1 text-[hsl(217_91%_60%)] hover:underline shrink-0"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <ExternalLink className="w-3 h-3" />
+                                                                <span className="hidden sm:inline">{label}</span>
+                                                            </a>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                         </div>

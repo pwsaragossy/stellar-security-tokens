@@ -343,6 +343,7 @@ export class WebAuthnController {
             name: user.name,
             email: user.email,
             document: user.document || '',
+            stellarContractId: user.stellarContractId,
             kycStatus: user.kycStatus,
             created_at: user.created_at,
             updated_at: user.updated_at,
