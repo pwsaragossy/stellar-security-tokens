@@ -1,6 +1,6 @@
 import { ChannelsClient } from '@openzeppelin/relayer-plugin-channels';
 import { Client as SmartAccountClient } from 'smart-account-kit-bindings';
-import { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl, isTestnet, getTreasuryKeypair } from '../config/stellar.js';
+import { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl, isTestnet, getTreasuryKeypair, getUsdcIssuer } from '../config/stellar.js';
 import prisma from '../config/prisma.js';
 import {
   Contract,
@@ -940,7 +940,8 @@ export class PasskeyWalletService {
   /**
    * Resolve a Radox asset code to its Stellar Asset Contract (SAC) contract ID.
    *
-   * USDC / XLM are configured via env (`USDC_CONTRACT_ID` / `XLM_CONTRACT_ID`).
+   * USDC SAC is configured via `USDC_SAC_CONTRACT_ID` (preferred) or
+   * `USDC_CONTRACT_ID` (legacy alias). XLM uses `XLM_CONTRACT_ID`.
    * TESOURO is computed deterministically from `ETHERFUSE_TESOURO_ASSET_IDENTIFIER`
    * via the SAC derivation (Asset.contractId), so no separate env var is needed.
    *
@@ -950,8 +951,8 @@ export class PasskeyWalletService {
    */
   static #resolveAssetSacContractId(assetCode) {
     if (assetCode === 'USDC') {
-      const id = process.env.USDC_CONTRACT_ID;
-      if (!id) throw new Error('USDC_CONTRACT_ID not configured');
+      const id = process.env.USDC_SAC_CONTRACT_ID || process.env.USDC_CONTRACT_ID;
+      if (!id) throw new Error('USDC SAC contract not configured (set USDC_SAC_CONTRACT_ID)');
       return id;
     }
     if (assetCode === 'XLM') {
@@ -991,9 +992,10 @@ export class PasskeyWalletService {
       return new Asset(code, issuer);
     }
     if (assetCode === 'USDC') {
-      // Stellar mainnet USDC issuer (Circle). Override via USDC_ISSUER for testnet.
-      const issuer = process.env.USDC_ISSUER || 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
-      return new Asset('USDC', issuer);
+      // getUsdcIssuer() auto-detects testnet vs mainnet from STELLAR_NETWORK,
+      // honoring the USDC_ISSUER override if explicitly set. Centralized in
+      // config/stellar.js so all consumers stay consistent.
+      return new Asset('USDC', getUsdcIssuer());
     }
     throw new Error(`No classic Asset configured for code: ${assetCode}`);
   }
