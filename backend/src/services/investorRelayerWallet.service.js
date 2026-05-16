@@ -208,9 +208,14 @@ export class InvestorRelayerWalletService {
   }
 
   /**
-   * Return the subset of REQUIRED_TRUSTLINE_ASSETS whose trustline is absent
-   * on the given account. Returns the full list if the account doesn't exist
-   * (caller falls through to full provisioning anyway).
+   * Return the subset of REQUIRED_TRUSTLINE_ASSETS whose trustline (for the
+   * canonical issuer per `resolveClassicAsset`) is absent on the account.
+   *
+   * IMPORTANT: matches on `(code, issuer)` pair, not just `code`. A USDC
+   * trustline for the wrong issuer (e.g. mainnet Circle on a testnet stack)
+   * does NOT satisfy a SAC `transfer()` whose SAC contract is derived from
+   * the testnet issuer — the runtime fails with `trustline entry is missing`
+   * even though the code is "present". Real bug observed 2026-05-16.
    */
   static async #findMissingTrustlines(publicKey) {
     try {
@@ -218,9 +223,12 @@ export class InvestorRelayerWalletService {
       const present = new Set(
         (account.balances || [])
           .filter((b) => b.asset_type !== 'native')
-          .map((b) => b.asset_code)
+          .map((b) => `${b.asset_code}:${b.asset_issuer}`)
       );
-      return REQUIRED_TRUSTLINE_ASSETS.filter((code) => !present.has(code));
+      return REQUIRED_TRUSTLINE_ASSETS.filter((code) => {
+        const asset = PasskeyWalletService.resolveClassicAsset(code);
+        return !present.has(`${asset.code}:${asset.issuer}`);
+      });
     } catch (err) {
       log.warn(`loadAccount(${publicKey.slice(0, 8)}…) failed — assuming all trustlines missing: ${err.message}`);
       return [...REQUIRED_TRUSTLINE_ASSETS];
