@@ -61,6 +61,13 @@ interface WithdrawDialogProps {
     onCompleted?: () => void;
     /** Called when the dialog wants to close (e.g. final success state). */
     onClose?: () => void;
+    /**
+     * When set (typically from `?ramp=<id>` URL handoff), the dialog skips
+     * the destination picker and the off-ramp input, opens directly on the
+     * tracking screen with the order rehydrated. Lets the user recover an
+     * in-flight off-ramp after accidentally closing the modal.
+     */
+    resumeOrderId?: number | null;
 }
 
 const TERMINAL_OFFRAMP_STATUSES = new Set([
@@ -74,9 +81,11 @@ export function WithdrawDialog({
     balances,
     onCompleted,
     onClose,
+    resumeOrderId,
 }: WithdrawDialogProps) {
     const { readiness, loading: readinessLoading } = useRampReadiness();
-    const [destination, setDestination] = useState<WithdrawDestination>(null);
+    // Resume always goes through PIX (the only off-ramp path); skip the picker.
+    const [destination, setDestination] = useState<WithdrawDestination>(resumeOrderId ? 'pix' : null);
 
     const offrampEnabled = !!readiness?.offrampEnabled;
 
@@ -160,6 +169,7 @@ export function WithdrawDialog({
                     walletAddress={walletAddress}
                     balances={balances}
                     onCompleted={onCompleted}
+                    resumeOrderId={resumeOrderId}
                 />
             )}
         </DialogContent>
@@ -391,16 +401,19 @@ function PixOfframpPanel({
     walletAddress: _walletAddress,
     balances,
     onCompleted,
+    resumeOrderId,
 }: {
     investorId?: number;
     walletAddress: string;
     balances?: WalletBalances;
     onCompleted?: () => void;
+    resumeOrderId?: number | null;
 }) {
     const navigate = useNavigate();
     const { readiness, isReady, loading: readinessLoading } = useRampReadiness();
 
-    const [stage, setStage] = useState<OfframpStage>('input');
+    // Resume jumps to tracking. Initial stage chosen from order state in effect below.
+    const [stage, setStage] = useState<OfframpStage>(resumeOrderId ? 'tracking' : 'input');
     const [asset, setAsset] = useState<OfframpAsset>('TESOURO');
     const [amount, setAmount] = useState('');
     const [quote, setQuote] = useState<RampQuote | null>(null);
@@ -410,6 +423,33 @@ function PixOfframpPanel({
     const [busy, setBusy] = useState(false);
     const [signing, setSigning] = useState(false);
     const pollHandle = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // Resume from URL handoff. Fetch the order and pick the right stage:
+    //   - burn tx already submitted (TX 1 landed) → 'tracking'
+    //   - status=created, no burn tx → 'signing' (user can re-trigger sign;
+    //     prepareSigningTx is idempotent and returns a fresh XDR)
+    useEffect(() => {
+        if (!resumeOrderId) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await rampApi.getOrder(resumeOrderId);
+                if (cancelled || !res.success || !res.data) return;
+                const o = res.data;
+                setOrder(o);
+                // Derive asset from order.sourceAsset (CODE:ISSUER → CODE)
+                const code = (o.sourceAsset?.split(':')[0] ?? 'TESOURO').toUpperCase() as OfframpAsset;
+                if (code === 'TESOURO' || code === 'USDC') setAsset(code);
+                const hasBurnTx = !!(o.pixInstructions && typeof o.pixInstructions === 'object'
+                    && 'relayerHoldTxHash' in (o.pixInstructions as Record<string, unknown>));
+                const isInProgress = o.status !== 'created' || hasBurnTx;
+                setStage(isInProgress ? 'tracking' : 'signing');
+            } catch {
+                /* Fall back to input stage silently */
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [resumeOrderId]);
 
     // Pre-select the default bank account once readiness loads.
     useEffect(() => {

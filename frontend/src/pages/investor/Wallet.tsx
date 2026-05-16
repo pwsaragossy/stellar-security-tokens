@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { rampApi } from '@/api/ramp';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowUpRight, ArrowDownLeft, ExternalLink, Coins, ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -51,6 +52,58 @@ export function Wallet() {
     // Dialog open state — WithdrawDialog owns its own internal flow.
     const [withdrawOpen, setWithdrawOpen] = useState(false);
     const [depositOpen, setDepositOpen] = useState(false);
+
+    // Resume-from-URL: when navigated to with `?ramp=<localOrderId>` (e.g.,
+    // from the notification bell), fetch the order, open the matching dialog
+    // with the order prerigged. Lets the user recover an in-flight ramp after
+    // accidentally closing the modal.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [resumeOrderId, setResumeOrderId] = useState<number | null>(null);
+    const [resumeDirection, setResumeDirection] = useState<'onramp' | 'offramp' | null>(null);
+
+    useEffect(() => {
+        const param = searchParams.get('ramp');
+        if (!param) return;
+        const id = Number(param);
+        if (!Number.isFinite(id) || id <= 0) {
+            setSearchParams({}, { replace: true });
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await rampApi.getOrder(id);
+                if (cancelled || !res.success || !res.data) {
+                    setSearchParams({}, { replace: true });
+                    return;
+                }
+                setResumeOrderId(id);
+                setResumeDirection(res.data.orderType);
+                if (res.data.orderType === 'onramp') setDepositOpen(true);
+                else setWithdrawOpen(true);
+                // Strip param so refresh doesn't auto-reopen forever.
+                setSearchParams({}, { replace: true });
+            } catch {
+                setSearchParams({}, { replace: true });
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [searchParams, setSearchParams]);
+
+    // Clear resume state when either dialog closes so reopening manually
+    // starts fresh at the source/destination picker.
+    useEffect(() => {
+        if (!depositOpen && resumeDirection === 'onramp') {
+            setResumeOrderId(null);
+            setResumeDirection(null);
+        }
+    }, [depositOpen, resumeDirection]);
+    useEffect(() => {
+        if (!withdrawOpen && resumeDirection === 'offramp') {
+            setResumeOrderId(null);
+            setResumeDirection(null);
+        }
+    }, [withdrawOpen, resumeDirection]);
 
     // Cache key for localStorage
     const getCacheKey = (userId: number | string) => `investor_wallet_cache_${userId}`;
@@ -302,6 +355,7 @@ export function Wallet() {
                         <DepositDialog
                             investorId={user.id}
                             walletAddress={walletStatus.walletAddress || ''}
+                            resumeOrderId={resumeDirection === 'onramp' ? resumeOrderId : null}
                         />
                     </Dialog>
 
@@ -320,6 +374,7 @@ export function Wallet() {
                             balances={walletStatus.balances}
                             onCompleted={refreshWalletStatus}
                             onClose={() => setWithdrawOpen(false)}
+                            resumeOrderId={resumeDirection === 'offramp' ? resumeOrderId : null}
                         />
                     </Dialog>
 

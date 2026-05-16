@@ -212,8 +212,23 @@ export function NotificationBell() {
                                         || order.status === 'canceled' || order.status === 'expired';
                                     const Icon = isOff ? ArrowUpRight : ArrowDownLeft;
                                     const amt = order.amountInFiat ? `R$ ${Number(order.amountInFiat).toFixed(2)}` : '—';
+                                    const canResume = !isFailed; // resume makes no sense for canceled/expired/failed
+                                    const onResume = () => {
+                                        if (!canResume) return;
+                                        setIsOpen(false);
+                                        navigate(`/wallet?ramp=${order.id}`);
+                                    };
                                     return (
-                                        <div key={order.id} className="px-3 py-2.5 hover:bg-white/[0.03] transition-colors border-t border-white/[0.04] first:border-t-0">
+                                        <div
+                                            key={order.id}
+                                            onClick={onResume}
+                                            className={cn(
+                                                'px-3 py-2.5 transition-colors border-t border-white/[0.04] first:border-t-0',
+                                                canResume ? 'hover:bg-white/[0.04] cursor-pointer' : 'hover:bg-white/[0.02]'
+                                            )}
+                                            role={canResume ? 'button' : undefined}
+                                            title={canResume ? 'Tap to resume this transaction' : undefined}
+                                        >
                                             <div className="flex items-center justify-between gap-2">
                                                 <div className="flex items-center gap-2 min-w-0">
                                                     <div className={cn(
@@ -233,6 +248,9 @@ export function NotificationBell() {
                                                         </p>
                                                         <p className="text-[10px] uppercase tracking-wider text-white/40">
                                                             {RAMP_STATUS_LABEL[order.status]}
+                                                            {canResume && !isComplete && (
+                                                                <span className="ml-1.5 text-white/55 normal-case tracking-normal">· tap to resume</span>
+                                                            )}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -250,22 +268,13 @@ export function NotificationBell() {
                                                         EtherFuse <ExternalLink className="w-2.5 h-2.5" />
                                                     </a>
                                                 )}
-                                                <button
-                                                    onClick={() => {
-                                                        setIsOpen(false);
-                                                        navigate(`/transactions?ramp=${order.etherfuseOrderId}`);
-                                                    }}
-                                                    className="text-[10px] text-white/50 hover:text-white/85 transition-colors ml-auto"
-                                                >
-                                                    Transactions →
-                                                </button>
                                                 {(isComplete || isFailed) && (
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             setRampDismissed((prev) => new Set([...prev, order.id]));
                                                         }}
-                                                        className="text-white/30 hover:text-white/70 transition-colors"
+                                                        className="text-white/30 hover:text-white/70 transition-colors ml-auto"
                                                         aria-label="Dismiss"
                                                     >
                                                         <X className="w-3 h-3" />
