@@ -1,11 +1,11 @@
 # 09 — Service Internals
 
 > **⚠️ AUTO-GENERATED — DO NOT EDIT MANUALLY**  
-> Generated: `2026-05-15T23:26:37.465Z`  
+> Generated: `2026-05-16T00:36:57.818Z`  
 > Source: `backend/src/services/` (31 files)  
 > Regenerate: `npm run docs:services`
 
-**31 services · 288 methods · 11 static fields**
+**31 services · 290 methods · 11 static fields**
 
 ---
 ## 1. KeyManager
@@ -963,7 +963,7 @@
 ---
 ## 27. UserType
 
-**File:** `backend/src/services/passkeyWallet.service.js` · **1315 lines**
+**File:** `backend/src/services/passkeyWallet.service.js` · **1437 lines**
 **Export:** `export const = { }`
 
 **Service dependencies:** `StellarService`
@@ -981,42 +981,44 @@ _No members extracted._
 
 | Line | Name | Value |
 |------|------|-------|
-| 87 | `#rpcServer` | `null` |
-| 90 | `#channelsClient` | `null` |
+| 88 | `#rpcServer` | `null` |
+| 91 | `#channelsClient` | `null` |
 
 **Methods**
 
 | Line | Signature | Async |
 |------|-----------|-------|
-| 100 | `static getRpcServer()` | – |
-| 111 | `static getChannelsClient()` | – |
-| 131 | `static getClientConfig()` | – |
-| 209 | `static async sendTransaction(transaction)` | ✓ |
-| 236 | `static async sendSorobanTransaction(funcXdr, authXdrs = [])` | ✓ |
-| 268 | `static async submitWithSponsorship(txOrXdr)` | ✓ |
-| 445 | `static async deploySmartWallet(credentialId, publicKey)` | ✓ |
-| 521 | `static async createSmartWallet(userType, userId, credentialId, publicKey)` | ✓ |
-| 588 | `static async hasSmartWallet(userType, userId)` | ✓ |
-| 606 | `static async getWalletStatus(userType, userId)` | ✓ |
-| 716 | `static async getTesouroMarketData()` | ✓ |
-| 762 | `static async getSorobanWalletBalances(walletContractId)` | ✓ |
-| 854 | `static async buildWithdrawalTx(userId, destinationAddress, amount, assetCode = "USDC", userType = UserType.INVESTOR, options = {})` | ✓ |
-| 980 | `static async buildInvestmentTx(investorContractId, companyWallet, amount)` | ✓ |
-| 1056 | `static async submitWithdrawalTx(signedXdr)` | ✓ |
-| 1136 | `static async buildWithdrawalTxForCompany(companyId, destinationAddress, amount, assetCode = "USDC")` | ✓ |
-| 1214 | `static async listUserPasskeys(userType, userId)` | ✓ |
-| 1278 | `static async listEd25519Signers(userType, userId)` | ✓ |
+| 101 | `static getRpcServer()` | – |
+| 112 | `static getChannelsClient()` | – |
+| 132 | `static getClientConfig()` | – |
+| 210 | `static async sendTransaction(transaction)` | ✓ |
+| 237 | `static async sendSorobanTransaction(funcXdr, authXdrs = [])` | ✓ |
+| 269 | `static async submitWithSponsorship(txOrXdr)` | ✓ |
+| 446 | `static async deploySmartWallet(credentialId, publicKey)` | ✓ |
+| 522 | `static async createSmartWallet(userType, userId, credentialId, publicKey)` | ✓ |
+| 589 | `static async hasSmartWallet(userType, userId)` | ✓ |
+| 607 | `static async getWalletStatus(userType, userId)` | ✓ |
+| 717 | `static async getTesouroMarketData()` | ✓ |
+| 763 | `static async getSorobanWalletBalances(walletContractId)` | ✓ |
+| 855 | `static async buildWithdrawalTx(userId, destinationAddress, amount, assetCode = "USDC", userType = UserType.INVESTOR, options = {})` | ✓ |
+| 984 | `static resolveClassicAsset(assetCode)` | – |
+| 1034 | `static async submitRelayerAnchorPayment({ anchorAccountId, assetCode, amount, memoHashHex, signingKeypair })` | ✓ |
+| 1102 | `static async buildInvestmentTx(investorContractId, companyWallet, amount)` | ✓ |
+| 1178 | `static async submitWithdrawalTx(signedXdr)` | ✓ |
+| 1258 | `static async buildWithdrawalTxForCompany(companyId, destinationAddress, amount, assetCode = "USDC")` | ✓ |
+| 1336 | `static async listUserPasskeys(userType, userId)` | ✓ |
+| 1400 | `static async listEd25519Signers(userType, userId)` | ✓ |
 
 **Private Methods**
 
 | Line | Signature | Async |
 |------|-----------|-------|
-| 154 | `static #getPrismaModel(userType)` | – |
-| 166 | `static #getCredentialModel(userType)` | – |
-| 178 | `static #getCredentialFkField(userType)` | – |
-| 190 | `static #getEd25519SignerModel(userType)` | – |
-| 950 | `static #resolveAssetSacContractId(assetCode)` | – |
-| 1078 | `static #validateWithdrawalTx(tx)` | – |
+| 155 | `static #getPrismaModel(userType)` | – |
+| 167 | `static #getCredentialModel(userType)` | – |
+| 179 | `static #getCredentialFkField(userType)` | – |
+| 191 | `static #getEd25519SignerModel(userType)` | – |
+| 951 | `static #resolveAssetSacContractId(assetCode)` | – |
+| 1200 | `static #validateWithdrawalTx(tx)` | – |
 
 **JSDoc Descriptions**
 
@@ -1037,6 +1039,8 @@ _No members extracted._
 - **`getTesouroMarketData`** — Fetch the TESOURO "market" data: current BRL-per-token price (from
 - **`buildWithdrawalTx`** — Build a withdrawal transaction to be signed by the user's Passkey.
 - **`#resolveAssetSacContractId`** — Resolve a Radox asset code to its Stellar Asset Contract (SAC) contract ID.
+- **`resolveClassicAsset`** — Resolve a Radox asset code to its classic Stellar Asset (CODE:ISSUER).
+- **`submitRelayerAnchorPayment`** — Build + submit the second half of the off-ramp relayer bridge: a CLASSIC
 - **`buildInvestmentTx`** — Build an investment SAC transfer transaction to be signed by investor's Passkey.
 - **`submitWithdrawalTx`** — Submit a signed withdrawal transaction.
 - **`#validateWithdrawalTx`** — Validate that a withdrawal transaction only contains expected operations.

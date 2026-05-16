@@ -7,36 +7,51 @@
  *
  *   1. Asset whitelist (TESOURO + USDC only for v1)
  *   2. Balance pre-flight against the investor's Soroban smart wallet
- *   3. The on-chain signing flow: prepare a SAC `transfer()` XDR with the
- *      EtherFuse-issued memo, get it passkey-signed on the frontend, submit.
+ *   3. The two-TX RELAYER BRIDGE that moves tokens from the investor's
+ *      Soroban C-address to the EtherFuse anchor.
  *
- * Signing mode: Stellar **Anchor Mode** (useAnchor=true). EtherFuse's default
- * `burnTransaction` XDR is built for classic G-account keypairs, not Soroban
- * smart-wallet auth entries — it won't carry our passkey signatures. Anchor
- * Mode lets us build the TX with the existing passkey withdraw machinery and
- * just attach the EtherFuse-supplied destination + memo.
+ * Why the relayer bridge (not a direct SAC transfer to the anchor):
+ *   EtherFuse's anchor monitor watches classic `payment` operations on the
+ *   anchor G-account. A SAC `transfer()` from a Soroban C-address credits
+ *   the anchor's classic trustline balance dually, but surfaces as a
+ *   contract event rather than a classic payment — the monitor doesn't see
+ *   it. EtherFuse confirmed this directly (2026-05-15): "the protocol
+ *   doesn't understand off-ramping from a C... wallet." The fix is a
+ *   two-hop transfer where the second hop is a real classic payment that
+ *   the monitor recognizes.
+ *
+ * Bridge flow (two on-chain TXs, submitted sync from submitSignedTx):
+ *   TX 1: investor C-address → relayer G-account, via SAC `transfer()`
+ *         (passkey-signed XDR; built by prepareSigningTx)
+ *   TX 2: relayer G-account  → anchor G-account, via classic `payment`
+ *         with Memo.hash    (ops-keypair-signed; built+submitted server-side)
+ *
+ * Persistence:
+ *   - TX 1 hash → `RampOrder.pixInstructions.relayerHoldTxHash` (JSON column
+ *     reuse; no migration; lives there as off-ramp trace data)
+ *   - TX 2 hash → `RampOrder.burnTransaction` (the anchor-facing TX; this is
+ *     the one EtherFuse's webhook will reference)
+ *
+ * Recovery: if TX 2 fails after TX 1 succeeds, tokens are stranded on the
+ *   relayer. See docs/Operations/OFFRAMP_RUNBOOK.md for the manual recovery
+ *   script. Monitor logs for `RELAYER_STRANDED` warnings.
  *
  *   Flow:
  *     createQuote  → EtherFuse `/ramp/quote` (type=offramp)
  *     createOrder  → EtherFuse `/ramp/order` (useAnchor=true) — returns
  *                    withdrawAnchorAccount + withdrawMemo (base64)
- *     prepareTx    → SAC transfer XDR with Memo.hash, ready for passkey sig
- *     submitTx     → submit to Soroban RPC, persist tx hash to
- *                    RampOrder.burnTransaction (legacy field name; stores the
- *                    on-chain asset-release tx hash regardless of mode)
+ *     prepareTx    → SAC transfer XDR targeting the relayer G-account
+ *                    (no memo); ready for passkey signing
+ *     submitTx     → submit TX 1, wait, then build+submit TX 2 (classic
+ *                    payment with Memo.hash from relayer to anchor)
  *     cancel       → EtherFuse `/ramp/order/{id}/cancel` (only `status=created`)
- *
- * Open risk — see plans/we-have-just-made-fancy-token.md "Open Risk #1":
- *   EtherFuse's anchor monitor may not detect SAC-sourced credits to the
- *   anchor G-address. A Phase 0 sandbox probe is required before enabling
- *   ENABLE_OFFRAMP. If the probe fails, this service grows a relayer-bridge
- *   step (SAC.transfer → platform relayer → classic payment to anchor).
  */
 import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
 import RampKycService from './rampKyc.service.js';
 import RampOrderService from './rampOrder.service.js';
 import { PasskeyWalletService, UserType } from './passkeyWallet.service.js';
+import InvestorRelayerWalletService from './investorRelayerWallet.service.js';
 import EtherFuseClient from './etherfuse.service.js';
 
 const log = logger.scope('RampOfframpService');
@@ -198,12 +213,12 @@ export class RampOfframpService {
   }
 
   /**
-   * Prepare the on-chain signing transaction for an off-ramp order.
+   * Prepare the FIRST half of the relayer bridge: a SAC `transfer()` from the
+   * investor's Soroban C-address to the platform relayer G-account.
    *
-   * Builds a SAC `transfer()` from the investor's C-address to the EtherFuse
-   * anchor G-address, with `Memo.hash(decode(withdrawMemo))` so the anchor
-   * monitor can correlate the credit to the order. Returns the unsigned XDR
-   * for passkey signing.
+   * Note: no memo on TX 1 — the EtherFuse anchor never sees it (only TX 2
+   * lands at the anchor). The withdrawMemo is consumed later in submitSignedTx
+   * when the backend builds and submits TX 2.
    *
    * Idempotent: safe to call multiple times for the same order while
    * status=created (each call returns a freshly-prepared XDR).
@@ -251,24 +266,43 @@ export class RampOfframpService {
       });
     }
 
-    // EtherFuse delivers withdrawMemo as base64; Memo.hash wants a 32-byte hex.
-    const memoHashHex = Buffer.from(order.withdrawMemo, 'base64').toString('hex');
+    // TX 1 destination: this investor's per-investor relayer G-account, NOT
+    // the EtherFuse anchor. The relayer holds the tokens briefly, then
+    // forwards them via a classic payment in TX 2 (server-side, fee-bumped).
+    // No memo on TX 1 — the anchor never sees it.
+    //
+    // ensureProvisioned() is idempotent: fast-path if the G already exists
+    // with trustlines, otherwise generates + funds + adds trustlines via a
+    // sponsored multi-op TX. First off-ramp ever costs ~3-5s extra here.
+    const relayer = await InvestorRelayerWalletService.ensureProvisioned(investorId);
+    log.info(`Preparing off-ramp TX 1 (investor → relayer): order=${orderId} asset=${assetCode} amount=${order.amountInTokens} relayer=${relayer.publicKey.slice(0, 8)}…`);
 
-    log.info(`Preparing off-ramp signing TX: order=${orderId} asset=${assetCode} amount=${order.amountInTokens}`);
     return PasskeyWalletService.buildWithdrawalTx(
       investorId,
-      order.withdrawAnchorAccount,
+      relayer.publicKey,
       order.amountInTokens,
       assetCode,
-      UserType.INVESTOR,
-      { memoHashHex }
+      UserType.INVESTOR
+      // No memoHashHex — memo goes on TX 2.
     );
   }
 
   /**
-   * Submit a passkey-signed off-ramp transaction. Persists the on-chain TX
-   * hash to RampOrder.burnTransaction (the field name is a schema legacy from
-   * burn-mode — it stores the asset-release hash regardless of mode).
+   * Submit the passkey-signed off-ramp transaction (TX 1), then build and
+   * submit the relayer → anchor classic payment (TX 2).
+   *
+   * Synchronous bridge — the API response blocks until both TXs confirm.
+   * Failure modes:
+   *   - TX 1 fails (e.g. insufficient balance, no relayer trustline) →
+   *     order stays at `status=created`, nothing on-chain, safe retry.
+   *   - TX 2 fails after TX 1 succeeds → tokens stranded on relayer. We
+   *     log RELAYER_STRANDED with both the order id and TX 1 hash so ops
+   *     can recover via the runbook procedure. Order stays at `created`
+   *     but `pixInstructions.relayerHoldTxHash` is populated.
+   *
+   * On success: persists TX 1 hash to `pixInstructions.relayerHoldTxHash`
+   * and TX 2 hash to `burnTransaction`. EtherFuse's `order_updated` webhook
+   * will advance status to `funded → completed → finalized`.
    */
   static async submitSignedTx(investorId, orderId, signedXdr) {
     if (!signedXdr || typeof signedXdr !== 'string') {
@@ -293,18 +327,79 @@ export class RampOfframpService {
       );
     }
 
-    const result = await PasskeyWalletService.submitWithdrawalTx(signedXdr);
+    const assetCode = (order.sourceAsset || '').split(':')[0];
+    if (!SUPPORTED_OFFRAMP_ASSETS.has(assetCode)) {
+      throw new RampOfframpError(`Unsupported asset on order ${orderId}: ${assetCode}`, {
+        status: 500,
+        code: 'unsupported_asset_on_order',
+      });
+    }
 
-    // Persist the on-chain hash. The webhook will advance the order to
-    // `funded` once EtherFuse's anchor monitor detects the credit. We don't
-    // mutate `status` here — that's the state machine's job.
+    // ── TX 1: investor C-address → relayer G-account (passkey-signed SAC transfer)
+    log.info(`Off-ramp TX 1 submit: order=${orderId}`);
+    const tx1 = await PasskeyWalletService.submitWithdrawalTx(signedXdr);
+    log.info(`Off-ramp TX 1 landed: order=${orderId} hash=${tx1.hash}`);
+
+    // Persist TX 1 hash IMMEDIATELY so we don't lose it if TX 2 fails.
+    // We append into pixInstructions (JSON) rather than adding a new column.
+    const existingInstructions = (order.pixInstructions ?? {});
     await prisma.rampOrder.update({
       where: { id: order.id },
-      data: { burnTransaction: result.hash, updatedAt: new Date() },
+      data: {
+        pixInstructions: { ...existingInstructions, relayerHoldTxHash: tx1.hash },
+        updatedAt: new Date(),
+      },
     });
 
-    log.info(`Off-ramp TX submitted: order=${orderId} hash=${result.hash}`);
-    return { hash: result.hash, status: result.status };
+    // ── TX 2: per-investor relayer G → EtherFuse anchor (classic payment with memo)
+    // The per-investor G signs the inner TX; ops fee-bumps it so the G never
+    // needs to hold XLM. The keypair is decrypted server-side from
+    // `investor_relayer_wallets.encryptedSeed` under OFFRAMP_KEYRING_SECRET.
+    const memoHashHex = Buffer.from(order.withdrawMemo, 'base64').toString('hex');
+    let tx2;
+    try {
+      const signingKeypair = await InvestorRelayerWalletService.getKeypair(investorId);
+      tx2 = await PasskeyWalletService.submitRelayerAnchorPayment({
+        anchorAccountId: order.withdrawAnchorAccount,
+        assetCode,
+        amount: order.amountInTokens,
+        memoHashHex,
+        signingKeypair,
+      });
+    } catch (err) {
+      // CRITICAL: TX 1 succeeded but TX 2 failed. Tokens are on the relayer.
+      // Log loudly so operations can run the recovery procedure.
+      log.error(`RELAYER_STRANDED: order=${orderId} tx1=${tx1.hash} reason=${err.message}`, {
+        orderId,
+        tx1Hash: tx1.hash,
+        anchorAccount: order.withdrawAnchorAccount,
+        asset: assetCode,
+        amount: order.amountInTokens,
+      });
+      throw new RampOfframpError(
+        `Off-ramp partially failed: investor tokens reached the relayer but the anchor payment failed (${err.message}). Operations has been notified — investor tokens are recoverable.`,
+        {
+          status: 502,
+          code: 'relayer_stranded',
+          details: { tx1Hash: tx1.hash, anchorAccount: order.withdrawAnchorAccount, asset: assetCode, amount: order.amountInTokens },
+        }
+      );
+    }
+    log.info(`Off-ramp TX 2 landed: order=${orderId} hash=${tx2.hash}`);
+
+    // Persist TX 2 hash — this is the one EtherFuse's webhook will reference.
+    await prisma.rampOrder.update({
+      where: { id: order.id },
+      data: { burnTransaction: tx2.hash, updatedAt: new Date() },
+    });
+
+    log.info(`Off-ramp bridge complete: order=${orderId} tx1=${tx1.hash} tx2=${tx2.hash}`);
+    return {
+      relayerHoldTxHash: tx1.hash,
+      anchorPaymentTxHash: tx2.hash,
+      hash: tx2.hash, // alias for back-compat with API contract
+      status: tx2.status,
+    };
   }
 
   /**

@@ -273,11 +273,30 @@ export const rampApi = {
     return res.data;
   },
 
-  /** Submit the passkey-signed XDR. Status flips to `created → funded` on webhook. */
+  /**
+   * Submit the passkey-signed XDR. The backend runs the **two-TX relayer
+   * bridge** synchronously: it submits TX 1 (investor → relayer), then
+   * builds + submits TX 2 (relayer → anchor classic payment with Memo.hash).
+   *
+   * Response shape:
+   *   - `relayerHoldTxHash` — TX 1 hash (Soroban SAC transfer to relayer)
+   *   - `anchorPaymentTxHash` — TX 2 hash (classic payment to anchor; the
+   *     hash EtherFuse's webhook will reference)
+   *   - `hash` — alias for anchorPaymentTxHash (legacy convenience)
+   *
+   * Failure mode to surface to the user: error code `relayer_stranded`
+   * means TX 1 succeeded but TX 2 failed — investor's tokens are at the
+   * platform relayer and operations will recover them manually.
+   */
   submitOfframpTx: async (
     orderId: number,
     signedXdr: string
-  ): Promise<ApiResponse<{ hash: string; status: string }>> => {
+  ): Promise<ApiResponse<{
+    relayerHoldTxHash: string;
+    anchorPaymentTxHash: string;
+    hash: string;
+    status: string;
+  }>> => {
     const res = await api.post(`/ramp/offramp/orders/${orderId}/submit-tx`, { signedXdr });
     return res.data;
   },

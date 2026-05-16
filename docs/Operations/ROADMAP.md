@@ -297,6 +297,52 @@ Turn platform fees into loyalty points. Instead of "we took $40," the investor s
 
 ---
 
+## Off-Ramp Hardening (Post-v1)
+
+Off-ramp v1 ships per-investor relayer G-accounts (Option A) with the keypairs
+encrypted at rest using a single master key (`OFFRAMP_KEYRING_SECRET`) in env.
+This is custody-equivalent to a shared relayer — the backend always has the
+keys — and is the standard v1 pattern. Two upgrades are queued.
+
+### A → KMS-managed envelope encryption 🔐
+> **Build when:** before mainnet, or before storing more than a handful of
+> investor relayer seeds in plaintext-on-disk-modulo-env.
+
+The current single master key has a binary failure mode: lose the key, every
+investor relayer G is permanently inaccessible. Backups help; KMS solves it.
+
+- [ ] Wrap each investor seed with a per-row data key (KMS `GenerateDataKey`)
+- [ ] Store the encrypted data key alongside the encrypted seed
+- [ ] Root key lives in KMS (AWS/GCP/whatever); never exists on the app server
+- [ ] Migration: re-encrypt existing seeds under the new scheme (one-time backfill)
+- [ ] Decommission `OFFRAMP_KEYRING_SECRET` env var after backfill
+- [ ] Add quarterly key rotation procedure to the runbook
+
+### C → Passkey-derived G-address (true non-custodial off-ramp) 🪪
+> **Build when:** WebAuthn PRF extension support is unambiguous across the
+> investor base, OR a regulator forces non-custodial off-ramp.
+
+The architectural endpoint for off-ramp custody. Instead of the platform
+holding the per-investor G's keypair, derive the keypair deterministically
+from the investor's passkey via the WebAuthn PRF extension. The investor
+signs TX 2 themselves; the platform never holds the seed.
+
+- [ ] PRF feature-detection on registration; persist a flag per investor
+- [ ] Client-side key derivation pipeline: PRF entropy → HKDF → ed25519 seed
+- [ ] Replay-protection on PRF entropy (per-operation salt)
+- [ ] Single-passkey-ceremony off-ramp: collect PRF entropy + Soroban auth in
+      one `navigator.credentials.get` call so the investor only sees one prompt
+- [ ] Fallback path: investors without PRF support fall back to platform-held
+      G (Option A) with a clear UX label
+- [ ] Migration: existing investors stay on platform-held G until they opt in
+- [ ] Security review on the key derivation before any mainnet rollout
+
+> Reference: WebAuthn Level 3 PRF extension, derivation similar to the
+> [Solana passkey wallet](https://github.com/peterpme/solana-passkey-wallet)
+> pattern.
+
+---
+
 ## Strategic Principle
 
 > The platform is **feature-complete**. The gap isn't features — it's:
