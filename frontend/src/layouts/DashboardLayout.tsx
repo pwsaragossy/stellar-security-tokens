@@ -9,6 +9,7 @@ import { authStorage } from '@/utils/authStorage';
 import { passkeyClient } from '@/lib/passkey';
 import { useAuthRefresh } from '@/hooks/useAuthRefresh';
 import { DepositTracker } from '@/components/wallet/DepositTracker';
+import { Identicon } from '@/components/Identicon';
 
 export function DashboardLayout() {
     const navigate = useNavigate();
@@ -59,8 +60,8 @@ export function DashboardLayout() {
         <>
             <div className="p-6">
                 <h2 className="text-xl font-bold tracking-tighter text-white flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">S</div>
-                    Stellar
+                    <div className="w-8 h-8 rounded-lg bg-[#161616] flex items-center justify-center text-[#fdda24] font-bold text-sm">R</div>
+                    Radox
                 </h2>
             </div>
 
@@ -120,7 +121,7 @@ export function DashboardLayout() {
                         <div className="text-sm text-muted-foreground hidden sm:block">
                             Connected: <span className="text-emerald-400">Passkey Wallet</span>
                         </div>
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500" />
+                        <Identicon seed={sessionStorage.getItem('radox_passkey_credential')} />
                     </div>
                 </header>
 
