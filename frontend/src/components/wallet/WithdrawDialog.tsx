@@ -759,10 +759,9 @@ function AssetPicker({
     const tesouro = balances?.tesouro ? Number(balances.tesouro) : 0;
     const usdc = balances?.usdc ? Number(balances.usdc) : 0;
 
-    // USDC off-ramp is disabled: EtherFuse rejects "Non-stable assets are
-    // not supported" for plain USDC — their off-ramp only takes their own
-    // stablebonds. Disabled tile shows the balance for context but can't
-    // be selected. Re-enable when EtherFuse confirms USDC off-ramp support.
+    // Both TESOURO and USDC off-ramps are supported. USDC quotes return
+    // `requiresSwap: true` — EtherFuse routes USDC → TESOURO → BRL internally
+    // via SDEX. Verified 2026-05-16 in sandbox.
     return (
         <div className="space-y-2">
             <p className="text-[10px] uppercase tracking-wider text-gray-500 px-1">Asset</p>
@@ -776,11 +775,10 @@ function AssetPicker({
                 />
                 <AssetTile
                     code="USDC"
-                    label="Coming soon"
+                    label="Stablecoin"
                     balance={`$${usdc.toFixed(2)}`}
-                    selected={false}
-                    onClick={() => undefined}
-                    disabled
+                    selected={selected === 'USDC'}
+                    onClick={() => onSelect('USDC')}
                 />
             </div>
         </div>

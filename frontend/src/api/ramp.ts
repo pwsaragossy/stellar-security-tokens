@@ -199,9 +199,15 @@ export const rampApi = {
     await api.delete(`/ramp/bank-accounts/${id}`);
   },
 
-  /** BRL → TESOURO quote. Returns expires_at; quotes are short-lived (2 min on EtherFuse). */
-  createQuote: async (sourceAmount: string | number): Promise<ApiResponse<{ quote: RampQuote; etherfuseResponse: unknown }>> => {
-    const res = await api.post('/ramp/quotes', { sourceAmount: String(sourceAmount) });
+  /**
+   * BRL → TESOURO|USDC quote. Returns expires_at; quotes are short-lived (2 min on EtherFuse).
+   * USDC targets route through EtherFuse's internal swap (`requiresSwap: true`).
+   */
+  createQuote: async (
+    sourceAmount: string | number,
+    targetAsset: 'TESOURO' | 'USDC' = 'TESOURO',
+  ): Promise<ApiResponse<{ quote: RampQuote; etherfuseResponse: unknown }>> => {
+    const res = await api.post('/ramp/quotes', { sourceAmount: String(sourceAmount), targetAsset });
     return res.data;
   },
 

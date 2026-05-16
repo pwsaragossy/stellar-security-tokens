@@ -350,7 +350,9 @@ export class RampOrderService {
     await prisma.rampOrder.update({ where: { etherfuseOrderId: orderId }, data: update });
 
     log.info(`Order ${orderId}: ${existing.status} → ${status}`);
-    await this.#notifyTransition(existing.investorId, orderId, existing.status, status, existing.orderType);
+    const tokenIdentifier = existing.orderType === 'offramp' ? existing.sourceAsset : existing.targetAsset;
+    const tokenCode = (tokenIdentifier?.split(':')[0] ?? 'TESOURO').toUpperCase();
+    await this.#notifyTransition(existing.investorId, orderId, existing.status, status, existing.orderType, tokenCode);
     return { handled: true };
   }
 
@@ -439,9 +441,10 @@ export class RampOrderService {
    * Side-effect: in-app notification on state changes. Best-effort —
    * failures here MUST NOT prevent the state transition from being recorded.
    */
-  static async #notifyTransition(investorId, etherfuseOrderId, fromStatus, toStatus, orderType) {
+  static async #notifyTransition(investorId, etherfuseOrderId, fromStatus, toStatus, orderType, tokenCode = 'TESOURO') {
+    const settlementLabel = orderType === 'onramp' ? tokenCode : 'BRL';
     const messages = {
-      funded:   ['Pagamento recebido', `Recebemos seu PIX para a ordem ${etherfuseOrderId.slice(0, 8)}. A liquidação em ${orderType === 'onramp' ? 'TESOURO' : 'BRL'} está a caminho.`],
+      funded:   ['Pagamento recebido', `Recebemos seu PIX para a ordem ${etherfuseOrderId.slice(0, 8)}. A liquidação em ${settlementLabel} está a caminho.`],
       completed:['Depósito concluído', `Sua ordem ${etherfuseOrderId.slice(0, 8)} foi liquidada.`],
       failed:   ['Ordem com falha',   `A ordem ${etherfuseOrderId.slice(0, 8)} falhou. Suporte foi notificado.`],
       refunded: ['Ordem estornada',   `O valor enviado não correspondia à ordem ${etherfuseOrderId.slice(0, 8)}. O PIX foi devolvido.`],

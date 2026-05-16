@@ -53,22 +53,15 @@ import RampOrderService from './rampOrder.service.js';
 import { PasskeyWalletService, UserType } from './passkeyWallet.service.js';
 import InvestorRelayerWalletService from './investorRelayerWallet.service.js';
 import EtherFuseClient from './etherfuse.service.js';
+import { getUsdcIssuer } from '../config/stellar.js';
 
 const log = logger.scope('RampOfframpService');
 
-/**
- * Off-ramp asset whitelist for v1.
- *
- * USDC is intentionally EXCLUDED here even though we initially scoped both.
- * EtherFuse's sandbox rejects USDC quotes with `Non-stable assets are not
- * supported: USDC:G…` — their off-ramp only accepts their own stablebonds
- * (TESOURO / CETES / etc.), not general stablecoins. Re-enable USDC here
- * only after EtherFuse confirms support. See ROADMAP "Off-Ramp Hardening".
- */
-const SUPPORTED_OFFRAMP_ASSETS = new Set(['TESOURO']);
-
-/** Stellar mainnet USDC issuer (Circle). Override via env for testnet. */
-const DEFAULT_USDC_ISSUER = 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
+// EtherFuse off-ramp accepts both stablebonds (TESOURO) and stablecoins (USDC).
+// USDC quotes return `requiresSwap: true` — EtherFuse routes USDC → TESOURO →
+// BRL internally via SDEX; surfaced to us as a single off-ramp call. Verified
+// in sandbox 2026-05-16 via scripts/probe-etherfuse-brl-assets.mjs.
+const SUPPORTED_OFFRAMP_ASSETS = new Set(['TESOURO', 'USDC']);
 
 export class RampOfframpError extends Error {
   constructor(message, { status = 400, code, details } = {}) {
@@ -100,8 +93,7 @@ export class RampOfframpService {
       return id;
     }
     if (assetCode === 'USDC') {
-      const issuer = process.env.USDC_ISSUER || DEFAULT_USDC_ISSUER;
-      return `USDC:${issuer}`;
+      return `USDC:${getUsdcIssuer()}`;
     }
     throw new RampOfframpError(`Unsupported off-ramp asset: ${assetCode}`, {
       status: 400,

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
     Copy, Check, Loader2, AlertCircle, RefreshCw, ArrowLeft,
-    Building2, Wallet, AlertTriangle, ArrowRight, Sparkles,
+    Building2, Wallet, AlertTriangle, ArrowRight, Sparkles, ExternalLink,
 } from 'lucide-react';
 import { QRCode } from '@/components/ui/qrcode';
 import { investorsApi } from '@/api/investors';
@@ -301,6 +301,7 @@ function PixPanel({
     const { readiness, isReady, loading: readinessLoading } = useRampReadiness();
 
     const [amount, setAmount] = useState('');
+    const [targetAsset, setTargetAsset] = useState<'TESOURO' | 'USDC'>('USDC');
     const [quote, setQuote] = useState<RampQuote | null>(null);
     const [order, setOrder] = useState<RampOrder | null>(null);
     const [selectedBankId, setSelectedBankId] = useState<number | null>(null);
@@ -351,7 +352,7 @@ function PixPanel({
         }
         setBusy(true);
         try {
-            const res = await rampApi.createQuote(amount);
+            const res = await rampApi.createQuote(amount, targetAsset);
             if (!res.success || !res.data) throw new Error(res.error ?? 'Failed to get quote');
             setQuote(res.data.quote);
             setStage('reviewing');
@@ -433,6 +434,33 @@ function PixPanel({
                 <div className="space-y-2">
                     <div className="flex items-baseline justify-between px-1">
                         <label className="text-[10px] font-medium uppercase tracking-wider text-gray-500">
+                            Receive
+                        </label>
+                        <span className="text-[10px] text-white/30 uppercase tracking-wider">
+                            Choose one
+                        </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <AssetChoice
+                            code="USDC"
+                            label="USDC"
+                            subtitle="Spend on offers"
+                            selected={targetAsset === 'USDC'}
+                            onClick={() => setTargetAsset('USDC')}
+                        />
+                        <AssetChoice
+                            code="TESOURO"
+                            label="TESOURO"
+                            subtitle="Yield (CDI)"
+                            selected={targetAsset === 'TESOURO'}
+                            onClick={() => setTargetAsset('TESOURO')}
+                        />
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <div className="flex items-baseline justify-between px-1">
+                        <label className="text-[10px] font-medium uppercase tracking-wider text-gray-500">
                             Amount in BRL
                         </label>
                         <span className="text-[10px] text-amber-400/80 uppercase tracking-wider">
@@ -455,7 +483,9 @@ function PixPanel({
                         />
                     </div>
                     <p className="text-[11px] text-white/45 px-1">
-                        TESOURO is a yield-bearing Brazilian treasury token.{' '}
+                        {targetAsset === 'TESOURO'
+                            ? 'TESOURO is a yield-bearing Brazilian treasury token.'
+                            : 'USDC is a US-dollar stablecoin you can spend on Radox offers.'}{' '}
                         <span className="text-white/30">Rate quoted live by EtherFuse.</span>
                     </p>
                 </div>
@@ -613,10 +643,54 @@ function BankAccountList({
     );
 }
 
+function assetCodeFromIdentifier(identifier: string | null | undefined): string {
+    if (!identifier) return '';
+    return identifier.split(':')[0] || '';
+}
+
+function AssetChoice({
+    code,
+    label,
+    subtitle,
+    selected,
+    onClick,
+}: {
+    code: 'TESOURO' | 'USDC';
+    label: string;
+    subtitle: string;
+    selected: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={
+                'flex flex-col items-start gap-0.5 px-3.5 py-3 rounded-xl border transition-colors text-left ' +
+                (selected
+                    ? 'border-[hsl(43_45%_55%/0.6)] bg-[hsl(43_45%_55%/0.10)]'
+                    : 'border-white/8 bg-white/[0.03] hover:bg-white/[0.05]')
+            }
+            aria-pressed={selected}
+            data-code={code}
+        >
+            <div className="flex items-center gap-1.5">
+                <div className={
+                    'w-3 h-3 rounded-full border-2 transition-colors ' +
+                    (selected ? 'border-[hsl(43_45%_55%)] bg-[hsl(43_45%_55%)]' : 'border-white/30')
+                } />
+                <span className="text-sm font-semibold text-white">{label}</span>
+            </div>
+            <span className="text-[11px] text-white/55 pl-[18px]">{subtitle}</span>
+        </button>
+    );
+}
+
 function QuoteCard({ quote }: { quote: RampQuote }) {
     const dest = quote.destinationAmount ? Number(quote.destinationAmount) : null;
     const fee = quote.feeBps != null ? (quote.feeBps / 100).toFixed(2) : null;
     const expiresIn = useCountdown(quote.expiresAt);
+    const code = assetCodeFromIdentifier(quote.targetAsset);
     return (
         <div className="px-5 py-5 rounded-xl bg-white/[0.04] border border-white/10 space-y-4">
             <div className="flex items-baseline justify-between">
@@ -632,7 +706,7 @@ function QuoteCard({ quote }: { quote: RampQuote }) {
                     <div className="text-[1.6rem] font-mono text-[hsl(43_45%_70%)] tabular-nums" style={{ letterSpacing: '-0.01em' }}>
                         {dest != null ? dest.toFixed(6) : '—'}
                     </div>
-                    <div className="text-[10px] uppercase tracking-wider text-white/45 mt-0.5">TESOURO</div>
+                    <div className="text-[10px] uppercase tracking-wider text-white/45 mt-0.5">{code || 'TOKEN'}</div>
                 </div>
             </div>
             <div className="pt-3 border-t border-white/8 flex items-center justify-between text-[11px] text-white/50">
@@ -727,7 +801,7 @@ function OrderInProgress({
                         {order.amountInTokens
                             ? Number(order.amountInTokens).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
                             : '—'}{' '}
-                        <span className="text-[hsl(43_45%_70%)] text-xl">TESOURO</span>
+                        <span className="text-[hsl(43_45%_70%)] text-xl">{assetCodeFromIdentifier(order.targetAsset) || 'TOKEN'}</span>
                     </p>
                     {order.amountInFiat && (
                         <p className="text-[12px] text-white/50 mt-1">
@@ -744,8 +818,8 @@ function OrderInProgress({
             {!isComplete && (
                 <div className="text-[11px] text-white/45 space-y-1.5 px-1">
                     <p>
-                        Pay the PIX to <span className="text-white/70 font-mono">{beneficiary}</span> from your bank app.
-                        TESOURO lands in your wallet seconds after the PIX clears.
+                        Pay the PIX to <span className="text-white/70 font-mono">{beneficiary}</span> from your bank app.{' '}
+                        {assetCodeFromIdentifier(order.targetAsset) || 'Tokens'} land in your wallet seconds after the PIX clears.
                     </p>
                 </div>
             )}
@@ -757,37 +831,87 @@ function OrderInProgress({
                         <p className="text-[11px] uppercase tracking-[0.14em] text-amber-300">Sandbox · skip the bank app</p>
                         <span className="text-[10px] text-amber-200/60">testnet only</span>
                     </div>
-                    <Button
-                        onClick={handleSimulate}
-                        disabled={simulating}
-                        className="w-full h-9 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 border border-amber-500/30 text-[12px] font-medium disabled:opacity-50"
-                    >
-                        {simulating ? (
-                            <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Simulating…</>
-                        ) : (
-                            <>Simulate PIX paid</>
-                        )}
-                    </Button>
+                    {simulating ? (
+                        <div className="flex flex-col items-center gap-3 py-3">
+                            <div className="relative w-20 h-20">
+                                <div className="absolute inset-0 rounded-lg bg-white/95 flex items-center justify-center">
+                                    <div className="grid grid-cols-5 gap-[2px] p-2">
+                                        {Array.from({ length: 25 }).map((_, i) => (
+                                            <div
+                                                key={i}
+                                                className={
+                                                    'w-[6px] h-[6px] rounded-[1px] ' +
+                                                    ((i * 7 + 13) % 3 === 0 ? 'bg-amber-600' : 'bg-slate-900')
+                                                }
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="absolute inset-0 rounded-lg border-2 border-amber-400/70 animate-pulse" />
+                                <div className="absolute -inset-1 rounded-lg ring-2 ring-amber-300/40 animate-ping" />
+                            </div>
+                            <div className="flex items-center gap-2 text-[12px] text-amber-200">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Confirmando pagamento PIX no banco simulado…</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <Button
+                            onClick={handleSimulate}
+                            className="w-full h-9 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 border border-amber-500/30 text-[12px] font-medium"
+                        >
+                            Simulate PIX paid
+                        </Button>
+                    )}
                     {simError && (
                         <p className="text-[11px] text-red-300/90">{simError}</p>
                     )}
                 </div>
             )}
 
-            {explorerUrl && (
-                <a
-                    href={explorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block w-full text-center text-[11px] text-[hsl(43_45%_70%)] hover:text-[hsl(43_45%_85%)] underline-offset-4 hover:underline transition-colors"
-                >
-                    View on-chain delivery →
-                </a>
-            )}
+            <DeliveryLinks order={order} explorerUrl={explorerUrl} />
 
             {order.failureReason && (
                 <InlineError message={order.failureReason} />
             )}
+        </div>
+    );
+}
+
+function DeliveryLinks({ order, explorerUrl }: { order: RampOrder; explorerUrl: string | null }) {
+    const navigate = useNavigate();
+    // Cascade: on-chain (Stellar Expert) → EtherFuse status page → in-app history.
+    // We always show at least the in-app history link so the user can always find this order.
+    const onchainUrl = explorerUrl;
+    const statusPageUrl = order.statusPage;
+    return (
+        <div className="flex flex-col gap-2 pt-1">
+            {onchainUrl && (
+                <a
+                    href={onchainUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 w-full text-[11px] text-[hsl(43_45%_70%)] hover:text-[hsl(43_45%_85%)] underline-offset-4 hover:underline transition-colors"
+                >
+                    View on-chain delivery <ExternalLink className="w-3 h-3" />
+                </a>
+            )}
+            {!onchainUrl && statusPageUrl && (
+                <a
+                    href={statusPageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 w-full text-[11px] text-[hsl(43_45%_70%)] hover:text-[hsl(43_45%_85%)] underline-offset-4 hover:underline transition-colors"
+                >
+                    View status on EtherFuse <ExternalLink className="w-3 h-3" />
+                </a>
+            )}
+            <button
+                onClick={() => navigate(`/transactions?ramp=${order.etherfuseOrderId}`)}
+                className="flex items-center justify-center gap-1.5 w-full text-[11px] text-white/55 hover:text-white/85 underline-offset-4 hover:underline transition-colors"
+            >
+                See in Transactions <ArrowRight className="w-3 h-3" />
+            </button>
         </div>
     );
 }
@@ -804,7 +928,7 @@ function StatusPill({ status }: { status: RampOrder['status'] }) {
     const copy: Record<RampOrder['status'], string> = {
         created: 'Waiting for PIX',
         funded: 'PIX received — settling',
-        completed: 'TESOURO delivered',
+        completed: 'Delivered',
         finalized: 'Final',
         failed: 'Failed',
         refunded: 'Refunded',

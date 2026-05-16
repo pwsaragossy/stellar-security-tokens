@@ -18,6 +18,31 @@ import RampKycService, { RampReadinessError } from '../services/rampKyc.service.
 import RampBankAccountService from '../services/rampBankAccount.service.js';
 import RampOrderService from '../services/rampOrder.service.js';
 import RampOfframpService, { RampOfframpError } from '../services/rampOfframp.service.js';
+import { getUsdcIssuer } from '../config/stellar.js';
+
+/**
+ * Resolve a code ('TESOURO' | 'USDC') or a full CODE:ISSUER identifier into
+ * the identifier EtherFuse expects as `targetAsset` for an on-ramp.
+ *
+ * On-ramp accepts both stablebonds (TESOURO) and stablecoins (USDC). USDC
+ * quotes return `requiresSwap: true` — EtherFuse routes BRL → TESOURO →
+ * USDC internally. Confirmed in sandbox 2026-05-16.
+ */
+function resolveOnrampTargetAsset(input) {
+  if (typeof input === 'string' && input.includes(':')) return input;
+  const code = input ?? 'TESOURO';
+  if (code === 'TESOURO') {
+    const id = process.env.ETHERFUSE_TESOURO_ASSET_IDENTIFIER;
+    if (!id || !id.includes(':')) {
+      throw new Error('ETHERFUSE_TESOURO_ASSET_IDENTIFIER not configured');
+    }
+    return id;
+  }
+  if (code === 'USDC') {
+    return `USDC:${getUsdcIssuer()}`;
+  }
+  throw new Error(`Unsupported on-ramp targetAsset "${code}" (allowed: TESOURO, USDC)`);
+}
 import EtherFuseClient, { EtherFuseApiError } from '../services/etherfuse.service.js';
 import prisma from '../config/prisma.js';
 
@@ -189,13 +214,13 @@ export async function deleteBankAccount(req, res) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * POST /api/ramp/quotes — BRL → TESOURO quote.
+ * POST /api/ramp/quotes — BRL → TESOURO|USDC quote.
  *
- * Body: { sourceAmount: number|string, sourceAsset?: "BRL", targetAsset?: <CODE:ISSUER> }
- * Defaults: sourceAsset="BRL", targetAsset=ETHERFUSE_TESOURO_ASSET_IDENTIFIER env var.
+ * Body: { sourceAmount: number|string, sourceAsset?: "BRL", targetAsset?: "TESOURO"|"USDC"|"CODE:ISSUER" }
+ * Defaults: sourceAsset="BRL", targetAsset="TESOURO".
  *
- * Gates on readiness. Locks the source asset to BRL only — explicit
- * allowlist prevents accidental MXN/USD routes through this endpoint.
+ * USDC quotes route through EtherFuse's internal swap (BRL → TESOURO → USDC)
+ * exposed as a single on-ramp call with `requiresSwap: true`.
  */
 export async function createQuote(req, res) {
   try {
@@ -206,14 +231,16 @@ export async function createQuote(req, res) {
     if (sourceAmount == null) {
       return send(res, 400, { success: false, error: 'sourceAmount is required' });
     }
-    // Whitelist — we only on-ramp BRL → TESOURO. Off-ramp + other assets are Phase 2+.
     const sourceAsset = req.body?.sourceAsset ?? 'BRL';
     if (sourceAsset !== 'BRL') {
-      return send(res, 400, { success: false, error: `unsupported sourceAsset "${sourceAsset}" (only BRL accepted in Phase 1)` });
+      return send(res, 400, { success: false, error: `unsupported sourceAsset "${sourceAsset}" (only BRL accepted)` });
     }
-    const targetAsset = req.body?.targetAsset ?? process.env.ETHERFUSE_TESOURO_ASSET_IDENTIFIER;
-    if (!targetAsset) {
-      return send(res, 500, { success: false, error: 'ETHERFUSE_TESOURO_ASSET_IDENTIFIER not configured' });
+    let targetAsset;
+    try {
+      targetAsset = resolveOnrampTargetAsset(req.body?.targetAsset);
+    } catch (err) {
+      const status = err.message.includes('not configured') ? 500 : 400;
+      return send(res, status, { success: false, error: err.message });
     }
 
     const investor = await prisma.investor.findUnique({ where: { id: investorId } });

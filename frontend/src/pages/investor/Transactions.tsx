@@ -6,9 +6,11 @@ import { api } from '@/lib/api';
 import { authStorage } from '@/utils/authStorage';
 import { rampApi } from '@/api/ramp';
 
+type RampDirection = 'BRL → TESOURO' | 'BRL → USDC' | 'TESOURO → BRL' | 'USDC → BRL';
+
 interface Transaction {
     id: string;
-    type: 'Interest Payment' | 'Token Purchase' | 'USDC Deposit' | 'Token Distribution' | 'BRL → TESOURO' | 'TESOURO → BRL';
+    type: 'Interest Payment' | 'Token Purchase' | 'USDC Deposit' | 'Token Distribution' | RampDirection;
     amount: number;
     currency?: 'USD' | 'BRL';
     date: string;
@@ -67,7 +69,19 @@ const TYPE_CONFIG: Record<string, { icon: typeof ArrowDownLeft; color: string; b
         bg: 'bg-[hsl(43_45%_55%/0.15)]',
         sign: '+',
     },
+    'BRL → USDC': {
+        icon: Banknote,
+        color: 'text-[hsl(180_60%_55%)]',
+        bg: 'bg-[hsl(180_60%_45%/0.15)]',
+        sign: '+',
+    },
     'TESOURO → BRL': {
+        icon: ArrowUpRight,
+        color: 'text-[hsl(217_91%_70%)]',
+        bg: 'bg-[hsl(217_91%_60%/0.15)]',
+        sign: '-',
+    },
+    'USDC → BRL': {
         icon: ArrowUpRight,
         color: 'text-[hsl(217_91%_70%)]',
         bg: 'bg-[hsl(217_91%_60%/0.15)]',
@@ -115,11 +129,15 @@ export function Transactions() {
                 const rampList: Transaction[] = (() => {
                     if (rampResult.status !== 'fulfilled' || !rampResult.value || !rampResult.value.success) return [];
                     return (rampResult.value.data ?? []).map((o) => {
-                        // Same shape for both directions; orderType drives the
-                        // label, the icon, and the sign on the amount column.
                         // amountInFiat is always the BRL leg, amountInTokens
-                        // is always the TESOURO leg, regardless of direction.
+                        // is always the token leg (TESOURO or USDC), regardless
+                        // of direction. orderType + tokenCode drive the label.
                         const isOfframp = o.orderType === 'offramp';
+                        const tokenIdentifier = isOfframp ? o.sourceAsset : o.targetAsset;
+                        const tokenCode = (tokenIdentifier?.split(':')[0] ?? 'TESOURO').toUpperCase();
+                        const directionLabel = isOfframp
+                            ? `${tokenCode} → BRL`
+                            : `BRL → ${tokenCode}`;
                         // Off-ramps consistently populate confirmedTxSignature.
                         // On-ramps to C-addresses often don't (EtherFuse webhook
                         // gap) — fall back to the EtherFuse-hosted status page so
@@ -131,12 +149,12 @@ export function Transactions() {
                         const explorerLabel = stellarHash ? 'View' : 'Status';
                         return {
                             id: `ramp-${o.id}`,
-                            type: (isOfframp ? 'TESOURO → BRL' : 'BRL → TESOURO') as Transaction['type'],
+                            type: directionLabel as Transaction['type'],
                             amount: o.amountInFiat ? Number(o.amountInFiat) : 0,
                             currency: 'BRL' as const,
                             date: o.completedAt ?? o.fundedAt ?? o.updatedAt ?? o.createdAt,
                             status: o.status,
-                            assetCode: 'TESOURO',
+                            assetCode: tokenCode,
                             txHash: stellarHash,
                             explorerUrl,
                             explorerLabel,
