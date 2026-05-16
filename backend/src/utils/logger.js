@@ -53,6 +53,26 @@ function formatMessage(level, component, message, meta = null) {
 /**
  * Create a log function for a specific level
  */
+function extractStack(meta) {
+    if (!meta) return null;
+    if (meta instanceof Error) return meta.stack ?? null;
+    if (typeof meta === 'object' && typeof meta.stack === 'string') return meta.stack;
+    return null;
+}
+
+/**
+ * Build a structured meta object from a caught exception so logs always
+ * carry message + stack + code. Used by errorFromException / warnFromException.
+ */
+function buildExceptionMeta(err, extraMeta) {
+    const base = (extraMeta && typeof extraMeta === 'object') ? { ...extraMeta } : {};
+    if (!err) return Object.keys(base).length > 0 ? base : null;
+    base.error = err.message ?? String(err);
+    if (err.stack) base.stack = err.stack;
+    if (err.code !== undefined) base.code = err.code;
+    return base;
+}
+
 function createLogFn(level) {
     return (message, meta = null) => {
         if (LEVELS[level] <= CURRENT_LEVEL) {
@@ -60,9 +80,8 @@ function createLogFn(level) {
 
             if (level === 'error') {
                 console.error(formatted);
-                if (meta instanceof Error) {
-                    console.error(meta.stack);
-                }
+                const stack = extractStack(meta);
+                if (stack) console.error(stack);
             } else if (level === 'warn') {
                 console.warn(formatted);
             } else {
@@ -78,14 +97,13 @@ function createLogFn(level) {
  *        log.info('Started');
  */
 function createScopedLogger(component) {
-    return {
+    const obj = {
         error: (message, meta = null) => {
             if (LEVELS.error <= CURRENT_LEVEL) {
                 const formatted = formatMessage('error', component, message, meta);
                 console.error(formatted);
-                if (meta instanceof Error) {
-                    console.error(meta.stack);
-                }
+                const stack = extractStack(meta);
+                if (stack) console.error(stack);
             }
         },
         warn: (message, meta = null) => {
@@ -104,6 +122,9 @@ function createScopedLogger(component) {
             }
         },
     };
+    obj.errorFromException = (message, err, extraMeta) => obj.error(message, buildExceptionMeta(err, extraMeta));
+    obj.warnFromException = (message, err, extraMeta) => obj.warn(message, buildExceptionMeta(err, extraMeta));
+    return obj;
 }
 
 const logger = {
@@ -111,6 +132,18 @@ const logger = {
     warn: createLogFn('warn'),
     info: createLogFn('info'),
     debug: createLogFn('debug'),
+
+    /**
+     * Log a caught exception at error/warn level with structured meta that
+     * always carries message + stack + code. Prevents stack-dropping when
+     * callers used `{ error: err.message }` without `.stack`.
+     */
+    errorFromException(message, err, extraMeta) {
+        this.error(message, buildExceptionMeta(err, extraMeta));
+    },
+    warnFromException(message, err, extraMeta) {
+        this.warn(message, buildExceptionMeta(err, extraMeta));
+    },
 
     /**
      * Create a scoped logger for a component

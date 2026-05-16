@@ -464,7 +464,7 @@ export class RampOrderService {
         `/transactions?ramp=${etherfuseOrderId}`
       );
     } catch (err) {
-      log.warn(`Notification failed for order ${etherfuseOrderId}`, { error: err.message });
+      log.warnFromException(`Notification failed for order ${etherfuseOrderId}`, err);
     }
     // TODO Phase 1.5: wire an EmailService.sendRampOrderStatus(...) call here.
   }

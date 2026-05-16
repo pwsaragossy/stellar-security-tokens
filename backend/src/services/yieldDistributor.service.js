@@ -406,7 +406,7 @@ export class YieldDistributorService {
             if (!result) return false; // Already locked
             return true;
         } catch (err) {
-            log.warn('Redis lock acquisition failed (proceeding without lock)', { offerId, error: err.message });
+            log.warnFromException('Redis lock acquisition failed (proceeding without lock)', err, { offerId });
             return true; // Fail open — better to double-prepare than to block payments
         }
     }
@@ -422,7 +422,7 @@ export class YieldDistributorService {
 
             await client.del(`yield_lock:${offerId}`);
         } catch (err) {
-            log.warn('Redis lock release failed (TTL will auto-expire)', { offerId, error: err.message });
+            log.warnFromException('Redis lock release failed (TTL will auto-expire)', err, { offerId });
         }
     }
 
@@ -476,7 +476,7 @@ export class YieldDistributorService {
             log.info('Contract TTL extended', { contractId, success: result.success });
             return result;
         } catch (err) {
-            log.error('Failed to extend contract TTL', { error: err.message });
+            log.errorFromException('Failed to extend contract TTL', err);
             throw err;
         }
     }

@@ -57,7 +57,7 @@ export async function handleWebhook(req, res) {
     const raw = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : String(req.body ?? '');
     payload = JSON.parse(raw);
   } catch (err) {
-    log.warn('Webhook body is not valid JSON', { error: err.message });
+    log.warnFromException('Webhook body is not valid JSON', err);
     return res.status(400).json({ error: 'invalid json' });
   }
 
@@ -77,7 +77,7 @@ export async function handleWebhook(req, res) {
       signatureValid = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signatureHeader));
     }
   } catch (err) {
-    log.error('HMAC verification crashed', { error: err.message });
+    log.errorFromException('HMAC verification crashed', err);
   }
 
   if (!signatureValid) {
@@ -127,7 +127,7 @@ export async function handleWebhook(req, res) {
       log.debug(`Duplicate webhook (${eventType}/${resourceId}/${resourceStatus}) — acked`);
       return res.status(200).json({ status: 'duplicate' });
     }
-    log.error('Failed to persist webhook event', { error: err.message });
+    log.errorFromException('Failed to persist webhook event', err);
     return res.status(500).json({ error: 'persist failed' });
   }
 
@@ -145,7 +145,7 @@ export async function handleWebhook(req, res) {
         },
       });
     } catch (err) {
-      log.error(`State transition failed for ${eventType}/${resourceId}`, { error: err.message, stack: err.stack });
+      log.errorFromException(`State transition failed for ${eventType}/${resourceId}`, err);
       try {
         await prisma.rampWebhookEvent.updateMany({
           where: { eventType, resourceId, resourceStatus },
