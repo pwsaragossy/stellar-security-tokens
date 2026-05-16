@@ -900,7 +900,7 @@ export class PasskeyWalletService {
       'transfer',
       xdr.ScVal.scvAddress(walletAddress.toScAddress()),
       xdr.ScVal.scvAddress(destination.toScAddress()),
-      xdr.ScVal.scvI128(xdr.Int128Parts.fromBigInt(amountBigInt))
+      nativeToScVal(amountBigInt, { type: 'i128' })
     );
 
     const builder = new TransactionBuilder(
@@ -1010,10 +1010,13 @@ export class PasskeyWalletService {
    * is loaded by the caller (after passkey-authenticated decryption) and
    * passed in here. This service is keypair-agnostic.
    *
-   * Fee model — the inner TX (per-investor G → anchor) is signed by the
-   * investor's relayer keypair, then wrapped in a **fee bump** signed by the
-   * ops keypair. Investor relayer Gs don't hold XLM; ops fee-sponsors them
-   * the same way it sponsors Soroban TXs.
+   * Fee model — the inner TX is signed by the investor's relayer keypair
+   * and handed to `sendTransaction`, which routes through OZ Channels (or
+   * the self-sponsorship fallback). Channels wraps the TX in its own fee
+   * bump signed by a channel keypair — so we do NOT pre-bump here. Pre-
+   * bumping causes Channels to attempt to fee-bump a fee-bump TX, which
+   * the Stellar SDK rejects with "v1 not set". Per-investor relayer Gs
+   * never need to hold XLM; Channels covers all classic TX fees.
    *
    * Preconditions:
    *   - `signingKeypair` is the investor's per-investor relayer G (matching
@@ -1057,7 +1060,11 @@ export class PasskeyWalletService {
     const stellarAmount = parsedAmount.toFixed(7).replace(/\.?0+$/, '') || '0.0000001';
 
     // Inner TX: per-investor relayer G → anchor, signed by the investor's
-    // relayer keypair. The investor's G is the source-of-funds.
+    // relayer keypair. The investor's G is the source-of-funds. We hand
+    // the SIGNED INNER TX directly to sendTransaction — Channels (or the
+    // self-sponsorship fallback inside sendTransaction) will wrap it in
+    // its own fee bump signed by a channel/ops keypair. DO NOT pre-bump
+    // here; Channels rejects already-bumped TXs with "v1 not set".
     const sourceAccount = await server.getAccount(signingKeypair.publicKey());
     const innerTx = new TransactionBuilder(sourceAccount, {
       fee: BASE_FEE,
@@ -1073,18 +1080,8 @@ export class PasskeyWalletService {
       .build();
     innerTx.sign(signingKeypair);
 
-    // Outer fee bump: ops pays the fee. The per-investor G is never required
-    // to hold XLM. Inner-tx semantics (source, ops, memo) are preserved.
-    const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
-      opsKeypair,
-      String(BASE_FEE * 2),
-      innerTx,
-      networkPassphrase,
-    );
-    feeBumpTx.sign(opsKeypair);
-
     log.info(`Relayer→anchor payment: ${stellarAmount} ${assetCode} from ${signingKeypair.publicKey().slice(0, 6)}… → ${anchorAccountId.slice(0, 6)}… memo=${memoHashHex.slice(0, 8)}…`);
-    const result = await this.sendTransaction(feeBumpTx);
+    const result = await this.sendTransaction(innerTx);
     if (!result || !result.hash) {
       throw new Error('Failed to submit relayer→anchor payment');
     }
@@ -1306,7 +1303,7 @@ export class PasskeyWalletService {
       'transfer',
       xdr.ScVal.scvAddress(walletAddress.toScAddress()),
       xdr.ScVal.scvAddress(destination.toScAddress()),
-      xdr.ScVal.scvI128(xdr.Int128Parts.fromBigInt(amountBigInt))
+      nativeToScVal(amountBigInt, { type: 'i128' })
     );
 
     const tx = new TransactionBuilder(

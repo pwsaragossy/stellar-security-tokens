@@ -1,7 +1,7 @@
 # 09 — Service Internals
 
 > **⚠️ AUTO-GENERATED — DO NOT EDIT MANUALLY**  
-> Generated: `2026-05-16T01:54:52.997Z`  
+> Generated: `2026-05-16T02:31:18.756Z`  
 > Source: `backend/src/services/` (31 files)  
 > Regenerate: `npm run docs:services`
 
@@ -963,7 +963,7 @@
 ---
 ## 27. UserType
 
-**File:** `backend/src/services/passkeyWallet.service.js` · **1437 lines**
+**File:** `backend/src/services/passkeyWallet.service.js` · **1434 lines**
 **Export:** `export const = { }`
 
 **Service dependencies:** `StellarService`
@@ -1002,12 +1002,12 @@ _No members extracted._
 | 763 | `static async getSorobanWalletBalances(walletContractId)` | ✓ |
 | 855 | `static async buildWithdrawalTx(userId, destinationAddress, amount, assetCode = "USDC", userType = UserType.INVESTOR, options = {})` | ✓ |
 | 984 | `static resolveClassicAsset(assetCode)` | – |
-| 1034 | `static async submitRelayerAnchorPayment({ anchorAccountId, assetCode, amount, memoHashHex, signingKeypair })` | ✓ |
-| 1102 | `static async buildInvestmentTx(investorContractId, companyWallet, amount)` | ✓ |
-| 1178 | `static async submitWithdrawalTx(signedXdr)` | ✓ |
-| 1258 | `static async buildWithdrawalTxForCompany(companyId, destinationAddress, amount, assetCode = "USDC")` | ✓ |
-| 1336 | `static async listUserPasskeys(userType, userId)` | ✓ |
-| 1400 | `static async listEd25519Signers(userType, userId)` | ✓ |
+| 1037 | `static async submitRelayerAnchorPayment({ anchorAccountId, assetCode, amount, memoHashHex, signingKeypair })` | ✓ |
+| 1099 | `static async buildInvestmentTx(investorContractId, companyWallet, amount)` | ✓ |
+| 1175 | `static async submitWithdrawalTx(signedXdr)` | ✓ |
+| 1255 | `static async buildWithdrawalTxForCompany(companyId, destinationAddress, amount, assetCode = "USDC")` | ✓ |
+| 1333 | `static async listUserPasskeys(userType, userId)` | ✓ |
+| 1397 | `static async listEd25519Signers(userType, userId)` | ✓ |
 
 **Private Methods**
 
@@ -1018,7 +1018,7 @@ _No members extracted._
 | 179 | `static #getCredentialFkField(userType)` | – |
 | 191 | `static #getEd25519SignerModel(userType)` | – |
 | 951 | `static #resolveAssetSacContractId(assetCode)` | – |
-| 1200 | `static #validateWithdrawalTx(tx)` | – |
+| 1197 | `static #validateWithdrawalTx(tx)` | – |
 
 **JSDoc Descriptions**
 

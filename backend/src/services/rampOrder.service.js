@@ -151,6 +151,11 @@ export class RampOrderService {
     bankAccountId, // local RampBankAccount.id
     memo,
     useAnchor = false,
+    feePayer, // Stellar G-address that fee-sponsors on-chain TXs. Required by
+              // EtherFuse for C-wallet (Soroban smart-account) off-ramps —
+              // error "C-wallet offramp requires fee_payer" otherwise. Field
+              // name is camelCase `feePayer` on the wire despite the error
+              // message's snake_case rendering (verified against sandbox).
   }) {
     const quote = await prisma.rampQuote.findFirst({
       where: { id: quoteId, investorId },
@@ -180,6 +185,7 @@ export class RampOrderService {
     };
     if (memo) payload.memo = memo;
     if (useAnchor) payload.useAnchor = true;
+    if (feePayer) payload.feePayer = feePayer;
 
     log.info('Creating EtherFuse order', {
       investorId,
