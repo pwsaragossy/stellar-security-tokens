@@ -46,6 +46,7 @@ import logger from '../utils/logger.js';
 import {
   getNetworkPassphrase,
   getOperationsKeypair,
+  stellarServer,
 } from '../config/stellar.js';
 import { PasskeyWalletService } from './passkeyWallet.service.js';
 
@@ -130,11 +131,21 @@ export class InvestorRelayerWalletService {
   static async ensureProvisioned(investorId) {
     let row = await prisma.investorRelayerWallet.findUnique({ where: { investorId } });
     if (row?.trustlinesEstablished) {
-      return {
-        publicKey: row.publicKey,
-        trustlinesEstablished: true,
-        provisioningTxHash: row.provisioningTxHash,
-      };
+      // Verify on-chain trustlines still cover REQUIRED_TRUSTLINE_ASSETS.
+      // When the required-assets list grows (e.g. USDC added after the relayer
+      // was provisioned for TESOURO-only), the DB flag stays sticky-true but
+      // the on-chain state is stale. Self-heal: detect missing trustlines and
+      // re-run provisioning, which is idempotent on existing ChangeTrust ops.
+      const missing = await this.#findMissingTrustlines(row.publicKey);
+      if (missing.length === 0) {
+        return {
+          publicKey: row.publicKey,
+          trustlinesEstablished: true,
+          provisioningTxHash: row.provisioningTxHash,
+        };
+      }
+      log.info(`Relayer ${row.publicKey} missing trustlines [${missing.join(',')}] — re-provisioning`);
+      // Fall through to the provisioning path below.
     }
 
     if (!row) {
@@ -194,6 +205,26 @@ export class InvestorRelayerWalletService {
   static #keypairFromRow(row) {
     const seed = decryptSeed(row.encryptedSeed, row.encryptionVersion);
     return Keypair.fromSecret(seed);
+  }
+
+  /**
+   * Return the subset of REQUIRED_TRUSTLINE_ASSETS whose trustline is absent
+   * on the given account. Returns the full list if the account doesn't exist
+   * (caller falls through to full provisioning anyway).
+   */
+  static async #findMissingTrustlines(publicKey) {
+    try {
+      const account = await stellarServer.loadAccount(publicKey);
+      const present = new Set(
+        (account.balances || [])
+          .filter((b) => b.asset_type !== 'native')
+          .map((b) => b.asset_code)
+      );
+      return REQUIRED_TRUSTLINE_ASSETS.filter((code) => !present.has(code));
+    } catch (err) {
+      log.warn(`loadAccount(${publicKey.slice(0, 8)}…) failed — assuming all trustlines missing: ${err.message}`);
+      return [...REQUIRED_TRUSTLINE_ASSETS];
+    }
   }
 
   /**
