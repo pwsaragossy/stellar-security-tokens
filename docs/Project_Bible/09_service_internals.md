@@ -1,7 +1,7 @@
 # 09 — Service Internals
 
 > **⚠️ AUTO-GENERATED — DO NOT EDIT MANUALLY**  
-> Generated: `2026-05-16T17:12:59.083Z`  
+> Generated: `2026-05-16T17:32:03.251Z`  
 > Source: `backend/src/services/` (31 files)  
 > Regenerate: `npm run docs:services`
 
@@ -963,12 +963,12 @@
 ---
 ## 27. UserType
 
-**File:** `backend/src/services/passkeyWallet.service.js` · **1434 lines**
+**File:** `backend/src/services/passkeyWallet.service.js` · **1436 lines**
 **Export:** `export const = { }`
 
 **Service dependencies:** `StellarService`
 **External packages:** `@openzeppelin/relayer-plugin-channels`, `smart-account-kit-bindings`, `@stellar/stellar-sdk`
-**Internal imports:** `getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl, isTestnet, getTreasuryKeypair`, `prisma`, `logger`
+**Internal imports:** `getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl, isTestnet, getTreasuryKeypair, getUsdcIssuer`, `prisma`, `logger`
 **Prisma models:** `company`, `credentialModel`, `model`, `signerModel`, `userModel`
 
 ### UserType
@@ -1001,13 +1001,13 @@ _No members extracted._
 | 717 | `static async getTesouroMarketData()` | ✓ |
 | 763 | `static async getSorobanWalletBalances(walletContractId)` | ✓ |
 | 855 | `static async buildWithdrawalTx(userId, destinationAddress, amount, assetCode = "USDC", userType = UserType.INVESTOR, options = {})` | ✓ |
-| 984 | `static resolveClassicAsset(assetCode)` | – |
-| 1037 | `static async submitRelayerAnchorPayment({ anchorAccountId, assetCode, amount, memoHashHex, signingKeypair })` | ✓ |
-| 1099 | `static async buildInvestmentTx(investorContractId, companyWallet, amount)` | ✓ |
-| 1175 | `static async submitWithdrawalTx(signedXdr)` | ✓ |
-| 1255 | `static async buildWithdrawalTxForCompany(companyId, destinationAddress, amount, assetCode = "USDC")` | ✓ |
-| 1333 | `static async listUserPasskeys(userType, userId)` | ✓ |
-| 1397 | `static async listEd25519Signers(userType, userId)` | ✓ |
+| 985 | `static resolveClassicAsset(assetCode)` | – |
+| 1039 | `static async submitRelayerAnchorPayment({ anchorAccountId, assetCode, amount, memoHashHex, signingKeypair })` | ✓ |
+| 1101 | `static async buildInvestmentTx(investorContractId, companyWallet, amount)` | ✓ |
+| 1177 | `static async submitWithdrawalTx(signedXdr)` | ✓ |
+| 1257 | `static async buildWithdrawalTxForCompany(companyId, destinationAddress, amount, assetCode = "USDC")` | ✓ |
+| 1335 | `static async listUserPasskeys(userType, userId)` | ✓ |
+| 1399 | `static async listEd25519Signers(userType, userId)` | ✓ |
 
 **Private Methods**
 
@@ -1017,8 +1017,8 @@ _No members extracted._
 | 167 | `static #getCredentialModel(userType)` | – |
 | 179 | `static #getCredentialFkField(userType)` | – |
 | 191 | `static #getEd25519SignerModel(userType)` | – |
-| 951 | `static #resolveAssetSacContractId(assetCode)` | – |
-| 1197 | `static #validateWithdrawalTx(tx)` | – |
+| 952 | `static #resolveAssetSacContractId(assetCode)` | – |
+| 1199 | `static #validateWithdrawalTx(tx)` | – |
 
 **JSDoc Descriptions**
 
