@@ -759,6 +759,10 @@ function AssetPicker({
     const tesouro = balances?.tesouro ? Number(balances.tesouro) : 0;
     const usdc = balances?.usdc ? Number(balances.usdc) : 0;
 
+    // USDC off-ramp is disabled: EtherFuse rejects "Non-stable assets are
+    // not supported" for plain USDC — their off-ramp only takes their own
+    // stablebonds. Disabled tile shows the balance for context but can't
+    // be selected. Re-enable when EtherFuse confirms USDC off-ramp support.
     return (
         <div className="space-y-2">
             <p className="text-[10px] uppercase tracking-wider text-gray-500 px-1">Asset</p>
@@ -772,10 +776,11 @@ function AssetPicker({
                 />
                 <AssetTile
                     code="USDC"
-                    label="Stablecoin"
+                    label="Coming soon"
                     balance={`$${usdc.toFixed(2)}`}
-                    selected={selected === 'USDC'}
-                    onClick={() => onSelect('USDC')}
+                    selected={false}
+                    onClick={() => undefined}
+                    disabled
                 />
             </div>
         </div>
@@ -788,21 +793,26 @@ function AssetTile({
     balance,
     selected,
     onClick,
+    disabled,
 }: {
     code: string;
     label: string;
     balance: string;
     selected: boolean;
     onClick: () => void;
+    disabled?: boolean;
 }) {
     return (
         <button
             onClick={onClick}
+            disabled={disabled}
             className={
                 'flex flex-col items-start gap-1 p-3 rounded-lg border transition-colors text-left ' +
-                (selected
-                    ? 'border-[hsl(43_45%_55%/0.5)] bg-[hsl(43_45%_55%/0.08)]'
-                    : 'border-white/8 bg-white/[0.03] hover:bg-white/[0.05]')
+                (disabled
+                    ? 'border-white/8 bg-white/[0.015] opacity-50 cursor-not-allowed'
+                    : selected
+                        ? 'border-[hsl(43_45%_55%/0.5)] bg-[hsl(43_45%_55%/0.08)]'
+                        : 'border-white/8 bg-white/[0.03] hover:bg-white/[0.05]')
             }
         >
             <div className="flex items-center gap-2 w-full">

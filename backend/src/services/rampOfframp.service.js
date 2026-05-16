@@ -56,8 +56,16 @@ import EtherFuseClient from './etherfuse.service.js';
 
 const log = logger.scope('RampOfframpService');
 
-/** Off-ramp asset whitelist for v1. */
-const SUPPORTED_OFFRAMP_ASSETS = new Set(['TESOURO', 'USDC']);
+/**
+ * Off-ramp asset whitelist for v1.
+ *
+ * USDC is intentionally EXCLUDED here even though we initially scoped both.
+ * EtherFuse's sandbox rejects USDC quotes with `Non-stable assets are not
+ * supported: USDC:G…` — their off-ramp only accepts their own stablebonds
+ * (TESOURO / CETES / etc.), not general stablecoins. Re-enable USDC here
+ * only after EtherFuse confirms support. See ROADMAP "Off-Ramp Hardening".
+ */
+const SUPPORTED_OFFRAMP_ASSETS = new Set(['TESOURO']);
 
 /** Stellar mainnet USDC issuer (Circle). Override via env for testnet. */
 const DEFAULT_USDC_ISSUER = 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
@@ -184,6 +192,32 @@ export class RampOfframpService {
         status: 403,
         code: 'no_wallet_registered',
       });
+    }
+
+    // Off-ramp specifically requires the bank account to be fully `active` on
+    // EtherFuse's side — `awaiting_deposit_verification` is accepted by our
+    // on-ramp readiness gate (PIX deposits work as soon as the account exists)
+    // but EtherFuse rejects off-ramp orders with 400 until CEP verification
+    // completes. Catch it locally with a friendly message instead of an
+    // upstream 502.
+    const bankAccount = await prisma.rampBankAccount.findFirst({
+      where: { id: Number(bankAccountId), investorId, deletedAt: null },
+    });
+    if (!bankAccount) {
+      throw new RampOfframpError('Bank account not found', {
+        status: 404,
+        code: 'bank_account_not_found',
+      });
+    }
+    if (bankAccount.status !== 'active') {
+      throw new RampOfframpError(
+        `Your PIX bank account is still being verified by the bank (status: ${bankAccount.status}). This usually takes a few minutes after registration — please try again shortly.`,
+        {
+          status: 409,
+          code: 'bank_account_not_active',
+          details: { status: bankAccount.status, bankAccountId: bankAccount.id },
+        }
+      );
     }
 
     const quote = await prisma.rampQuote.findFirst({
