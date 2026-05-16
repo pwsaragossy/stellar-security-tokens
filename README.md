@@ -23,6 +23,35 @@ O módulo de ramp conecta o fluxo fiat brasileiro aos ativos usados na plataform
 
 Esses fluxos dependem de credenciais Etherfuse, webhooks, liquidez operacional, configuração dos contratos SAC de USDC/TESOURO e reconciliação dos pedidos. Veja o runbook de off-ramp em [`docs/Operations/OFFRAMP_RUNBOOK.md`](./docs/Operations/OFFRAMP_RUNBOOK.md).
 
+### API de Rampas
+
+As rotas de rampa ficam sob `/api/ramp` e exigem JWT de investidor:
+
+- `GET /api/ramp/readiness`: valida se o investidor pode operar rampas.
+- `POST /api/ramp/kyc`: envia ou atualiza dados de KYC e provisiona o cliente na Etherfuse.
+- `POST /api/ramp/bank-accounts`: cadastra conta bancária Pix.
+- `POST /api/ramp/quotes`: cria cotação BRL -> TESOURO ou USDC, conforme `targetAsset`.
+- `POST /api/ramp/orders`: executa cotação de on-ramp e retorna instruções Pix.
+- `GET /api/ramp/orders/:id`: consulta pedidos de on-ramp e off-ramp.
+
+As rotas de off-ramp só existem quando `ENABLE_OFFRAMP=true`:
+
+- `POST /api/ramp/offramp/quotes`: cota TESOURO/USDC -> BRL.
+- `POST /api/ramp/offramp/orders`: cria ordem de saque via Anchor Mode.
+- `POST /api/ramp/offramp/orders/:id/prepare-tx`: monta XDR para assinatura com Passkey.
+- `POST /api/ramp/offramp/orders/:id/submit-tx`: submete XDR assinado e aciona o pagamento Pix.
+
+### Configuração Crítica
+
+Para produção, valide pelo menos estas variáveis antes de liberar rampas:
+
+- `ENABLE_ETHERFUSE_ANCHOR=true`: habilita o módulo Etherfuse.
+- `ENABLE_OFFRAMP=true`: habilita as rotas de off-ramp.
+- `ETHERFUSE_API_BASE_URL`, `ETHERFUSE_API_KEY`, `ETHERFUSE_ORG_ID` e `ETHERFUSE_WEBHOOK_SECRET`: conectam backend e Etherfuse.
+- `ETHERFUSE_TESOURO_ASSET_IDENTIFIER`: identifica o ativo TESOURO correto.
+- `USDC_SAC_CONTRACT_ID` / `USDC_CONTRACT_ID` e `USDC_ISSUER`: configuram USDC.
+- `OFFRAMP_KEYRING_SECRET`: chave AES-256-GCM para relayers de off-ramp; deve ter backup testado.
+
 ## 💰 Sistema de Taxas (Fee System)
 
 A plataforma implementa um sistema de taxas dinâmico e configurável:
