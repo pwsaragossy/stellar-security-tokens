@@ -2,30 +2,34 @@
  * RampBankAccountService — register and manage the investor's BR PIX bank
  * account on EtherFuse.
  *
- * ⚠ STALE-API WORKAROUND (sandbox-confirmed 2026-05-15):
- *   EtherFuse's `POST /ramp/customer/{id}/bank-account` does NOT yet accept
- *   a BR/PIX schema programmatically — only MX (CLABE+CURP+RFC). However,
- *   the sandbox accepts the MX-personal shape with `birthCountryIsoCode: "BR"`
- *   and routes BRL → TESOURO orders through it correctly, even though the
- *   returned record has `currency: "mxn"` as a legacy label.
+ * BR/PIX wire schema (verified 2026-05-16, sandbox returned `currency: "brl"`,
+ * `status: "active"`, `compliant: true`):
  *
- *   Until EtherFuse ships a real PIX programmatic schema:
- *     - We pre-fill CLABE/CURP/RFC with EtherFuse-friendly placeholder values
- *       (sandbox accepts these without validation).
- *     - The investor's REAL PIX key + key type are stored locally in
- *       RampBankAccount.pixKey / .pixKeyType for our own UI / future migration
- *       to the real API.
- *     - In production, we MUST verify EtherFuse accepts this shape before
- *       letting investors actually move BRL. If they enforce real CLABE
- *       validation in prod, the only recourse is hosted onboarding for the
- *       bank-account step.
+ *   POST /ramp/customer/{customerId}/bank-account
+ *   {
+ *     "account": {
+ *       "pixKey":     "<real PIX key>",
+ *       "pixKeyType": "cpf" | "cnpj" | "email" | "phone" | "evp",
+ *       "firstName":  "<investor first name>",
+ *       "lastName":   "<investor last name>",
+ *       "cpf":        "<11-digit CPF>"
+ *     }
+ *   }
  *
- * Required-on-Investor row: at least `givenName`, `familyName`, `dateOfBirth`,
- * `document` (CPF). RampKycService.saveKycFields() captures these from the
- * same form the user submits before this service runs.
+ * This shape is NOT in EtherFuse's public OpenAPI (which is MX/CLABE-centric)
+ * but matches the EtherfusePixAccountBody interface in Elliot Friend's
+ * Regional Starter Pack (ElliotFriend/regional-starter-pack, src/lib/anchors/
+ * etherfuse/types.ts) and was confirmed working against the live sandbox.
+ *
+ * Important: EtherFuse generates the `bankAccountId` server-side and IGNORES
+ * any client-supplied `transactionId` on the PIX shape (unlike MX where the
+ * docs say transactionId is the bank account id). Always read the response's
+ * `bankAccountId` field — don't assume it matches anything we sent.
+ *
+ * Required-on-Investor row: `givenName`, `familyName`, `document` (CPF).
+ * RampKycService.saveKycFields() captures these from the form the user
+ * submits before this service runs.
  */
-import { randomUUID } from 'node:crypto';
-
 import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
 import EtherFuseClient from './etherfuse.service.js';
@@ -74,27 +78,24 @@ export class RampBankAccountService {
     if (!investor) throw new Error(`Investor ${investorId} not found`);
     if (!customer) throw new Error(`Investor ${investorId} has no EtherFuse customer — run KYC first`);
 
-    // EtherFuse payload (workaround shape). Real PIX info stored locally.
-    const transactionId = randomUUID();
+    if (!investor.document) {
+      throw new Error(`Investor ${investorId} is missing CPF (document) — complete KYC first`);
+    }
+
+    // Canonical BR/PIX shape — see file header for schema reference.
+    const firstName = investor.givenName ?? investor.name?.split(' ')[0] ?? 'Investor';
+    const lastName = investor.familyName ?? investor.name?.split(' ').slice(-1)[0] ?? 'Radox';
     const efPayload = {
       account: {
-        transactionId,
-        firstName: investor.givenName ?? investor.name?.split(' ')[0] ?? 'Investor',
-        paternalLastName: investor.familyName ?? investor.name?.split(' ').slice(-1)[0] ?? 'Radox',
-        maternalLastName: 'Radox',
-        birthDate: investor.dateOfBirth
-          ? investor.dateOfBirth.toISOString().slice(0, 10).replaceAll('-', '')
-          : '19900101',
-        birthCountryIsoCode: investor.country ?? 'BR',
-        // Workaround filler — sandbox doesn't validate these for BR investors.
-        // Replace with real PIX-shaped fields once EtherFuse ships the schema.
-        curp: 'AAAA990101HDFRRN09',
-        rfc: 'AAAA990101AAA',
-        clabe: '012345678901234567',
+        pixKey,
+        pixKeyType,
+        firstName,
+        lastName,
+        cpf: investor.document,
       },
     };
 
-    log.info(`Registering EtherFuse bank account (PIX workaround) for investor ${investorId}`);
+    log.info(`Registering EtherFuse bank account (PIX) for investor ${investorId}: pixKeyType=${pixKeyType}`);
     let efResponse;
     try {
       efResponse = await EtherFuseClient.Customers.registerBankAccount(
