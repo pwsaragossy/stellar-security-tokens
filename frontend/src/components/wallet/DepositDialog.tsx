@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
     Copy, Check, Loader2, AlertCircle, RefreshCw, ArrowLeft,
-    Building2, Wallet, AlertTriangle, ArrowRight, Sparkles,
+    Building2, Wallet, AlertTriangle, ArrowRight, Sparkles, ExternalLink,
 } from 'lucide-react';
 import { QRCode } from '@/components/ui/qrcode';
 import { investorsApi } from '@/api/investors';
@@ -831,37 +831,87 @@ function OrderInProgress({
                         <p className="text-[11px] uppercase tracking-[0.14em] text-amber-300">Sandbox · skip the bank app</p>
                         <span className="text-[10px] text-amber-200/60">testnet only</span>
                     </div>
-                    <Button
-                        onClick={handleSimulate}
-                        disabled={simulating}
-                        className="w-full h-9 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 border border-amber-500/30 text-[12px] font-medium disabled:opacity-50"
-                    >
-                        {simulating ? (
-                            <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Simulating…</>
-                        ) : (
-                            <>Simulate PIX paid</>
-                        )}
-                    </Button>
+                    {simulating ? (
+                        <div className="flex flex-col items-center gap-3 py-3">
+                            <div className="relative w-20 h-20">
+                                <div className="absolute inset-0 rounded-lg bg-white/95 flex items-center justify-center">
+                                    <div className="grid grid-cols-5 gap-[2px] p-2">
+                                        {Array.from({ length: 25 }).map((_, i) => (
+                                            <div
+                                                key={i}
+                                                className={
+                                                    'w-[6px] h-[6px] rounded-[1px] ' +
+                                                    ((i * 7 + 13) % 3 === 0 ? 'bg-amber-600' : 'bg-slate-900')
+                                                }
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="absolute inset-0 rounded-lg border-2 border-amber-400/70 animate-pulse" />
+                                <div className="absolute -inset-1 rounded-lg ring-2 ring-amber-300/40 animate-ping" />
+                            </div>
+                            <div className="flex items-center gap-2 text-[12px] text-amber-200">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Confirmando pagamento PIX no banco simulado…</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <Button
+                            onClick={handleSimulate}
+                            className="w-full h-9 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 border border-amber-500/30 text-[12px] font-medium"
+                        >
+                            Simulate PIX paid
+                        </Button>
+                    )}
                     {simError && (
                         <p className="text-[11px] text-red-300/90">{simError}</p>
                     )}
                 </div>
             )}
 
-            {explorerUrl && (
-                <a
-                    href={explorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block w-full text-center text-[11px] text-[hsl(43_45%_70%)] hover:text-[hsl(43_45%_85%)] underline-offset-4 hover:underline transition-colors"
-                >
-                    View on-chain delivery →
-                </a>
-            )}
+            <DeliveryLinks order={order} explorerUrl={explorerUrl} />
 
             {order.failureReason && (
                 <InlineError message={order.failureReason} />
             )}
+        </div>
+    );
+}
+
+function DeliveryLinks({ order, explorerUrl }: { order: RampOrder; explorerUrl: string | null }) {
+    const navigate = useNavigate();
+    // Cascade: on-chain (Stellar Expert) → EtherFuse status page → in-app history.
+    // We always show at least the in-app history link so the user can always find this order.
+    const onchainUrl = explorerUrl;
+    const statusPageUrl = order.statusPage;
+    return (
+        <div className="flex flex-col gap-2 pt-1">
+            {onchainUrl && (
+                <a
+                    href={onchainUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 w-full text-[11px] text-[hsl(43_45%_70%)] hover:text-[hsl(43_45%_85%)] underline-offset-4 hover:underline transition-colors"
+                >
+                    View on-chain delivery <ExternalLink className="w-3 h-3" />
+                </a>
+            )}
+            {!onchainUrl && statusPageUrl && (
+                <a
+                    href={statusPageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 w-full text-[11px] text-[hsl(43_45%_70%)] hover:text-[hsl(43_45%_85%)] underline-offset-4 hover:underline transition-colors"
+                >
+                    View status on EtherFuse <ExternalLink className="w-3 h-3" />
+                </a>
+            )}
+            <button
+                onClick={() => navigate(`/transactions?ramp=${order.etherfuseOrderId}`)}
+                className="flex items-center justify-center gap-1.5 w-full text-[11px] text-white/55 hover:text-white/85 underline-offset-4 hover:underline transition-colors"
+            >
+                See in Transactions <ArrowRight className="w-3 h-3" />
+            </button>
         </div>
     );
 }
@@ -878,7 +928,7 @@ function StatusPill({ status }: { status: RampOrder['status'] }) {
     const copy: Record<RampOrder['status'], string> = {
         created: 'Waiting for PIX',
         funded: 'PIX received — settling',
-        completed: 'TESOURO delivered',
+        completed: 'Delivered',
         finalized: 'Final',
         failed: 'Failed',
         refunded: 'Refunded',
