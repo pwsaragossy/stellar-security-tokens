@@ -1,8 +1,11 @@
 # Docker Compose for Development
 # This file overrides settings from docker-compose.yml for local development
 #
-# Usage:
+# Usage (local stack, no Cloudflare tunnel):
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# With Cloudflare tunnel (needs ~/.cloudflared/cert.pem after `cloudflared login`):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile cf-tunnel up -d
 #
 # To stop:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml down
@@ -25,6 +28,17 @@ services:
       - ./backend/prisma:/app/backend/prisma
       - ./backend/tests:/app/backend/tests
       - ./contracts:/app/contracts:ro  # WASM binary for E2E tests
+    # Bind mount replaces image prisma/ with host copy; generated client is gitignored,
+    # so regenerate on every start (fast) instead of relying on Dockerfile RUN prisma generate.
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        sleep 5 &&
+        cd backend &&
+        npx prisma generate &&
+        node --import tsx src/database/migrate.js &&
+        node --import tsx src/index.js
+      "
 
   frontend:
     build:
@@ -41,10 +55,13 @@ services:
     #   - ./frontend/src:/app/frontend/src
 
   tunnel:
+    profiles:
+      - cf-tunnel
     image: cloudflare/cloudflared:latest
     command: tunnel run radox-dev
     volumes:
-      - /Users/pedrosaragossy/.cloudflared:/etc/cloudflared
+      # Host creds after `cloudflared login` (override with CLOUDFLARED_CONFIG_DIR in .env)
+      - ${CLOUDFLARED_CONFIG_DIR:-$HOME/.cloudflared}:/etc/cloudflared:ro
     environment:
       TUNNEL_ORIGIN_CERT: /etc/cloudflared/cert.pem
     networks:

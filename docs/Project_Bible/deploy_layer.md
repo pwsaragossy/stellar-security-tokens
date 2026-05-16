@@ -1,7 +1,7 @@
 # Deploy Layer — Full Deep Read
 
 > Read date: 2026-03-17
-> Files: `Dockerfile` (33L), `frontend/Dockerfile` (45L), `docker-compose.yml` (154L), `docker-compose.prod.yml` (268L), `docker-compose.dev.yml` (53L), `deploy/Caddyfile` (48L), `deploy/setup-vm.sh` (77L), `deploy/bootstrap-admin.sh` (45L), `frontend/nginx.conf` (38L), `.env.production.template` (92L)
+> Files: `Dockerfile` (33L), `frontend/Dockerfile` (45L), `docker-compose.yml` (154L), `docker-compose.prod.yml` (268L), `docker-compose.dev.yml` (dev: `npx prisma generate` on backend start; optional Cloudflare tunnel via `--profile cf-tunnel`; mount `${CLOUDFLARED_CONFIG_DIR:-$HOME/.cloudflared}`), `deploy/Caddyfile` (48L), `deploy/setup-vm.sh` (77L), `deploy/bootstrap-admin.sh` (45L), `frontend/nginx.conf` (38L), `.env.production.template` (92L)
 
 ---
 
@@ -150,6 +150,8 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
 
 # === Development ===
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+# Optional tunnel: add `--profile cf-tunnel` (needs `cloudflared login`; ~/.cloudflared/cert.pem).
+# Backend: dev override runs prisma generate before migrate (bind mount hides image-generated client).
 ```
 
 ## First Deploy Checklist

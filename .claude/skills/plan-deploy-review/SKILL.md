@@ -502,13 +502,15 @@ npm run multisig:setup -- -a issuer --lock
 #### Step 1: Start Dev Stack
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+# Optional Cloudflare tunnel (requires ~/.cloudflared after `cloudflared login`):
+# docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile cf-tunnel up -d --build
 ```
 
 #### Step 2: Verify
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
 ```
-**Gate**: postgres, redis, backend, frontend, tunnel all "Up".
+**Gate**: postgres, redis, backend, frontend all "Up". Tunnel only if you started with `--profile cf-tunnel`.
 
 #### Key Dev Differences
 | Aspect | Dev | Prod |
@@ -520,7 +522,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
 | Port exposure | 3000, 80, 5432 | 80, 443 only (via Caddy) |
 | HTTPS | None | Caddy + Let's Encrypt |
 | `VITE_ENABLE_TEST_LOGIN` | `true` | `false` |
-| Tunnel | Cloudflare tunnel container | Direct DNS → VM |
+| Tunnel | Optional: `--profile cf-tunnel` | Direct DNS → VM |
 
 ---
 
