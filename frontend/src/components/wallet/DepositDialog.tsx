@@ -778,9 +778,15 @@ function OrderInProgress({
         try {
             const res = await rampApi.simulateFiatReceived(order.id);
             if (!res.success) throw new Error(res.error ?? 'Simulator rejected the call');
+            // Intentionally do NOT reset `simulating` on success. The order
+            // status takes ~3s to advance to `funded` (via webhook). Keeping
+            // the spinner up bridges that gap so the button can't reappear
+            // and get re-clicked — a re-click would hit EtherFuse with an
+            // already-funded order and 404. Once status changes, the outer
+            // `order.status === 'created'` guard unmounts this whole
+            // sandbox box, taking the spinner with it.
         } catch (err: any) {
             setSimError(err?.response?.data?.error ?? err?.message ?? 'Simulator failed');
-        } finally {
             setSimulating(false);
         }
     }
