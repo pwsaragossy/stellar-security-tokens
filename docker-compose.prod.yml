@@ -143,6 +143,12 @@ services:
       ACCOUNT_WASM_HASH: ${ACCOUNT_WASM_HASH:-}
       WEBAUTHN_VERIFIER_ADDRESS: ${WEBAUTHN_VERIFIER_ADDRESS:-}
       ED25519_VERIFIER_ADDRESS: ${ED25519_VERIFIER_ADDRESS:-}
+      # ── Prod propagation override (2026-05-16) — fixes silent breakage ──
+      SETTLEMENT_WASM_HASH: ${SETTLEMENT_WASM_HASH:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      ADMIN_ALERT_EMAIL: ${ADMIN_ALERT_EMAIL:-}
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-Radox}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       postgres:
         condition: service_healthy
@@ -188,6 +194,8 @@ services:
         VITE_STELLAR_NETWORK: ${STELLAR_NETWORK:-testnet}
         VITE_SOROBAN_RPC_URL: ${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
         VITE_STELLAR_NETWORK_PASSPHRASE: "${VITE_STELLAR_NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
+        VITE_APP_VERSION: ${VITE_APP_VERSION:-}
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
     # Override base compose port 80 — only Caddy exposes ports externally
     ports: !override []
     depends_on:
