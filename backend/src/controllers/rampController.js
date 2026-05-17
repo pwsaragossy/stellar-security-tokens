@@ -391,7 +391,13 @@ export async function getOrder(req, res) {
  * Hard-guarded: returns 404 in production so the route looks like it doesn't exist.
  */
 export async function simulateFiatReceived(req, res) {
-  if (process.env.NODE_ENV === 'production') {
+  // Match the sandbox detection used by RampKycService.getReadiness so the
+  // simulator is available wherever the UI advertises the "skip bank app"
+  // affordance. NODE_ENV alone is wrong: prod-mode Node running against
+  // EtherFuse's sandbox URL is still a sandbox environment.
+  const efBase = process.env.ETHERFUSE_API_BASE_URL || '';
+  const isSandbox = efBase.includes('.sand.') || process.env.NODE_ENV !== 'production';
+  if (!isSandbox) {
     return send(res, 404, { success: false, error: 'not found' });
   }
   try {
