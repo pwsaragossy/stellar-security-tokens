@@ -101,6 +101,48 @@ services:
       # Soroban Sale Kill Switch
       ENABLE_SOROBAN_SALE: ${ENABLE_SOROBAN_SALE:-false}
       SALE_WASM_HASH: ${SALE_WASM_HASH:-}
+      # ── Backend propagation patch (2026-05-16): every var read by backend code ──
+      # Soroban Settlement (Bullet Maturity payout contract) — was silently broken
+      SETTLEMENT_WASM_HASH: ${SETTLEMENT_WASM_HASH:-}
+      # Sentry observability (no-op if DSN not set)
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      # Pusher (graceful no-op if not configured; frontend client deleted)
+      PUSHER_APP_ID: ${PUSHER_APP_ID:-}
+      PUSHER_KEY: ${PUSHER_KEY:-}
+      PUSHER_SECRET: ${PUSHER_SECRET:-}
+      PUSHER_CLUSTER: ${PUSHER_CLUSTER:-}
+      PUSHER_USE_TLS: ${PUSHER_USE_TLS:-true}
+      # Swagger / OpenAPI base URL
+      API_URL: ${API_URL:-https://api.radox.net}
+      # Email link expiry
+      EMAIL_VERIFICATION_EXPIRY_HOURS: ${EMAIL_VERIFICATION_EXPIRY_HOURS:-24}
+      # Admin/oncall alerting
+      ADMIN_ALERT_EMAIL: ${ADMIN_ALERT_EMAIL:-}
+      ALERT_SLACK_WEBHOOK_URL: ${ALERT_SLACK_WEBHOOK_URL:-}
+      ALERT_PAGERDUTY_ROUTING_KEY: ${ALERT_PAGERDUTY_ROUTING_KEY:-}
+      # Operations wallet balance alert thresholds (XLM)
+      OPERATIONS_WALLET_WARNING_XLM: ${OPERATIONS_WALLET_WARNING_XLM:-20}
+      OPERATIONS_WALLET_CRITICAL_XLM: ${OPERATIONS_WALLET_CRITICAL_XLM:-5}
+      # Backups
+      BACKUP_DIR: ${BACKUP_DIR:-/app/backups}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Pinata gateway override
+      PINATA_GATEWAY: ${PINATA_GATEWAY:-gateway.pinata.cloud}
+      # Payment monitoring
+      ENABLE_PAYMENT_MONITORING: ${ENABLE_PAYMENT_MONITORING:-true}
+      PAYMENT_MONITOR_RECONNECT_DELAY: ${PAYMENT_MONITOR_RECONNECT_DELAY:-5000}
+      USDC_PAYMENT_WINDOW_MINUTES: ${USDC_PAYMENT_WINDOW_MINUTES:-2}
+      # WebAuthn display name (shown in passkey UI)
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-Radox}
+      # Treasury multisig (CSV of public keys; falls back to single treasury PK)
+      TREASURY_SIGNERS: ${TREASURY_SIGNERS:-}
+      # Trusted API key (rate-limit bypass for internal services)
+      TRUSTED_API_KEY: ${TRUSTED_API_KEY:-}
+      # Legacy XLM/USDC contract IDs — passkeyWallet.service.js reads these without SAC fallback
+      XLM_CONTRACT_ID: ${XLM_CONTRACT_ID:-${XLM_SAC_CONTRACT_ID:-CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC}}
+      USDC_CONTRACT_ID: ${USDC_CONTRACT_ID:-${USDC_SAC_CONTRACT_ID:-CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA}}
       # EtherFuse anchor (BRL/PIX ↔ TESOURO/USDC on-ramp + off-ramp)
       ENABLE_ETHERFUSE_ANCHOR: ${ENABLE_ETHERFUSE_ANCHOR:-false}
       ETHERFUSE_API_BASE_URL: ${ETHERFUSE_API_BASE_URL:-https://api.sand.etherfuse.com}
