@@ -100,7 +100,10 @@ function handleError(res, err, context) {
       || (typeof err.body === 'string' ? err.body : null)
       || `EtherFuse upstream error (status ${err.status})`;
     log.warn(`${context}: EtherFuse ${err.status} — ${upstream}`, { path: err.path, body: err.body });
-    return send(res, 502, {
+    // Forward upstream 4xx as-is (client-correctable conditions like 409
+    // "pending order exists"); only 5xx / network failures are true 502s.
+    const upstreamIsClientError = err.status >= 400 && err.status < 500;
+    return send(res, upstreamIsClientError ? err.status : 502, {
       success: false,
       error: String(upstream),
       etherfuseStatus: err.status,

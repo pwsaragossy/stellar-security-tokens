@@ -250,11 +250,15 @@ export const Orders = {
   /**
    * POST /ramp/order/fiat_received — SANDBOX ONLY simulator. Marks the order
    * as if the fiat deposit landed, triggering `funded` → `completed` flow.
-   * The handler in our rampRoutes.js hard-guards against NODE_ENV=production,
-   * but this client method also throws in production for defense in depth.
+   * Defense-in-depth check matches the controller's sandbox detection — gates
+   * on EtherFuse base URL (and falls back to NODE_ENV in local dev) rather
+   * than NODE_ENV alone, since prod-mode Node pointed at sandbox EtherFuse
+   * is still a sandbox environment.
    */
   async simulateFiatReceived({ orderId, amount }) {
-    if (process.env.NODE_ENV === 'production') {
+    const efBase = process.env.ETHERFUSE_API_BASE_URL || '';
+    const isSandbox = efBase.includes('.sand.') || process.env.NODE_ENV !== 'production';
+    if (!isSandbox) {
       throw new EtherFuseApiError('fiat_received simulator is sandbox-only', {
         status: 0,
         path: '/ramp/order/fiat_received',
