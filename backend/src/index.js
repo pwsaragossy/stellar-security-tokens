@@ -302,6 +302,19 @@ app.listen(PORT, async () => {
   } catch (error) {
     console.error('Failed to start ramp order reconciler:', error.message);
   }
+
+  // --- DORMANT-ACTIVE ANOMALY MONITOR (F-009) ---
+  // Detects investors returning from > 30d dormancy + immediately
+  // transacting. Writes an AdminAction row + dispatches a high-severity
+  // alert via AlertRouter. Caroline's <30-min credential-compromise
+  // containment signal.
+  try {
+    const { DormantAlertMonitor } = await import('./services/dormantAlertMonitor.service.js');
+    DormantAlertMonitor.start();
+    console.log('Dormant-active anomaly monitor enabled — polling every 60s');
+  } catch (error) {
+    console.error('Failed to start dormant alert monitor:', error.message);
+  }
 });
 
 // ─── GRACEFUL SHUTDOWN ───
@@ -321,6 +334,12 @@ const gracefulShutdown = async (signal) => {
     try {
       const { WalletMonitorService } = await import('./services/walletMonitor.service.js');
       WalletMonitorService.stop();
+    } catch (_) { /* not started — safe to ignore */ }
+
+    // Stop dormant-active anomaly monitor (F-009)
+    try {
+      const { DormantAlertMonitor } = await import('./services/dormantAlertMonitor.service.js');
+      DormantAlertMonitor.stop();
     } catch (_) { /* not started — safe to ignore */ }
 
     if (process.env.ENABLE_SOROBAN_SALE === 'true') {

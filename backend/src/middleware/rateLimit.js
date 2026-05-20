@@ -142,6 +142,30 @@ export const strictLimiter = createLimiter({
 });
 
 /**
+ * Per-user rate limiter — O-002 audit follow-up.
+ *
+ * IP-based limiting alone is insufficient against an attacker rotating
+ * IPs. This limiter keys on `req.user.userId` (set by authenticateToken)
+ * with an IP fallback for anonymous requests. Mount AFTER authenticateToken
+ * on routes where per-user volume matters more than per-IP volume.
+ *
+ * Limit: 100 req/min/user — generous enough for a heavy active session,
+ * tight enough to catch credential-replay bots.
+ */
+export const perUserLimiter = createLimiter({
+    windowMs: 60 * 1000,
+    max: 100,
+    message: 'Per-user rate limit exceeded. Slow down or contact support.',
+    keyPrefix: 'rl:user',
+});
+
+// express-rate-limit v6+ accepts keyGenerator at limiter creation; we patch
+// it after the fact because createLimiter is a wrapper. The keyGenerator
+// receives the Express req and returns the key string.
+perUserLimiter.keyGenerator = (req) =>
+    req.user?.userId ? `u:${req.user.userType ?? 'unk'}:${req.user.userId}` : (req.ip ?? 'anon');
+
+/**
  * Skip rate limiting for certain conditions
  * @param {Request} req - Express request
  * @returns {boolean} True to skip rate limiting
@@ -179,6 +203,7 @@ export default {
     authLimiter,
     apiLimiter,
     strictLimiter,
+    perUserLimiter,
     conditionalRateLimit,
     skipRateLimitForTrusted,
 };

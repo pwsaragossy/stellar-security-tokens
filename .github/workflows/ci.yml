@@ -1,0 +1,141 @@
+# CI gate — O-005 audit follow-up.
+#
+# Runs on every PR + push to main. Catches the obvious regressions:
+#   - Backend + frontend lint (catches unused imports, broken refs)
+#   - Backend mocked tests (catches logic + Prisma regressions)
+#   - Backend npm audit at high severity (catches new CVEs in direct deps)
+#   - Soroban contract tests for every contract crate
+#
+# TODO (audit Phase 4 hardening): SHA-pin every third-party action below
+# to prevent tag-drift supply-chain attacks. Currently using major-version
+# tags (@v4 etc.) which Dependabot can bump but a malicious actor could
+# also re-tag. Pin to a specific commit SHA after verifying it on GitHub.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend-lint-test-audit:
+    name: Backend (lint + test:ci + npm audit)
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: stellar_tokens_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install root + backend + frontend deps
+        run: |
+          npm ci
+          (cd backend && npm ci)
+          (cd frontend && npm ci --legacy-peer-deps)
+
+      - name: Backend lint
+        working-directory: backend
+        run: npm run lint
+
+      - name: Backend CI tests (mocked)
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/stellar_tokens_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          JWT_SECRET: ci_test_jwt_secret_do_not_use_in_prod
+        run: npm run test:ci
+
+      - name: Backend npm audit (prod deps, high+)
+        working-directory: backend
+        run: npm audit --audit-level=high --omit=dev
+
+  frontend-lint:
+    name: Frontend (lint + type-check)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: TypeScript type-check
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Frontend npm audit (prod deps, high+)
+        working-directory: frontend
+        run: npm audit --audit-level=high --omit=dev
+
+  contracts-test:
+    name: Soroban contracts (cargo test)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        crate: [token_sale, maturity_settlement, yield_distributor]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            contracts/${{ matrix.crate }}/target
+          key: ${{ runner.os }}-cargo-${{ matrix.crate }}-${{ hashFiles(format('contracts/{0}/Cargo.lock', matrix.crate)) }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.crate }}-
+
+      - name: cargo test
+        working-directory: contracts/${{ matrix.crate }}
+        run: cargo test --lib
