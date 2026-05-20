@@ -49,7 +49,8 @@ COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 #   1) Make /var/cache/nginx and /var/run writable for the nginx user.
 #   2) Point pid to a writable location.
 #   3) Bind to port 8080 instead of 80 (ports <1024 require root).
-RUN sed -i 's/listen\s*80;/listen 8080;/g' /etc/nginx/conf.d/default.conf \
+RUN sed -i 's/listen 80;/listen 8080;/g' /etc/nginx/conf.d/default.conf \
+  && grep -q 'listen 8080;' /etc/nginx/conf.d/default.conf \
   && chown -R nginx:nginx /var/cache/nginx /var/run /usr/share/nginx/html /etc/nginx/conf.d \
   && touch /var/run/nginx.pid \
   && chown nginx:nginx /var/run/nginx.pid

@@ -106,7 +106,7 @@ export function Contracts() {
         ? confirmTypedValue.trim().toUpperCase() === (selected?.offer.assetCode || '').toUpperCase()
         : true;
     const closeAction = () => {
-        closeAction();
+        setAction({ type: null });
         setActionInput({});
         setConfirmTypedValue('');
     };
