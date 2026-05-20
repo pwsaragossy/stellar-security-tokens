@@ -30,6 +30,10 @@ WORKDIR /app/backend
 RUN npx prisma generate
 WORKDIR /app
 
+# Reclaim ownership of everything root created during install + generate
+# (npm ci and prisma generate write to node_modules / prisma/generated as root).
+RUN chown -R nodeapp:nodeapp /app
+
 # Switch to the non-root user for runtime.
 USER nodeapp
 
