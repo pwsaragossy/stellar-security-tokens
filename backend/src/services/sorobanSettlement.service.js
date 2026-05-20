@@ -14,7 +14,8 @@
  * Contract error codes (mirrors SettleError enum in lib.rs):
  *   1=AlreadyInitialized, 2=NotInitialized, 3=InvalidAmount, 4=Overflow,
  *   5=EmptyBatch, 6=AlreadySettled, 7=BatchTooLarge, 8=NoDeposit,
- *   9=DuplicateInvestor, 10=PhantomInvestor, 11=FeeTooHigh
+ *   9=DuplicateInvestor, 10=PhantomInvestor, 11=FeeTooHigh,
+ *   12=ContractPaused, 13=NoPendingAdmin  ← v2 (F-003)
  */
 import {
     Contract,
@@ -55,6 +56,9 @@ const SETTLE_ERRORS = {
     9: { code: 'DuplicateInvestor', message: 'Duplicate investor in batch' },
     10: { code: 'PhantomInvestor', message: 'Investor holds 0 tokens — cannot pay' },
     11: { code: 'FeeTooHigh', message: 'Fee exceeds max_fee_bps cap' },
+    // v2 — F-003
+    12: { code: 'ContractPaused', message: 'Settlement contract is paused — operation blocked' },
+    13: { code: 'NoPendingAdmin', message: 'No pending admin proposal — call propose_admin first' },
 };
 
 /** Convert USDC amount (float) to stroops (i128 ScVal) */
@@ -551,6 +555,144 @@ export class SorobanSettlementService {
             return SETTLE_ERRORS[code] || { code: `Unknown(${code})`, message: error.message };
         }
         return { code: 'Unknown', message: error?.message || 'Unknown error' };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // v2 admin actions (F-003) — pause / resume / 2-step admin rotation
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Generic admin-op XDR builder. Issuer is the TX source for pause/resume/propose_admin;
+     * caller can override sourceAccount for accept_admin (pending admin signs).
+     * @private
+     */
+    static async #buildAdminOpXdr(offerId, method, args = [], sourceAccount = null) {
+        const offer = await prisma.offer.findUnique({ where: { id: offerId } });
+        if (!offer?.sorobanSettlementContractId) {
+            const err = new Error(`Offer ${offerId} has no deployed settlement contract`);
+            err.status = 400;
+            throw err;
+        }
+
+        const source = sourceAccount || keyManager.getIssuerPublicKey();
+        const contract = new Contract(offer.sorobanSettlementContractId);
+        const op = contract.call(method, ...args);
+
+        let tx = new TransactionBuilder(
+            await StellarService.getAccountRPC(source),
+            { fee: BASE_FEE, networkPassphrase: getNetworkPassphrase() }
+        )
+            .addOperation(op)
+            .setTimeout(300)
+            .build();
+
+        tx = await StellarService.prepareSorobanTransaction(tx);
+
+        log.info(`[settlement.${method}] contract=${offer.sorobanSettlementContractId} source=${source.slice(0, 8)}…`);
+        return {
+            xdr: tx.toXDR('base64'),
+            networkPassphrase: getNetworkPassphrase(),
+            contractId: offer.sorobanSettlementContractId,
+            method,
+        };
+    }
+
+    /**
+     * Generic read-only simulation helper. Uses operations keypair as source (zero-cost simulation only).
+     * Returns null if contract is v1 (function doesn't exist) or simulation otherwise fails.
+     * @private
+     */
+    static async #simulateReadOnly(offerId, method, args = []) {
+        const offer = await prisma.offer.findUnique({ where: { id: offerId } });
+        if (!offer?.sorobanSettlementContractId) return null;
+
+        try {
+            const contract = new Contract(offer.sorobanSettlementContractId);
+            const rpcServer = new rpc.Server(getSorobanRpcUrl());
+
+            const tx = new TransactionBuilder(
+                await StellarService.getAccountRPC(keyManager.getOperationsKeypair().publicKey()),
+                { fee: BASE_FEE, networkPassphrase: getNetworkPassphrase() }
+            )
+                .addOperation(contract.call(method, ...args))
+                .setTimeout(30)
+                .build();
+
+            const simResult = await rpcServer.simulateTransaction(tx);
+            if (simResult.result) {
+                return scValToNative(simResult.result.retval);
+            }
+            return null;
+        } catch (err) {
+            log.warn(`[simulateReadOnly] ${method} failed (likely v1 contract): ${err?.message}`);
+            return null;
+        }
+    }
+
+    /** Build pause() XDR. Admin (issuer) signs. */
+    static async buildPauseXdr(offerId) {
+        return this.#buildAdminOpXdr(offerId, 'pause');
+    }
+
+    /** Build resume() XDR. Admin (issuer) signs. */
+    static async buildResumeXdr(offerId) {
+        return this.#buildAdminOpXdr(offerId, 'resume');
+    }
+
+    /**
+     * Build propose_admin(new_admin) XDR. Current admin (issuer) signs.
+     * Caller is responsible for validating the address format before invoking.
+     */
+    static async buildProposeAdminXdr(offerId, newAdmin) {
+        if (!/^G[A-Z2-7]{55}$/.test(newAdmin)) {
+            const err = new Error('newAdmin must be a 56-char Stellar address starting with G');
+            err.status = 400;
+            throw err;
+        }
+        return this.#buildAdminOpXdr(offerId, 'propose_admin', [
+            new Address(newAdmin).toScVal(),
+        ]);
+    }
+
+    /**
+     * Build accept_admin() XDR. The PENDING admin signs (proves they hold the keypair).
+     * @param sourceAccount The pending admin G... address. Required (no fallback) —
+     *   if absent, the contract will reject the auth (current admin can't accept on their behalf).
+     */
+    static async buildAcceptAdminXdr(offerId, sourceAccount) {
+        if (!sourceAccount) {
+            const err = new Error('sourceAccount (pending admin G...) is required for accept_admin');
+            err.status = 400;
+            throw err;
+        }
+        return this.#buildAdminOpXdr(offerId, 'accept_admin', [], sourceAccount);
+    }
+
+    /** Get the current paused flag. Returns false on v1 contracts or unreachable contract. */
+    static async getPaused(offerId) {
+        const v = await this.#simulateReadOnly(offerId, 'get_paused');
+        return v === true;
+    }
+
+    /** Get the currently active admin address. Returns null if unreadable. */
+    static async getActiveAdmin(offerId) {
+        return this.#simulateReadOnly(offerId, 'get_admin');
+    }
+
+    /** Get the pending admin (if propose_admin has been called and not yet accepted). */
+    static async getPendingAdmin(offerId) {
+        return this.#simulateReadOnly(offerId, 'get_pending_admin');
+    }
+
+    /**
+     * Get the contract's reported version. Returns 1 if the version() call fails
+     * (heuristic for v1 contracts that may or may not have exposed version()).
+     */
+    static async getVersion(offerId) {
+        const v = await this.#simulateReadOnly(offerId, 'version');
+        if (typeof v === 'number') return v;
+        if (typeof v === 'bigint') return Number(v);
+        return 1;
     }
 
     /**

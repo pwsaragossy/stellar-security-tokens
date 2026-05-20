@@ -236,5 +236,49 @@ export const offersApi = {
     const response = await api.get(`/admin/offers/${offerId}/settlement-status`);
     return response.data;
   },
+
+  // ─── Settlement Admin (v2 — F-003 follow-up) ───
+  // Aggregated status + circuit-breaker (pause/resume) + 2-step admin rotation.
+
+  /** Aggregated on-chain status for the settlement contract (single round-trip). */
+  getSettlementStatusV2: async (offerId: number): Promise<{
+    offerId: number;
+    deployed: boolean;
+    contractId: string | null;
+    paused: boolean | null;
+    admin: string | null;
+    pendingAdmin: string | null;
+    balance: number | null;
+    version: number | null;
+    v2Ready: boolean;
+    maturityDate: string | null;
+  }> => {
+    const response = await api.get(`/admin/settlements/${offerId}`);
+    return response.data;
+  },
+
+  /** Pause the settlement contract (blocks deposit/settle/withdraw/refund). */
+  pauseSettlement: async (offerId: number): Promise<ApiResponse> => {
+    const response = await api.post(`/admin/settlements/${offerId}/pause`);
+    return response.data;
+  },
+
+  /** Resume a paused settlement contract. */
+  resumeSettlement: async (offerId: number): Promise<ApiResponse> => {
+    const response = await api.post(`/admin/settlements/${offerId}/resume`);
+    return response.data;
+  },
+
+  /** Step 1: current admin proposes a new admin. */
+  proposeSettlementAdmin: async (offerId: number, newAdmin: string): Promise<ApiResponse> => {
+    const response = await api.post(`/admin/settlements/${offerId}/propose-admin`, { newAdmin });
+    return response.data;
+  },
+
+  /** Step 2: pending admin accepts ownership. */
+  acceptSettlementAdmin: async (offerId: number): Promise<ApiResponse> => {
+    const response = await api.post(`/admin/settlements/${offerId}/accept-admin`);
+    return response.data;
+  },
 };
 
