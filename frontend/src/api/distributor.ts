@@ -4,6 +4,11 @@
  * F-004 audit follow-up — exposes pause / resume / 2-step admin rotation
  * for the platform's YieldDistributor. All endpoints require platform-admin
  * auth and are audited via the AdminAction table (F-011 hook).
+ *
+ * Uses the fetch-wrapper client at `@/lib/api` (NOT the axios client at
+ * `@/api/client`). The fetch wrapper returns the parsed JSON body directly —
+ * there is no `response.data` envelope here. Both `get(endpoint)` and
+ * `post(endpoint, data)` require the second arg on POST.
  */
 import { api } from '@/lib/api';
 
@@ -20,32 +25,27 @@ export interface DistributorStatus {
 export const distributorApi = {
     /** Aggregated on-chain status for the singleton YieldDistributor. */
     getStatus: async (): Promise<DistributorStatus> => {
-        const response = await api.get('/admin/distributor');
-        return response.data;
+        return api.get('/admin/distributor');
     },
 
     /** Pause distribute() calls. */
     pause: async () => {
-        const response = await api.post('/admin/distributor/pause');
-        return response.data;
+        return api.post('/admin/distributor/pause', {});
     },
 
     /** Resume a paused distributor. */
     resume: async () => {
-        const response = await api.post('/admin/distributor/resume');
-        return response.data;
+        return api.post('/admin/distributor/resume', {});
     },
 
     /** Step 1 — current admin proposes a new admin. */
     proposeAdmin: async (newAdmin: string) => {
-        const response = await api.post('/admin/distributor/propose-admin', { newAdmin });
-        return response.data;
+        return api.post('/admin/distributor/propose-admin', { newAdmin });
     },
 
     /** Step 2 — pending admin accepts ownership. */
     acceptAdmin: async () => {
-        const response = await api.post('/admin/distributor/accept-admin');
-        return response.data;
+        return api.post('/admin/distributor/accept-admin', {});
     },
 };
 

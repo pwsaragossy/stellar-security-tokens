@@ -14,7 +14,7 @@
  */
 import { useState, useEffect } from 'react';
 import {
-    Loader2, Coins, Pause, Play, UserCog, Check, ShieldAlert, Copy,
+    Loader2, Coins, Pause, Play, UserCog, Check, ShieldAlert,
     RefreshCw, AlertTriangle, Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
