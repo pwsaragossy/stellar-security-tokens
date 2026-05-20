@@ -246,6 +246,10 @@ app.use('/api/admin/transactions', strictLimiter, adminTransactionRoutes);
 import contractRoutes from './routes/contractRoutes.js';
 app.use('/api/admin/contracts', strictLimiter, contractRoutes);
 
+// Admin MaturitySettlement v2 management routes (F-003 follow-up)
+import settlementAdminRoutes from './routes/settlementAdminRoutes.js';
+app.use('/api/admin/settlements', strictLimiter, settlementAdminRoutes);
+
 
 app.use(notFoundHandler);
 

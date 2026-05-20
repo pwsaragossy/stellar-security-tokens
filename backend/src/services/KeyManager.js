@@ -421,6 +421,11 @@ class KeyManager {
             'contract_propose_admin': 1, // Admin proposes transfer
             'contract_accept_admin': 1, // New admin accepts
             'contract_upgrade': 2,      // DESTRUCTIVE — 2 signers required
+            // ── MaturitySettlement v2 admin ops (F-003 follow-up) ──
+            'settlement_pause': 1,          // Day-to-day incident lever
+            'settlement_resume': 1,         // Day-to-day incident lever
+            'settlement_propose_admin': 1,  // Admin proposes transfer
+            'settlement_accept_admin': 1,   // Pending admin accepts (2-step rotation)
         };
 
         return defaultThresholds[operationType] || 1;

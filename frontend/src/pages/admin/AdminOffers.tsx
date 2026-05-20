@@ -17,6 +17,7 @@ import {
     Rocket,
     ExternalLink,
     Lock, Unlock,
+    Pause, Play, UserCog, ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -39,17 +40,30 @@ import { useAutoSelect } from '@/hooks/useAdminNavigation';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
-type ActionType = 'issue' | 'activate' | 'verify' | 'deploy_settlement' | 'execute_settlement' | null;
+type ActionType =
+    | 'issue' | 'activate' | 'verify'
+    | 'deploy_settlement' | 'execute_settlement'
+    // v2 — F-003 follow-up
+    | 'pause_settlement' | 'resume_settlement'
+    | 'propose_settlement_admin' | 'accept_settlement_admin'
+    | null;
 type StatusFilter = 'all' | 'approved' | 'active' | 'matured' | 'rejected' | 'closed';
 
+/**
+ * On-chain MaturitySettlement contract status. Maps the
+ * /api/admin/settlements/:offerId aggregated payload.
+ */
 interface SettlementStatus {
     offerId: number;
-    offerType: string;
-    offerStatus: string;
-    settlementContractId: string | null;
-    contractBalance: number | null;
+    deployed: boolean;
+    contractId: string | null;
+    paused: boolean | null;
+    admin: string | null;
+    pendingAdmin: string | null;
+    balance: number | null;
+    version: number | null;
+    v2Ready: boolean;
     maturityDate: string | null;
-    hasSettlementContract: boolean;
 }
 
 // ─── Design tokens ────────────────────────────────────────────────────────
@@ -113,6 +127,11 @@ export function AdminOffers() {
     const [actionDialog, setActionDialog] = useState<{ type: ActionType; offer: Offer | null }>({ type: null, offer: null });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // propose_settlement_admin double-entry state (F-013 address-poisoning mitigation)
+    const [proposeAdminInput1, setProposeAdminInput1] = useState('');
+    const [proposeAdminInput2, setProposeAdminInput2] = useState('');
+    const STELLAR_G_RE = /^G[A-Z2-7]{55}$/;
+
     // ─── Data loading ─────────────────────────────────────────────────────
 
     const loadOffers = async () => {
@@ -174,10 +193,8 @@ export function AdminOffers() {
     const loadSettlementStatus = async (offerId: number) => {
         try {
             setSettlementLoading(true);
-            const res = await offersApi.getSettlementStatus(offerId);
-            if (res.success && res.data) {
-                setSettlementStatus(res.data);
-            }
+            const data = await offersApi.getSettlementStatusV2(offerId);
+            setSettlementStatus(data);
         } catch {
             setSettlementStatus(null);
         } finally {
@@ -198,7 +215,15 @@ export function AdminOffers() {
 
     const closeAction = () => {
         setActionDialog({ type: null, offer: null });
+        setProposeAdminInput1('');
+        setProposeAdminInput2('');
     };
+
+    const SETTLEMENT_REFRESH_ACTIONS: ActionType[] = [
+        'deploy_settlement', 'execute_settlement',
+        'pause_settlement', 'resume_settlement',
+        'propose_settlement_admin', 'accept_settlement_admin',
+    ];
 
     const handleAction = async () => {
         const { type, offer } = actionDialog;
@@ -207,7 +232,7 @@ export function AdminOffers() {
         setError(null);
 
         try {
-            let response;
+            let response: any;
             if (type === 'issue') {
                 response = await offersApi.issueToken(offer.id);
             } else if (type === 'activate') {
@@ -218,20 +243,40 @@ export function AdminOffers() {
                 response = await offersApi.deploySettlement(offer.id);
             } else if (type === 'execute_settlement') {
                 response = await offersApi.executeSettlement(offer.id);
+            } else if (type === 'pause_settlement') {
+                response = await offersApi.pauseSettlement(offer.id);
+            } else if (type === 'resume_settlement') {
+                response = await offersApi.resumeSettlement(offer.id);
+            } else if (type === 'propose_settlement_admin') {
+                if (proposeAdminInput1 !== proposeAdminInput2 || !STELLAR_G_RE.test(proposeAdminInput1)) {
+                    setError('Address mismatch or invalid format');
+                    setIsSubmitting(false);
+                    return;
+                }
+                response = await offersApi.proposeSettlementAdmin(offer.id, proposeAdminInput1);
+            } else if (type === 'accept_settlement_admin') {
+                response = await offersApi.acceptSettlementAdmin(offer.id);
             }
 
-            if (response && response.success) {
+            // pause/resume/propose/accept return 202 with { id, status, ... } (no .success wrapper)
+            // deploy_settlement/execute_settlement use ApiResponse with .success
+            const succeeded = response && (response.success === true || response.status === 'pending' || response.id);
+
+            if (succeeded) {
                 const MSG: Record<string, string> = {
                     issue: 'Token issued successfully',
                     activate: 'Offer activated',
                     verify: 'Issuance verified',
                     deploy_settlement: 'Settlement contract deployed',
                     execute_settlement: 'Settlement executed — offer closed',
+                    pause_settlement: 'Settlement paused — deposits, settles, withdraws, refunds blocked',
+                    resume_settlement: 'Settlement resumed',
+                    propose_settlement_admin: 'New admin proposed — they must sign accept to complete the rotation',
+                    accept_settlement_admin: 'Admin role accepted — rotation complete',
                 };
                 toast.success(MSG[type] || `${type} completed`);
                 await loadOffers();
-                // Refresh settlement status after deploy/settle
-                if (['deploy_settlement', 'execute_settlement'].includes(type)) {
+                if (SETTLEMENT_REFRESH_ACTIONS.includes(type)) {
                     await loadSettlementStatus(offer.id);
                 }
                 closeAction();
@@ -523,32 +568,47 @@ export function AdminOffers() {
 
                                         {settlementStatus ? (
                                             <>
-                                                <div className="grid grid-cols-3 gap-2">
+                                                {/* Status grid: contract | balance | paused | settle-readiness */}
+                                                <div className="grid grid-cols-4 gap-2">
                                                     <div className="bg-white/[0.03] rounded-lg p-2.5">
                                                         <p className="text-[10px] text-zinc-500 mb-0.5">Contract</p>
                                                         <p className="text-xs font-mono text-white truncate">
-                                                            {settlementStatus.settlementContractId
-                                                                ? `${settlementStatus.settlementContractId.slice(0, 8)}…`
+                                                            {settlementStatus.contractId
+                                                                ? `${settlementStatus.contractId.slice(0, 8)}…`
                                                                 : '—'}
                                                         </p>
                                                     </div>
                                                     <div className="bg-white/[0.03] rounded-lg p-2.5">
                                                         <p className="text-[10px] text-zinc-500 mb-0.5">Balance</p>
                                                         <p className={`text-xs font-mono font-medium ${
-                                                            (settlementStatus.contractBalance ?? 0) > 0 ? 'text-emerald-400' : 'text-zinc-400'
+                                                            (settlementStatus.balance ?? 0) > 0 ? 'text-emerald-400' : 'text-zinc-400'
                                                         }`}>
-                                                            {settlementStatus.contractBalance != null
-                                                                ? `${settlementStatus.contractBalance.toLocaleString()} USDC`
+                                                            {settlementStatus.balance != null
+                                                                ? `${settlementStatus.balance.toLocaleString()} USDC`
                                                                 : '—'}
                                                         </p>
                                                     </div>
                                                     <div className="bg-white/[0.03] rounded-lg p-2.5">
-                                                        <p className="text-[10px] text-zinc-500 mb-0.5">Status</p>
+                                                        <p className="text-[10px] text-zinc-500 mb-0.5">Paused</p>
                                                         <p className="text-xs font-medium">
-                                                            {!settlementStatus.hasSettlementContract ? (
+                                                            {!settlementStatus.deployed ? (
+                                                                <span className="text-zinc-500">—</span>
+                                                            ) : !settlementStatus.v2Ready ? (
+                                                                <span className="text-amber-400">v1 (no pause)</span>
+                                                            ) : settlementStatus.paused ? (
+                                                                <span className="text-amber-400">🔴 Paused</span>
+                                                            ) : (
+                                                                <span className="text-emerald-400">🟢 Active</span>
+                                                            )}
+                                                        </p>
+                                                    </div>
+                                                    <div className="bg-white/[0.03] rounded-lg p-2.5">
+                                                        <p className="text-[10px] text-zinc-500 mb-0.5">Settle</p>
+                                                        <p className="text-xs font-medium">
+                                                            {!settlementStatus.deployed ? (
                                                                 <span className="text-amber-400">No Contract</span>
-                                                            ) : (settlementStatus.contractBalance ?? 0) > 0 ? (
-                                                                <span className="text-emerald-400">Ready to Settle</span>
+                                                            ) : (settlementStatus.balance ?? 0) > 0 ? (
+                                                                <span className="text-emerald-400">Ready</span>
                                                             ) : (
                                                                 <span className="text-zinc-400">Awaiting Deposit</span>
                                                             )}
@@ -556,15 +616,58 @@ export function AdminOffers() {
                                                     </div>
                                                 </div>
 
-                                                {settlementStatus.settlementContractId && (
+                                                {/* v1 banner — old contract, v2 features unavailable */}
+                                                {settlementStatus.deployed && !settlementStatus.v2Ready && (
+                                                    <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+                                                        <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                                                        <div className="text-xs text-amber-200 space-y-0.5">
+                                                            <p className="font-medium">Contract is v1 — pause / admin-rotation unavailable.</p>
+                                                            <p className="text-amber-300/80">Upgrade to v2 via the contract WASM upgrade flow to enable F-003 protections.</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {settlementStatus.contractId && (
                                                     <div className="flex items-center gap-2 bg-purple-500/5 rounded-lg px-3 py-1.5 border border-purple-500/10">
                                                         <code className="text-[11px] text-purple-300 font-mono flex-1 truncate">
-                                                            {settlementStatus.settlementContractId}
+                                                            {settlementStatus.contractId}
                                                         </code>
                                                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-purple-400"
-                                                            onClick={() => navigator.clipboard.writeText(settlementStatus.settlementContractId || '')}>
+                                                            onClick={() => navigator.clipboard.writeText(settlementStatus.contractId || '')}>
                                                             <Copy className="w-3 h-3" />
                                                         </Button>
+                                                    </div>
+                                                )}
+
+                                                {/* Admin row — only render once v2 contract is detected */}
+                                                {settlementStatus.deployed && settlementStatus.v2Ready && (
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center gap-2 bg-white/[0.03] rounded-lg px-3 py-2 border border-white/[0.06]">
+                                                            <UserCog className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                                                            <span className="text-[10px] text-zinc-500 shrink-0">Admin:</span>
+                                                            <code className="text-[11px] text-zinc-200 font-mono flex-1 truncate">
+                                                                {settlementStatus.admin ?? '—'}
+                                                            </code>
+                                                            {settlementStatus.admin && (
+                                                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-zinc-400"
+                                                                    onClick={() => navigator.clipboard.writeText(settlementStatus.admin || '')}>
+                                                                    <Copy className="w-3 h-3" />
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                        {settlementStatus.pendingAdmin && (
+                                                            <div className="flex items-center gap-2 bg-amber-500/5 rounded-lg px-3 py-2 border border-amber-500/30">
+                                                                <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                                                <span className="text-[10px] text-amber-400 shrink-0">Pending:</span>
+                                                                <code className="text-[11px] text-amber-200 font-mono flex-1 truncate">
+                                                                    {settlementStatus.pendingAdmin}
+                                                                </code>
+                                                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-amber-400"
+                                                                    onClick={() => navigator.clipboard.writeText(settlementStatus.pendingAdmin || '')}>
+                                                                    <Copy className="w-3 h-3" />
+                                                                </Button>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
                                             </>
@@ -573,8 +676,8 @@ export function AdminOffers() {
                                         ) : null}
 
                                         {/* Settlement actions */}
-                                        <div className="flex items-center gap-2 pt-1">
-                                            {!settlementStatus?.hasSettlementContract && (
+                                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                                            {!settlementStatus?.deployed && (
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
@@ -584,13 +687,53 @@ export function AdminOffers() {
                                                     <Wallet className="w-3.5 h-3.5" /> Deploy Contract
                                                 </Button>
                                             )}
-                                            {settlementStatus?.hasSettlementContract && (settlementStatus.contractBalance ?? 0) > 0 && (
+                                            {settlementStatus?.deployed && (settlementStatus.balance ?? 0) > 0 && !settlementStatus.paused && (
                                                 <Button
                                                     size="sm"
                                                     className="gap-1.5 bg-purple-600 hover:bg-purple-700 text-white"
                                                     onClick={() => setActionDialog({ type: 'execute_settlement', offer: selected })}
                                                 >
                                                     <Zap className="w-3.5 h-3.5" /> Execute Settlement
+                                                </Button>
+                                            )}
+                                            {/* v2-only admin controls */}
+                                            {settlementStatus?.deployed && settlementStatus.v2Ready && !settlementStatus.paused && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="gap-1.5 text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                                                    onClick={() => setActionDialog({ type: 'pause_settlement', offer: selected })}
+                                                >
+                                                    <Pause className="w-3.5 h-3.5" /> Pause
+                                                </Button>
+                                            )}
+                                            {settlementStatus?.deployed && settlementStatus.v2Ready && settlementStatus.paused && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="gap-1.5 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                                                    onClick={() => setActionDialog({ type: 'resume_settlement', offer: selected })}
+                                                >
+                                                    <Play className="w-3.5 h-3.5" /> Resume
+                                                </Button>
+                                            )}
+                                            {settlementStatus?.deployed && settlementStatus.v2Ready && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="gap-1.5 text-zinc-300 border-white/10 hover:bg-white/[0.06]"
+                                                    onClick={() => setActionDialog({ type: 'propose_settlement_admin', offer: selected })}
+                                                >
+                                                    <UserCog className="w-3.5 h-3.5" /> Propose Admin
+                                                </Button>
+                                            )}
+                                            {settlementStatus?.deployed && settlementStatus.v2Ready && settlementStatus.pendingAdmin && (
+                                                <Button
+                                                    size="sm"
+                                                    className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+                                                    onClick={() => setActionDialog({ type: 'accept_settlement_admin', offer: selected })}
+                                                >
+                                                    <Check className="w-3.5 h-3.5" /> Accept Admin
                                                 </Button>
                                             )}
                                             <Button
@@ -736,13 +879,13 @@ export function AdminOffers() {
                             <div className="flex justify-between text-sm">
                                 <span className="text-zinc-400">Contract Balance</span>
                                 <span className="text-emerald-400 font-mono font-medium">
-                                    {(settlementStatus.contractBalance ?? 0).toLocaleString()} USDC
+                                    {(settlementStatus.balance ?? 0).toLocaleString()} USDC
                                 </span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-zinc-400">Contract</span>
                                 <span className="text-purple-300 font-mono text-xs">
-                                    {settlementStatus.settlementContractId?.slice(0, 16)}…
+                                    {settlementStatus.contractId?.slice(0, 16)}…
                                 </span>
                             </div>
                         </div>
@@ -752,6 +895,173 @@ export function AdminOffers() {
                         <Button onClick={handleAction} disabled={isSubmitting} className="bg-purple-600 hover:bg-purple-700">
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
                             Execute Settlement
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Pause Settlement Dialog (v2 — F-003) ── */}
+            <Dialog open={actionDialog.type === 'pause_settlement' && !!actionDialog.offer} onOpenChange={() => closeAction()}>
+                <DialogContent className="bg-slate-900 border-white/10 text-white">
+                    <DialogHeader>
+                        <DialogTitle className="text-amber-400 flex items-center gap-2">
+                            <Pause className="w-5 h-5" /> Pause Settlement Contract
+                        </DialogTitle>
+                        <DialogDescription>
+                            This will pause the MaturitySettlement contract for "{actionDialog.offer?.offer_name}".
+                            While paused, <strong>deposit</strong>, <strong>settle_batch</strong>, <strong>withdraw</strong>, and <strong>refund</strong> are
+                            all blocked. Use this to contain an in-flight incident. You can resume at any time.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {settlementStatus?.contractId && (
+                        <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+                            <p className="text-xs text-zinc-400 mb-1">Contract</p>
+                            <code className="text-xs text-amber-200 font-mono break-all">{settlementStatus.contractId}</code>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeAction} className="border-white/10">Cancel</Button>
+                        <Button onClick={handleAction} disabled={isSubmitting} className="bg-amber-600 hover:bg-amber-700">
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Pause className="w-4 h-4 mr-2" />}
+                            Pause
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Resume Settlement Dialog (v2 — F-003) ── */}
+            <Dialog open={actionDialog.type === 'resume_settlement' && !!actionDialog.offer} onOpenChange={() => closeAction()}>
+                <DialogContent className="bg-slate-900 border-white/10 text-white">
+                    <DialogHeader>
+                        <DialogTitle className="text-emerald-400 flex items-center gap-2">
+                            <Play className="w-5 h-5" /> Resume Settlement Contract
+                        </DialogTitle>
+                        <DialogDescription>
+                            This will resume the MaturitySettlement contract for "{actionDialog.offer?.offer_name}",
+                            re-enabling deposit / settle / withdraw / refund. Confirm the incident is contained
+                            before resuming.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeAction} className="border-white/10">Cancel</Button>
+                        <Button onClick={handleAction} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700">
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                            Resume
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Propose Settlement Admin Dialog (v2 — F-003) ── */}
+            <Dialog
+                open={actionDialog.type === 'propose_settlement_admin' && !!actionDialog.offer}
+                onOpenChange={() => closeAction()}
+            >
+                <DialogContent className="bg-slate-900 border-white/10 text-white max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="text-zinc-200 flex items-center gap-2">
+                            <UserCog className="w-5 h-5" /> Propose New Admin
+                        </DialogTitle>
+                        <DialogDescription>
+                            Step 1 of 2 — the new admin must then call "Accept Admin" with their own wallet to
+                            complete the rotation. The current admin keeps full control until that happens.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {/* Address-poisoning mitigation: show current admin as anchor */}
+                    {settlementStatus?.admin && (
+                        <div className="bg-zinc-500/10 rounded-lg p-3 border border-white/[0.08]">
+                            <p className="text-[10px] text-zinc-500 mb-1">Current admin</p>
+                            <code className="text-xs text-zinc-200 font-mono break-all">{settlementStatus.admin}</code>
+                        </div>
+                    )}
+
+                    <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                        <ShieldAlert className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+                        <p className="text-xs text-red-200">
+                            <strong>Address poisoning warning</strong> — verify every character. Truncated previews
+                            (first/last 4) can be spoofed. Type the address twice below; submit is disabled until they match.
+                        </p>
+                    </div>
+
+                    <div className="space-y-2">
+                        <div>
+                            <label className="text-[11px] text-zinc-400 mb-1 block">New admin address (G...)</label>
+                            <Input
+                                value={proposeAdminInput1}
+                                onChange={(e) => setProposeAdminInput1(e.target.value.trim())}
+                                placeholder="GABC...XYZ (56 chars, paste here)"
+                                className="bg-white/[0.03] border-white/[0.08] font-mono text-xs"
+                                spellCheck={false}
+                                autoCapitalize="off"
+                                autoCorrect="off"
+                            />
+                            {proposeAdminInput1 && !STELLAR_G_RE.test(proposeAdminInput1) && (
+                                <p className="text-[10px] text-red-400 mt-1">Invalid format — must be a 56-char Stellar address starting with G.</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="text-[11px] text-zinc-400 mb-1 block">Re-type to confirm</label>
+                            <Input
+                                value={proposeAdminInput2}
+                                onChange={(e) => setProposeAdminInput2(e.target.value.trim())}
+                                placeholder="Type the same address again"
+                                className="bg-white/[0.03] border-white/[0.08] font-mono text-xs"
+                                spellCheck={false}
+                                autoCapitalize="off"
+                                autoCorrect="off"
+                            />
+                            {proposeAdminInput2 && proposeAdminInput1 !== proposeAdminInput2 && (
+                                <p className="text-[10px] text-red-400 mt-1">Addresses do not match.</p>
+                            )}
+                        </div>
+                        {settlementStatus?.admin && proposeAdminInput1 === settlementStatus.admin && (
+                            <p className="text-[10px] text-amber-400">⚠ New admin is the same as the current admin.</p>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeAction} className="border-white/10">Cancel</Button>
+                        <Button
+                            onClick={handleAction}
+                            disabled={
+                                isSubmitting
+                                || !STELLAR_G_RE.test(proposeAdminInput1)
+                                || proposeAdminInput1 !== proposeAdminInput2
+                            }
+                            className="bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40"
+                        >
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <UserCog className="w-4 h-4 mr-2" />}
+                            Propose
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Accept Settlement Admin Dialog (v2 — F-003) ── */}
+            <Dialog open={actionDialog.type === 'accept_settlement_admin' && !!actionDialog.offer} onOpenChange={() => closeAction()}>
+                <DialogContent className="bg-slate-900 border-white/10 text-white">
+                    <DialogHeader>
+                        <DialogTitle className="text-amber-400 flex items-center gap-2">
+                            <Check className="w-5 h-5" /> Accept Admin Role
+                        </DialogTitle>
+                        <DialogDescription>
+                            Step 2 of 2 — the pending admin signs this transaction. Soroban verifies the signer
+                            matches the proposed address; if you're not the pending admin, the transaction will
+                            be rejected.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {settlementStatus?.pendingAdmin && (
+                        <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20 space-y-1">
+                            <p className="text-[10px] text-amber-300 mb-1">Pending admin (must sign)</p>
+                            <code className="text-xs text-amber-200 font-mono break-all">{settlementStatus.pendingAdmin}</code>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeAction} className="border-white/10">Cancel</Button>
+                        <Button onClick={handleAction} disabled={isSubmitting} className="bg-amber-600 hover:bg-amber-700">
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                            Accept Role
                         </Button>
                     </DialogFooter>
                 </DialogContent>
