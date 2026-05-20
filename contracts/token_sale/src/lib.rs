@@ -19,6 +19,17 @@ const TTL_EXTEND: u32 = 518_400;
 #[cfg(feature = "testnet")]
 const USDC_SAC: &str = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
 
+// TODO(mainnet): VERIFY this address before building the mainnet WASM. It was
+// carried over from the audit plan and has NOT been independently confirmed
+// against Circle's documentation or Stellar Lab. If the address is wrong,
+// EVERY mainnet contract deployment will fail at create() with
+// UnauthorizedToken. To verify:
+//   1. Look up Circle's mainnet USDC issuer (well-known:
+//      GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN).
+//   2. Compute / look up its Stellar Asset Contract address on stellar.expert
+//      or via `stellar contract id asset --asset USDC:<issuer> --network mainnet`.
+//   3. Replace the const, rebuild the mainnet WASM, update DEPLOYMENTS.md.
+// Until verified, do NOT deploy mainnet contracts.
 #[cfg(feature = "mainnet")]
 const USDC_SAC: &str = "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75";
 

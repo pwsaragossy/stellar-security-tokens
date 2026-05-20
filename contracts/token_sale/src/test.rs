@@ -1428,3 +1428,37 @@ fn test_auth_freeze_buyer_requires_admin_auth() {
     // offer.admin.require_auth() panics — no auth
     sale.freeze_buyer(&Address::generate(&e), &true);
 }
+
+// ═══════════════════════════════════════════════════════
+//  F-006 — canonical USDC SAC rejection path
+//  These tests ONLY compile when the `testing` feature is OFF — i.e. when
+//  the const-baked validation in lib.rs is active. Run with:
+//     cargo test --no-default-features --features testnet
+// ═══════════════════════════════════════════════════════
+#[cfg(not(feature = "testing"))]
+mod canonical_usdc_tests {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+
+    #[test]
+    fn test_create_rejects_non_canonical_buy_token() {
+        let e = Env::default();
+        e.mock_all_auths();
+        let sale_id = e.register(TokenSale, ());
+        let sale = TokenSaleClient::new(&e, &sale_id);
+
+        let admin = Address::generate(&e);
+        let seller = Address::generate(&e);
+        let sell_token = Address::generate(&e);
+        // Random address — guaranteed not equal to the canonical USDC SAC const.
+        let fake_buy_token = Address::generate(&e);
+        let treasury = Address::generate(&e);
+        let company = Address::generate(&e);
+
+        let result = sale.try_create(
+            &admin, &seller, &sell_token, &fake_buy_token, &treasury, &company,
+            &0i128, &1u32, &1u32, &0u32, &0i128, &0i128,
+        );
+        assert_eq!(result, Err(Ok(SaleError::UnauthorizedToken)));
+    }
+}

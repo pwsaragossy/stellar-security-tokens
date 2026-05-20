@@ -3006,3 +3006,32 @@ fn test_v2_version_bumped_to_3() {
 
     assert_eq!(client.version(), 3);
 }
+
+// ═══════════════════════════════════════════════════════
+//  F-006 — canonical USDC SAC rejection path
+//  These tests ONLY compile when the `testing` feature is OFF — i.e. when
+//  the const-baked validation in lib.rs is active. Run with:
+//     cargo test --no-default-features --features testnet
+// ═══════════════════════════════════════════════════════
+#[cfg(not(feature = "testing"))]
+mod canonical_usdc_tests {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+
+    #[test]
+    fn test_initialize_rejects_non_canonical_usdc() {
+        let e = Env::default();
+        e.mock_all_auths();
+        let contract_id = e.register(MaturitySettlement, ());
+        let client = MaturitySettlementClient::new(&e, &contract_id);
+
+        let admin = Address::generate(&e);
+        // Random address — guaranteed not equal to the canonical USDC SAC const.
+        let fake_usdc = Address::generate(&e);
+        let token_sac = Address::generate(&e);
+        let treasury = Address::generate(&e);
+
+        let result = client.try_initialize(&admin, &fake_usdc, &token_sac, &treasury, &5000);
+        assert_eq!(result, Err(Ok(SettleError::UnauthorizedToken)));
+    }
+}
