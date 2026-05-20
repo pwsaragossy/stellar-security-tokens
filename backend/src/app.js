@@ -250,6 +250,10 @@ app.use('/api/admin/contracts', strictLimiter, contractRoutes);
 import settlementAdminRoutes from './routes/settlementAdminRoutes.js';
 app.use('/api/admin/settlements', strictLimiter, settlementAdminRoutes);
 
+// Admin YieldDistributor v3 management routes (F-004 follow-up — singleton, no offerId)
+import distributorAdminRoutes from './routes/distributorAdminRoutes.js';
+app.use('/api/admin/distributor', strictLimiter, distributorAdminRoutes);
+
 
 app.use(notFoundHandler);
 

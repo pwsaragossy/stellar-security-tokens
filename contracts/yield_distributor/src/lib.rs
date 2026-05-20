@@ -7,8 +7,13 @@ use soroban_sdk::{
 // ═══════════════════════════════════════════════════════════════
 //  Storage layout — flat keys (no Config struct = easier upgrades)
 //
-//  DataKey::Admin   → Address   (high-privilege: upgrade, pause, set_admin)
-//  DataKey::Paused  → bool      (circuit breaker)
+//  DataKey::Admin        → Address   (high-privilege: upgrade, pause, propose_admin)
+//  DataKey::PendingAdmin → Address   (v3: 2-step rotation, awaiting accept)
+//  DataKey::Paused       → bool      (circuit breaker)
+//
+//  v3 (May 2026, F-004 security audit follow-up): 2-step admin rotation
+//  via propose_admin + accept_admin. The legacy set_admin remains for
+//  back-compat but is marked deprecated.
 // ═══════════════════════════════════════════════════════════════
 
 /// TTL constants — same as maturity_settlement.
@@ -26,6 +31,9 @@ const MAX_BATCH_SIZE: u32 = 30;
 enum DataKey {
     Admin,
     Paused,
+    /// v3: address proposed by current admin via propose_admin().
+    /// Cleared on accept_admin().
+    PendingAdmin,
 }
 
 #[contracterror]
@@ -49,6 +57,8 @@ pub enum DistributeError {
     DuplicateRecipient = 10,
     /// Payer cannot be a recipient (self-transfer)
     SelfTransfer = 11,
+    /// v3: accept_admin() called but no propose_admin() is pending
+    NoPendingAdmin = 12,
 }
 
 #[contract]
@@ -137,11 +147,46 @@ impl YieldDistributor {
         Ok(())
     }
 
-    /// Transfer admin role. Current admin must authorize.
+    /// Transfer admin role in one step. Current admin must authorize.
+    ///
+    /// **Deprecated** in v3 — prefer the 2-step `propose_admin` + `accept_admin`
+    /// flow which requires the new admin to prove they hold the keypair
+    /// (prevents transfer-to-typo'd-address footgun).
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), DistributeError> {
         let admin = load_admin(&env)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &new_admin);
+        // Clear any stale propose-admin proposal to avoid a misleading state.
+        env.storage().instance().remove(&DataKey::PendingAdmin);
+        emit(&env, symbol_short!("admchg"), new_admin);
+        Ok(())
+    }
+
+    /// v3 — Step 1 of admin rotation. Current admin proposes a new admin.
+    /// The new admin must call accept_admin() to take ownership.
+    /// Overwrites any prior pending proposal.
+    pub fn propose_admin(env: Env, new_admin: Address) -> Result<(), DistributeError> {
+        let admin = load_admin(&env)?;
+        admin.require_auth();
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingAdmin, &new_admin);
+        emit(&env, symbol_short!("propadm"), new_admin);
+        Ok(())
+    }
+
+    /// v3 — Step 2 of admin rotation. Pending admin accepts ownership.
+    /// The pending admin must sign — proves they hold the keypair.
+    pub fn accept_admin(env: Env) -> Result<(), DistributeError> {
+        let pending: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::PendingAdmin)
+            .ok_or(DistributeError::NoPendingAdmin)?;
+        pending.require_auth();
+        env.storage().instance().set(&DataKey::Admin, &pending);
+        env.storage().instance().remove(&DataKey::PendingAdmin);
+        emit(&env, symbol_short!("admchg"), pending);
         Ok(())
     }
 
@@ -282,7 +327,7 @@ impl YieldDistributor {
 
     /// Returns the contract version.
     pub fn version(_env: Env) -> u32 {
-        2 // v2: admin, pause, dedup, TTL, rich events
+        3 // v3 (F-004): 2-step admin rotation via propose_admin / accept_admin
     }
 
     /// Returns the admin address.
@@ -293,6 +338,11 @@ impl YieldDistributor {
     /// Returns whether the contract is paused.
     pub fn get_paused(env: Env) -> bool {
         is_paused(&env)
+    }
+
+    /// v3 — Returns the pending admin if propose_admin() was called and not yet accepted.
+    pub fn get_pending_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::PendingAdmin)
     }
 }
 

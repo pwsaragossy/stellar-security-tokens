@@ -426,6 +426,11 @@ class KeyManager {
             'settlement_resume': 1,         // Day-to-day incident lever
             'settlement_propose_admin': 1,  // Admin proposes transfer
             'settlement_accept_admin': 1,   // Pending admin accepts (2-step rotation)
+            // ── YieldDistributor v3 admin ops (F-004 follow-up) ──
+            'distributor_pause': 1,         // Day-to-day incident lever
+            'distributor_resume': 1,        // Day-to-day incident lever
+            'distributor_propose_admin': 1, // Admin proposes transfer
+            'distributor_accept_admin': 1,  // Pending admin accepts (2-step rotation)
         };
 
         return defaultThresholds[operationType] || 1;

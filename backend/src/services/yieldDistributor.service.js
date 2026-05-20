@@ -18,6 +18,7 @@ import {
     TransactionBuilder,
     Operation,
     nativeToScVal,
+    scValToNative,
     xdr,
     rpc,
     BASE_FEE,
@@ -47,6 +48,13 @@ const DISTRIBUTE_ERRORS = {
     4: { code: 'Overflow', message: 'Arithmetic overflow' },
     5: { code: 'MismatchedArrays', message: 'Recipients/amounts array length mismatch' },
     6: { code: 'FeeTooHigh', message: 'Fee exceeds 70% safety cap' },
+    7: { code: 'AlreadyInitialized', message: 'Contract already initialized' },
+    8: { code: 'NotInitialized', message: 'Contract not initialized' },
+    9: { code: 'ContractPaused', message: 'Yield distributor is paused — distribute blocked' },
+    10: { code: 'DuplicateRecipient', message: 'Duplicate recipient in batch' },
+    11: { code: 'SelfTransfer', message: 'Payer cannot be a recipient' },
+    // v3 — F-004
+    12: { code: 'NoPendingAdmin', message: 'No pending admin proposal — call propose_admin first' },
 };
 
 /** Convert USDC amount (float) to stroops (i128 ScVal) */
@@ -445,6 +453,146 @@ export class YieldDistributorService {
     // ═══════════════════════════════════════════════════════════════
     // TTL Management
     // ═══════════════════════════════════════════════════════════════
+
+    // ═══════════════════════════════════════════════════════════════
+    // v3 admin actions (F-004) — pause / resume / 2-step admin rotation
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Generic admin-op XDR builder for the singleton YieldDistributor.
+     * Issuer is the default TX source; caller can override for accept_admin
+     * (the pending admin signs, not the issuer).
+     * @private
+     */
+    static async _buildAdminOpXdr(method, args = [], sourceAccount = null) {
+        const contractId = this.getContractId();
+        const source = sourceAccount || keyManager.getIssuerPublicKey();
+        const contract = new Contract(contractId);
+        const op = contract.call(method, ...args);
+
+        let tx = new TransactionBuilder(
+            await StellarService.getAccountRPC(source),
+            { fee: BASE_FEE, networkPassphrase: getNetworkPassphrase() }
+        )
+            .addOperation(op)
+            .setTimeout(300)
+            .build();
+
+        tx = await StellarService.prepareSorobanTransaction(tx);
+
+        log.info(`[distributor.${method}] contract=${contractId} source=${source.slice(0, 8)}…`);
+        return {
+            xdr: tx.toXDR('base64'),
+            networkPassphrase: getNetworkPassphrase(),
+            contractId,
+            method,
+        };
+    }
+
+    /**
+     * Generic read-only simulation helper. Uses operations keypair as source
+     * (zero-cost simulation only). Returns null on simulation failure or v2
+     * contracts that don't expose the method.
+     * @private
+     */
+    static async _simulateReadOnly(method, args = []) {
+        const contractId = this.getContractId();
+        try {
+            const contract = new Contract(contractId);
+            const rpcServer = new rpc.Server(getSorobanRpcUrl());
+
+            const tx = new TransactionBuilder(
+                await StellarService.getAccountRPC(keyManager.getOperationsKeypair().publicKey()),
+                { fee: BASE_FEE, networkPassphrase: getNetworkPassphrase() }
+            )
+                .addOperation(contract.call(method, ...args))
+                .setTimeout(30)
+                .build();
+
+            const simResult = await rpcServer.simulateTransaction(tx);
+            if (simResult.result) {
+                return scValToNative(simResult.result.retval);
+            }
+            return null;
+        } catch (err) {
+            log.warn(`[distributor.simulateReadOnly] ${method} failed (likely v2 contract or unset env): ${err?.message}`);
+            return null;
+        }
+    }
+
+    /** Build pause() XDR. Admin signs. */
+    static async buildPauseXdr() {
+        return this._buildAdminOpXdr('pause');
+    }
+
+    /** Build resume() XDR. Admin signs. */
+    static async buildResumeXdr() {
+        return this._buildAdminOpXdr('resume');
+    }
+
+    /**
+     * Build propose_admin(new_admin) XDR. Current admin signs.
+     * Caller is responsible for validating the address format.
+     */
+    static async buildProposeAdminXdr(newAdmin) {
+        if (!/^G[A-Z2-7]{55}$/.test(newAdmin)) {
+            const err = new Error('newAdmin must be a 56-char Stellar address starting with G');
+            err.status = 400;
+            throw err;
+        }
+        return this._buildAdminOpXdr('propose_admin', [new Address(newAdmin).toScVal()]);
+    }
+
+    /**
+     * Build accept_admin() XDR. The PENDING admin signs.
+     * @param sourceAccount Required — the pending admin's G... address.
+     */
+    static async buildAcceptAdminXdr(sourceAccount) {
+        if (!sourceAccount) {
+            const err = new Error('sourceAccount (pending admin G...) is required for accept_admin');
+            err.status = 400;
+            throw err;
+        }
+        return this._buildAdminOpXdr('accept_admin', [], sourceAccount);
+    }
+
+    /** Get the paused flag. Returns false on v2 contracts or unreachable. */
+    static async getPaused() {
+        const v = await this._simulateReadOnly('get_paused');
+        return v === true;
+    }
+
+    /** Get the currently active admin address. */
+    static async getActiveAdmin() {
+        return this._simulateReadOnly('get_admin');
+    }
+
+    /** Get the pending admin (v3-only; returns null on v2). */
+    static async getPendingAdmin() {
+        return this._simulateReadOnly('get_pending_admin');
+    }
+
+    /**
+     * Get the contract's reported version. Returns 2 on simulation failure
+     * (heuristic for v2 contracts — the version() call may exist but the
+     * v3-only readers won't). v2 contracts also have version() returning 2.
+     */
+    static async getVersion() {
+        const v = await this._simulateReadOnly('version');
+        if (typeof v === 'number') return v;
+        if (typeof v === 'bigint') return Number(v);
+        return 2;
+    }
+
+    /** Parse contract-error string into a structured code. */
+    static parseContractError(error) {
+        const match = error?.message?.match(/Error\(Contract, #(\d+)\)/);
+        if (match) {
+            const code = parseInt(match[1]);
+            return DISTRIBUTE_ERRORS[code] || { code: `Unknown(${code})`, message: error.message };
+        }
+        return { code: 'Unknown', message: error?.message || 'Unknown error' };
+    }
 
     /**
      * Extend the contract instance TTL to prevent expiry.

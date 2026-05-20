@@ -201,14 +201,15 @@ fn test_distribute_fee_exceeds_cap() {
     let recipients = Vec::from_array(&env, [r1]);
     let amounts = Vec::from_array(&env, [100_0000000i128]); // 100 USDC
 
-    // Fee = 25 USDC = 25% of 100 → exceeds 20% cap
+    // Cap is 70% (lib.rs:295 — `total_payout * 7 / 10`). 100 USDC payout
+    // → max_fee = 70 USDC. Fee = 75 USDC → 75 > 70 → FeeTooHigh.
     let result = client.try_distribute(
         &payer,
         &usdc,
         &recipients,
         &amounts,
         &treasury,
-        &25_0000000i128,
+        &75_0000000i128,
     );
     assert_eq!(result, Err(Ok(DistributeError::FeeTooHigh)));
 }
@@ -577,11 +578,11 @@ fn t12_tiny_fee_rounding() {
 
     let r1 = Address::generate(&env);
     let recipients = Vec::from_array(&env, [r1]);
-    // total = 4 stroops, max_fee = 4/5 = 0 (integer division)
-    // fee = 1 stroop → 1 > 0 → FeeTooHigh
+    // total = 4 stroops, max_fee = 4 * 7 / 10 = 2 (integer division on 70% cap)
+    // fee = 3 stroops → 3 > 2 → FeeTooHigh. Smallest possible boundary.
     let amounts = Vec::from_array(&env, [4i128]);
 
-    let result = client.try_distribute(&payer, &usdc, &recipients, &amounts, &treasury, &1i128);
+    let result = client.try_distribute(&payer, &usdc, &recipients, &amounts, &treasury, &3i128);
     assert_eq!(result, Err(Ok(DistributeError::FeeTooHigh)));
 }
 
@@ -605,11 +606,11 @@ fn t13_extend_ttl_no_auth_required() {
 // ─── T14: version increments (P0) ───────────────────────────
 
 #[test]
-fn t14_version_is_2() {
+fn t14_version_is_3() {
     let env = Env::default();
     let contract_id = env.register(YieldDistributor, ());
     let client = YieldDistributorClient::new(&env, &contract_id);
-    assert_eq!(client.version(), 2);
+    assert_eq!(client.version(), 3);
 }
 
 // ─── T15: distribute without auth → fails (P0) ──────────────
@@ -783,4 +784,248 @@ fn test_negative_fee_rejected() {
 
     let result = client.try_distribute(&payer, &usdc, &recipients, &amounts, &treasury, &-1i128);
     assert_eq!(result, Err(Ok(DistributeError::InvalidAmount)));
+}
+
+// ═══════════════════════════════════════════════════════════
+//  V3 — F-004: 2-step admin rotation (propose_admin / accept_admin)
+//  Plus F-016 test coverage backfill.
+// ═══════════════════════════════════════════════════════════
+
+#[test]
+fn test_v3_version_returns_3() {
+    let env = Env::default();
+    let contract_id = env.register(YieldDistributor, ());
+    let client = YieldDistributorClient::new(&env, &contract_id);
+    assert_eq!(client.version(), 3);
+}
+
+#[test]
+fn test_v3_propose_admin_sets_pending() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _usdc, _token, _sac, _payer, _treasury, _admin) = setup(&env);
+    let new_admin = Address::generate(&env);
+
+    assert_eq!(client.get_pending_admin(), None);
+    client.propose_admin(&new_admin);
+    assert_eq!(client.get_pending_admin(), Some(new_admin));
+}
+
+#[test]
+fn test_v3_propose_admin_overwrites_prior() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _usdc, _token, _sac, _payer, _treasury, _admin) = setup(&env);
+    let first = Address::generate(&env);
+    let second = Address::generate(&env);
+
+    client.propose_admin(&first);
+    client.propose_admin(&second);
+    assert_eq!(client.get_pending_admin(), Some(second));
+}
+
+#[test]
+fn test_v3_accept_admin_rotates_active_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _usdc, _token, _sac, _payer, _treasury, admin) = setup(&env);
+    let new_admin = Address::generate(&env);
+
+    assert_eq!(client.get_admin(), admin);
+    client.propose_admin(&new_admin);
+    client.accept_admin();
+
+    assert_eq!(client.get_admin(), new_admin);
+    assert_eq!(client.get_pending_admin(), None);
+}
+
+#[test]
+fn test_v3_accept_admin_without_proposal_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _usdc, _token, _sac, _payer, _treasury, _admin) = setup(&env);
+
+    let result = client.try_accept_admin();
+    assert_eq!(result, Err(Ok(DistributeError::NoPendingAdmin)));
+}
+
+#[test]
+fn test_v3_new_admin_can_pause_after_rotation() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _usdc, _token, _sac, _payer, _treasury, _admin) = setup(&env);
+    let new_admin = Address::generate(&env);
+
+    client.propose_admin(&new_admin);
+    client.accept_admin();
+
+    // new admin can pause/resume — under mock_all_auths both auths pass
+    client.pause();
+    assert_eq!(client.get_paused(), true);
+    client.resume();
+    assert_eq!(client.get_paused(), false);
+}
+
+#[test]
+#[should_panic]
+fn test_v3_old_admin_locked_out_after_rotation() {
+    let env = Env::default();
+
+    let (client, _usdc, _token, _sac, _payer, _treasury, admin) = setup(&env);
+    let new_admin = Address::generate(&env);
+
+    // Phase 1: rotate under mock_all_auths
+    env.mock_all_auths();
+    client.propose_admin(&new_admin);
+    client.accept_admin();
+    assert_eq!(client.get_admin(), new_admin);
+
+    // Phase 2: old admin tries to pause — Soroban must reject because
+    // require_auth now checks new_admin, not the old admin.
+    let contract_id = client.address.clone();
+    env.mock_auths(&[soroban_sdk::testutils::MockAuth {
+        address: &admin,
+        invoke: &soroban_sdk::testutils::MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "pause",
+            args: soroban_sdk::vec![&env],
+            sub_invokes: &[],
+        },
+    }]);
+
+    client.pause(); // expected panic — old admin no longer authorized
+}
+
+#[test]
+fn test_v3_set_admin_clears_pending() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _usdc, _token, _sac, _payer, _treasury, _admin) = setup(&env);
+    let pending = Address::generate(&env);
+    let direct_swap = Address::generate(&env);
+
+    // Propose one, then use the deprecated set_admin to swap to a different one.
+    client.propose_admin(&pending);
+    assert_eq!(client.get_pending_admin(), Some(pending));
+
+    client.set_admin(&direct_swap);
+    assert_eq!(client.get_admin(), direct_swap);
+    // Stale pending must be cleared — otherwise an attacker who knew the
+    // earlier proposed address could call accept_admin and take over.
+    assert_eq!(client.get_pending_admin(), None);
+}
+
+// ─── F-016 backfill: invariants and edge cases ──────────────────
+
+#[test]
+fn test_paused_blocks_distribute() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, usdc, _token, _sac, payer, treasury, _admin) = setup(&env);
+    client.pause();
+
+    let r1 = Address::generate(&env);
+    let recipients = Vec::from_array(&env, [r1]);
+    let amounts = Vec::from_array(&env, [10_0000000i128]);
+
+    let result = client.try_distribute(&payer, &usdc, &recipients, &amounts, &treasury, &0i128);
+    assert_eq!(result, Err(Ok(DistributeError::ContractPaused)));
+}
+
+#[test]
+fn test_resume_unblocks_distribute() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, usdc, token, _sac, payer, treasury, _admin) = setup(&env);
+    client.pause();
+    client.resume();
+
+    let r1 = Address::generate(&env);
+    let recipients = Vec::from_array(&env, [r1.clone()]);
+    let amounts = Vec::from_array(&env, [10_0000000i128]);
+
+    // Should succeed now
+    client.distribute(&payer, &usdc, &recipients, &amounts, &treasury, &0i128);
+    assert_eq!(token.balance(&r1), 10_0000000);
+}
+
+#[test]
+fn test_duplicate_recipient_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, usdc, _token, _sac, payer, treasury, _admin) = setup(&env);
+
+    let r1 = Address::generate(&env);
+    let recipients = Vec::from_array(&env, [r1.clone(), r1.clone()]);
+    let amounts = Vec::from_array(&env, [5_0000000i128, 5_0000000i128]);
+
+    let result = client.try_distribute(&payer, &usdc, &recipients, &amounts, &treasury, &0i128);
+    assert_eq!(result, Err(Ok(DistributeError::DuplicateRecipient)));
+}
+
+#[test]
+fn test_self_transfer_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, usdc, _token, _sac, payer, treasury, _admin) = setup(&env);
+
+    let recipients = Vec::from_array(&env, [payer.clone()]);
+    let amounts = Vec::from_array(&env, [10_0000000i128]);
+
+    let result = client.try_distribute(&payer, &usdc, &recipients, &amounts, &treasury, &0i128);
+    assert_eq!(result, Err(Ok(DistributeError::SelfTransfer)));
+}
+
+#[test]
+fn test_initialize_twice_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+
+    let contract_id = env.register(YieldDistributor, ());
+    let client = YieldDistributorClient::new(&env, &contract_id);
+    client.initialize(&admin);
+
+    let result = client.try_initialize(&admin);
+    assert_eq!(result, Err(Ok(DistributeError::AlreadyInitialized)));
+}
+
+#[test]
+fn test_overflow_total_payout_rejected() {
+    // Two recipients with i128::MAX amounts each → overflow on .checked_add()
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, usdc, _token, _sac, payer, treasury, _admin) = setup(&env);
+
+    let r1 = Address::generate(&env);
+    let r2 = Address::generate(&env);
+    let recipients = Vec::from_array(&env, [r1, r2]);
+    let amounts = Vec::from_array(&env, [i128::MAX, 1i128]);
+
+    let result = client.try_distribute(&payer, &usdc, &recipients, &amounts, &treasury, &0i128);
+    assert_eq!(result, Err(Ok(DistributeError::Overflow)));
+}
+
+#[test]
+fn test_extend_ttl_no_auth_required() {
+    // extend_ttl is intentionally permissionless (cron jobs)
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let contract_id = env.register(YieldDistributor, ());
+    let client = YieldDistributorClient::new(&env, &contract_id);
+    env.mock_all_auths();
+    client.initialize(&admin);
+
+    // No auths needed — even an empty mock list should let this through.
+    env.mock_auths(&[]);
+    client.extend_ttl();
+}
+
+#[test]
+fn test_get_pending_admin_default_none() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _usdc, _token, _sac, _payer, _treasury, _admin) = setup(&env);
+
+    assert_eq!(client.get_pending_admin(), None);
 }

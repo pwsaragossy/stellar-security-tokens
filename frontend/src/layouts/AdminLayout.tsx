@@ -218,6 +218,7 @@ export function AdminLayout() {
         { id: 'tokens', label: 'Tokens', icon: Coins, path: '/admin/tokens' },
         { id: 'offers', label: 'Offers', icon: FileText, path: '/admin/offers' },
         { id: 'contracts', label: 'Contracts', icon: Box, path: '/admin/contracts' },
+        { id: 'distributor', label: 'Yield Distributor', icon: Coins, path: '/admin/distributor' },
 
         { id: 'wallets', label: 'Wallets', icon: Wallet, path: '/admin/wallets' },
 
