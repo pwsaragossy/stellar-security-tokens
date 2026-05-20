@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import api from '@/api/client';
 import { RelatedEntities } from '@/components/admin/RelatedEntities';
 import { useAutoSelect } from '@/hooks/useAdminNavigation';
+import { AddressDisplay } from '@/components/ui/AddressDisplay';
 
 // ─── Types ─────────────────────────────────────────
 
@@ -289,7 +290,13 @@ export function Contracts() {
                                         >
                                             <div className="min-w-0">
                                                 <p className="text-[13px] font-medium text-white truncate">{c.offerName || c.assetCode}</p>
-                                                <p className="text-[11px] text-zinc-500 font-mono truncate">{c.sorobanContractId?.slice(0, 12)}…</p>
+                                                <AddressDisplay
+                                                    value={c.sorobanContractId}
+                                                    truncate={[12, 0]}
+                                                    kind="contract"
+                                                    className="text-[11px] text-zinc-500 truncate"
+                                                />
+
                                             </div>
                                             <div className="text-center">
                                                 <Badge variant="outline" className={`text-[10px] ${initCfg.className}`}>{initCfg.label}</Badge>

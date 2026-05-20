@@ -37,6 +37,7 @@ import { offersApi } from '@/api/offers';
 import type { Offer } from '@/types';
 import { RelatedEntities } from '@/components/admin/RelatedEntities';
 import { useAutoSelect } from '@/hooks/useAdminNavigation';
+import { AddressDisplay } from '@/components/ui/AddressDisplay';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -572,11 +573,12 @@ export function AdminOffers() {
                                                 <div className="grid grid-cols-4 gap-2">
                                                     <div className="bg-white/[0.03] rounded-lg p-2.5">
                                                         <p className="text-[10px] text-zinc-500 mb-0.5">Contract</p>
-                                                        <p className="text-xs font-mono text-white truncate">
-                                                            {settlementStatus.contractId
-                                                                ? `${settlementStatus.contractId.slice(0, 8)}…`
-                                                                : '—'}
-                                                        </p>
+                                                        <AddressDisplay
+                                                            value={settlementStatus.contractId}
+                                                            truncate={[8, 0]}
+                                                            kind="contract"
+                                                            className="text-xs text-white"
+                                                        />
                                                     </div>
                                                     <div className="bg-white/[0.03] rounded-lg p-2.5">
                                                         <p className="text-[10px] text-zinc-500 mb-0.5">Balance</p>
@@ -884,9 +886,13 @@ export function AdminOffers() {
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-zinc-400">Contract</span>
-                                <span className="text-purple-300 font-mono text-xs">
-                                    {settlementStatus.contractId?.slice(0, 16)}…
-                                </span>
+                                <AddressDisplay
+                                    value={settlementStatus.contractId}
+                                    truncate={[16, 0]}
+                                    kind="contract"
+                                    showCopy
+                                    className="text-purple-300 text-xs"
+                                />
                             </div>
                         </div>
                     )}

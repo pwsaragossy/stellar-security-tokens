@@ -14,13 +14,14 @@ import { Button } from "@/components/ui/button";
 import {
     ArrowLeft, AlertTriangle, Clock, CheckCircle, DollarSign, Users, Calendar,
     Loader2, ShieldAlert, Package, TrendingUp, Database,
-    History, ExternalLink, ChevronDown, ChevronUp,
+    History, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { companyPaymentsApi, type PaymentDetails, type BulletPaymentDetails } from "@/api/companyPayments";
 import { usePasskey } from "@/hooks/usePasskey";
 import { api } from '@/lib/api';
 import { authStorage } from '@/utils/authStorage';
 import { Wallet as WalletIcon } from 'lucide-react';
+import { AddressDisplay } from '@/components/ui/AddressDisplay';
 
 
 // ─── Payment History Sub-Component ────────────────────────────────────────
@@ -43,8 +44,6 @@ function PaymentHistorySection({ offerId, refreshKey = 0 }: { offerId: number; r
     const totalPaid = history
         .filter((p: any) => p.status === 'completed')
         .reduce((sum: number, p: any) => sum + Number(p.usdcAmount || p.usdc_amount || 0), 0);
-
-    const explorerBase = 'https://stellar.expert/explorer/testnet/tx/';
 
     return (
         <Card className="glass-panel border-white/5 bg-white/5 animate-fade-in-up">
@@ -98,15 +97,13 @@ function PaymentHistorySection({ offerId, refreshKey = 0 }: { offerId: number; r
                                             </td>
                                             <td className="py-2.5 pr-4">
                                                 {hash ? (
-                                                    <a
-                                                        href={`${explorerBase}${hash}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 font-mono text-xs"
-                                                    >
-                                                        {hash.slice(0, 8)}...{hash.slice(-6)}
-                                                        <ExternalLink className="w-3 h-3" />
-                                                    </a>
+                                                    <AddressDisplay
+                                                        value={hash}
+                                                        truncate={[8, 6]}
+                                                        kind="tx"
+                                                        linkToExplorer
+                                                        className="text-sky-400 text-xs"
+                                                    />
                                                 ) : (
                                                     <span className="text-zinc-600">—</span>
                                                 )}
@@ -809,9 +806,13 @@ export function PayInvestors() {
                                     <div key={idx} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                                         <div>
                                             <p className="text-white font-medium">{investor.investorName}</p>
-                                            <p className="text-xs text-muted-foreground font-mono">
-                                                {investor.investorWallet?.slice(0, 10)}...{investor.investorWallet?.slice(-6)}
-                                            </p>
+                                            <AddressDisplay
+                                                value={investor.investorWallet}
+                                                truncate={[10, 6]}
+                                                showCopy
+                                                className="text-xs text-muted-foreground"
+                                            />
+
                                         </div>
                                         <div className="text-right">
                                             <p className="text-success font-medium">

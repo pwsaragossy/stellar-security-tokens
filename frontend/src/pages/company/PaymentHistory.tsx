@@ -7,10 +7,11 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-    History, ExternalLink, DollarSign, Users, TrendingUp,
+    History, DollarSign, Users, TrendingUp,
     Loader2, Filter, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { companyPaymentsApi } from "@/api/companyPayments";
+import { AddressDisplay } from '@/components/ui/AddressDisplay';
 
 interface PaymentRecord {
     id: number;
@@ -30,8 +31,6 @@ interface PaymentRecord {
     status: string;
     createdAt: string;
 }
-
-const EXPLORER_BASE = 'https://stellar.expert/explorer/testnet/tx/';
 
 export function PaymentHistory() {
     const navigate = useNavigate();
@@ -255,15 +254,13 @@ export function PaymentHistory() {
                                                                 </td>
                                                                 <td className="py-2.5 pr-4">
                                                                     {p.transactionHash ? (
-                                                                        <a
-                                                                            href={`${EXPLORER_BASE}${p.transactionHash}`}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                            className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 font-mono text-xs"
-                                                                        >
-                                                                            {p.transactionHash.slice(0, 8)}...
-                                                                            <ExternalLink className="w-3 h-3" />
-                                                                        </a>
+                                                                        <AddressDisplay
+                                                                            value={p.transactionHash}
+                                                                            truncate={[8, 0]}
+                                                                            kind="tx"
+                                                                            linkToExplorer
+                                                                            className="text-sky-400 text-xs"
+                                                                        />
                                                                     ) : (
                                                                         <span className="text-zinc-600">—</span>
                                                                     )}

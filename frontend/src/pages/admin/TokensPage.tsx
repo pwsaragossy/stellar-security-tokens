@@ -23,6 +23,7 @@ import { TokenManagementModal } from '@/components/admin/TokenManagementModal';
 import { toast } from 'sonner';
 import { RelatedEntities } from '@/components/admin/RelatedEntities';
 import { useAutoSelect } from '@/hooks/useAdminNavigation';
+import { AddressDisplay } from '@/components/ui/AddressDisplay';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -340,7 +341,14 @@ export function TokensPage() {
                                         <p className="text-[11px] text-zinc-500 mb-1">Contract</p>
                                         <p className="text-sm text-white">
                                             {(selected.offer as any)?.sorobanContractId
-                                                ? <code className="text-xs font-mono text-blue-300">{(selected.offer as any).sorobanContractId.slice(0, 12)}…</code>
+                                                ? <AddressDisplay
+                                                    value={(selected.offer as any).sorobanContractId}
+                                                    truncate={[12, 0]}
+                                                    kind="contract"
+                                                    showCopy
+                                                    linkToExplorer
+                                                    className="text-xs text-blue-300"
+                                                  />
                                                 : '—'}
                                         </p>
                                     </div>

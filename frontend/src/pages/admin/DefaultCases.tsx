@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, Users, DollarSign, Building2, Loader2, CheckCircle, ArrowRight } from "lucide-react";
 import { adminDefaultsApi, type DefaultedOffer, type DefaultStats } from "@/api/adminDefaults";
 import { usePasskey } from "@/hooks/usePasskey";
+import { AddressDisplay } from '@/components/ui/AddressDisplay';
 
 export function DefaultCases() {
     const { signTransaction } = usePasskey();
@@ -114,7 +115,9 @@ export function DefaultCases() {
             {success && (
                 <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400">
                     <CheckCircle className="w-4 h-4 inline mr-2" />
-                    Collateral distributed successfully! Transaction: {success.hash.slice(0, 16)}...
+                    Collateral distributed successfully! Transaction:{' '}
+                    <AddressDisplay value={success.hash} truncate={[16, 0]} kind="tx" linkToExplorer className="text-green-300" />
+
                 </div>
             )}
 
@@ -198,9 +201,12 @@ export function DefaultCases() {
                                                 <div key={idx} className="flex items-center justify-between p-2 bg-white/5 rounded">
                                                     <div>
                                                         <p className="text-white text-sm">{dist.investorName}</p>
-                                                        <p className="text-xs text-muted-foreground font-mono">
-                                                            {dist.investorWallet?.slice(0, 10)}...
-                                                        </p>
+                                                        <AddressDisplay
+                                                            value={dist.investorWallet}
+                                                            truncate={[10, 0]}
+                                                            className="text-xs text-muted-foreground"
+                                                        />
+
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="text-teal-400 text-sm">

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { ApprovalItem } from '@/hooks/useApprovalQueue';
 import { TYPE_CONFIG, STATUS_BADGE, timeAgo } from './constants';
+import { AddressDisplay } from '@/components/ui/AddressDisplay';
 import { InvestorDetail } from './details/InvestorDetail';
 import { CompanyDetail } from './details/CompanyDetail';
 import { OfferDetail } from './details/OfferDetail';
@@ -218,8 +219,9 @@ export function DetailPanel({
                                                 {(!freighterPublicKey || !isKeyMatch) && (
                                                     <div className="mt-1 space-y-0.5">
                                                         {requiredKeys.map(w => (
-                                                            <p key={w.publicKey} className="font-mono">
-                                                                {w.name}: {w.publicKey.slice(0, 4)}…{w.publicKey.slice(-4)}
+                                                            <p key={w.publicKey} className="font-mono inline-flex items-baseline gap-1">
+                                                                {w.name}:{' '}
+                                                                <AddressDisplay value={w.publicKey} truncate={[4, 4]} showCopy />
                                                             </p>
                                                         ))}
                                                     </div>
