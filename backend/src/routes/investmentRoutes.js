@@ -87,8 +87,13 @@ router.post(
     purchaseInvestment,
 );
 
-// Same hardening on submit-tx (the signed half of the purchase flow)
-router.post('/submit-tx', authenticateToken, perUserLimiter, intentDebounce(), [
+// perUserLimiter on submit-tx — same rationale as purchase.
+// NOTE: intentDebounce intentionally NOT applied here. /submit-tx submits an
+// already-signed Soroban XDR which is sequence-number-bound and single-use;
+// a legitimate retry-after-network-glitch resubmits the SAME XDR (same body),
+// and a debounce would 409 the retry, breaking resilience. The Stellar
+// sequence number is the real anti-replay gate at this layer.
+router.post('/submit-tx', authenticateToken, perUserLimiter, [
   body('signedXdr').isString().notEmpty().withMessage('Signed XDR is required'),
   body('investmentContext').isObject().withMessage('investmentContext object is required'),
   body('investmentContext.investorId').isInt({ min: 1 }).withMessage('Valid investor ID is required'),

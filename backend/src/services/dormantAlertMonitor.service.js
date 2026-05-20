@@ -163,10 +163,29 @@ async function checkOnce() {
 
 export const DormantAlertMonitor = {
     /**
-     * Start the monitor. Idempotent.
+     * Start the monitor. Idempotent. Off-by-default via
+     * `ENABLE_DORMANT_ALERTS=true` env gate.
+     *
+     * Reasoning for the gate: this monitor will fire on ANY user who
+     * returns from > 30 days dormancy and immediately invests — which
+     * IS a normal "I forgot about Radox, now I want to buy in" path.
+     * Until we have enough volume to tune the detection (e.g., require
+     * also a new IP / new device fingerprint before alerting), the
+     * monitor should be off in production to avoid PagerDuty noise on
+     * legitimate returning users. Set ENABLE_DORMANT_ALERTS=true once
+     * you've validated the signal on real traffic.
      */
     start() {
         if (_started) return;
+
+        if (process.env.ENABLE_DORMANT_ALERTS !== 'true') {
+            log.info(
+                '[DormantAlertMonitor] Disabled — set ENABLE_DORMANT_ALERTS=true to enable. ' +
+                'Off-by-default to avoid PagerDuty noise on legitimately-returning users.',
+            );
+            return;
+        }
+
         _started = true;
         // First scan after a brief delay so DB pools and prisma are ready.
         setTimeout(() => { checkOnce(); }, 15_000);
