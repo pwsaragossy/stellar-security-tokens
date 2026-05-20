@@ -31,7 +31,15 @@ export function getStellarExplorerAssetUrl(assetCode: string, issuerPublicKey: s
   return `${baseUrl}/${assetCode}-${issuerPublicKey}`;
 }
 
-// Format Stellar public key for display
+/**
+ * Format Stellar public key for display.
+ *
+ * @deprecated In React contexts, prefer `<AddressDisplay value={key} />` from
+ * `@/components/ui/AddressDisplay` — it renders the full address on hover via
+ * Radix Tooltip, which mitigates address-poisoning attacks (Caroline Cardoso,
+ * Stellar 37º audit F-013). This helper is kept for non-React contexts (logs,
+ * toast messages, plain string templates).
+ */
 export function formatStellarPublicKey(publicKey: string, start: number = 8, end: number = 8): string {
   if (!publicKey) return '';
   if (publicKey.length <= start + end) return publicKey;

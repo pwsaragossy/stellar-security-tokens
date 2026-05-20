@@ -11,6 +11,7 @@ import {
     DollarSign, ExternalLink, ShieldCheck, Clock, Building2,
     Hash, CheckCircle2, Copy, ChevronDown, Info, MapPin, Home, Ruler, BedDouble,
 } from 'lucide-react';
+import { AddressDisplay } from '@/components/ui/AddressDisplay';
 import { useState } from 'react';
 import { useInvestmentFees } from '@/hooks/useInvestmentFees';
 import { PAYMENT_LABELS } from '@/utils/offerCalculations';
@@ -557,10 +558,16 @@ export function OfferDetails() {
                                 <DetailRow
                                     label="Issuer Account"
                                     value={
-                                        <a href={`${stellarExplorerBase}/account/${token.issuerPublicKey}`} target="_blank" rel="noopener noreferrer" className="hover:text-[hsl(43_45%_55%)] transition-colors flex items-center gap-1">
-                                            {truncateAddress(token.issuerPublicKey)}
-                                            <ExternalLink className="h-3 w-3" />
-                                        </a>
+                                        <span className="flex items-center gap-1">
+                                            <AddressDisplay
+                                                value={token.issuerPublicKey}
+                                                truncate={[6, 6]}
+                                                kind="account"
+                                            />
+                                            <a href={`${stellarExplorerBase}/account/${token.issuerPublicKey}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-[hsl(43_45%_55%)] transition-colors" aria-label="View on Stellar Expert">
+                                                <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                        </span>
                                     }
                                     mono
                                     copyable={token.issuerPublicKey}
@@ -571,10 +578,16 @@ export function OfferDetails() {
                                 <DetailRow
                                     label="SAC Contract"
                                     value={
-                                        <a href={`${stellarExplorerBase}/contract/${token.sacContractId}`} target="_blank" rel="noopener noreferrer" className="hover:text-[hsl(43_45%_55%)] transition-colors flex items-center gap-1">
-                                            {truncateAddress(token.sacContractId)}
-                                            <ExternalLink className="h-3 w-3" />
-                                        </a>
+                                        <span className="flex items-center gap-1">
+                                            <AddressDisplay
+                                                value={token.sacContractId}
+                                                truncate={[6, 6]}
+                                                kind="contract"
+                                            />
+                                            <a href={`${stellarExplorerBase}/contract/${token.sacContractId}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-[hsl(43_45%_55%)] transition-colors" aria-label="View on Stellar Expert">
+                                                <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                        </span>
                                     }
                                     mono
                                     copyable={token.sacContractId}

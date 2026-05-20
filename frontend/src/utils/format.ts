@@ -37,7 +37,16 @@ export function formatDate(date: string | Date, format: 'short' | 'long' | 'date
   }
 }
 
-// Hash truncation
+/**
+ * Hash truncation helper.
+ *
+ * @deprecated In React contexts displaying Stellar addresses or contract IDs,
+ * prefer `<AddressDisplay value={x} />` from `@/components/ui/AddressDisplay` —
+ * it shows the full address on hover (Radix Tooltip) and mitigates
+ * address-poisoning attacks (Caroline Cardoso, Stellar 37º audit F-013).
+ * Transaction hashes can keep using this helper since hashes are not
+ * user-controlled and can't be vanity-collided into a poisoning attack.
+ */
 export function truncateHash(hash: string, start: number = 8, end: number = 8): string {
   if (!hash || hash.length <= start + end) return hash;
   return `${hash.slice(0, start)}...${hash.slice(-end)}`;
