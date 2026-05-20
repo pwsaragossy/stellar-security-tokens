@@ -175,7 +175,7 @@ fn test_initialize_extends_ttl() {
     let client = MaturitySettlementClient::new(&e, &contract_id);
     client.initialize(&admin, &usdc.address, &sec_token.address, &Address::generate(&e), &5000);
     // Subsequent calls shouldn't panic due to expired TTL
-    assert_eq!(client.version(), 1);
+    assert_eq!(client.version(), 2);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -931,11 +931,11 @@ fn test_refund_returns_full_amount() {
 // ═══════════════════════════════════════════════════════
 
 #[test]
-fn test_version_returns_1() {
+fn test_version_returns_2() {
     let e = Env::default();
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
-    assert_eq!(client.version(), 1);
+    assert_eq!(client.version(), 2);
 }
 
 #[test]
@@ -2148,7 +2148,7 @@ fn test_golden_state_post_settlement() {
     assert_eq!(client.get_deposit(&company), deposit);
 
     // 4. version still works
-    assert_eq!(client.version(), 1);
+    assert_eq!(client.version(), 2);
 
     // 5. extend_ttl still works
     client.extend_ttl();
@@ -2500,7 +2500,7 @@ fn test_full_lifecycle_init_deposit_settle_withdraw() {
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
     client.initialize(&admin, &usdc.address, &sec_token.address, &treasury, &5000);
-    assert_eq!(client.version(), 1);
+    assert_eq!(client.version(), 2);
     assert_eq!(client.get_balance(), 0);
 
     // === 2. SETUP INVESTORS ===
@@ -2581,7 +2581,7 @@ fn test_full_lifecycle_init_deposit_settle_withdraw() {
     client.extend_ttl();
 
     // State is preserved
-    assert_eq!(client.version(), 1);
+    assert_eq!(client.version(), 2);
     assert_eq!(client.get_deposit(&company), 115 * 10_000_000); // stale but preserved
 }
 
@@ -2787,4 +2787,222 @@ fn test_auth_company_cannot_withdraw() {
 
     // This MUST fail: company ≠ admin
     client.withdraw(&usdc.address, &(100 * 10_000_000i128), &company);
+}
+
+// ═══════════════════════════════════════════════════════
+//  V2 — pause + 2-step admin rotation
+//  (security audit F-003, added 2026-05-20)
+// ═══════════════════════════════════════════════════════
+
+#[test]
+fn test_v2_pause_sets_flag() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let (client, _admin, _company, _investor, _treasury, _usdc, _, _, _, _) = setup(&e);
+
+    assert_eq!(client.get_paused(), false);
+    client.pause();
+    assert_eq!(client.get_paused(), true);
+    client.resume();
+    assert_eq!(client.get_paused(), false);
+}
+
+#[test]
+fn test_v2_pause_blocks_deposit() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let (client, _admin, company, _investor, _treasury, _usdc, _, _, _, _) = setup(&e);
+
+    client.pause();
+
+    let result = client.try_deposit(&company, &(100 * 10_000_000i128));
+    assert_eq!(result, Err(Ok(SettleError::ContractPaused)));
+}
+
+#[test]
+fn test_v2_pause_blocks_settle_batch() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let (client, _admin, company, investor, _treasury, _usdc, _, _, _, _) = setup(&e);
+
+    // Fund the contract first (before pausing) so the failure is unambiguously about the pause
+    client.deposit(&company, &(100 * 10_000_000i128));
+    client.pause();
+
+    let items: Vec<SettleItem> = vec![
+        &e,
+        SettleItem {
+            investor: investor.clone(),
+            payout: 50 * 10_000_000i128,
+        },
+    ];
+    let result = client.try_settle_batch(&items, &0);
+    assert_eq!(result, Err(Ok(SettleError::ContractPaused)));
+}
+
+#[test]
+fn test_v2_pause_blocks_withdraw() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let (client, _admin, company, _investor, _treasury, usdc, _, _, _, _) = setup(&e);
+
+    client.deposit(&company, &(100 * 10_000_000i128));
+    client.pause();
+
+    let result = client.try_withdraw(&usdc.address, &(10 * 10_000_000i128), &company);
+    assert_eq!(result, Err(Ok(SettleError::ContractPaused)));
+}
+
+#[test]
+fn test_v2_pause_blocks_refund() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let (client, _admin, company, _investor, _treasury, _usdc, _, _, _, _) = setup(&e);
+
+    client.deposit(&company, &(100 * 10_000_000i128));
+    client.pause();
+
+    let result = client.try_refund(&company);
+    assert_eq!(result, Err(Ok(SettleError::ContractPaused)));
+}
+
+#[test]
+fn test_v2_resume_unblocks_flows() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let (client, _admin, company, _investor, _treasury, _usdc, _, _, _, _) = setup(&e);
+
+    client.pause();
+    client.resume();
+
+    // Should succeed now — no error from the deposit path
+    client.deposit(&company, &(100 * 10_000_000i128));
+    assert_eq!(client.get_deposit(&company), 100 * 10_000_000i128);
+}
+
+#[test]
+#[should_panic]
+fn test_v2_pause_requires_admin_auth() {
+    let e = Env::default();
+
+    let (client, _admin, company, _investor, _treasury, _usdc, _, _, _, contract_id) = setup(&e);
+
+    // Mock only the company's auth — NOT the admin's. pause() requires admin.
+    e.mock_auths(&[soroban_sdk::testutils::MockAuth {
+        address: &company,
+        invoke: &soroban_sdk::testutils::MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "pause",
+            args: soroban_sdk::vec![&e],
+            sub_invokes: &[],
+        },
+    }]);
+
+    client.pause(); // must panic — company is not admin
+}
+
+#[test]
+fn test_v2_propose_admin_sets_pending() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let (client, _admin, _company, _investor, _treasury, _usdc, _, _, _, _) = setup(&e);
+    let new_admin = Address::generate(&e);
+
+    assert_eq!(client.get_pending_admin(), None);
+    client.propose_admin(&new_admin);
+    assert_eq!(client.get_pending_admin(), Some(new_admin));
+}
+
+#[test]
+fn test_v2_accept_admin_rotates_active_admin() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let (client, admin, _company, _investor, _treasury, _usdc, _, _, _, _) = setup(&e);
+    let new_admin = Address::generate(&e);
+
+    // Before rotation: get_admin returns the initial Config.admin
+    assert_eq!(client.get_admin(), admin);
+
+    client.propose_admin(&new_admin);
+    client.accept_admin();
+
+    // After rotation: active admin is the new one; pending is cleared
+    assert_eq!(client.get_admin(), new_admin);
+    assert_eq!(client.get_pending_admin(), None);
+}
+
+#[test]
+fn test_v2_accept_admin_without_proposal_fails() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let (client, _admin, _company, _investor, _treasury, _usdc, _, _, _, _) = setup(&e);
+
+    let result = client.try_accept_admin();
+    assert_eq!(result, Err(Ok(SettleError::NoPendingAdmin)));
+}
+
+#[test]
+#[should_panic]
+fn test_v2_old_admin_disabled_after_rotation() {
+    let e = Env::default();
+
+    let (client, admin, _company, _investor, _treasury, _usdc, _, _, _, contract_id) = setup(&e);
+    let new_admin = Address::generate(&e);
+
+    // Phase 1: under mock_all_auths, perform the rotation
+    e.mock_all_auths();
+    client.propose_admin(&new_admin);
+    client.accept_admin();
+    assert_eq!(client.get_admin(), new_admin);
+
+    // Phase 2: only the OLD admin signs — pause() must panic because
+    // require_auth() is now checking the new admin, not the old one.
+    e.mock_auths(&[soroban_sdk::testutils::MockAuth {
+        address: &admin,
+        invoke: &soroban_sdk::testutils::MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "pause",
+            args: soroban_sdk::vec![&e],
+            sub_invokes: &[],
+        },
+    }]);
+
+    client.pause(); // expected to panic — old admin cannot act
+}
+
+#[test]
+fn test_v2_new_admin_can_act_after_rotation() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let (client, _admin, _company, _investor, _treasury, _usdc, _, _, _, _) = setup(&e);
+    let new_admin = Address::generate(&e);
+
+    client.propose_admin(&new_admin);
+    client.accept_admin();
+
+    // New admin can now pause/resume (mock_all_auths covers their require_auth)
+    client.pause();
+    assert_eq!(client.get_paused(), true);
+    client.resume();
+    assert_eq!(client.get_paused(), false);
+}
+
+#[test]
+fn test_v2_version_bumped_to_2() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let (client, _admin, _company, _investor, _treasury, _usdc, _, _, _, _) = setup(&e);
+
+    assert_eq!(client.version(), 2);
 }

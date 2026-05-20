@@ -410,6 +410,39 @@ model PlatformAdmin {
   @@map("platform_admins")
 }
 
+/// AdminAction — immutable audit log for platform-admin operations.
+///
+/// Append-only by convention. DB-level enforcement (revoke UPDATE/DELETE
+/// for the application's Postgres role) should follow in a hardening
+/// migration. Every requirePlatformAdmin / requireAdminRole route emits
+/// one row via `adminAuditLog.service.js` on response finish.
+///
+/// `actorId` references `platform_admins.id` but is NOT declared as a Prisma
+/// relation — audit log survives admin row deletion (which should be soft-only
+/// anyway). `payloadHash` is sha256(request body) — we never store raw
+/// payloads (PII, base64 blobs).
+model AdminAction {
+  id          String   @id @default(uuid())
+  actorId     Int?     @map("actor_id")
+  actorType   String?  @map("actor_type") @db.VarChar(50)
+  actorRole   String?  @map("actor_role") @db.VarChar(50)
+  action      String   @db.VarChar(255)
+  targetType  String?  @map("target_type") @db.VarChar(50)
+  targetId    String?  @map("target_id") @db.VarChar(255)
+  payloadHash String?  @map("payload_hash") @db.VarChar(64)
+  ip          String?  @db.VarChar(64)
+  userAgent   String?  @map("user_agent") @db.VarChar(500)
+  result      String   @db.VarChar(20)
+  statusCode  Int?     @map("status_code")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([targetType, targetId, createdAt])
+  @@index([createdAt])
+  @@map("admin_actions")
+}
+
 model Offer {
   id          Int    @id @default(autoincrement())
   companyId   Int    @map("company_id")

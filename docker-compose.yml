@@ -77,7 +77,10 @@ services:
       # Set explicitly only if using a custom USDC issuer
       USDC_ISSUER: ${USDC_ISSUER:-}
       # Security
-      JWT_SECRET: ${JWT_SECRET:-change_this_in_production}
+      # JWT_SECRET is REQUIRED. Generate one with: openssl rand -hex 32
+      # No fallback even in dev — silent fallback to a known string is a forge-tokens-for-any-user backdoor
+      # if dev compose is ever used in a production-like context.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required (run: openssl rand -hex 32)}
       API_KEY: ${API_KEY}
       # Email (Resend HTTP API — no SMTP needed)
       RESEND_API_KEY: ${RESEND_API_KEY:-}

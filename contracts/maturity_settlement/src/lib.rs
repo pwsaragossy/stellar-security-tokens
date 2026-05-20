@@ -4,7 +4,9 @@ use soroban_sdk::{
     symbol_short, token, Address, BytesN, Env, Map, Vec,
 };
 
-const CONTRACT_VERSION: u32 = 1;
+// v2 (May 2026): adds pause/resume + 2-step admin rotation (propose_admin/accept_admin).
+// See docs/Operations/security_audit_stellar37.md F-003.
+const CONTRACT_VERSION: u32 = 2;
 // ~30 days at 5s per ledger
 const TTL_THRESHOLD: u32 = 518_400;
 const TTL_EXTEND: u32 = 518_400;
@@ -33,6 +35,10 @@ pub enum SettleError {
     PhantomInvestor = 10,
     /// Fee exceeds the max_fee_bps cap declared at initialization.
     FeeTooHigh = 11,
+    /// Contract is paused — settle/deposit/withdraw/refund blocked.
+    ContractPaused = 12,
+    /// accept_admin() called but no propose_admin() is pending.
+    NoPendingAdmin = 13,
 }
 
 /// Per-offer contract state keys.
@@ -50,6 +56,19 @@ pub enum DataKey {
     /// Counter of total investors settled. Used as guard for refund().
     /// Stored in instance storage (fast access).
     SettledCount,
+    /// Active admin override. Set after a successful accept_admin().
+    /// If absent (fresh-init contract), Config.admin is the active admin.
+    /// Added in v2.
+    Admin,
+    /// Admin proposed by current admin via propose_admin(), awaiting
+    /// new admin's accept_admin() call. Cleared on acceptance.
+    /// Added in v2.
+    PendingAdmin,
+    /// Pause flag — when true, deposit/settle_batch/withdraw/refund return
+    /// ContractPaused. Upgrade and admin-rotation are intentionally
+    /// NOT gated (the recovery path must remain accessible).
+    /// Added in v2.
+    Paused,
 }
 
 /// Immutable configuration set once during initialize().
@@ -101,6 +120,32 @@ fn emit<D: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(
     data: D,
 ) {
     e.events().publish((topic,), data);
+}
+
+/// Returns the contract's pause flag. Default false (fresh deploys).
+fn is_paused(env: &Env) -> bool {
+    env.storage()
+        .instance()
+        .get(&DataKey::Paused)
+        .unwrap_or(false)
+}
+
+/// Returns the address currently authorized as admin.
+///
+/// v1 → v2 upgrade-safe: if `DataKey::Admin` is unset (never rotated),
+/// falls back to `Config.admin` (which v1 set during initialize()).
+/// After a successful `accept_admin()`, `DataKey::Admin` is set and
+/// takes precedence over `Config.admin`.
+fn get_active_admin(env: &Env) -> Result<Address, SettleError> {
+    if let Some(admin) = env
+        .storage()
+        .instance()
+        .get::<DataKey, Address>(&DataKey::Admin)
+    {
+        return Ok(admin);
+    }
+    let config = load_config(env)?;
+    Ok(config.admin)
 }
 
 #[contractimpl]
@@ -156,6 +201,10 @@ impl MaturitySettlement {
     ) -> Result<(), SettleError> {
         let config = load_config(&env)?;
 
+        if is_paused(&env) {
+            return Err(SettleError::ContractPaused);
+        }
+
         if amount <= 0 {
             return Err(SettleError::InvalidAmount);
         }
@@ -199,7 +248,13 @@ impl MaturitySettlement {
         total_fee: i128,
     ) -> Result<(), SettleError> {
         let config = load_config(&env)?;
-        config.admin.require_auth();
+
+        if is_paused(&env) {
+            return Err(SettleError::ContractPaused);
+        }
+
+        let admin = get_active_admin(&env)?;
+        admin.require_auth();
 
         if items.is_empty() {
             return Err(SettleError::EmptyBatch);
@@ -313,8 +368,14 @@ impl MaturitySettlement {
         amount: i128,
         to: Address,
     ) -> Result<(), SettleError> {
-        let config = load_config(&env)?;
-        config.admin.require_auth();
+        let _config = load_config(&env)?;
+
+        if is_paused(&env) {
+            return Err(SettleError::ContractPaused);
+        }
+
+        let admin = get_active_admin(&env)?;
+        admin.require_auth();
 
         if amount <= 0 {
             return Err(SettleError::InvalidAmount);
@@ -334,7 +395,13 @@ impl MaturitySettlement {
         depositor: Address,
     ) -> Result<(), SettleError> {
         let config = load_config(&env)?;
-        config.admin.require_auth();
+
+        if is_paused(&env) {
+            return Err(SettleError::ContractPaused);
+        }
+
+        let admin = get_active_admin(&env)?;
+        admin.require_auth();
 
         // Block refunds after any settlement has started
         let settled_count: u32 = env.storage().instance().get(&DataKey::SettledCount).unwrap_or(0);
@@ -366,10 +433,91 @@ impl MaturitySettlement {
     }
 
     /// Upgrade contract WASM. Admin only (high-privilege).
+    /// Intentionally NOT pause-gated — upgrade is the recovery path when a
+    /// pause has been triggered to contain a bug.
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
-        let config = load_config(&env).expect("not initialized");
-        config.admin.require_auth();
+        let admin = get_active_admin(&env).expect("not initialized");
+        admin.require_auth();
         env.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+
+    // ─── v2 additions: pause + 2-step admin rotation ─────────────
+
+    /// Pause the contract. Admin-only. Blocks deposit/settle/withdraw/refund.
+    /// Upgrade and accept_admin remain accessible (recovery paths).
+    pub fn pause(env: Env) -> Result<(), SettleError> {
+        let admin = get_active_admin(&env)?;
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
+        emit(&env, symbol_short!("paused"), true);
+        Ok(())
+    }
+
+    /// Resume the contract. Admin-only.
+    pub fn resume(env: Env) -> Result<(), SettleError> {
+        let admin = get_active_admin(&env)?;
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
+        emit(&env, symbol_short!("resumed"), true);
+        Ok(())
+    }
+
+    /// Step 1 of admin rotation: current admin proposes a new admin.
+    /// The new admin must then call accept_admin() to take ownership.
+    /// Overwrites any prior pending proposal.
+    pub fn propose_admin(env: Env, new_admin: Address) -> Result<(), SettleError> {
+        let admin = get_active_admin(&env)?;
+        admin.require_auth();
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingAdmin, &new_admin);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
+        emit(&env, symbol_short!("propadm"), new_admin);
+        Ok(())
+    }
+
+    /// Step 2 of admin rotation: pending admin accepts ownership.
+    /// The pending admin must sign — proves they hold the keypair (prevents
+    /// transfer-to-typo'd-address footgun).
+    pub fn accept_admin(env: Env) -> Result<(), SettleError> {
+        let pending: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::PendingAdmin)
+            .ok_or(SettleError::NoPendingAdmin)?;
+        pending.require_auth();
+        env.storage().instance().set(&DataKey::Admin, &pending);
+        env.storage().instance().remove(&DataKey::PendingAdmin);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
+        emit(&env, symbol_short!("admchg"), pending);
+        Ok(())
+    }
+
+    // ─── v2 readers ──────────────────────────────────────────────
+
+    /// Returns whether the contract is paused.
+    pub fn get_paused(env: Env) -> bool {
+        is_paused(&env)
+    }
+
+    /// Returns the currently active admin.
+    pub fn get_admin(env: Env) -> Result<Address, SettleError> {
+        get_active_admin(&env)
+    }
+
+    /// Returns the pending admin if one has been proposed.
+    pub fn get_pending_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::PendingAdmin)
     }
 
     /// Extend contract instance TTL. Anyone can call (allows cron jobs).
