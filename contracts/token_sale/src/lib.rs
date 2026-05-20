@@ -1,12 +1,37 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
+    contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, String,
 };
 
-const CONTRACT_VERSION: u32 = 6;
+// v7 (May 2026, F-006 security audit follow-up): canonical USDC SAC is now
+// hardcoded per network and validated at create(). Prevents address-poisoning
+// attacks where a malicious or compromised admin could deploy an offer
+// pointing to a fake USDC SAC. The `testing` feature disables the check so
+// unit tests can use generated SACs; production WASMs are built with
+// `--no-default-features --features testnet|mainnet`.
+const CONTRACT_VERSION: u32 = 7;
 // ~30 days at 5s per ledger
 const TTL_THRESHOLD: u32 = 518_400;
 const TTL_EXTEND: u32 = 518_400;
+
+// Canonical USDC Stellar Asset Contract — F-006.
+// IMPORTANT: when changing, also update docs/Operations/DEPLOYMENTS.md.
+#[cfg(feature = "testnet")]
+const USDC_SAC: &str = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
+
+// TODO(mainnet): VERIFY this address before building the mainnet WASM. It was
+// carried over from the audit plan and has NOT been independently confirmed
+// against Circle's documentation or Stellar Lab. If the address is wrong,
+// EVERY mainnet contract deployment will fail at create() with
+// UnauthorizedToken. To verify:
+//   1. Look up Circle's mainnet USDC issuer (well-known:
+//      GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN).
+//   2. Compute / look up its Stellar Asset Contract address on stellar.expert
+//      or via `stellar contract id asset --asset USDC:<issuer> --network mainnet`.
+//   3. Replace the const, rebuild the mainnet WASM, update DEPLOYMENTS.md.
+// Until verified, do NOT deploy mainnet contracts.
+#[cfg(feature = "mainnet")]
+const USDC_SAC: &str = "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75";
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -25,6 +50,8 @@ pub enum SaleError {
     NoPendingAdmin = 11,
     NotPendingAdmin = 12,
     InsufficientForFee = 13,
+    /// v7 (F-006): supplied buy_token is not the canonical USDC SAC for this network
+    UnauthorizedToken = 14,
 }
 
 #[contracttype]
@@ -87,6 +114,22 @@ fn emit<D: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(
     e.events().publish((topic,), data);
 }
 
+/// v7 (F-006) — verify the supplied buy_token matches the canonical USDC
+/// SAC for this network. In `testing` feature builds the check is a no-op
+/// so unit tests can use generated SACs. Production builds (testnet /
+/// mainnet feature) enforce the check.
+#[allow(unused_variables)]
+fn validate_canonical_usdc(env: &Env, buy_token: &Address) -> Result<(), SaleError> {
+    #[cfg(not(feature = "testing"))]
+    {
+        let canonical = Address::from_string(&String::from_str(env, USDC_SAC));
+        if *buy_token != canonical {
+            return Err(SaleError::UnauthorizedToken);
+        }
+    }
+    Ok(())
+}
+
 #[contractimpl]
 impl TokenSale {
     /// Creates the offer. Must be called once.
@@ -122,6 +165,9 @@ impl TokenSale {
         if fixed_fee < 0 {
             return Err(SaleError::InvalidAmount);
         }
+        // v7 (F-006): enforce canonical USDC SAC at create() — prevents
+        // address-poisoning by a malicious or compromised admin.
+        validate_canonical_usdc(&e, &buy_token)?;
         admin.require_auth();
         write_offer(
             &e,

@@ -1,15 +1,40 @@
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype,
-    symbol_short, token, Address, BytesN, Env, Map, Vec,
+    symbol_short, token, Address, BytesN, Env, Map, String, Vec,
 };
 
 // v2 (May 2026): adds pause/resume + 2-step admin rotation (propose_admin/accept_admin).
-// See docs/Operations/security_audit_stellar37.md F-003.
-const CONTRACT_VERSION: u32 = 2;
+// v3 (May 2026, F-006 audit follow-up): canonical USDC SAC is hardcoded per
+// network and validated at initialize(). Prevents address-poisoning attacks
+// where a malicious or compromised admin could initialize the contract with
+// a fake USDC SAC. The `testing` feature disables the check so unit tests
+// can use generated SACs; production WASMs are built with
+// `--no-default-features --features testnet|mainnet`.
+// See docs/Operations/security_audit_stellar37.md F-003, F-006.
+const CONTRACT_VERSION: u32 = 3;
 // ~30 days at 5s per ledger
 const TTL_THRESHOLD: u32 = 518_400;
 const TTL_EXTEND: u32 = 518_400;
+
+// Canonical USDC Stellar Asset Contract — F-006.
+// IMPORTANT: when changing, also update docs/Operations/DEPLOYMENTS.md.
+#[cfg(feature = "testnet")]
+const USDC_SAC: &str = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
+
+// TODO(mainnet): VERIFY this address before building the mainnet WASM. It was
+// carried over from the audit plan and has NOT been independently confirmed
+// against Circle's documentation or Stellar Lab. If the address is wrong,
+// EVERY mainnet contract deployment will fail at initialize() with
+// UnauthorizedToken. To verify:
+//   1. Look up Circle's mainnet USDC issuer (well-known:
+//      GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN).
+//   2. Compute / look up its Stellar Asset Contract address on stellar.expert
+//      or via `stellar contract id asset --asset USDC:<issuer> --network mainnet`.
+//   3. Replace the const, rebuild the mainnet WASM, update DEPLOYMENTS.md.
+// Until verified, do NOT deploy mainnet contracts.
+#[cfg(feature = "mainnet")]
+const USDC_SAC: &str = "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75";
 /// Maximum investors per settle_batch() call.
 /// At ~12M CPU per investor, 30 × 12M = 360M, within 600M budget.
 /// Footprint: 30 investors × 4 reads + 4 base = 124 entries (62% of ~200 limit).
@@ -39,6 +64,8 @@ pub enum SettleError {
     ContractPaused = 12,
     /// accept_admin() called but no propose_admin() is pending.
     NoPendingAdmin = 13,
+    /// v3 (F-006): supplied usdc_sac is not the canonical USDC SAC for this network.
+    UnauthorizedToken = 14,
 }
 
 /// Per-offer contract state keys.
@@ -130,6 +157,22 @@ fn is_paused(env: &Env) -> bool {
         .unwrap_or(false)
 }
 
+/// v3 (F-006) — verify the supplied usdc_sac matches the canonical USDC SAC
+/// for this network. In `testing` feature builds the check is a no-op so unit
+/// tests can use generated SACs. Production builds (testnet / mainnet
+/// feature) enforce the check.
+#[allow(unused_variables)]
+fn validate_canonical_usdc(env: &Env, usdc_sac: &Address) -> Result<(), SettleError> {
+    #[cfg(not(feature = "testing"))]
+    {
+        let canonical = Address::from_string(&String::from_str(env, USDC_SAC));
+        if *usdc_sac != canonical {
+            return Err(SettleError::UnauthorizedToken);
+        }
+    }
+    Ok(())
+}
+
 /// Returns the address currently authorized as admin.
 ///
 /// v1 → v2 upgrade-safe: if `DataKey::Admin` is unset (never rotated),
@@ -170,6 +213,10 @@ impl MaturitySettlement {
         if env.storage().instance().has(&DataKey::Config) {
             return Err(SettleError::AlreadyInitialized);
         }
+
+        // v3 (F-006): enforce canonical USDC SAC at initialize() — prevents
+        // address-poisoning by a malicious or compromised admin.
+        validate_canonical_usdc(&env, &usdc_sac)?;
 
         admin.require_auth();
 

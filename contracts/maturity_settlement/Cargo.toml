@@ -12,6 +12,15 @@ soroban-sdk = "25.3.0"
 [dev-dependencies]
 soroban-sdk = { version = "25.3.0", features = ["testutils"] }
 
+# Network feature gates (F-006 audit — canonical USDC SAC hardcoded per network).
+# Default is `testing` so `cargo test` works out of the box. WASM builds MUST
+# pass `--no-default-features --features testnet` or `--features mainnet`.
+[features]
+default = ["testing"]
+testnet = []
+mainnet = []
+testing = []  # disables USDC SAC validation for unit tests
+
 [profile.release]
 opt-level = "z"
 overflow-checks = true

@@ -175,7 +175,7 @@ fn test_initialize_extends_ttl() {
     let client = MaturitySettlementClient::new(&e, &contract_id);
     client.initialize(&admin, &usdc.address, &sec_token.address, &Address::generate(&e), &5000);
     // Subsequent calls shouldn't panic due to expired TTL
-    assert_eq!(client.version(), 2);
+    assert_eq!(client.version(), 3);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -931,11 +931,11 @@ fn test_refund_returns_full_amount() {
 // ═══════════════════════════════════════════════════════
 
 #[test]
-fn test_version_returns_2() {
+fn test_version_returns_3() {
     let e = Env::default();
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
-    assert_eq!(client.version(), 2);
+    assert_eq!(client.version(), 3);
 }
 
 #[test]
@@ -2148,7 +2148,7 @@ fn test_golden_state_post_settlement() {
     assert_eq!(client.get_deposit(&company), deposit);
 
     // 4. version still works
-    assert_eq!(client.version(), 2);
+    assert_eq!(client.version(), 3);
 
     // 5. extend_ttl still works
     client.extend_ttl();
@@ -2500,7 +2500,7 @@ fn test_full_lifecycle_init_deposit_settle_withdraw() {
     let contract_id = e.register(MaturitySettlement, ());
     let client = MaturitySettlementClient::new(&e, &contract_id);
     client.initialize(&admin, &usdc.address, &sec_token.address, &treasury, &5000);
-    assert_eq!(client.version(), 2);
+    assert_eq!(client.version(), 3);
     assert_eq!(client.get_balance(), 0);
 
     // === 2. SETUP INVESTORS ===
@@ -2581,7 +2581,7 @@ fn test_full_lifecycle_init_deposit_settle_withdraw() {
     client.extend_ttl();
 
     // State is preserved
-    assert_eq!(client.version(), 2);
+    assert_eq!(client.version(), 3);
     assert_eq!(client.get_deposit(&company), 115 * 10_000_000); // stale but preserved
 }
 
@@ -2998,11 +2998,40 @@ fn test_v2_new_admin_can_act_after_rotation() {
 }
 
 #[test]
-fn test_v2_version_bumped_to_2() {
+fn test_v2_version_bumped_to_3() {
     let e = Env::default();
     e.mock_all_auths();
 
     let (client, _admin, _company, _investor, _treasury, _usdc, _, _, _, _) = setup(&e);
 
-    assert_eq!(client.version(), 2);
+    assert_eq!(client.version(), 3);
+}
+
+// ═══════════════════════════════════════════════════════
+//  F-006 — canonical USDC SAC rejection path
+//  These tests ONLY compile when the `testing` feature is OFF — i.e. when
+//  the const-baked validation in lib.rs is active. Run with:
+//     cargo test --no-default-features --features testnet
+// ═══════════════════════════════════════════════════════
+#[cfg(not(feature = "testing"))]
+mod canonical_usdc_tests {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+
+    #[test]
+    fn test_initialize_rejects_non_canonical_usdc() {
+        let e = Env::default();
+        e.mock_all_auths();
+        let contract_id = e.register(MaturitySettlement, ());
+        let client = MaturitySettlementClient::new(&e, &contract_id);
+
+        let admin = Address::generate(&e);
+        // Random address — guaranteed not equal to the canonical USDC SAC const.
+        let fake_usdc = Address::generate(&e);
+        let token_sac = Address::generate(&e);
+        let treasury = Address::generate(&e);
+
+        let result = client.try_initialize(&admin, &fake_usdc, &token_sac, &treasury, &5000);
+        assert_eq!(result, Err(Ok(SettleError::UnauthorizedToken)));
+    }
 }
