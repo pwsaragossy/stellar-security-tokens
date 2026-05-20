@@ -2,6 +2,11 @@ import { authenticateToken } from './auth.js';
 import { CompanyUser } from '../models/CompanyUser.js';
 import { Company } from '../models/Company.js';
 import { Offer } from '../models/Offer.js';
+import {
+  attachAdminAuditHook,
+  logAdminAction,
+  buildAdminActionPayload,
+} from '../services/adminAuditLog.service.js';
 
 /**
  * Middleware para requerer que o usuário seja um investidor
@@ -36,7 +41,13 @@ export const requireCompanyUser = (req, res, next) => {
 };
 
 /**
- * Middleware para requerer que o usuário seja um administrador da plataforma
+ * Middleware para requerer que o usuário seja um administrador da plataforma.
+ *
+ * Side effect: every admin-gated request — whether allowed or denied at
+ * the role check — is recorded in the `admin_actions` audit log via
+ * `adminAuditLog.service.js`. Denied attempts are logged immediately;
+ * allowed requests hook into `res.on('finish')` so the final status code
+ * is captured.
  */
 export const requirePlatformAdmin = (req, res, next) => {
   authenticateToken(req, res, () => {
@@ -46,11 +57,13 @@ export const requirePlatformAdmin = (req, res, next) => {
       req.user.role === 'super_admin';
 
     if (!isAdmin) {
+      logAdminAction(buildAdminActionPayload(req, res, 'denied'));
       return res.status(403).json({
         success: false,
         error: 'Access denied. Platform admin role required.',
       });
     }
+    attachAdminAuditHook(req, res);
     next();
   });
 };
@@ -69,6 +82,7 @@ export const requireAdminRole = (allowedRoles) => {
         req.user.role === 'super_admin';
 
       if (!isAdmin) {
+        logAdminAction(buildAdminActionPayload(req, res, 'denied'));
         return res.status(403).json({
           success: false,
           error: 'Access denied. Platform admin role required.',
@@ -76,12 +90,14 @@ export const requireAdminRole = (allowedRoles) => {
       }
 
       if (!roles.includes(req.user.role)) {
+        logAdminAction(buildAdminActionPayload(req, res, 'denied'));
         return res.status(403).json({
           success: false,
           error: `Access denied. Required role: ${roles.join(' or ')}`,
         });
       }
 
+      attachAdminAuditHook(req, res);
       next();
     });
   };

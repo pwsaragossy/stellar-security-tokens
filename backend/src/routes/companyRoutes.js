@@ -171,11 +171,6 @@ const registerValidation = [
 // Rotas públicas
 router.post('/register', registerValidation, CompanyController.registerCompany);
 
-// Rota de debug para aprovar empresa sem autenticação (apenas em desenvolvimento)
-if (process.env.NODE_ENV !== 'production') {
-  router.put('/debug/:id/approve', CompanyController.debugApproveCompany);
-}
-
 /**
  * @swagger
  * /api/companies/profile:
