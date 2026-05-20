@@ -60,7 +60,7 @@ async function getRedisClient() {
  * Falls back to memory store if Redis unavailable
  */
 function createLimiter(options) {
-    const { windowMs, max, message, keyPrefix = 'rl' } = options;
+    const { windowMs, max, message, keyPrefix = 'rl', keyGenerator } = options;
 
     const limiterConfig = {
         windowMs,
@@ -76,6 +76,10 @@ function createLimiter(options) {
         handler: (req, res, next, options) => {
             res.status(429).json(options.message);
         },
+        // Custom keyGenerator (e.g. perUserLimiter keys on req.user.userId).
+        // Must be passed at construction time — express-rate-limit captures
+        // options in a closure and ignores post-hoc property mutation.
+        ...(typeof keyGenerator === 'function' ? { keyGenerator } : {}),
     };
 
     // Create limiter with memory store initially
@@ -142,6 +146,33 @@ export const strictLimiter = createLimiter({
 });
 
 /**
+ * Per-user rate limiter — O-002 audit follow-up.
+ *
+ * IP-based limiting alone is insufficient against an attacker rotating
+ * IPs. This limiter keys on `req.user.userId` (set by authenticateToken)
+ * with an IP fallback for anonymous requests. Mount AFTER authenticateToken
+ * on routes where per-user volume matters more than per-IP volume.
+ *
+ * Limit: 60 req/min/user — generous enough for typical active sessions
+ * (page navigations, dashboard polling, an investment flow), tight
+ * enough to catch credential-replay bots driving thousands of requests.
+ *
+ * IMPORTANT: keyGenerator is passed at construction time. Setting it
+ * post-hoc on the returned middleware is a silent no-op because
+ * express-rate-limit captures options in a closure.
+ */
+export const perUserLimiter = createLimiter({
+    windowMs: 60 * 1000,
+    max: 60,
+    message: 'Per-user rate limit exceeded. Slow down or contact support.',
+    keyPrefix: 'rl:user',
+    keyGenerator: (req) =>
+        req.user?.userId
+            ? `u:${req.user.userType ?? 'unk'}:${req.user.userId}`
+            : (req.ip ?? 'anon'),
+});
+
+/**
  * Skip rate limiting for certain conditions
  * @param {Request} req - Express request
  * @returns {boolean} True to skip rate limiting
@@ -179,6 +210,7 @@ export default {
     authLimiter,
     apiLimiter,
     strictLimiter,
+    perUserLimiter,
     conditionalRateLimit,
     skipRateLimitForTrusted,
 };

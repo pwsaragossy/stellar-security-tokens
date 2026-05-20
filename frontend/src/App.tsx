@@ -48,6 +48,7 @@ import { Companies } from './pages/admin/Companies';
 import { AdminOffers } from './pages/admin/AdminOffers';
 import { Contracts } from './pages/admin/Contracts';
 import { Distributor } from './pages/admin/Distributor';
+import { SecurityEvents } from './pages/admin/SecurityEvents';
 
 import { AssetCompliance } from './pages/admin/AssetCompliance';
 import { EmergencyControls } from './pages/admin/EmergencyControls';
@@ -117,6 +118,7 @@ function App() {
             <Route path="offers" element={<AdminOffers />} />
             <Route path="contracts" element={<Contracts />} />
             <Route path="distributor" element={<Distributor />} />
+            <Route path="security-events" element={<SecurityEvents />} />
             <Route path="transactions" element={<Navigate to="/admin/approvals" replace />} />
             <Route path="compliance" element={<AssetCompliance />} />
             <Route path="emergency" element={<EmergencyControls />} />

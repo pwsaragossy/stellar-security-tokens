@@ -188,6 +188,11 @@ model Investor {
   postalCode   String?   @map("postal_code") @db.VarChar(20)
   country      String?   @default("BR") @db.VarChar(2)
 
+  // O-006 audit follow-up: per-investor daily cap. NULL = no cap (back-compat).
+  // Enforced by middleware/dailyCapCheck.js on fund-moving routes. Set via
+  // platform admin endpoint PATCH /api/admin/investors/:id.
+  dailyCapUsd Decimal? @map("daily_cap_usd") @db.Decimal(20, 2)
+
   // Relations
   tokenDistributions  TokenDistribution[]
   interestPayments    InterestPayment[]

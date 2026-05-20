@@ -254,6 +254,10 @@ app.use('/api/admin/settlements', strictLimiter, settlementAdminRoutes);
 import distributorAdminRoutes from './routes/distributorAdminRoutes.js';
 app.use('/api/admin/distributor', strictLimiter, distributorAdminRoutes);
 
+// Read-only feed of the AdminAction audit log + security anomalies (F-009 follow-up)
+import securityEventsRoutes from './routes/securityEventsRoutes.js';
+app.use('/api/admin/security-events', strictLimiter, securityEventsRoutes);
+
 
 app.use(notFoundHandler);
 

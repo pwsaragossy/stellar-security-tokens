@@ -100,3 +100,52 @@ export function attachAdminAuditHook(req, res) {
     logAdminAction(buildAdminActionPayload(req, res, result));
   });
 }
+
+/**
+ * List recent AdminAction rows for the SecurityEvents admin page (F-009).
+ *
+ * Reads the immutable admin_actions table with optional filters. Indexes
+ * already exist on (actorId, createdAt), (action, createdAt),
+ * (targetType, targetId, createdAt), (createdAt) — all the common filter
+ * patterns are O(log n) lookups.
+ */
+export async function listRecentActions(filters = {}) {
+  const {
+    limit = 50,
+    offset = 0,
+    actorId = null,
+    targetType = null,
+    targetId = null,
+    result = null,
+    actionPrefix = null,
+    from = null,
+    to = null,
+  } = filters;
+
+  const where = {};
+  if (Number.isInteger(actorId)) where.actorId = actorId;
+  if (targetType) where.targetType = targetType;
+  if (targetId) where.targetId = targetId;
+  if (result) where.result = result;
+  if (actionPrefix) where.action = { startsWith: actionPrefix };
+  if (from || to) {
+    where.createdAt = {};
+    if (from) where.createdAt.gte = new Date(from);
+    if (to) where.createdAt.lte = new Date(to);
+  }
+
+  const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 500);
+  const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
+
+  const [items, total] = await Promise.all([
+    prisma.adminAction.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: safeLimit,
+      skip: safeOffset,
+    }),
+    prisma.adminAction.count({ where }),
+  ]);
+
+  return { items, total };
+}

@@ -221,6 +221,7 @@ export function AdminLayout() {
         { id: 'distributor', label: 'Yield Distributor', icon: Coins, path: '/admin/distributor' },
 
         { id: 'wallets', label: 'Wallets', icon: Wallet, path: '/admin/wallets' },
+        { id: 'security-events', label: 'Security Events', icon: Shield, path: '/admin/security-events' },
 
         { id: 'fees', label: 'Fee Configuration', icon: DollarSign, path: '/admin/fees' },
         { id: 'defaults', label: 'Default Cases', icon: AlertTriangle, path: '/admin/defaults' },

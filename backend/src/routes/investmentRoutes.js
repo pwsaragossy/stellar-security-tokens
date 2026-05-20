@@ -2,6 +2,9 @@ import express from 'express';
 import { body, param } from 'express-validator';
 import { validate } from '../middleware/validator.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { intentDebounce } from '../middleware/intentDebounce.js';
+import { dailyCapCheck } from '../middleware/dailyCapCheck.js';
+import { perUserLimiter } from '../middleware/rateLimit.js';
 import { purchaseInvestment, getInvestmentStatus, getFeeSchedule, submitInvestmentTx } from '../controllers/investmentController.js';
 
 const router = express.Router();
@@ -69,10 +72,28 @@ const purchaseValidation = [
  */
 router.get('/fee-schedule', getFeeSchedule);
 
-router.post('/purchase', authenticateToken, purchaseValidation, purchaseInvestment);
+// PR5 audit hardening:
+//  - perUserLimiter (O-002): 100/min per authenticated user, prevents IP-rotating bots
+//  - intentDebounce (F-008): rejects byte-equal repeat purchase intents within 10s
+//  - dailyCapCheck (O-006): enforces Investor.dailyCapUsd if set
+// Extract amount from req.body.usdcAmount for the cap check.
+router.post(
+    '/purchase',
+    authenticateToken,
+    perUserLimiter,
+    purchaseValidation,
+    intentDebounce(),
+    dailyCapCheck({ amountExtractor: (req) => Number(req.body?.usdcAmount) || null }),
+    purchaseInvestment,
+);
 
-// Submit signed investment SAC transfer (smart wallet passkey flow)
-router.post('/submit-tx', authenticateToken, [
+// perUserLimiter on submit-tx — same rationale as purchase.
+// NOTE: intentDebounce intentionally NOT applied here. /submit-tx submits an
+// already-signed Soroban XDR which is sequence-number-bound and single-use;
+// a legitimate retry-after-network-glitch resubmits the SAME XDR (same body),
+// and a debounce would 409 the retry, breaking resilience. The Stellar
+// sequence number is the real anti-replay gate at this layer.
+router.post('/submit-tx', authenticateToken, perUserLimiter, [
   body('signedXdr').isString().notEmpty().withMessage('Signed XDR is required'),
   body('investmentContext').isObject().withMessage('investmentContext object is required'),
   body('investmentContext.investorId').isInt({ min: 1 }).withMessage('Valid investor ID is required'),
