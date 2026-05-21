@@ -1,6 +1,6 @@
 ---
 name: tokenomics-expert
-version: 3.1.0
+version: 3.3.0
 description: |
   Security token lifecycle expert. Provides ground-truth formulas, money flow
   diagrams, and invariant checks for the Radox platform's token issuance,
@@ -15,6 +15,9 @@ description: |
   Fixed stale round2 reference in dual computation example (now round7).
   v3.2 (Apr 2026): Updated maturity flow to Soroban Settlement. Removed all
   references to legacy maturity_clawback and batch_pending pipeline.
+  v3.3 (May 2026): Added v7 awareness for TokenSale (F-006: canonical USDC SAC
+  hardcoded per network via Cargo features, validated at create()). Fee mechanism
+  unchanged from v6 (additive fixed_fee model).
 ---
 
 # Tokenomics Expert — Radox Platform
@@ -139,7 +142,7 @@ EXAMPLE:
 
 ### Platform Fee — Two Separate Fee Mechanisms
 
-#### 1. Trade Fee (on-chain, additive — Soroban contract v6)
+#### 1. Trade Fee (on-chain, additive — Soroban contract v7)
 
 ```
 Charged AT TRADE TIME. Additive — investor pays investment + fee.
@@ -555,7 +558,7 @@ DEFAULT INVARIANTS:
 ### Fee Configuration Points
 
 ```
-1. TRADE FEE (on-chain — additive fixed fee, contract v6):
+1. TRADE FEE (on-chain — additive fixed fee, contract v7):
    offer.processingFee → BigInt(processingFee × 10_000_000) stroops
    Passed to Soroban create_sale() as `fixedFee` parameter.
    Default: $5 USDC (50_000_000 stroops)

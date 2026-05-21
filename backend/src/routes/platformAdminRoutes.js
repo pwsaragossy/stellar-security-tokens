@@ -469,50 +469,6 @@ router.get('/', requirePlatformAdmin, PlatformAdminController.getPlatformAdmins)
 // Rotas de configuração e logs (DEVEM vir antes de /:id)
 /**
  * @swagger
- * /api/platform-admins/system-config:
- *   get:
- *     summary: Obter configurações do sistema (Taxas)
- *     tags: [Platform Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Configurações retornadas
- *   put:
- *     summary: Atualizar configurações do sistema
- *     tags: [Platform Admin]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               settings:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     key:
- *                       type: string
- *                     value:
- *                       type: string
- *     responses:
- *       200:
- *         description: Configurações atualizadas
- */
-router.get('/system-config', authenticateToken, requirePlatformAdmin, PlatformAdminController.getSystemConfig);
-router.put('/system-config', [
-  body('settings').isArray({ min: 1 }).withMessage('Settings must be a non-empty array'),
-  body('settings.*.key').isString().notEmpty().withMessage('Each setting must have a key'),
-  body('settings.*.value').isString().withMessage('Each setting must have a string value'),
-  validate,
-], authenticateToken, requirePlatformAdmin, PlatformAdminController.updateSystemConfig);
-
-/**
- * @swagger
  * /api/platform-admins/investments/metrics:
  *   get:
  *     summary: Obter métricas gerais de investimento

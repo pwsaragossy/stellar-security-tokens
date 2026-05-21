@@ -13,12 +13,6 @@ export interface Investor {
   updatedAt: string;
 }
 
-export interface SystemConfig {
-  key: string;
-  value: string;
-  description?: string;
-}
-
 export interface FeeLog {
   id: string;
   relatedId: string;
@@ -99,17 +93,6 @@ export const platformAdminsApi = {
     explorer: string;
   }> & { message?: string }> => {
     const response = await api.post(`/platform-admins/investors/${id}/sponsor`, { amount });
-    return response.data;
-  },
-
-  // Fee Configuration
-  getSystemConfig: async (): Promise<ApiResponse<SystemConfig[]>> => {
-    const response = await api.get('/platform-admins/system-config');
-    return response.data;
-  },
-
-  updateSystemConfig: async (settings: SystemConfig[]): Promise<ApiResponse> => {
-    const response = await api.put('/platform-admins/system-config', { settings });
     return response.data;
   },
 

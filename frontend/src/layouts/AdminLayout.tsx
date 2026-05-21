@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, DollarSign, Shield, Wallet, AlertTriangle, Building2, FileText, Siren, Coins, Info, CheckCircle2, ClipboardCheck, Loader2, Box } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, Shield, Wallet, AlertTriangle, Building2, FileText, Siren, Coins, Info, CheckCircle2, ClipboardCheck, Loader2, Box } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -99,16 +99,6 @@ const PAGE_DESCRIPTIONS: Record<string, { title: string, description: string, ke
         ]
     },
 
-    '/admin/fees': {
-        title: 'Fee Configuration',
-        description: 'Manage global fee structures for platform services.',
-        keyFeatures: [
-            'Set flat fees or percentages for issuances',
-            'Configure secondary market transaction fees',
-            'Enable or disable specific fee types',
-            'Apply changes globally across the platform'
-        ]
-    },
     '/admin/defaults': {
         title: 'Default Cases',
         description: 'Manage default system behaviors and fallback parameters.',
@@ -223,7 +213,6 @@ export function AdminLayout() {
         { id: 'wallets', label: 'Wallets', icon: Wallet, path: '/admin/wallets' },
         { id: 'security-events', label: 'Security Events', icon: Shield, path: '/admin/security-events' },
 
-        { id: 'fees', label: 'Fee Configuration', icon: DollarSign, path: '/admin/fees' },
         { id: 'defaults', label: 'Default Cases', icon: AlertTriangle, path: '/admin/defaults' },
         { id: 'compliance', label: 'Token Compliance', icon: Shield, path: '/admin/compliance' },
         { id: 'emergency', label: 'Emergency Controls', icon: Siren, path: '/admin/emergency' },

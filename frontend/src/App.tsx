@@ -24,7 +24,6 @@ import { AdminLayout } from './layouts/AdminLayout';
 import { AdminLogin } from './pages/admin/Login';
 import { AdminDashboard } from './pages/admin/Dashboard';
 import { UserManagement } from './pages/admin/UserManagement';
-import { FeeConfig } from './pages/admin/FeeConfig';
 import { Wallets } from './pages/admin/Wallets';
 
 // Company imports
@@ -125,7 +124,6 @@ function App() {
 
             <Route path="wallets" element={<Wallets />} />
             <Route path="tokens" element={<TokensPage />} />
-            <Route path="fees" element={<FeeConfig />} />
             <Route path="defaults" element={<DefaultCases />} />
 
           </Route>
