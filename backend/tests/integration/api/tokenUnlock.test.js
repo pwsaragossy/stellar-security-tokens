@@ -11,7 +11,7 @@ describe('Token Unlock API Integration Tests', () => {
     let platformAdmin;
     let adminToken;
     let offer;
-    let token;
+    let _token;
 
     before(async () => {
         const appModule = await import('../../../src/app.js');
@@ -20,7 +20,7 @@ describe('Token Unlock API Integration Tests', () => {
 
         const data = await setupTestDatabase();
         offer = data.offer;
-        token = data.token;
+        _token = data.token;
 
         // Create platform admin for auth
         platformAdmin = await createTestAdmin();

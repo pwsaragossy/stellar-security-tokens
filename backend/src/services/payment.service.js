@@ -7,11 +7,8 @@ import {
   getUsdcIssuer,
 } from '../config/stellar.js';
 import { keyManager } from './KeyManager.js';
-import { TransactionManager } from './transactionManager.service.js';
 import { Asset, rpc, scValToNative, Address } from '@stellar/stellar-sdk';
-
 import logger from '../utils/logger.js';
-const log = logger.scope('PaymentService');
 
 
 
@@ -27,7 +24,7 @@ const BALANCE_SOURCE = {
  * Uses centralized getUsdcIssuer() for automatic testnet/mainnet detection
  * @returns {Promise<{issuer: string, code: string}>}
  */
-const getUSDCConfig = async () => {
+const _getUSDCConfig = async () => {
   const issuer = getUsdcIssuer();
   const code = await ConfigService.get('USDC_ASSET_CODE', 'USDC');
   return { issuer, code };
@@ -53,7 +50,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
  * @throws {Error} Último erro se todas as tentativas falharem
  * @private
  */
-const retryOperation = async (operation, maxRetries = 3, delayMs = 1000) => {
+const _retryOperation = async (operation, maxRetries = 3, delayMs = 1000) => {
   let lastError;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -121,7 +118,7 @@ export class PaymentService {
       const addressScVal = new Address(investorAddress).toScVal();
 
       // Build the balance query
-      const balanceKey = {
+      const _balanceKey = {
         type: 'LedgerKeyContractData',
         contract: sacContractId,
         key: {

@@ -1,7 +1,6 @@
 import { InvestmentMetricsService } from '../services/investmentMetrics.service.js';
 import logger from '../utils/logger.js';
 const log = logger.scope('InvestmentMetrics');
-import { requirePlatformAdmin } from '../middleware/authorize.js';
 
 /**
  * Controller para métricas de investimentos (apenas platform_admin)

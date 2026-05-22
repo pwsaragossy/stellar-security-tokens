@@ -4,7 +4,6 @@ import prisma from '../../../src/config/prisma.js';
 import { setupTestDatabase, cleanDatabase } from '../../helpers/testDatabase.js';
 import { StellarService } from '../../../src/services/stellar.service.js';
 import { MaintenanceService } from '../../../src/services/maintenance.service.js';
-import { rpc, xdr } from '@stellar/stellar-sdk';
 
 describe('TTL Maintenance Flow', () => {
     let originalGetContractTTL;
@@ -50,7 +49,7 @@ describe('TTL Maintenance Flow', () => {
             return { exists: true, ttlRemaining: 200000 }; // Above threshold
         };
 
-        StellarService.extendContractTTL = async (id, ledgers) => {
+        StellarService.extendContractTTL = async (id, _ledgers) => {
             extendCalledCount++;
             extendedIds.push(id);
             return { success: true, hash: 'mock-hash' };

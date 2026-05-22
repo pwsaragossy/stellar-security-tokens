@@ -61,7 +61,7 @@ const PERIODIC_BREAKDOWN = [
     { investorId: 2, tokenBalance: 500, interestOwed: 500, investorWallet: 'GINV2...' },
 ];
 
-const BULLET_BREAKDOWN = [
+const _BULLET_BREAKDOWN = [
     { investorId: 1, principal: 5000, interest: 1000, totalPayout: 6000, investorWallet: 'GINV1...' },
     { investorId: 2, principal: 5000, interest: 1000, totalPayout: 6000, investorWallet: 'GINV2...' },
 ];
@@ -375,7 +375,7 @@ describe('_recordPayments – DRY helper', () => {
             { investorId: 1, principal: 5000, interest: 1000, totalPayout: 6000 },
         ];
 
-        const { records, totalFee } = await CompanyPaymentService._recordPayments(
+        const { records, _totalFee } = await CompanyPaymentService._recordPayments(
             offer, breakdown, 'tx_hash_test', 2, true
         );
 
@@ -397,7 +397,7 @@ describe('_recordPayments – DRY helper', () => {
             { investorId: 1, tokenBalance: 500, interestOwed: 500 },
         ];
 
-        const { records, totalFee } = await CompanyPaymentService._recordPayments(
+        const { records, _totalFee } = await CompanyPaymentService._recordPayments(
             offer, breakdown, 'tx_hash_periodic', 2, false
         );
 

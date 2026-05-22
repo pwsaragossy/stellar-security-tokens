@@ -1,6 +1,5 @@
 import { Offer } from '../models/Offer.js';
 import { Token } from '../models/Token.js';
-import { Company } from '../models/Company.js';
 import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
 const log = logger.scope('OfferService');
@@ -35,7 +34,7 @@ export class OfferService {
    */
   static validatePaymentFields(paymentType, paymentFields) {
     const errors = [];
-    const { maturityDate, bulletPaymentAmount, paymentFrequency, annualInterestRate } = paymentFields;
+    const { maturityDate, _bulletPaymentAmount, paymentFrequency, annualInterestRate } = paymentFields;
 
     // Validar tipos de pagamento suportados
     const validPaymentTypes = ['monthly', 'bullet', 'quarterly', 'semi_annual'];

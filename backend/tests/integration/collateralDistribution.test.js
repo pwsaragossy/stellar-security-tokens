@@ -14,7 +14,6 @@
  * Run: docker exec stellar_backend sh -c 'cd /app/backend && node --import tsx ../backend/tests/integration/collateralDistribution.test.js'
  */
 
-import assert from 'node:assert/strict';
 import crypto from 'crypto';
 
 // Bootstrap env BEFORE imports

@@ -329,7 +329,7 @@ async function main() {
     // The SAC deploy requires the asset to exist on-chain
     await mintTestUSDC(testDistributor, 1);  // Creates the asset on-chain
 
-    const usdcSacResult = await StellarService.deploySACForAsset('USDC', testIssuer.publicKey());
+    const _usdcSacResult = await StellarService.deploySACForAsset('USDC', testIssuer.publicKey());
     const usdcSacId = StellarService.getSACContractId(usdcAsset);
     assert(!!usdcSacId, `USDC SAC: ${usdcSacId?.slice(0, 12)}…`);
     process.env.USDC_SAC_CONTRACT_ID = usdcSacId;

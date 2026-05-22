@@ -10,7 +10,7 @@ export class MockTransactionManager {
      * Records the submission and returns a mock multisig-pending response.
      */
     static async submit({
-        transaction,
+        transaction: _transaction,
         xdr,
         signingRole,
         operationType,

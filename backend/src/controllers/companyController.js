@@ -1,5 +1,4 @@
 import { Company } from '../models/Company.js';
-import { generateToken } from '../middleware/auth.js';
 import { StellarService } from '../services/stellar.service.js';
 import { ipfsService } from '../services/ipfs.service.js';
 import jwt from 'jsonwebtoken';
@@ -764,7 +763,7 @@ export class CompanyController {
       }
 
       // Import service dynamically
-      const { PasskeyWalletService, UserType } = await import('../services/passkeyWallet.service.js');
+      const { PasskeyWalletService, _UserType } = await import('../services/passkeyWallet.service.js');
 
       // Build the withdrawal transaction using Company's wallet
       // Note: We pass company ID but use COMPANY type (need to add this type support)

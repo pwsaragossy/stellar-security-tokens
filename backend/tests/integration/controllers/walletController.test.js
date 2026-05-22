@@ -4,7 +4,6 @@ import assert from 'node:assert';
 import request from 'supertest';
 import esmock from 'esmock';
 import prisma from '../../../src/config/prisma.js';
-import { stellarServer } from '../../../src/config/stellar.js';
 import { Keypair } from '@stellar/stellar-sdk';
 import { generateToken } from '../../../src/middleware/auth.js';
 

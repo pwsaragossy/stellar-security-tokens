@@ -6,12 +6,10 @@ import prisma from '../config/prisma.js';
 import { StellarService } from './stellar.service.js';
 import { YieldDistributorService } from './yieldDistributor.service.js';
 import { PaymentService } from './payment.service.js';
-import { EmailService } from './email.service.js';
 import { AlertService } from './alert.service.js';
 
-import { MultiSigTransactionService } from './multiSigTransaction.service.js';
-import { Keypair, Asset, Operation, TransactionBuilder, Networks, Contract, Address, nativeToScVal, xdr, rpc, BASE_FEE } from '@stellar/stellar-sdk';
-import { getUsdcIssuer, getNetworkPassphrase, getSorobanRpcUrl } from '../config/stellar.js';
+import { Asset, Operation } from '@stellar/stellar-sdk';
+import { getUsdcIssuer } from '../config/stellar.js';
 import { keyManager } from './KeyManager.js';
 import logger from '../utils/logger.js';
 
@@ -434,7 +432,7 @@ export class CompanyPaymentService {
      * @param {Object} [options] - Reserved for future use
      * @returns {Promise<Object>} Transaction XDR for signing
      */
-    static async createPaymentTransaction(offerId, companyUserId, options = {}) {
+    static async createPaymentTransaction(offerId, companyUserId, _options = {}) {
         const offer = await prisma.offer.findUnique({
             where: { id: offerId },
             include: {

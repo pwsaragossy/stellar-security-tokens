@@ -35,7 +35,6 @@
 import crypto from 'node:crypto';
 import {
   Keypair,
-  Asset,
   TransactionBuilder,
   Operation,
   BASE_FEE,

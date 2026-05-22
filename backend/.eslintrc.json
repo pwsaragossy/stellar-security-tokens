@@ -11,10 +11,18 @@
         "ecmaVersion": "latest",
         "sourceType": "module"
     },
+    "plugins": ["unused-imports"],
     "rules": {
-        "no-unused-vars": "warn",
+        "no-unused-vars": "off",
+        "unused-imports/no-unused-imports": "warn",
+        "unused-imports/no-unused-vars": ["warn", {
+            "args": "after-used",
+            "argsIgnorePattern": "^_",
+            "varsIgnorePattern": "^_",
+            "caughtErrorsIgnorePattern": "^_"
+        }],
         "no-console": "off",
-        "no-empty": "warn",
+        "no-empty": ["warn", { "allowEmptyCatch": true }],
         "no-case-declarations": "warn",
         "no-useless-catch": "warn"
     }

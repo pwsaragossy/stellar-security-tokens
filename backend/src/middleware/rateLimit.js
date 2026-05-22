@@ -72,7 +72,7 @@ function createLimiter(options) {
         standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
         legacyHeaders: true, // Also return `X-RateLimit-*` headers for compatibility
         // Skip rate limiting in test environment
-        skip: (req, res) => process.env.NODE_ENV === 'test',
+        skip: (_req, _res) => process.env.NODE_ENV === 'test',
         handler: (req, res, next, options) => {
             res.status(429).json(options.message);
         },

@@ -10,7 +10,7 @@ import path from 'path';
 describe('Real Estate Offer Flow', () => {
     let companyUser;
     let companyToken;
-    let adminToken;
+    let _adminToken;
 
     before(async () => {
         await TestDatabase.setup();
@@ -22,7 +22,7 @@ describe('Real Estate Offer Flow', () => {
 
         // Create admin
         const admin = await TestData.createPlatformAdmin();
-        adminToken = TestData.generateToken(admin.id, 'platform_admin');
+        _adminToken = TestData.generateToken(admin.id, 'platform_admin');
     });
 
     after(async () => {

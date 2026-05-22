@@ -29,7 +29,6 @@ import {
 import {
     getNetworkPassphrase,
     getSorobanRpcUrl,
-    buildTransactionWithAccount,
 } from '../config/stellar.js';
 import { StellarService } from './stellar.service.js';
 import logger from '../utils/logger.js';

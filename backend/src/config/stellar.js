@@ -1,9 +1,7 @@
 import {
   Horizon,
   Networks,
-  Keypair,
   Asset,
-  Operation,
   TransactionBuilder,
   BASE_FEE,
   Memo,

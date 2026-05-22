@@ -35,7 +35,7 @@
 import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
 import { randomUUID } from 'node:crypto';
-import EtherFuseClient, { EtherFuseApiError } from './etherfuse.service.js';
+import EtherFuseClient from './etherfuse.service.js';
 import { NotificationService } from './notification.service.js';
 
 const log = logger.scope('RampOrderService');

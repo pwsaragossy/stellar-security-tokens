@@ -1,7 +1,7 @@
 import express from 'express';
-import { body, param, query } from 'express-validator';
+import { body } from 'express-validator';
 import { validate } from '../middleware/validator.js';
-import { requireCompanyUser, requirePlatformAdmin, requireOfferAccess, requireRole } from '../middleware/authorize.js';
+import { requireCompanyUser, requirePlatformAdmin } from '../middleware/authorize.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { OfferController } from '../controllers/offerController.js';
 

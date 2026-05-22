@@ -1,6 +1,6 @@
 import { ChannelsClient } from '@openzeppelin/relayer-plugin-channels';
 import { Client as SmartAccountClient } from 'smart-account-kit-bindings';
-import { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl, isTestnet, getTreasuryKeypair, getUsdcIssuer } from '../config/stellar.js';
+import { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl, isTestnet, getUsdcIssuer } from '../config/stellar.js';
 import prisma from '../config/prisma.js';
 import {
   Contract,
@@ -12,11 +12,8 @@ import {
   Address,
   Account,
   Asset,
-  Keypair,
   Memo,
   Operation,
-  Transaction,
-  FeeBumpTransaction,
   nativeToScVal,
   rpc,
   StrKey as StellarStrKey,
@@ -1053,7 +1050,7 @@ export class PasskeyWalletService {
 
     const asset = this.resolveClassicAsset(assetCode);
     const networkPassphrase = getNetworkPassphrase();
-    const opsKeypair = getOperationsKeypair();
+    const _opsKeypair = getOperationsKeypair();
     const server = this.getRpcServer();
 
     // Classic payments use a decimal-string amount with up to 7 fractional

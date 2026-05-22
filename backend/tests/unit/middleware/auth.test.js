@@ -2,7 +2,7 @@ import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import jwt from 'jsonwebtoken';
 import { authenticateToken, generateToken, optionalAuth } from '../../../src/middleware/auth.js';
-import { createMockRequest, createMockResponse, createMockNext, createMockJWT } from '../../helpers/testUtils.js';
+import { createMockRequest, createMockResponse, createMockNext } from '../../helpers/testUtils.js';
 
 describe('Auth Middleware', () => {
   const JWT_SECRET = process.env.JWT_SECRET || 'test_jwt_secret_key_for_testing_only';

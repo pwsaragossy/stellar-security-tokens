@@ -1,5 +1,4 @@
-import { test, describe } from 'node:test';
-import assert from 'node:assert';
+import { describe } from 'node:test';
 
 describe('Investors API Integration Tests', () => {
 

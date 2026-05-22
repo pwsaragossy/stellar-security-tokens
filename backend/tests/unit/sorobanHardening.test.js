@@ -1,4 +1,4 @@
-import { describe, it, before, after, mock } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 /**
@@ -37,7 +37,7 @@ describe('Rate Limiter (submitInvestmentTx)', () => {
         const rateLimiter = new Map();
         const investorKey = 'submit_tx:42';
         const windowMs = 60_000;
-        const maxAttempts = 3;
+        const _maxAttempts = 3;
         const past = Date.now() - windowMs - 1000; // 61s ago
 
         // Fill with old timestamps

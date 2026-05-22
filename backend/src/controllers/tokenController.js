@@ -1,10 +1,8 @@
 import { Token } from '../models/Token.js';
-import { Investor } from '../models/Investor.js';
 import { StellarService } from '../services/stellar.service.js';
 import { keyManager } from '../services/KeyManager.js';
 import { MultiSigTransactionService } from '../services/multiSigTransaction.service.js';
 import { buildUnsignedTransaction } from '../config/stellar.js';
-import { Operation } from '@stellar/stellar-sdk';
 import logger from '../utils/logger.js';
 const log = logger.scope('TokenController');
 

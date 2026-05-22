@@ -1,5 +1,5 @@
 import express from 'express';
-import { body, param } from 'express-validator';
+import { body } from 'express-validator';
 import { validate } from '../middleware/validator.js';
 import { authenticateToken, generateToken, generateRefreshToken, setRefreshCookie } from '../middleware/auth.js';
 import { requirePlatformAdmin, requireAdminRole } from '../middleware/authorize.js';
@@ -83,7 +83,6 @@ router.post('/freighter/challenge', async (req, res) => {
       .build();
 
     const challengeXdr = tx.toXDR();
-    const txHash = tx.hash();
 
     // Store challenge data in Redis (txHash as hex for JSON serialization)
     const challengeRedisKey = `freighter:${publicKey}`;
@@ -1512,8 +1511,8 @@ router.put('/investors/:id/reject', authenticateToken, requirePlatformAdmin, Pla
 
 // ============ Wallet Sponsorship Routes ============
 
-import { getTreasuryKeypair, getNetworkPassphrase, stellarServer } from '../config/stellar.js';
-import { TransactionBuilder, BASE_FEE, Operation, Asset, Keypair } from '@stellar/stellar-sdk';
+import { getTreasuryKeypair, getNetworkPassphrase } from '../config/stellar.js';
+import { TransactionBuilder } from '@stellar/stellar-sdk';
 
 /**
  * @swagger
@@ -1945,7 +1944,7 @@ router.get('/soroban/dashboard', authenticateToken, requirePlatformAdmin, async 
     for (const offer of offers) {
       let onChain = { status: 'unknown', error: null };
       try {
-        const [version, saleOffer, isFrozen] = await Promise.allSettled([
+        const [version, saleOffer, _isFrozen] = await Promise.allSettled([
           SorobanSaleService.getVersion(offer.sorobanContractId),
           SorobanSaleService.getOffer(offer.sorobanContractId),
           SorobanSaleService.isFrozen(offer.sorobanContractId, 'DUMMY'), // will fail but tells us contract exists

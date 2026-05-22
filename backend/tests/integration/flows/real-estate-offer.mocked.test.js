@@ -17,7 +17,7 @@ import { MockStellarService } from '../../mocks/StellarService.mock.js';
 describe('Real Estate Offer Flow (Mocked)', () => {
     let companyUser;
     let companyToken;
-    let adminToken;
+    let _adminToken;
     let app;
 
     before(async () => {
@@ -38,7 +38,7 @@ describe('Real Estate Offer Flow (Mocked)', () => {
 
         // Create admin
         const admin = await TestData.createPlatformAdmin();
-        adminToken = TestData.generateToken(admin.id, 'platform_admin');
+        _adminToken = TestData.generateToken(admin.id, 'platform_admin');
     });
 
     after(async () => {

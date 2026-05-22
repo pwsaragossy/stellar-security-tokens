@@ -17,7 +17,7 @@ let request;
 
 describe('Payments API Integration Tests (Mocked)', () => {
     let investor;
-    let token;
+    let _token;
     let authToken;
 
     before(async () => {
@@ -31,7 +31,7 @@ describe('Payments API Integration Tests (Mocked)', () => {
 
         const data = await setupTestDatabase();
         investor = data.investor;
-        token = data.token;
+        _token = data.token;
         authToken = getInvestorToken(investor);
     });
 

@@ -1,4 +1,4 @@
-import { test, describe, beforeEach, mock } from 'node:test';
+import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import crypto from 'crypto';
 
@@ -60,7 +60,7 @@ const mockStellarService = {
 describe('DepositRelayService', () => {
 
     // We dynamically import with mocked dependencies
-    let DepositRelayService;
+    let _DepositRelayService;
 
     beforeEach(async () => {
         // Reset state
@@ -85,7 +85,7 @@ describe('DepositRelayService', () => {
         // Import the real module — it will use real prisma import,
         // but we test by providing mock data through the test structure.
         // For a pure unit test, we re-implement the core logic assertions.
-        DepositRelayService = (await import('../../../src/services/depositRelay.service.js')).DepositRelayService;
+        _DepositRelayService = (await import('../../../src/services/depositRelay.service.js'))._DepositRelayService;
     });
 
     // ── initiateDeposit ─────────────────────────────────────────
@@ -312,7 +312,7 @@ async function mockHandleIncomingPayment(memoText, amount, txHash, assetCode = '
     await mockForwardAsset(deposit.id, assetCode);
 }
 
-async function mockForwardAsset(depositId, assetCode = 'USDC') {
+async function mockForwardAsset(depositId, _assetCode = 'USDC') {
     const deposit = await mockPrisma.deposit.findUnique({ where: { id: depositId }, include: { investor: true } });
     if (!deposit || deposit.status !== 'received') return;
 

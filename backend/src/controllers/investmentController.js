@@ -1,7 +1,6 @@
 import { Investor } from '../models/Investor.js';
 import { Token } from '../models/Token.js';
 import { Investment } from '../models/Investment.js';
-import { StellarService } from '../services/stellar.service.js';
 import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
 import { SorobanSaleService } from '../services/sorobanSale.service.js';
 import { ConfigService } from '../services/config.service.js';
@@ -47,7 +46,7 @@ function verifyInvestmentContext(ctx) {
 }
 
 
-const USDC_PAYMENT_WINDOW_MINUTES = parseInt(process.env.USDC_PAYMENT_WINDOW_MINUTES || '2', 10);
+const _USDC_PAYMENT_WINDOW_MINUTES = parseInt(process.env.USDC_PAYMENT_WINDOW_MINUTES || '2', 10);
 
 /**
  * Gera memo único para transação Stellar
@@ -56,7 +55,7 @@ const USDC_PAYMENT_WINDOW_MINUTES = parseInt(process.env.USDC_PAYMENT_WINDOW_MIN
  * @param {string} assetCode - Código do asset
  * @returns {string} Memo único (máximo 28 caracteres)
  */
-function generateInvestmentMemo(investmentId, investorId, assetCode) {
+function _generateInvestmentMemo(investmentId, investorId, assetCode) {
   // Formato: INV-{investmentId}-{hash}
   // Limita a 28 caracteres (limite do Stellar)
   const hash = crypto.createHash('sha256')
@@ -414,7 +413,7 @@ export const getFeeSchedule = async (req, res, next) => {
  * tokenDistribution records AFTER on-chain confirmation.
  * No DB record exists until the transaction is confirmed by Horizon.
  */
-export const submitInvestmentTx = async (req, res, next) => {
+export const submitInvestmentTx = async (req, res, _next) => {
   try {
     const { signedXdr, investmentContext } = req.body;
 
@@ -425,7 +424,7 @@ export const submitInvestmentTx = async (req, res, next) => {
       });
     }
 
-    const { investorId, offerId, usdcAmount, totalDeduction, tokenAmount, assetCode } = investmentContext;
+    const { investorId, offerId, usdcAmount, totalDeduction, _tokenAmount, assetCode } = investmentContext;
     if (!investorId || !offerId || !assetCode || !totalDeduction) {
       return res.status(400).json({
         success: false,
@@ -544,12 +543,12 @@ export const submitInvestmentTx = async (req, res, next) => {
     // Auth entry signatures use ENVELOPE_TYPE_SOROBAN_AUTHORIZATION preimage
     // (independent of TX body hash), so re-simulation + assemble won't
     // invalidate them.
-    const { TransactionBuilder, xdr: stellarXdr, Operation, BASE_FEE } = await import('@stellar/stellar-sdk');
+    const { TransactionBuilder, xdr: _stellarXdr, Operation, BASE_FEE } = await import('@stellar/stellar-sdk');
     const rpc = await import('@stellar/stellar-sdk/rpc');
     const { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl } = await import('../config/stellar.js');
 
     const networkPassphrase = getNetworkPassphrase();
-    const opsKeypair = getOperationsKeypair();
+    const _opsKeypair = getOperationsKeypair();
     const rpcServer = new rpc.Server(getSorobanRpcUrl());
 
     // Parse the signed TX from frontend to extract the operation + signed auth entries

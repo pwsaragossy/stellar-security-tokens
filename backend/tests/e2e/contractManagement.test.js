@@ -15,8 +15,7 @@
  */
 
 import {
-  Keypair, Asset, Operation, TransactionBuilder, BASE_FEE, Networks,
-  Contract, Address, nativeToScVal, rpc,
+  Keypair, Asset, Operation, TransactionBuilder, BASE_FEE, Networks, rpc,
 } from '@stellar/stellar-sdk';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -812,7 +811,7 @@ async function main() {
       try {
         const expertRes = await fetch(expertUrl, { signal: AbortSignal.timeout(10000) });
         if (expertRes.ok) {
-          const expertData = await expertRes.json();
+          const _expertData = await expertRes.json();
           assert(true, `Stellar Expert: asset ${ASSET_CODE} indexed (attempt ${attempt})`);
           expertChecked = true;
           break;

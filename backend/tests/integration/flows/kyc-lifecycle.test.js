@@ -14,7 +14,7 @@ describe('KYC Lifecycle Flow', () => {
         const appModule = await esmock('../../../src/app.js', {
             '../../../src/services/passkeyWallet.service.js': {
                 PasskeyWalletService: {
-                    deploySmartWallet: async (credId, pubKey) => ({
+                    deploySmartWallet: async (_credId, _pubKey) => ({
                         success: true,
                         contractId: 'C' + 'MOCK_CONTRACT_ID_KYC_' + Date.now().toString().padEnd(30, '0').substring(0, 30),
                         transactionHash: 'mock_tx_hash_kyc',

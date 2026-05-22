@@ -10,7 +10,7 @@ let request;
 
 describe('Payments API Integration Tests', () => {
   let investor;
-  let token;
+  let _token;
   let authToken;
 
   before(async () => {
@@ -20,7 +20,7 @@ describe('Payments API Integration Tests', () => {
 
     const data = await setupTestDatabase();
     investor = data.investor;
-    token = data.token;
+    _token = data.token;
     authToken = getInvestorToken(investor);
   });
 

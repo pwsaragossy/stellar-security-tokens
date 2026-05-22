@@ -58,7 +58,7 @@ const DISTRIBUTE_ERRORS = {
 };
 
 /** Convert USDC amount (float) to stroops (i128 ScVal) */
-const usdcToStroops = (amount) =>
+const _usdcToStroops = (amount) =>
     nativeToScVal(BigInt(Math.round(amount * 10_000_000)), { type: 'i128' });
 
 /** Round to Stellar USDC precision (7 decimal places) */

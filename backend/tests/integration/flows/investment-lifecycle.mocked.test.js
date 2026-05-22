@@ -4,26 +4,24 @@
  */
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
-import esmock from 'esmock';
 import prisma from '../../../src/config/prisma.js';
 import { setupTestDatabase, cleanDatabase } from '../../helpers/testDatabase.js';
 import { createTestAdmin } from '../../helpers/authHelper.js';
 
 // Import Mocks
-import { MockStellarService } from '../../mocks/StellarService.mock.js';
 
 describe('Investment Lifecycle Flow (Mocked)', () => {
     let investor;
     let token;
     let offer;
-    let paymentMonitor;
+    let _paymentMonitor;
     let mockStreamCallback;
 
     before(async () => {
         await setupTestDatabase();
 
         // Setup initial data
-        const admin = await createTestAdmin();
+        const _admin = await createTestAdmin();
 
         // Create Investor (must be approved) with passkey fields
         investor = await prisma.investor.create({

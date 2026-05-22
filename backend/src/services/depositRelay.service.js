@@ -1,6 +1,5 @@
 import prisma from '../config/prisma.js';
 import { StellarService } from './stellar.service.js';
-import { Asset, Operation, TransactionBuilder, Networks, Keypair } from '@stellar/stellar-sdk';
 import logger from '../utils/logger.js';
 import crypto from 'crypto';
 

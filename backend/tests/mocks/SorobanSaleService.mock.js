@@ -1,12 +1,15 @@
 /**
  * Mock SorobanSaleService for CI-safe integration tests.
  * Returns realistic response shapes without touching Soroban RPC.
+ *
+ * Params are prefixed with `_` to indicate they're kept for signature
+ * compatibility with the real service but unused in the mock body.
  */
 export class MockSorobanSaleService {
 
     // ─── Read-Only Queries ──────────────────────────────
 
-    static async getOffer(contractId) {
+    static async getOffer(_contractId) {
         return {
             admin: 'GADMIN1234567890123456789012345678901234567890123456789012',
             seller: 'GSELLER123456789012345678901234567890123456789012345678901',
@@ -21,75 +24,75 @@ export class MockSorobanSaleService {
         };
     }
 
-    static async getBalance(contractId) {
+    static async getBalance(_contractId) {
         return 50000000000n; // 5000 tokens in stroops
     }
 
-    static async getBuyerSpent(contractId, buyerAddress) {
+    static async getBuyerSpent(_contractId, _buyerAddress) {
         return 10000000n; // 1 USDC in stroops
     }
 
-    static async isFrozen(contractId, buyerAddress) {
+    static async isFrozen(_contractId, _buyerAddress) {
         return false;
     }
 
-    static async getVersion(contractId) {
+    static async getVersion(_contractId) {
         return 3;
     }
 
-    static async contractExistsOnChain(contractId) {
+    static async contractExistsOnChain(_contractId) {
         return true;
     }
 
     // ─── XDR Builders (admin ops) ───────────────────────
 
-    static async buildSetActiveXdr(contractId, active) {
+    static async buildSetActiveXdr(_contractId, _active) {
         return { xdr: 'AAAAAgAAAABbYXNlNjRfbW9ja19zZXRfYWN0aXZlX3hkcg==' };
     }
 
-    static async buildFreezeBuyerXdr(contractId, buyerAddress, frozen) {
+    static async buildFreezeBuyerXdr(_contractId, _buyerAddress, _frozen) {
         return { xdr: 'AAAAAgAAAABiYXNlNjRfbW9ja19mcmVlemVfYnV5ZXJfeGRy' };
     }
 
-    static async buildWithdrawXdr(contractId, tokenAddress, amount) {
+    static async buildWithdrawXdr(_contractId, _tokenAddress, _amount) {
         return { xdr: 'AAAAAgAAAABiYXNlNjRfbW9ja193aXRoZHJhd194ZHI=====' };
     }
 
-    static async buildEmergencyDrainXdr(contractId) {
+    static async buildEmergencyDrainXdr(_contractId) {
         return { xdr: 'AAAAAgAAAABiYXNlNjRfbW9ja19kcmFpbl94ZHI========' };
     }
 
-    static async buildUpdatePriceXdr(contractId, sellPrice, buyPrice) {
+    static async buildUpdatePriceXdr(_contractId, _sellPrice, _buyPrice) {
         return { xdr: 'AAAAAgAAAABiYXNlNjRfbW9ja191cGRhdGVfcHJpY2U====' };
     }
 
-    static async buildProposeAdminXdr(contractId, newAdmin) {
+    static async buildProposeAdminXdr(_contractId, _newAdmin) {
         return { xdr: 'AAAAAgAAAABiYXNlNjRfbW9ja19wcm9wb3NlX2FkbWlu==' };
     }
 
-    static async buildAcceptAdminXdr(contractId) {
+    static async buildAcceptAdminXdr(_contractId) {
         return { xdr: 'AAAAAgAAAABiYXNlNjRfbW9ja19hY2NlcHRfYWRtaW4===' };
     }
 
-    static async buildUpgradeXdr(contractId, newWasmHash) {
+    static async buildUpgradeXdr(_contractId, _newWasmHash) {
         return { xdr: 'AAAAAgAAAABiYXNlNjRfbW9ja191cGdyYWRlX3hkcg====' };
     }
 
-    static async buildSacAuthorizeXdr(sacContractId, targetAddress, authorize) {
+    static async buildSacAuthorizeXdr(_sacContractId, _targetAddress, _authorize) {
         return { xdr: 'AAAAAgAAAABiYXNlNjRfbW9ja19zYWNfYXV0aG9yaXpl==' };
     }
 
-    static async buildSacTransferXdr(sacContractId, from, to, amount) {
+    static async buildSacTransferXdr(_sacContractId, _from, _to, _amount) {
         return { xdr: 'AAAAAgAAAABiYXNlNjRfbW9ja19zYWNfdHJhbnNmZXI===' };
     }
 
     // ─── Deploy / Create (used during offer activation) ─
 
-    static async buildDeployXdr(issuerPublicKey, wasmHash, salt) {
+    static async buildDeployXdr(_issuerPublicKey, _wasmHash, _salt) {
         return { xdr: 'mock_deploy_xdr', contractId: 'CMOCKCONTRACT1234567890123456789012345678901234567890123' };
     }
 
-    static async buildCreateSaleXdr(contractId, issuerPublicKey, params) {
+    static async buildCreateSaleXdr(_contractId, _issuerPublicKey, params) {
         // Validate required params to catch missing fields in tests
         if (params.company === undefined) {
             throw new Error('[MockSorobanSaleService] Missing required param: company');
@@ -100,7 +103,7 @@ export class MockSorobanSaleService {
         return { xdr: 'mock_create_sale_xdr' };
     }
 
-    static async buildTradeXdr(contractId, buyerAddress, usdcAmount) {
+    static async buildTradeXdr(_contractId, _buyerAddress, _usdcAmount) {
         return { xdr: 'mock_trade_xdr' };
     }
 }

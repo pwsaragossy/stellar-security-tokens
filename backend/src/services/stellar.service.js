@@ -13,14 +13,12 @@ import { keyManager } from './KeyManager.js';
 import { TransactionManager } from './transactionManager.service.js';
 import {
   Operation,
-  Keypair,
   Asset,
   AuthRequiredFlag,
   AuthRevocableFlag,
   AuthClawbackEnabledFlag,
   TransactionBuilder,
   Transaction,
-  FeeBumpTransaction,
   BASE_FEE,
   xdr,
   StrKey,
@@ -28,9 +26,7 @@ import {
   Address,
   Contract,
   rpc,
-  scValToNative,
   nativeToScVal,
-  Account, // Imported Account class
 } from '@stellar/stellar-sdk';
 import logger from '../utils/logger.js';
 const log = logger.scope('StellarService');
@@ -238,7 +234,7 @@ export class StellarService {
 
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      const account = await stellarServer.loadAccount(issuerPublicKey);
+      const _account = await stellarServer.loadAccount(issuerPublicKey);
 
       const homeDomain = process.env.STELLAR_HOME_DOMAIN;
       const operations = [
@@ -1912,7 +1908,7 @@ export class StellarService {
    */
   static async prepareSorobanTransaction(transaction) {
     try {
-      const rpcServer = new rpc.Server(getSorobanRpcUrl());
+      const _rpcServer = new rpc.Server(getSorobanRpcUrl());
 
       // 1. Simulate
       const simulation = await this.simulateSorobanTransaction(transaction);
@@ -1935,7 +1931,7 @@ export class StellarService {
       // 3. Set a safer fee based on simulation
       // We add a small margin to the suggested fee to ensure execution
       const suggestedFee = parseInt(preparedTx.fee);
-      const safeFee = Math.ceil(suggestedFee * 1.15).toString();
+      const _safeFee = Math.ceil(suggestedFee * 1.15).toString();
 
       // Re-build with the safe fee if it's a standard Transaction
       // Note: FeeBumpTransaction fees are handled differently

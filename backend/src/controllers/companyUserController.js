@@ -106,7 +106,7 @@ export class CompanyUserController {
         role = 'user',
         // New fields for single-step registration
         credentialId,
-        publicKey,
+        _publicKey,
         contractId
       } = req.body;
 

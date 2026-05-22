@@ -7,7 +7,7 @@ import { StellarService } from './stellar.service.js';
 import { PaymentService } from './payment.service.js';
 import { NotificationService } from './notification.service.js';
 import { EmailService } from './email.service.js';
-import { Asset, Operation, Keypair } from '@stellar/stellar-sdk';
+import { Asset, Operation } from '@stellar/stellar-sdk';
 import { getIssuerKeypair, getDistributorKeypair } from '../config/stellar.js';
 import logger from '../utils/logger.js';
 const log = logger.scope('CollateralDist');
@@ -194,7 +194,7 @@ export class CollateralDistributionService {
             throw new Error('No token associated with this offer');
         }
 
-        const token = offer.tokens[0];
+        const _token = offer.tokens[0];
         const issuerPublicKey = getIssuerKeypair().publicKey();
         const distributorPublicKey = getDistributorKeypair().publicKey();
 

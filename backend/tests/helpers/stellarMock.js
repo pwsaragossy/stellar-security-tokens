@@ -43,8 +43,8 @@ export const createStellarMock = () => {
   // Mock para streaming de pagamentos
   const mockPayments = () => {
     return {
-      forAccount: (accountId) => ({
-        cursor: (cursor) => ({
+      forAccount: (_accountId) => ({
+        cursor: (_cursor) => ({
           stream: (options) => {
             // Armazena o callback onmessage para ser chamado manualmente nos testes
             global.mockStreamCallback = options.onmessage;
@@ -114,7 +114,7 @@ export const createTransactionBuilderMock = () => {
     build() {
       return {
         operations: this.operations,
-        sign: (keypair) => {
+        sign: (_keypair) => {
           this.signed = true;
         },
       };

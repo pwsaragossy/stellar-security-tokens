@@ -2,7 +2,7 @@
  * Mocked version of KYC Lifecycle Flow test
  * Uses mocked PasskeyWalletService for CI stability
  */
-import { test, describe, before, after, mock } from 'node:test';
+import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import supertest from 'supertest';
 import esmock from 'esmock';
@@ -11,7 +11,7 @@ import { setupTestDatabase, teardownTestDatabase } from '../../helpers/testDatab
 // Mock PasskeyWalletService
 const MockPasskeyWalletService = {
     getServer: () => ({
-        createWallet: async (credId, pubKey) => ({
+        createWallet: async (_credId, _pubKey) => ({
             contractId: 'C' + 'MOCK_CONTRACT_ID_KYC_MOCKED_' + Date.now().toString().padEnd(25, '0').substring(0, 25)
         })
     })

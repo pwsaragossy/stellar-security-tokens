@@ -1,5 +1,4 @@
 import prisma from '../config/prisma.js';
-import { Investment } from '../models/Investment.js';
 
 /**
  * Serviço para métricas e estatísticas de investimentos

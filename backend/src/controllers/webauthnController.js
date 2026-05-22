@@ -28,22 +28,22 @@ export class WebAuthnController {
       }
 
       let user;
-      let userModel;
+      let _userModel;
 
       // Buscar usuário por email ou ID
       if (userId) {
         switch (userType) {
           case 'investor':
             user = await Investor.findById(parseInt(userId));
-            userModel = Investor;
+            _userModel = Investor;
             break;
           case 'company_user':
             user = await CompanyUser.findById(parseInt(userId));
-            userModel = CompanyUser;
+            _userModel = CompanyUser;
             break;
           case 'platform_admin':
             user = await PlatformAdmin.findById(parseInt(userId));
-            userModel = PlatformAdmin;
+            _userModel = PlatformAdmin;
             break;
           default:
             return res.status(400).json({
@@ -55,15 +55,15 @@ export class WebAuthnController {
         switch (userType) {
           case 'investor':
             user = await Investor.findByEmail(email);
-            userModel = Investor;
+            _userModel = Investor;
             break;
           case 'company_user':
             user = await CompanyUser.findByEmail(email);
-            userModel = CompanyUser;
+            _userModel = CompanyUser;
             break;
           case 'platform_admin':
             user = await PlatformAdmin.findByEmail(email);
-            userModel = PlatformAdmin;
+            _userModel = PlatformAdmin;
             break;
           default:
             return res.status(400).json({

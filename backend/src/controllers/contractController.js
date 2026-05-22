@@ -10,7 +10,7 @@ import { StellarService } from '../services/stellar.service.js';
 import { TransactionManager } from '../services/transactionManager.service.js';
 import logger from '../utils/logger.js';
 
-const log = logger.scope('ContractCtrl');
+const _log = logger.scope('ContractCtrl');
 
 // ─── Helpers ───
 

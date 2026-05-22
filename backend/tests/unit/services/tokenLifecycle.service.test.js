@@ -1,9 +1,9 @@
-import { test, describe, mock } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
 // Dynamic imports to handle Stellar SDK initialization
 let PaymentService;
-let BALANCE_SOURCE;
+let _BALANCE_SOURCE;
 
 describe('Token Lifecycle Feature', () => {
 

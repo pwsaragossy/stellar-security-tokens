@@ -1,7 +1,6 @@
-import { test, describe, beforeEach } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { body, validationResult } from 'express-validator';
-import { validate } from '../../../src/middleware/validator.js';
+import { validationResult } from 'express-validator';
 import { createMockRequest, createMockResponse, createMockNext } from '../../helpers/testUtils.js';
 
 describe('Validator Middleware', () => {
@@ -20,7 +19,7 @@ describe('Validator Middleware', () => {
     };
     
     // Substituir validationResult temporariamente
-    const originalValidationResult = validationResult;
+    const _originalValidationResult = validationResult;
     const validateMiddleware = (req, res, next) => {
       const errors = mockValidationResult;
       if (!errors.isEmpty()) {
@@ -66,10 +65,10 @@ describe('Validator Middleware', () => {
 
     // Substituir temporariamente validationResult
     const originalModule = await import('express-validator');
-    const originalValidationResult = originalModule.validationResult;
+    const _originalValidationResult = originalModule.validationResult;
     
     // Criar novo módulo mockado
-    const mockedModule = {
+    const _mockedModule = {
       ...originalModule,
       validationResult: mockValidationResult,
     };

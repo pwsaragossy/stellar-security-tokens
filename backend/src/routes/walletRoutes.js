@@ -43,7 +43,7 @@ router.post('/submit-tx',
     strictLimiter,
     body('xdr').isString().notEmpty().withMessage('xdr is required'),
     validate,
-    async (req, res, next) => {
+    async (req, res, _next) => {
         const { xdr } = req.body;
         log.info('[WalletRoutes] Submitting transaction from frontend (XDR length:', xdr.length, ')');
 

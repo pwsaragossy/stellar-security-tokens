@@ -14,7 +14,6 @@
 import { rpc, scValToNative, xdr } from '@stellar/stellar-sdk';
 import { getSorobanRpcUrl } from '../config/stellar.js';
 import prisma from '../config/prisma.js';
-import cron from 'node-cron';
 import logger from '../utils/logger.js';
 
 const log = logger.scope('SorobanEventIndexer');

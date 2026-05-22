@@ -1,7 +1,6 @@
 import {
     stellarServer,
     createFreshServer,
-    buildTransaction,
     createAsset,
     getUsdcIssuer,
 } from '../config/stellar.js';
@@ -24,7 +23,7 @@ function getWalletPublicKey(walletName) {
  * Post-execution hook: runs after a multisig TX is submitted to Stellar.
  * Handles SAC→Distribution chaining and investment completion.
  */
-async function runPostExecutionHook(proposal, stellarResult) {
+async function runPostExecutionHook(proposal, _stellarResult) {
     const { operationType, metadata, txHash } = proposal;
     const meta = metadata || {};
 
@@ -287,7 +286,7 @@ export const WalletController = {
                             clearFlags: 4, // AuthClawbackEnabledFlag = 4
                         });
                         break;
-                    default:
+                    default: {
                         // Default to payment if no operationType is specified (backwards compatibility)
                         let paymentAsset;
                         if (!assetCode || assetCode === 'XLM') {
@@ -303,6 +302,8 @@ export const WalletController = {
                             asset: paymentAsset,
                             amount: amount.toString(),
                         });
+                        break;
+                    }
                 }
 
                 let txBuilder = new TransactionBuilder(sourceAccount, {

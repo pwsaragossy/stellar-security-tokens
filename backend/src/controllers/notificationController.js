@@ -1,4 +1,3 @@
-import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
 import { NotificationService } from '../services/notification.service.js';
 

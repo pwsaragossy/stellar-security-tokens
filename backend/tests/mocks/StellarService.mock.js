@@ -1,6 +1,9 @@
 /**
  * Mock da StellarService para testes de integração
  * Evita chamadas reais à rede Stellar durante CI/CD
+ *
+ * Params com prefix `_` são mantidos por compatibilidade de assinatura
+ * com o serviço real, mas não são usados no corpo do mock.
  */
 export class MockStellarService {
     static async createIssuerAccount() {
@@ -31,7 +34,7 @@ export class MockStellarService {
         };
     }
 
-    static async distributeTokens(investorPublicKey, amount, assetCode, options = {}) {
+    static async distributeTokens(investorPublicKey, amount, assetCode, _options = {}) {
         return {
             success: true,
             assetCode,
@@ -93,7 +96,7 @@ export class MockStellarService {
         };
     }
 
-    static async verifyUSDCPayment(investorPublicKey, expectedAmount, treasuryPublicKey = null, windowMinutes = 2) {
+    static async verifyUSDCPayment(investorPublicKey, expectedAmount, _treasuryPublicKey = null, _windowMinutes = 2) {
         return {
             transactionHash: 'mock_usdc_payment_hash',
             amount: expectedAmount.toString(),
@@ -133,11 +136,11 @@ export class MockStellarService {
         };
     }
 
-    static buildDisableClawbackOp(investorPublicKey, assetCode) {
+    static buildDisableClawbackOp(_investorPublicKey, _assetCode) {
         return {}; // Returns an Operation object placeholder
     }
 
-    static async listAssetHolders(assetCode) {
+    static async listAssetHolders(_assetCode) {
         return [
             {
                 publicKey: 'GHOLDER1234567890123456789012345678901234567890123456789012',
@@ -148,13 +151,13 @@ export class MockStellarService {
         ];
     }
 
-    static async listAccountAssets(publicKey) {
+    static async listAccountAssets(_publicKey) {
         return [
             { assetCode: 'TEST01', assetIssuer: 'GBISSUERMOCK123456789012345678901234567890123456789012', balance: '1000.0000000' },
         ];
     }
 
-    static async simulateSorobanTransaction(transaction) {
+    static async simulateSorobanTransaction(_transaction) {
         return { success: true, results: [] };
     }
 

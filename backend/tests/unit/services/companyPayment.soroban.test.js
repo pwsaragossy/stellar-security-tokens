@@ -101,7 +101,7 @@ mock.module('../../../src/config/prisma.js', {
         },
         yieldPaymentJob: {
             create: async (args) => { return { id: 'job-uuid-1', ...args.data }; },
-            update: async (args) => { return {}; },
+            update: async (_args) => { return {}; },
             findUnique: async () => null,
         },
         multiSigTransaction: {
@@ -515,7 +515,7 @@ describe('YieldDistributor — Financial Invariants', () => {
         const totalInvestors = 45;
         const perInvestorInterest = 10;
         const spreadRatio = 0.2;
-        const batchSize = 30;
+        const _batchSize = 30;
 
         const totalFee = round7(totalInvestors * perInvestorInterest * spreadRatio);
 
@@ -896,7 +896,7 @@ describe('YieldDistributor — Prepare Phase Guards', () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe('YieldDistributor — Investor Filtering', () => {
-    const round7 = (v) => Math.round(v * 10_000_000) / 10_000_000;
+    const _round7 = (v) => Math.round(v * 10_000_000) / 10_000_000;
 
     test('investors with null wallet are excluded from batches', () => {
         const breakdown = [
@@ -1113,14 +1113,14 @@ describe('YieldDistributor — Multi-Batch Response Shape', () => {
         ];
 
         // Multi-batch adds:
-        const multiBatchFields = [
+        const _multiBatchFields = [
             'batchXDRs',        // string[] (1 per batch)
             'batchCount',       // number
             'jobId',            // string (Redis job ID)
         ];
 
         // Backward compat: single batch also has transactionXDR
-        const backwardCompatFields = [
+        const _backwardCompatFields = [
             'transactionXDR',   // string (first/only XDR — for 1-batch case)
         ];
 
@@ -1192,7 +1192,7 @@ describe('YieldDistributor — Submit Retry Behavior', () => {
     test('tx_already_applied during retry → mark as success, stop retrying', () => {
         // Scenario: timeout on first submit → retry → get tx_already_applied
         // Means: first submit actually DID succeed, we just didn't get confirmation
-        const firstAttempt = { error: 'timeout', retryable: true };
+        const _firstAttempt = { error: 'timeout', retryable: true };
         const secondAttempt = { error: 'tx_already_applied', retryable: false, success: true };
 
         assert.strictEqual(secondAttempt.success, true,

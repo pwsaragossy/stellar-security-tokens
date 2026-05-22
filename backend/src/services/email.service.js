@@ -393,7 +393,7 @@ export class EmailService {
    */
   static async sendBulletPaymentConfirmation(email, data) {
     try {
-      const { investorName, paymentDate, transactionHash, totalAmount, payments } = data;
+      const { investorName, paymentDate, transactionHash, totalAmount, _payments } = data;
 
       return await sendEmail({
         to: email,

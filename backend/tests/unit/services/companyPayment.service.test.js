@@ -2,11 +2,11 @@
  * CompanyPaymentService Unit Tests
  * Tests for company-to-investor payment calculations and overdue handling
  */
-import { test, describe, beforeEach, mock } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
 let CompanyPaymentService;
-let mockPrisma;
+let _mockPrisma;
 
 describe('CompanyPaymentService', () => {
     test('CompanyPaymentService exports correctly', async () => {
@@ -412,53 +412,41 @@ describe('CompanyPaymentService - Yield Calculation Logic', () => {
 
 describe('CompanyPaymentService - Penalty Calculation Logic', () => {
     test('Late fee calculation: 0.1% per day on $1000 for 5 days = $5', async () => {
-        try {
-            // Test the math: 0.1% * 5 days * $1000 = $5
-            const owedAmount = 1000;
-            const lateFeePercentPerDay = 0.001; // 0.1%
-            const daysLate = 5;
+        // Test the math: 0.1% * 5 days * $1000 = $5
+        const owedAmount = 1000;
+        const lateFeePercentPerDay = 0.001; // 0.1%
+        const daysLate = 5;
 
-            const lateFee = owedAmount * lateFeePercentPerDay * daysLate;
+        const lateFee = owedAmount * lateFeePercentPerDay * daysLate;
 
-            assert.strictEqual(lateFee, 5);
-        } catch (error) {
-            throw error;
-        }
+        assert.strictEqual(lateFee, 5);
     });
 
     test('Default fee calculation: 5% on $10000 = $500', async () => {
-        try {
-            // Test the math: 5% * $10000 = $500
-            const owedAmount = 10000;
-            const defaultFeePercent = 0.05; // 5%
+        // Test the math: 5% * $10000 = $500
+        const owedAmount = 10000;
+        const defaultFeePercent = 0.05; // 5%
 
-            const defaultFee = owedAmount * defaultFeePercent;
+        const defaultFee = owedAmount * defaultFeePercent;
 
-            assert.strictEqual(defaultFee, 500);
-        } catch (error) {
-            throw error;
-        }
+        assert.strictEqual(defaultFee, 500);
     });
 
     test('Grace period is 10 days (constant check)', async () => {
-        try {
-            // This validates our business logic constant
-            const GRACE_PERIOD_DAYS = 10;
+        // This validates our business logic constant
+        const GRACE_PERIOD_DAYS = 10;
 
-            // Days 1-10: overdue with late fees
-            // Day 11+: defaulted
+        // Days 1-10: overdue with late fees
+        // Day 11+: defaulted
 
-            const daysOverdue = 11;
-            const isDefaulted = daysOverdue > GRACE_PERIOD_DAYS;
+        const daysOverdue = 11;
+        const isDefaulted = daysOverdue > GRACE_PERIOD_DAYS;
 
-            assert.strictEqual(isDefaulted, true);
+        assert.strictEqual(isDefaulted, true);
 
-            const daysOverdue2 = 10;
-            const isDefaulted2 = daysOverdue2 > GRACE_PERIOD_DAYS;
+        const daysOverdue2 = 10;
+        const isDefaulted2 = daysOverdue2 > GRACE_PERIOD_DAYS;
 
-            assert.strictEqual(isDefaulted2, false);
-        } catch (error) {
-            throw error;
-        }
+        assert.strictEqual(isDefaulted2, false);
     });
 });

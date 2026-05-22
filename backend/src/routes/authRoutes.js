@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import express from 'express';
 import { body } from 'express-validator';
 import { validate } from '../middleware/validator.js';
@@ -11,8 +10,6 @@ import {
   rotateRefreshToken,
   getRefreshTokenFromCookies,
 } from '../middleware/auth.js';
-import { Investor } from '../models/Investor.js';
-import { CompanyUser } from '../models/CompanyUser.js';
 import prisma from '../config/prisma.js';
 import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
 import { WebAuthnService } from '../services/webauthn.service.js';

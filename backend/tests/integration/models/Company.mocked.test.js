@@ -4,7 +4,6 @@
  */
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
-import esmock from 'esmock';
 import { TestDatabase } from '../../helpers/testDatabase.js';
 
 let Company;

@@ -13,7 +13,6 @@ import { mkdir, writeFile, readdir, unlink, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { createWriteStream } from 'node:fs';
-import { pipeline } from 'node:stream/promises';
 import { createGzip } from 'node:zlib';
 import logger from '../utils/logger.js';
 

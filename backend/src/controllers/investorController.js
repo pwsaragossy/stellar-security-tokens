@@ -1,5 +1,4 @@
 import { Investor } from '../models/Investor.js';
-import { StellarService } from '../services/stellar.service.js';
 import { isTestnet } from '../config/stellar.js';
 
 import { DepositRelayService } from '../services/depositRelay.service.js';
@@ -8,7 +7,6 @@ import { EmailService } from '../services/email.service.js';
 import { generateToken } from '../middleware/auth.js';
 import { generateRefreshToken, setRefreshCookie } from '../middleware/auth.js';
 import prisma from '../config/prisma.js';
-import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { generate6DigitCode, storeEmailCode, verifyEmailCode as redisVerifyEmailCode } from '../config/redis.js';
 import logger from '../utils/logger.js';

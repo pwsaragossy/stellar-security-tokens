@@ -1,6 +1,6 @@
 import prisma from '../config/prisma.js';
 import { TransactionBuilder, Keypair } from '@stellar/stellar-sdk';
-import { getNetworkPassphrase, stellarServer, createFreshServer } from '../config/stellar.js';
+import { getNetworkPassphrase, createFreshServer } from '../config/stellar.js';
 import logger from '../utils/logger.js';
 
 // Scoped logger for this service
@@ -675,7 +675,7 @@ export class MultiSigTransactionService {
 
                             // Auto-chain sale_deploy → eliminates the manual "Activate" click
                             const { OfferService } = await import('./offer.service.js');
-                            const activateResult = await OfferService.activateOffer(parseInt(metadata.offerId));
+                            const _activateResult = await OfferService.activateOffer(parseInt(metadata.offerId));
                             log.info(`[sac_deploy] Auto-chained sale_deploy for offer #${metadata.offerId}`);
                         } catch (verifyErr) {
                             log.error(`[sac_deploy] Auto-chain failed: ${verifyErr.message}`);
@@ -852,7 +852,7 @@ export class MultiSigTransactionService {
                         const { SorobanSaleService } = await import('./sorobanSale.service.js');
                         const { TransactionManager } = await import('./transactionManager.service.js');
                         const { keyManager: km } = await import('./KeyManager.js');
-                        const { getUsdcAsset } = await import('../config/stellar.js');
+                        const { _getUsdcAsset } = await import('../config/stellar.js');
 
                         const offer = await prisma.offer.findUnique({
                             where: { id: deployOfferId },

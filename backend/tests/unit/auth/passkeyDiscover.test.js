@@ -40,7 +40,7 @@ describe('Passkey Discover Login', () => {
 
     describe('POST /auth/passkey-login/discover - User Lookup Logic', () => {
         test('returns 401 when credentialId not found', () => {
-            const req = createMockRequest({
+            const _req = createMockRequest({
                 body: {
                     credentialId: 'non_existent_credential_id',
                 },

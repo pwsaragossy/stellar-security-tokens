@@ -7,7 +7,7 @@ const log = logger.scope('ErrorHandler');
  * In production: suppresses error.message, returns only a tracking error ID
  * In development: returns full error details for debugging
  */
-export const errorHandler = (err, req, res, next) => {
+export const errorHandler = (err, req, res, _next) => {
   const isDev = process.env.NODE_ENV !== 'production';
   const errorId = crypto.randomUUID();
 

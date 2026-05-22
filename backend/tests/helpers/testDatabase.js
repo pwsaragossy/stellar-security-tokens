@@ -3,7 +3,6 @@
  */
 
 import prisma from '../../src/config/prisma.js';
-import bcrypt from 'bcrypt';
 
 /**
  * Limpa todas as tabelas do banco de testes usando Prisma
