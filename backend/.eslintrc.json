@@ -13,6 +13,9 @@
     },
     "rules": {
         "no-unused-vars": "warn",
-        "no-console": "off"
+        "no-console": "off",
+        "no-empty": "warn",
+        "no-case-declarations": "warn",
+        "no-useless-catch": "warn"
     }
 }
