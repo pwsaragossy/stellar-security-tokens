@@ -1,6 +1,6 @@
 # Radox — Stellar Security Tokens
 
-Real-world asset tokenization platform built on Stellar. Source code published as part of the Stellar Accelerator program.
+Cross-border real-world asset tokenization platform built on Stellar — bridging Brazilian fiat (Pix/BRL) into dollar-denominated security tokens. Source code published as part of the Stellar Accelerator program.
 
 ## What's here
 
