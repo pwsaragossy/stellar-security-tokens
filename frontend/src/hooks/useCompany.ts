@@ -51,7 +51,7 @@ export function useCompany(): UseCompanyReturn {
     const calculateDashboardMetrics = async (offers: Offer[]) => {
         const activeOffers = offers.filter(o => o.status === 'active' || o.status === 'closed');
         const allInvestors: any[] = [];
-        let totalDistributions = 0; // Placeholder for now
+        const totalDistributions = 0; // Placeholder for now
 
         // Fetch investors for relevant offers to build metrics
         for (const offer of activeOffers) {
