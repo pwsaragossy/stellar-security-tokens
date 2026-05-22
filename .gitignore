@@ -35,6 +35,7 @@ deploy/setup-vm.sh
 deploy/maintenance.html
 deploy/landing/
 scripts/
+backend/scripts/
 frontend/README.md
 
 # Rust/Soroban build artifacts
