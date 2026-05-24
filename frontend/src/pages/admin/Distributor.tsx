@@ -1,7 +1,7 @@
 /**
  * Distributor.tsx — Platform admin panel for the singleton YieldDistributor v3.
  *
- * F-004 audit follow-up. YieldDistributor is platform-scoped (one contract for
+ * audit follow-up. YieldDistributor is platform-scoped (one contract for
  * all offers), so this is a dedicated page — unlike per-offer settlement which
  * lives under AdminOffers. Provides:
  *
@@ -38,7 +38,7 @@ export function Distributor() {
     const [actionType, setActionType] = useState<ActionType>(null);
     const [submitting, setSubmitting] = useState(false);
 
-    // propose_admin double-entry state (F-013 address-poisoning mitigation)
+    // propose_admin double-entry state
     const [proposeInput1, setProposeInput1] = useState('');
     const [proposeInput2, setProposeInput2] = useState('');
 

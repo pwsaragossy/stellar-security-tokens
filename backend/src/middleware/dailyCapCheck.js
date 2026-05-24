@@ -1,5 +1,5 @@
 /**
- * Per-investor daily cap enforcement (O-006).
+ * Per-investor daily cap enforcement.
  *
  * Caroline's class emphasized "limites operacionais" as a defense layer
  * for compromised credentials — even if an attacker has the passkey,

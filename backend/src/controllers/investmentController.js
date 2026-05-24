@@ -252,7 +252,7 @@ export const purchaseInvestment = async (req, res, next) => {
           }
         } catch (authErr) {
           // Operations wallet critically low — return 503 (Service Unavailable).
-          // F-21: this catch is the ONLY place OPERATIONS_WALLET_EMPTY can be handled;
+          // this catch is the ONLY place OPERATIONS_WALLET_EMPTY can be handled;
           // it never reaches catch(txError) below because this block returns directly.
           if (authErr.code === 'OPERATIONS_WALLET_EMPTY') {
             log.warn('[Investment] Ops wallet empty — retornando 503 ao cliente');

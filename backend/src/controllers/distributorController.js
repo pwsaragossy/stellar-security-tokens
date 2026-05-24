@@ -1,7 +1,7 @@
 /**
  * DistributorController — Admin endpoints for the YieldDistributor v3 singleton.
  *
- * F-004 audit follow-up — operator-facing pause / resume / 2-step admin
+ * audit follow-up — operator-facing pause / resume / 2-step admin
  * rotation for the platform's singleton YieldDistributor contract. Unlike
  * settlement contracts (per-offer), YieldDistributor is a single contract
  * shared across all offers, so the URL is platform-scoped — no offerId.

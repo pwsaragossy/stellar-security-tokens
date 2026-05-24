@@ -237,7 +237,7 @@ export const offersApi = {
     return response.data;
   },
 
-  // ─── Settlement Admin (v2 — F-003 follow-up) ───
+  // ─── Settlement Admin ───
   // Aggregated status + circuit-breaker (pause/resume) + 2-step admin rotation.
 
   /** Aggregated on-chain status for the settlement contract (single round-trip). */

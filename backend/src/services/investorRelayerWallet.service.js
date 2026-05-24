@@ -17,12 +17,12 @@
  * At off-ramp signing time, `getKeypair(investorId)` decrypts the seed and
  * returns a `Keypair` instance that signs TX 2 (relayer → anchor classic payment).
  *
- * ⚠ KEY MANAGEMENT — read OFFRAMP_RUNBOOK.md before touching this code.
+ * ⚠ KEY MANAGEMENT — read the operator runbook before touching this code.
  *
  *   The master key (`OFFRAMP_KEYRING_SECRET`) is a 32-byte base64 string. Loss
  *   of this key = permanent loss of access to ALL per-investor relayer Gs.
  *   For v1 this lives in env; the KMS-managed envelope-encryption migration
- *   is queued in ROADMAP.md.
+ *   is queued in internal docs.
  *
  * Encryption format (encryptedSeed column):
  *   base64( IV(12 bytes) || authTag(16 bytes) || ciphertext )

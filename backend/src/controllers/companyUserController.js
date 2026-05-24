@@ -469,7 +469,7 @@ export class CompanyUserController {
     try {
       const { userId } = req.params;
 
-      // SECURITY: Ownership check — requesting user must be the wallet owner (F-06 IDOR fix)
+      // SECURITY: Ownership check — requesting user must be the wallet owner
       if (parseInt(userId, 10) !== req.user?.userId) {
         return res.status(403).json({
           success: false,

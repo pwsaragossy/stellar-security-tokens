@@ -42,7 +42,7 @@ const KNOWN_EVENT_TYPES = new Set([
  * Set ETHERFUSE_ALLOWED_IPS as comma-separated IP literals or CIDRs.
  * Empty / unset → no IP check (preserves the dev-easy default).
  *
- * O-003 from the Stellar 37º audit.
+ * from the Stellar 37º audit.
  */
 function isIpAllowed(req) {
   const raw = process.env.ETHERFUSE_ALLOWED_IPS;
@@ -91,7 +91,7 @@ function ipInCidr(ip, cidr) {
  * before this handler so `req.body` is a Buffer — needed for JCS canonicalization.
  */
 export async function handleWebhook(req, res) {
-  // Optional IP allowlist (O-003 defense-in-depth). HMAC is the real gate.
+  // Optional IP allowlist. HMAC is the real gate.
   if (!isIpAllowed(req)) {
     log.warn('Webhook from disallowed IP', {
       ip: req.ip,

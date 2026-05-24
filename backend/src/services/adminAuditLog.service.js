@@ -102,7 +102,7 @@ export function attachAdminAuditHook(req, res) {
 }
 
 /**
- * List recent AdminAction rows for the SecurityEvents admin page (F-009).
+ * List recent AdminAction rows for the SecurityEvents admin page.
  *
  * Reads the immutable admin_actions table with optional filters. Indexes
  * already exist on (actorId, createdAt), (action, createdAt),

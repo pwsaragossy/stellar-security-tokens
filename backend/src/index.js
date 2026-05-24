@@ -147,7 +147,7 @@ app.listen(PORT, async () => {
     console.error('Failed to start daily payment cron:', error.message);
   }
 
-  // F-39: Startup reconciliation — verify counter ↔ InterestPayment consistency
+  // Startup reconciliation — verify counter ↔ InterestPayment consistency
   try {
     const prisma = (await import('./config/prisma.js')).default;
     const offers = await prisma.offer.findMany({
@@ -303,7 +303,7 @@ app.listen(PORT, async () => {
     console.error('Failed to start ramp order reconciler:', error.message);
   }
 
-  // --- DORMANT-ACTIVE ANOMALY MONITOR (F-009) ---
+  // --- DORMANT-ACTIVE ANOMALY MONITOR ---
   // Detects investors returning from > 30d dormancy + immediately
   // transacting. Writes an AdminAction row + dispatches a high-severity
   // alert via AlertRouter. Caroline's <30-min credential-compromise
@@ -336,7 +336,7 @@ const gracefulShutdown = async (signal) => {
       WalletMonitorService.stop();
     } catch (_) { /* not started — safe to ignore */ }
 
-    // Stop dormant-active anomaly monitor (F-009)
+    // Stop dormant-active anomaly monitor
     try {
       const { DormantAlertMonitor } = await import('./services/dormantAlertMonitor.service.js');
       DormantAlertMonitor.stop();

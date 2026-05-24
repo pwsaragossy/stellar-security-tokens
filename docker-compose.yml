@@ -193,7 +193,7 @@ services:
       args:
         VITE_API_URL: /api
     container_name: stellar_frontend
-    # nginx now binds to 8080 internally (non-root, see frontend/Dockerfile O-001 hardening).
+    # nginx now binds to 8080 internally.
     # Host port 80 → container 8080.
     ports:
       - "80:8080"

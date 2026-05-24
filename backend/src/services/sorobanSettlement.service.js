@@ -15,7 +15,7 @@
  *   1=AlreadyInitialized, 2=NotInitialized, 3=InvalidAmount, 4=Overflow,
  *   5=EmptyBatch, 6=AlreadySettled, 7=BatchTooLarge, 8=NoDeposit,
  *   9=DuplicateInvestor, 10=PhantomInvestor, 11=FeeTooHigh,
- *   12=ContractPaused, 13=NoPendingAdmin  ← v2 (F-003)
+ *   12=ContractPaused, 13=NoPendingAdmin ← v2
  */
 import {
     Contract,
@@ -56,7 +56,7 @@ const SETTLE_ERRORS = {
     9: { code: 'DuplicateInvestor', message: 'Duplicate investor in batch' },
     10: { code: 'PhantomInvestor', message: 'Investor holds 0 tokens — cannot pay' },
     11: { code: 'FeeTooHigh', message: 'Fee exceeds max_fee_bps cap' },
-    // v2 — F-003
+    // v2
     12: { code: 'ContractPaused', message: 'Settlement contract is paused — operation blocked' },
     13: { code: 'NoPendingAdmin', message: 'No pending admin proposal — call propose_admin first' },
 };
@@ -558,7 +558,7 @@ export class SorobanSettlementService {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // v2 admin actions (F-003) — pause / resume / 2-step admin rotation
+    // v2 admin actions — pause / resume / 2-step admin rotation
     // ═══════════════════════════════════════════════════════════════
 
     /**

@@ -73,9 +73,9 @@ const purchaseValidation = [
 router.get('/fee-schedule', getFeeSchedule);
 
 // PR5 audit hardening:
-//  - perUserLimiter (O-002): 100/min per authenticated user, prevents IP-rotating bots
-//  - intentDebounce (F-008): rejects byte-equal repeat purchase intents within 10s
-//  - dailyCapCheck (O-006): enforces Investor.dailyCapUsd if set
+//  - perUserLimiter: 100/min per authenticated user, prevents IP-rotating bots
+//  - intentDebounce: rejects byte-equal repeat purchase intents within 10s
+//  - dailyCapCheck: enforces Investor.dailyCapUsd if set
 // Extract amount from req.body.usdcAmount for the cap check.
 router.post(
     '/purchase',

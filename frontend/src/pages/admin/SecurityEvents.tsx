@@ -1,5 +1,5 @@
 /**
- * SecurityEvents.tsx — F-009 audit follow-up.
+ * SecurityEvents.tsx audit follow-up.
  *
  * Read-only feed of the AdminAction audit log + dormant-active anomaly
  * alerts. Operators use this page to triage:

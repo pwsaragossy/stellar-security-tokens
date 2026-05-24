@@ -29,7 +29,7 @@ const USDC_SAC: &str = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA
 //      GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN).
 //   2. Compute / look up its Stellar Asset Contract address on stellar.expert
 //      or via `stellar contract id asset --asset USDC:<issuer> --network mainnet`.
-//   3. Replace the const, rebuild the mainnet WASM, update DEPLOYMENTS.md.
+//   3. Replace the const, rebuild the mainnet WASM, update the deployments record.
 // Until verified, do NOT deploy mainnet contracts.
 #[cfg(feature = "mainnet")]
 const USDC_SAC: &str = "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75";
@@ -62,7 +62,7 @@ pub enum SettleError {
     ContractPaused = 12,
     /// accept_admin() called but no propose_admin() is pending.
     NoPendingAdmin = 13,
-    /// v3 (F-006): supplied usdc_sac is not the canonical USDC SAC for this network.
+    /// v3: supplied usdc_sac is not the canonical USDC SAC for this network.
     UnauthorizedToken = 14,
 }
 
@@ -155,7 +155,7 @@ fn is_paused(env: &Env) -> bool {
         .unwrap_or(false)
 }
 
-/// v3 (F-006) — verify the supplied usdc_sac matches the canonical USDC SAC
+/// v3 — verify the supplied usdc_sac matches the canonical USDC SAC
 /// for this network. In `testing` feature builds the check is a no-op so unit
 /// tests can use generated SACs. Production builds (testnet / mainnet
 /// feature) enforce the check.
@@ -212,7 +212,7 @@ impl MaturitySettlement {
             return Err(SettleError::AlreadyInitialized);
         }
 
-        // v3 (F-006): enforce canonical USDC SAC at initialize() — prevents
+        // v3: enforce canonical USDC SAC at initialize() — prevents
         // address-poisoning by a malicious or compromised admin.
         validate_canonical_usdc(&env, &usdc_sac)?;
 

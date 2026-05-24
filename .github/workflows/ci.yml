@@ -1,4 +1,4 @@
-# CI gate — O-005 audit follow-up.
+# CI gate audit follow-up.
 #
 # Runs on every PR + push to main. Catches the obvious regressions:
 #   - Backend + frontend lint (catches unused imports, broken refs)

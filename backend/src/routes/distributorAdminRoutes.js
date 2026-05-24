@@ -4,7 +4,7 @@
  *   name: Distributor
  *   description: YieldDistributor v3 contract management (admin only, singleton)
  */
-// F-004 audit follow-up — operator pause / resume / 2-step admin rotation
+// audit follow-up — operator pause / resume / 2-step admin rotation
 // for the platform's singleton YieldDistributor contract.
 import { Router } from 'express';
 import { requirePlatformAdmin } from '../middleware/authorize.js';

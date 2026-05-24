@@ -1,9 +1,9 @@
 /**
  * Admin API surface for the singleton YieldDistributor v3 contract.
  *
- * F-004 audit follow-up — exposes pause / resume / 2-step admin rotation
+ * audit follow-up — exposes pause / resume / 2-step admin rotation
  * for the platform's YieldDistributor. All endpoints require platform-admin
- * auth and are audited via the AdminAction table (F-011 hook).
+ * auth and are audited via the AdminAction table.
  *
  * Uses the fetch-wrapper client at `@/lib/api` (NOT the axios client at
  * `@/api/client`). The fetch wrapper returns the parsed JSON body directly —

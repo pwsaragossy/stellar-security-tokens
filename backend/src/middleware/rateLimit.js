@@ -146,7 +146,7 @@ export const strictLimiter = createLimiter({
 });
 
 /**
- * Per-user rate limiter — O-002 audit follow-up.
+ * Per-user rate limiter audit follow-up.
  *
  * IP-based limiting alone is insufficient against an attacker rotating
  * IPs. This limiter keys on `req.user.userId` (set by authenticateToken)

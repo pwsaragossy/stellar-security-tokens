@@ -60,9 +60,9 @@ export class CompanyPaymentService {
             throw new Error(`Offer ${offerId} not found`);
         }
 
-        // ─── MATURITY METADATA (computed BEFORE routing) ─── F-10, F-14
+        // ─── MATURITY METADATA (computed BEFORE routing) ───
         const totalExpectedPayments = this.computeTotalExpectedPayments(offer);
-        const paymentsMade = offer.periodicPaymentsCompleted;  // F-14: atomic counter
+        const paymentsMade = offer.periodicPaymentsCompleted;  // atomic counter
         const maturityReached = totalExpectedPayments !== null && paymentsMade >= totalExpectedPayments;
         const isLastPeriod = totalExpectedPayments !== null
             && !maturityReached
@@ -81,7 +81,7 @@ export class CompanyPaymentService {
 
         // For unlocked tokens, use on-chain balances instead of DB investment records
         // This ensures accurate interest calculations when tokens have been traded on DEXes
-        // F-10: On-chain path gets schedule metadata
+        // On-chain path gets schedule metadata
         if (offer.isTokenLocked === false) {
             return { ...await this._calculateOwedAmountOnChain(offer), ...scheduleMetadata };
         }
@@ -92,7 +92,7 @@ export class CompanyPaymentService {
             0
         );
 
-        // F-15: Zero-investment early return includes metadata
+        // Zero-investment early return includes metadata
         if (totalInvested === 0) {
             return {
                 offerId,
@@ -474,7 +474,7 @@ export class CompanyPaymentService {
             throw new Error('No payment owed for this offer');
         }
 
-        // ─── MATURITY GUARD (prepare-time) ─── F-02, F-13
+        // ─── MATURITY GUARD (prepare-time) ───
         if (paymentDetails.maturityReached) {
             const err = new Error('PAYMENT_SCHEDULE_COMPLETE');
             err.code = 'E_MATURITY_REACHED';
@@ -658,7 +658,7 @@ export class CompanyPaymentService {
             const effectiveInvestorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
             const spreadPct = Math.max(0, annualRate - effectiveInvestorRate);
 
-            // ─── MATURITY GUARD (submit-time re-check) ─── F-02
+            // ─── MATURITY GUARD (submit-time re-check) ───
             const preCheckDetails = await this.calculateOwedAmount(offerId);
             if (preCheckDetails.maturityReached) {
                 const err = new Error('PAYMENT_SCHEDULE_COMPLETE');
@@ -672,18 +672,18 @@ export class CompanyPaymentService {
 
             if (result.success) {
                 const nowDate = new Date();
-                // F-24: Use FRESH lastPaymentDate so nextPaymentDue points to the
+                // Use FRESH lastPaymentDate so nextPaymentDue points to the
                 // NEXT upcoming payment, not the one we just completed
                 const updatedOffer = { ...offer, lastPaymentDate: nowDate };
 
-                // Update offer payment status — F-14: ATOMIC counter increment
+                // Update offer payment status: ATOMIC counter increment
                 const dbOffer = await prisma.offer.update({
                     where: { id: offerId },
                     data: {
                         lastPaymentDate: nowDate,
                         paymentDueStatus: 'current',
-                        nextPaymentDue: this.calculateNextPaymentDate(updatedOffer),  // F-24
-                        periodicPaymentsCompleted: { increment: 1 },  // F-14: ATOMIC
+                        nextPaymentDue: this.calculateNextPaymentDate(updatedOffer),
+                        periodicPaymentsCompleted: { increment: 1 },  // ATOMIC
                     }
                 });
 
@@ -752,7 +752,7 @@ export class CompanyPaymentService {
             throw new Error('No signed XDRs provided');
         }
 
-        // ─── MATURITY GUARD (batch submit-time) ─── F-02
+        // ─── MATURITY GUARD (batch submit-time) ───
         const preCheckDetails = await this.calculateOwedAmount(offerId);
         if (preCheckDetails.maturityReached) {
             const err = new Error('PAYMENT_SCHEDULE_COMPLETE');
@@ -780,11 +780,11 @@ export class CompanyPaymentService {
             const effectiveInvestorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
             const spreadPct = Math.max(0, annualRate - effectiveInvestorRate);
 
-            // ─── F-33: Counter increment is the CRITICAL safety state ───
+            // ───: Counter increment is the CRITICAL safety state ───
             // Do it FIRST, in its own try/catch, so a _recordPayments failure
             // cannot skip the maturity guard update and allow overpayment.
             const nowDate = new Date();
-            const updatedOffer = { ...offer, lastPaymentDate: nowDate };  // F-24
+            const updatedOffer = { ...offer, lastPaymentDate: nowDate };
 
             try {
                 const dbOffer = await prisma.offer.update({
@@ -793,9 +793,9 @@ export class CompanyPaymentService {
                         lastPaymentDate: nowDate,
                         paymentDueStatus: submitResult.success ? 'current' : 'overdue',
                         nextPaymentDue: submitResult.success
-                            ? this.calculateNextPaymentDate(updatedOffer)   // F-24: fresh offer
+                            ? this.calculateNextPaymentDate(updatedOffer)   // fresh offer
                             : undefined,
-                        // F-25: ONLY increment counter if ALL batches succeeded
+                        // ONLY increment counter if ALL batches succeeded
                         ...(submitResult.success && { periodicPaymentsCompleted: { increment: 1 } }),
                     }
                 });
@@ -823,7 +823,7 @@ export class CompanyPaymentService {
                 }).catch(() => {});
             }
 
-            // ─── F-30: Record payments for CONFIRMED batch investors only ───
+            // ───: Record payments for CONFIRMED batch investors only ───
             // On partial failure, only create InterestPayment records for investors
             // whose batches actually succeeded on-chain, preventing phantom records.
             try {
@@ -1027,7 +1027,7 @@ export class CompanyPaymentService {
             include: { company: true }
         });
 
-        // F-20: Filter out offers that have completed all periodic payments
+        // Filter out offers that have completed all periodic payments
         // These are awaiting principal return, NOT a missed periodic yield
         const activeOverdueOffers = overdueOffers.filter(offer => {
             const totalExpected = this.computeTotalExpectedPayments(offer);
@@ -1187,14 +1187,14 @@ export class CompanyPaymentService {
             });
         }
 
-        // 3. Detect completed periodic offers awaiting principal return (F-06, F-19)
+        // 3. Detect completed periodic offers awaiting principal return
         const completedPeriodicOffers = await prisma.offer.findMany({
             where: {
                 status: 'active',
                 paymentType: { not: 'bullet' },
                 maturityDate: { lt: now },
                 nextPaymentDue: null,  // all periodic payments done
-                paymentDueStatus: { not: 'due' },  // F-26: skip already-flagged (idempotency)
+                paymentDueStatus: { not: 'due' },  // skip already-flagged (idempotency)
             },
             include: { company: true }
         });
@@ -1202,8 +1202,8 @@ export class CompanyPaymentService {
         for (const offer of completedPeriodicOffers) {
             const totalExpected = this.computeTotalExpectedPayments(offer);
             if (totalExpected !== null && offer.periodicPaymentsCompleted >= totalExpected) {
-                // F-19: DON'T set status='matured'
-                // F-20: DON'T set nextPaymentDue (would trigger false default)
+                // DON'T set status='matured'
+                // DON'T set nextPaymentDue (would trigger false default)
                 await prisma.offer.update({
                     where: { id: offer.id },
                     data: {
@@ -1233,40 +1233,40 @@ export class CompanyPaymentService {
         }
     }
 
-    // ─── F-12, F-16: Safe date arithmetic for period advancement ───
+    // ───: Safe date arithmetic for period advancement ───
     static _advanceByPeriod(date, paymentType, paymentDay) {
         const next = new Date(date);
-        next.setUTCDate(1);                    // F-12: prevent month overflow
+        next.setUTCDate(1);                    // prevent month overflow
         switch (paymentType) {
             case 'monthly':     next.setUTCMonth(next.getUTCMonth() + 1); break;
             case 'quarterly':   next.setUTCMonth(next.getUTCMonth() + 3); break;
             case 'semi_annual': next.setUTCMonth(next.getUTCMonth() + 6); break;
             case 'annual':      next.setUTCFullYear(next.getUTCFullYear() + 1); break;
-            default: throw new Error(`Unknown paymentType: ${paymentType}`); // F-22
+            default: throw new Error(`Unknown paymentType: ${paymentType}`);
         }
         next.setUTCDate(Math.min(paymentDay || 1, 28));
-        next.setUTCHours(0, 0, 0, 0);         // F-16: eliminate time-of-day sensitivity
+        next.setUTCHours(0, 0, 0, 0);         // eliminate time-of-day sensitivity
         return next;
     }
 
-    // ─── F-08, F-04, F-05, F-16: Deterministic date-walking for total expected payments ───
+    // ───: Deterministic date-walking for total expected payments ───
     static computeTotalExpectedPayments(offer) {
         if (!offer.maturityDate) return null;           // perpetual — no limit
         if (offer.paymentType === 'bullet') return 0;   // bullet uses settlement, not periodic
 
         const maturity = new Date(offer.maturityDate);
-        maturity.setUTCHours(23, 59, 59, 999);          // F-16: end of maturity day
+        maturity.setUTCHours(23, 59, 59, 999);          // end of maturity day
 
         const startDate = new Date(offer.createdAt);
-        startDate.setUTCHours(0, 0, 0, 0);              // F-16: normalize
+        startDate.setUTCHours(0, 0, 0, 0);              // normalize
 
-        if (maturity <= startDate) return 0;             // F-05: invalid state guard
+        if (maturity <= startDate) return 0;             // invalid state guard
 
         let count = 0;
         let date = new Date(startDate);
-        while (count < 1200) {                           // F-04: iteration cap (100yrs monthly)
+        while (count < 1200) {                           // iteration cap (100yrs monthly)
             date = this._advanceByPeriod(date, offer.paymentType, offer.paymentDay);
-            if (date > maturity) break;                  // F-08: STRICT > (not >=)
+            if (date > maturity) break;                  // STRICT > (not >=)
             count++;
         }
 
@@ -1279,7 +1279,7 @@ export class CompanyPaymentService {
             result: count,
         });
 
-        return count;                                    // F-08: NO +1
+        return count;                                    // NO +1
     }
 
     static calculateNextPaymentDate(offer) {
@@ -1288,12 +1288,12 @@ export class CompanyPaymentService {
         }
 
         const lastPayment = offer.lastPaymentDate || offer.createdAt;
-        // F-17+F-18: reuse _advanceByPeriod (UTC-normalized, no code duplication)
+        // reuse _advanceByPeriod (UTC-normalized, no code duplication)
         const nextDate = this._advanceByPeriod(lastPayment, offer.paymentType, offer.paymentDay);
 
         if (offer.maturityDate) {
             const maturityEnd = new Date(offer.maturityDate);
-            maturityEnd.setUTCHours(23, 59, 59, 999);  // F-17: same normalization as computeTotal
+            maturityEnd.setUTCHours(23, 59, 59, 999);  // same normalization as computeTotal
             if (nextDate > maturityEnd) {
                 // Change 12: Structured logging for maturity boundary hits
                 log.info('MATURITY_BOUNDARY_HIT', {
@@ -1302,7 +1302,7 @@ export class CompanyPaymentService {
                     maturityDate: offer.maturityDate,
                     nextComputedDate: nextDate?.toISOString(),
                 });
-                return null;    // F-08: STRICT >
+                return null;    // STRICT >
             }
         }
         return nextDate;

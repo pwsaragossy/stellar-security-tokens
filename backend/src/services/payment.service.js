@@ -437,7 +437,7 @@ export class PaymentService {
 
         for (const offer of periodicOffers) {
           try {
-            // F-37: Skip offers that have completed all periodic payments.
+            // Skip offers that have completed all periodic payments.
             // nextPaymentDue = null with a maturityDate set means calculateNextPaymentDate
             // returned null (next date exceeds maturity). Don't send false notifications
             // or overwrite the status for completed offers.

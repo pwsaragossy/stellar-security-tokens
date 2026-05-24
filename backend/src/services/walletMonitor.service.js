@@ -62,7 +62,7 @@ async function checkOperationsBalance() {
             }
         }
     } catch (err) {
-        // F-28: HTTP 404 means wallet is unfunded — more critical than low balance
+        // HTTP 404 means wallet is unfunded — more critical than low balance
         if (err.response?.status === 404 || err.message?.includes('Not Found')) {
             log.error('[WalletMonitor] 🚨 CRITICAL: Operations wallet não encontrada na ledger (não financiada)');
             if (_lastAlertLevel !== 'critical') {
@@ -111,7 +111,7 @@ export const WalletMonitorService = {
     start() {
         if (_started) return; // guard: prevents double-start on hot reload
 
-        // F-23: without ops key the monitor cannot read the balance
+        // without ops key the monitor cannot read the balance
         const hasOpsKey = process.env.OPERATIONS_PUBLIC_KEY ||
                           process.env.OPERATIONS_SECRET_KEY;
         if (!hasOpsKey) {

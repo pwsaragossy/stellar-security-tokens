@@ -44,7 +44,7 @@ COPY --from=builder /app/frontend/dist /usr/share/nginx/html
 # Copy custom nginx configuration
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
-# F-003-followup / O-001 hardening: drop to non-root.
+# hardening: drop to non-root.
 # nginx:alpine ships with the `nginx` user. We need to:
 #   1) Make /var/cache/nginx and /var/run writable for the nginx user.
 #   2) Point pid to a writable location.

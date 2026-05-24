@@ -1,5 +1,5 @@
 /**
- * Sequential-identical-tx debounce (F-008).
+ * Sequential-identical-tx debounce.
  *
  * Caroline Cardoso's Stellar 37º class explicitly flagged the pattern of
  * "três sanções do mesmo valor sequencial, quase no mesmo minuto" as a

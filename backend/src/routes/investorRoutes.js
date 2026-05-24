@@ -230,7 +230,7 @@ router.get('/passkey/config', getPasskeyConfig);
  *                   items:
  *                     $ref: '#/components/schemas/Investor'
  */
-// SECURITY: Restricted to platform admins (F-03). Frontend uses /api/admin/investors instead.
+// SECURITY: Restricted to platform admins. Frontend uses /api/admin/investors instead.
 router.get('/', requirePlatformAdmin, getInvestors);
 
 /**
@@ -257,7 +257,7 @@ router.get('/', requirePlatformAdmin, getInvestors);
  *       404:
  *         description: Investidor não encontrado
  */
-// SECURITY: Investor can only read their own profile (F-02 IDOR fix)
+// SECURITY: Investor can only read their own profile
 router.get('/:id', requireInvestor, requireOwnData, getInvestorById);
 
 /**
@@ -393,7 +393,7 @@ router.get('/:investorId/wallet-status', requireInvestor, requireOwnData, getWal
  *       200:
  *         description: Transaction built successfully
  */
-// SECURITY: requireOwnData replaces broken inline guard (F-01/F-04 — req.user.id vs req.user.userId)
+// SECURITY: requireOwnData replaces broken inline guard
 router.post('/:investorId/withdraw/propose', requireInvestor, requireOwnData, proposeWithdrawal);
 
 /**

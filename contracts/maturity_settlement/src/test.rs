@@ -2791,7 +2791,6 @@ fn test_auth_company_cannot_withdraw() {
 
 // ═══════════════════════════════════════════════════════
 //  V2 — pause + 2-step admin rotation
-//  (security audit F-003, added 2026-05-20)
 // ═══════════════════════════════════════════════════════
 
 #[test]
@@ -3008,7 +3007,7 @@ fn test_v2_version_bumped_to_3() {
 }
 
 // ═══════════════════════════════════════════════════════
-//  F-006 — canonical USDC SAC rejection path
+// canonical USDC SAC rejection path
 //  These tests ONLY compile when the `testing` feature is OFF — i.e. when
 //  the const-baked validation in lib.rs is active. Run with:
 //     cargo test --no-default-features --features testnet

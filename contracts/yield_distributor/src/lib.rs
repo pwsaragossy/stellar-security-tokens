@@ -11,7 +11,7 @@ use soroban_sdk::{
 //  DataKey::PendingAdmin → Address   (v3: 2-step rotation, awaiting accept)
 //  DataKey::Paused       → bool      (circuit breaker)
 //
-//  v3 (May 2026, F-004 security audit follow-up): 2-step admin rotation
+//  v3: 2-step admin rotation
 //  via propose_admin + accept_admin. The legacy set_admin remains for
 //  back-compat but is marked deprecated.
 // ═══════════════════════════════════════════════════════════════
@@ -327,7 +327,7 @@ impl YieldDistributor {
 
     /// Returns the contract version.
     pub fn version(_env: Env) -> u32 {
-        3 // v3 (F-004): 2-step admin rotation via propose_admin / accept_admin
+        3 // v3: 2-step admin rotation via propose_admin / accept_admin
     }
 
     /// Returns the admin address.

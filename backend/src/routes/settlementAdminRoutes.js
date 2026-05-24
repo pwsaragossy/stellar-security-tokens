@@ -4,7 +4,7 @@
  *   name: Settlements
  *   description: MaturitySettlement v2 contract management (admin only)
  */
-// F-003 follow-up — operator-facing pause / resume / 2-step admin rotation
+// follow-up — operator-facing pause / resume / 2-step admin rotation
 // for deployed MaturitySettlement contracts. Mirrors /api/admin/contracts/*.
 import { Router } from 'express';
 import { requirePlatformAdmin } from '../middleware/authorize.js';

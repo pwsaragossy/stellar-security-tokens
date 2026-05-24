@@ -3,7 +3,7 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, String,
 };
 
-// v7 (May 2026, F-006 security audit follow-up): canonical USDC SAC is now
+// v7: canonical USDC SAC is now
 // hardcoded per network and validated at create(). Prevents address-poisoning
 // attacks where a malicious or compromised admin could deploy an offer
 // pointing to a fake USDC SAC. The `testing` feature disables the check so
@@ -27,7 +27,7 @@ const USDC_SAC: &str = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA
 //      GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN).
 //   2. Compute / look up its Stellar Asset Contract address on stellar.expert
 //      or via `stellar contract id asset --asset USDC:<issuer> --network mainnet`.
-//   3. Replace the const, rebuild the mainnet WASM, update DEPLOYMENTS.md.
+//   3. Replace the const, rebuild the mainnet WASM, update the deployments record.
 // Until verified, do NOT deploy mainnet contracts.
 #[cfg(feature = "mainnet")]
 const USDC_SAC: &str = "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75";
@@ -49,7 +49,7 @@ pub enum SaleError {
     NoPendingAdmin = 11,
     NotPendingAdmin = 12,
     InsufficientForFee = 13,
-    /// v7 (F-006): supplied buy_token is not the canonical USDC SAC for this network
+    /// v7: supplied buy_token is not the canonical USDC SAC for this network
     UnauthorizedToken = 14,
 }
 
@@ -113,7 +113,7 @@ fn emit<D: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(
     e.events().publish((topic,), data);
 }
 
-/// v7 (F-006) — verify the supplied buy_token matches the canonical USDC
+/// v7 — verify the supplied buy_token matches the canonical USDC
 /// SAC for this network. In `testing` feature builds the check is a no-op
 /// so unit tests can use generated SACs. Production builds (testnet /
 /// mainnet feature) enforce the check.
@@ -164,7 +164,7 @@ impl TokenSale {
         if fixed_fee < 0 {
             return Err(SaleError::InvalidAmount);
         }
-        // v7 (F-006): enforce canonical USDC SAC at create() — prevents
+        // v7: enforce canonical USDC SAC at create() — prevents
         // address-poisoning by a malicious or compromised admin.
         validate_canonical_usdc(&e, &buy_token)?;
         admin.require_auth();

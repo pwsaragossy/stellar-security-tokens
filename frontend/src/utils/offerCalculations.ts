@@ -122,7 +122,7 @@ export function computeIRR(
     }
 
     // Newton-Raphson: solve Σ CF_t / (1+r)^t = 0
-    let r = ratePercent / 100 / (periods || 1); // seed: periodic rate for faster convergence (F-12)
+    let r = ratePercent / 100 / (periods || 1); // seed: periodic rate for faster convergence
     for (let iter = 0; iter < 100; iter++) {
         let npv = 0, dnpv = 0;
         for (let t = 0; t < cfs.length; t++) {

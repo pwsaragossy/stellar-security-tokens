@@ -44,7 +44,7 @@ import { AddressDisplay } from '@/components/ui/AddressDisplay';
 type ActionType =
     | 'issue' | 'activate' | 'verify'
     | 'deploy_settlement' | 'execute_settlement'
-    // v2 — F-003 follow-up
+    // v2 follow-up
     | 'pause_settlement' | 'resume_settlement'
     | 'propose_settlement_admin' | 'accept_settlement_admin'
     | null;
@@ -128,7 +128,7 @@ export function AdminOffers() {
     const [actionDialog, setActionDialog] = useState<{ type: ActionType; offer: Offer | null }>({ type: null, offer: null });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // propose_settlement_admin double-entry state (F-013 address-poisoning mitigation)
+    // propose_settlement_admin double-entry state
     const [proposeAdminInput1, setProposeAdminInput1] = useState('');
     const [proposeAdminInput2, setProposeAdminInput2] = useState('');
     const STELLAR_G_RE = /^G[A-Z2-7]{55}$/;
@@ -906,7 +906,7 @@ export function AdminOffers() {
                 </DialogContent>
             </Dialog>
 
-            {/* ── Pause Settlement Dialog (v2 — F-003) ── */}
+            {/* ── Pause Settlement Dialog ── */}
             <Dialog open={actionDialog.type === 'pause_settlement' && !!actionDialog.offer} onOpenChange={() => closeAction()}>
                 <DialogContent className="bg-slate-900 border-white/10 text-white">
                     <DialogHeader>
@@ -935,7 +935,7 @@ export function AdminOffers() {
                 </DialogContent>
             </Dialog>
 
-            {/* ── Resume Settlement Dialog (v2 — F-003) ── */}
+            {/* ── Resume Settlement Dialog ── */}
             <Dialog open={actionDialog.type === 'resume_settlement' && !!actionDialog.offer} onOpenChange={() => closeAction()}>
                 <DialogContent className="bg-slate-900 border-white/10 text-white">
                     <DialogHeader>
@@ -958,7 +958,7 @@ export function AdminOffers() {
                 </DialogContent>
             </Dialog>
 
-            {/* ── Propose Settlement Admin Dialog (v2 — F-003) ── */}
+            {/* ── Propose Settlement Admin Dialog ── */}
             <Dialog
                 open={actionDialog.type === 'propose_settlement_admin' && !!actionDialog.offer}
                 onOpenChange={() => closeAction()}
@@ -1044,7 +1044,7 @@ export function AdminOffers() {
                 </DialogContent>
             </Dialog>
 
-            {/* ── Accept Settlement Admin Dialog (v2 — F-003) ── */}
+            {/* ── Accept Settlement Admin Dialog ── */}
             <Dialog open={actionDialog.type === 'accept_settlement_admin' && !!actionDialog.offer} onOpenChange={() => closeAction()}>
                 <DialogContent className="bg-slate-900 border-white/10 text-white">
                     <DialogHeader>

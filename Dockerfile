@@ -4,7 +4,7 @@ FROM node:22-alpine
 RUN apk add --no-cache postgresql-client
 
 # Create non-root user (alpine base image runs as root by default).
-# F-003-followup / O-001 hardening: drop privileges so a container escape
+# hardening: drop privileges so a container escape
 # doesn't give the attacker root inside the namespace.
 RUN addgroup -g 1001 nodeapp \
   && adduser -D -u 1001 -G nodeapp nodeapp \

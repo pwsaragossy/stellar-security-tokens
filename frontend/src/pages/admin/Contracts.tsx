@@ -97,7 +97,7 @@ export function Contracts() {
     const [actionInput, setActionInput] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
 
-    // F-014 typed-confirm state. For irreversible ops (drain / upgrade) the
+    // typed-confirm state. For irreversible ops (drain / upgrade) the
     // operator must type the offer's asset code before the confirm button
     // becomes enabled. Mirrors the propose-admin double-entry pattern in
     // AdminOffers.tsx — protects against late-night misclicks.
@@ -582,7 +582,7 @@ export function Contracts() {
                             onChange={e => setActionInput({ ...actionInput, newAdmin: e.target.value })} className="bg-black/20 border-white/10" />
                     )}
 
-                    {/* F-014 — typed-confirm gate for irreversible ops. */}
+                    {/*typed-confirm gate for irreversible ops. */}
                     {isTypedConfirmRequired && selected && (
                         <div className="space-y-2 pt-1">
                             <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">

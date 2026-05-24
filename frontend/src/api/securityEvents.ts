@@ -1,5 +1,5 @@
 /**
- * Admin API surface for the AdminAction audit log + security anomalies (F-009).
+ * Admin API surface for the AdminAction audit log + security anomalies.
  *
  * Read-only feed. All filters optional. The backend caps `limit` at 500.
  */

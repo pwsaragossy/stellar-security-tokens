@@ -1,5 +1,5 @@
 /**
- * DormantAlertMonitor — F-009 audit follow-up.
+ * DormantAlertMonitor audit follow-up.
  *
  * Caroline's class: "endereço de carteira aí que fica dormindo. Criou 30
  * dias, ficou adormecida … daqui a pouco ela resolve se mexer. E quando

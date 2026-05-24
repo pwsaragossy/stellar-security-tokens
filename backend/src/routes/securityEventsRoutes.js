@@ -2,7 +2,7 @@
  * @swagger
  * tags:
  *   name: SecurityEvents
- *   description: Read-only admin view of the AdminAction audit log + anomaly events (F-009 follow-up)
+ *   description: Read-only admin view of the AdminAction audit log + anomaly events
  */
 import { Router } from 'express';
 import { requirePlatformAdmin } from '../middleware/authorize.js';

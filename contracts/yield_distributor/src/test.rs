@@ -787,8 +787,8 @@ fn test_negative_fee_rejected() {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  V3 — F-004: 2-step admin rotation (propose_admin / accept_admin)
-//  Plus F-016 test coverage backfill.
+//  V3: 2-step admin rotation (propose_admin / accept_admin)
+//  Plus test coverage backfill.
 // ═══════════════════════════════════════════════════════════
 
 #[test]
@@ -915,7 +915,7 @@ fn test_v3_set_admin_clears_pending() {
     assert_eq!(client.get_pending_admin(), None);
 }
 
-// ─── F-016 backfill: invariants and edge cases ──────────────────
+// ─── backfill: invariants and edge cases ──────────────────
 
 #[test]
 fn test_paused_blocks_distribute() {

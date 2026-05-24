@@ -1,7 +1,7 @@
 /**
  * SettlementController — Admin endpoints for MaturitySettlement v2 contract management.
  *
- * v2 (F-003 follow-up) wires the new contract functions — pause, resume,
+ * v2 wires the new contract functions — pause, resume,
  * propose_admin, accept_admin, and read-only queries — through HTTP so
  * operators have the <30-min incident-containment lever Caroline's class
  * defines as the standard.

@@ -202,7 +202,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      # Internal port 8080 (non-root nginx, O-001 hardening)
+      # Internal port 8080
       test: [ "CMD-SHELL", "curl -sf http://localhost:8080/ > /dev/null || wget -q --spider http://localhost:8080/ || exit 1" ]
       interval: 15s
       timeout: 5s

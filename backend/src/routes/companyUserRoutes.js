@@ -185,7 +185,7 @@ router.post('/create-wallet', authenticateToken, [
  *         description: Status da wallet
  */
 // Get wallet creation status
-// SECURITY: requireCompanyUser blocks cross-tenant enumeration (F-05/F-06 IDOR fix)
+// SECURITY: requireCompanyUser blocks cross-tenant enumeration
 router.get('/:userId/wallet-status', requireCompanyUser, CompanyUserController.getWalletStatus);
 
 /**

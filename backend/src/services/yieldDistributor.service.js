@@ -53,7 +53,7 @@ const DISTRIBUTE_ERRORS = {
     9: { code: 'ContractPaused', message: 'Yield distributor is paused — distribute blocked' },
     10: { code: 'DuplicateRecipient', message: 'Duplicate recipient in batch' },
     11: { code: 'SelfTransfer', message: 'Payer cannot be a recipient' },
-    // v3 — F-004
+    // v3
     12: { code: 'NoPendingAdmin', message: 'No pending admin proposal — call propose_admin first' },
 };
 
@@ -408,7 +408,7 @@ export class YieldDistributorService {
             if (!client) return true; // No Redis → skip locking (graceful degradation)
 
             const lockKey = `yield_lock:${offerId}`;
-            // F-03: Atomic SETNX — prevents TOCTOU race where two requests
+            // Atomic SETNX — prevents TOCTOU race where two requests
             // both read null and both acquire the lock
             const result = await client.set(lockKey, jobId, { NX: true, EX: LOCK_TTL_SECONDS });
             if (!result) return false; // Already locked
@@ -455,7 +455,7 @@ export class YieldDistributorService {
     // ═══════════════════════════════════════════════════════════════
 
     // ═══════════════════════════════════════════════════════════════
-    // v3 admin actions (F-004) — pause / resume / 2-step admin rotation
+    // v3 admin actions — pause / resume / 2-step admin rotation
     // ═══════════════════════════════════════════════════════════════
 
     /**

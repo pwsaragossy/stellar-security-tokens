@@ -1430,7 +1430,7 @@ fn test_auth_freeze_buyer_requires_admin_auth() {
 }
 
 // ═══════════════════════════════════════════════════════
-//  F-006 — canonical USDC SAC rejection path
+// canonical USDC SAC rejection path
 //  These tests ONLY compile when the `testing` feature is OFF — i.e. when
 //  the const-baked validation in lib.rs is active. Run with:
 //     cargo test --no-default-features --features testnet
