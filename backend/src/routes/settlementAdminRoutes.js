@@ -86,4 +86,41 @@ router.post('/:offerId/propose-admin', SettlementController.proposeAdmin);
  */
 router.post('/:offerId/accept-admin', SettlementController.acceptAdmin);
 
+/**
+ * @swagger
+ * /api/admin/settlements/{offerId}/mark-defaulted:
+ *   post:
+ *     summary: Formally declare a collateral offer as defaulted
+ *     description: |
+ *       Admin-driven default declaration. Requires:
+ *       - offerType=collateral
+ *       - maturityDate in the past + grace period elapsed (>10 days)
+ *       - settlement contract deployed
+ *       - typed confirmation matching assetCode
+ *       - status not already 'defaulted' (idempotent if it is)
+ *
+ *       Sets status='defaulted' + paymentDueStatus='defaulted' atomically,
+ *       unblocks collateral distribution (DefaultCases), and notifies
+ *       distributed investors (in-app + email, best effort).
+ *     tags: [Settlements]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [confirm_asset_code]
+ *             properties:
+ *               confirm_asset_code:
+ *                 type: string
+ *                 description: Must match offer.assetCode exactly (typed confirmation gate)
+ *     responses:
+ *       200:
+ *         description: Defaulted (or already-defaulted idempotent response)
+ *       400:
+ *         description: Validation failed (grace period, missing settlement, mismatch, etc.)
+ */
+router.post('/:offerId/mark-defaulted', SettlementController.markDefaulted);
+
 export default router;

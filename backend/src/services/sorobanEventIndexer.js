@@ -49,7 +49,7 @@ export class SorobanEventIndexer {
         const offers = await prisma.offer.findMany({
             where: {
                 sorobanContractId: { not: null },
-                status: { in: ['active', 'closed', 'matured'] },
+                status: { in: ['active', 'closed', 'matured', 'defaulted'] },
             },
             select: {
                 id: true,

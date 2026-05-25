@@ -47,8 +47,10 @@ type ActionType =
     // v2 follow-up
     | 'pause_settlement' | 'resume_settlement'
     | 'propose_settlement_admin' | 'accept_settlement_admin'
+    // Default declaration (admin-driven, requires typed confirmation)
+    | 'mark_defaulted'
     | null;
-type StatusFilter = 'all' | 'approved' | 'active' | 'matured' | 'rejected' | 'closed';
+type StatusFilter = 'all' | 'approved' | 'active' | 'matured' | 'defaulted' | 'rejected' | 'closed';
 
 /**
  * On-chain MaturitySettlement contract status. Maps the
@@ -76,6 +78,7 @@ const STATUS_DOT: Record<string, string> = {
     closed: 'bg-zinc-400',
     paused: 'bg-yellow-400',
     matured: 'bg-purple-400',
+    defaulted: 'bg-red-500',
 };
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
@@ -85,6 +88,7 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
     closed: { label: 'Completed', className: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30' },
     paused: { label: 'Paused', className: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
     matured: { label: 'Matured', className: 'bg-purple-500/15 text-purple-400 border-purple-500/30' },
+    defaulted: { label: 'Defaulted', className: 'bg-red-500/20 text-red-300 border-red-500/40' },
 };
 
 const FILTER_CONFIG: { key: StatusFilter; label: string }[] = [
@@ -92,6 +96,7 @@ const FILTER_CONFIG: { key: StatusFilter; label: string }[] = [
     { key: 'approved', label: 'Approved' },
     { key: 'active', label: 'Active' },
     { key: 'matured', label: 'Matured' },
+    { key: 'defaulted', label: 'Defaulted' },
     { key: 'rejected', label: 'Declined' },
     { key: 'closed', label: 'Completed' },
 ];
@@ -132,6 +137,9 @@ export function AdminOffers() {
     const [proposeAdminInput1, setProposeAdminInput1] = useState('');
     const [proposeAdminInput2, setProposeAdminInput2] = useState('');
     const STELLAR_G_RE = /^G[A-Z2-7]{55}$/;
+
+    // mark_defaulted typed-confirmation state (must type assetCode exactly)
+    const [markDefaultedAssetInput, setMarkDefaultedAssetInput] = useState('');
 
     // ─── Data loading ─────────────────────────────────────────────────────
 
@@ -182,9 +190,16 @@ export function AdminOffers() {
         }
     }, [offers]);
 
-    // Load settlement status when selecting a matured/collateral offer
+    // Load settlement status when selecting a collateral offer at maturity or in default.
+    // Covers: matured bullet, periodic-completed waiting for principal, and defaulted offers.
     useEffect(() => {
-        if (selected && selected.offer_type === 'collateral' && selected.status === 'matured') {
+        const needsSettlementStatus = selected && selected.offer_type === 'collateral' && (
+            selected.status === 'matured' ||
+            selected.status === 'defaulted' ||
+            // Periodic offer past maturity awaiting principal return (doesn't flip to 'matured')
+            (selected.payment_type !== 'bullet' && selected.maturity_date && new Date(selected.maturity_date) < new Date())
+        );
+        if (needsSettlementStatus) {
             loadSettlementStatus(selected.id);
         } else {
             setSettlementStatus(null);
@@ -218,12 +233,14 @@ export function AdminOffers() {
         setActionDialog({ type: null, offer: null });
         setProposeAdminInput1('');
         setProposeAdminInput2('');
+        setMarkDefaultedAssetInput('');
     };
 
     const SETTLEMENT_REFRESH_ACTIONS: ActionType[] = [
         'deploy_settlement', 'execute_settlement',
         'pause_settlement', 'resume_settlement',
         'propose_settlement_admin', 'accept_settlement_admin',
+        'mark_defaulted',
     ];
 
     const handleAction = async () => {
@@ -257,10 +274,17 @@ export function AdminOffers() {
                 response = await offersApi.proposeSettlementAdmin(offer.id, proposeAdminInput1);
             } else if (type === 'accept_settlement_admin') {
                 response = await offersApi.acceptSettlementAdmin(offer.id);
+            } else if (type === 'mark_defaulted') {
+                if (markDefaultedAssetInput !== offer.asset_code) {
+                    setError(`Confirmation does not match. Type exactly: ${offer.asset_code}`);
+                    setIsSubmitting(false);
+                    return;
+                }
+                response = await offersApi.markDefaulted(offer.id, markDefaultedAssetInput);
             }
 
             // pause/resume/propose/accept return 202 with { id, status, ... } (no .success wrapper)
-            // deploy_settlement/execute_settlement use ApiResponse with .success
+            // deploy_settlement/execute_settlement/mark_defaulted use ApiResponse with .success
             const succeeded = response && (response.success === true || response.status === 'pending' || response.id);
 
             if (succeeded) {
@@ -274,6 +298,7 @@ export function AdminOffers() {
                     resume_settlement: 'Settlement resumed',
                     propose_settlement_admin: 'New admin proposed — they must sign accept to complete the rotation',
                     accept_settlement_admin: 'Admin role accepted — rotation complete',
+                    mark_defaulted: 'Offer declared defaulted — collateral distribution unblocked in DefaultCases',
                 };
                 toast.success(MSG[type] || `${type} completed`);
                 await loadOffers();
@@ -304,6 +329,7 @@ export function AdminOffers() {
         approved: offers.filter((o) => o.status === 'approved').length,
         active: offers.filter((o) => o.status === 'active').length,
         matured: offers.filter((o) => o.status === 'matured').length,
+        defaulted: offers.filter((o) => o.status === 'defaulted').length,
         rejected: offers.filter((o) => o.status === 'rejected').length,
         closed: offers.filter((o) => o.status === 'closed').length,
     };
@@ -558,12 +584,27 @@ export function AdminOffers() {
                                     </div>
                                 )}
 
-                                {/* ── Settlement Panel (matured debt offers) ── */}
-                                {selected.offer_type === 'collateral' && selected.status === 'matured' && (
-                                    <div className="bg-purple-500/5 rounded-xl border border-purple-500/15 p-4 space-y-3">
+                                {/* ── Settlement Panel ──
+                                  * Covers all collateral offers needing principal return:
+                                  *   - Bullet at maturity (status='matured')
+                                  *   - Periodic past maturity awaiting principal (status='active' AND paymentDueStatus='due')
+                                  *   - Defaulted (admin declared, collateral distribution unblocked)
+                                  */}
+                                {selected.offer_type === 'collateral' && (
+                                    selected.status === 'matured' ||
+                                    selected.status === 'defaulted' ||
+                                    (selected.payment_type !== 'bullet' && selected.maturity_date && new Date(selected.maturity_date) < new Date())
+                                ) && (
+                                    <div className={`rounded-xl border p-4 space-y-3 ${
+                                        selected.status === 'defaulted'
+                                            ? 'bg-red-500/5 border-red-500/20'
+                                            : 'bg-purple-500/5 border-purple-500/15'
+                                    }`}>
                                         <div className="flex items-center gap-2">
-                                            <Landmark className="w-4 h-4 text-purple-400" />
-                                            <h4 className="text-sm font-semibold text-purple-300">Bullet Maturity Settlement</h4>
+                                            <Landmark className={`w-4 h-4 ${selected.status === 'defaulted' ? 'text-red-400' : 'text-purple-400'}`} />
+                                            <h4 className={`text-sm font-semibold ${selected.status === 'defaulted' ? 'text-red-300' : 'text-purple-300'}`}>
+                                                {selected.status === 'defaulted' ? 'Defaulted — Collateral Distribution' : 'Maturity Settlement'}
+                                            </h4>
                                             {settlementLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400 ml-auto" />}
                                         </div>
 
@@ -738,6 +779,25 @@ export function AdminOffers() {
                                                     <Check className="w-3.5 h-3.5" /> Accept Admin
                                                 </Button>
                                             )}
+                                            {/* Mark Defaulted — only show if NOT already defaulted, settlement deployed, AND grace period elapsed */}
+                                            {selected.status !== 'defaulted' && settlementStatus?.deployed && selected.maturity_date && (() => {
+                                                const daysSince = Math.floor((Date.now() - new Date(selected.maturity_date).getTime()) / (24 * 60 * 60 * 1000));
+                                                const graceElapsed = daysSince > 10;
+                                                return (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={!graceElapsed}
+                                                        title={graceElapsed
+                                                            ? `${daysSince} days past maturity — declare default`
+                                                            : `Grace period active (${daysSince}/10 days) — wait ${11 - daysSince} more day(s)`}
+                                                        className="gap-1.5 text-red-400 border-red-500/30 hover:bg-red-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        onClick={() => setActionDialog({ type: 'mark_defaulted', offer: selected })}
+                                                    >
+                                                        <ShieldAlert className="w-3.5 h-3.5" /> Mark Defaulted
+                                                    </Button>
+                                                );
+                                            })()}
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
@@ -1068,6 +1128,49 @@ export function AdminOffers() {
                         <Button onClick={handleAction} disabled={isSubmitting} className="bg-amber-600 hover:bg-amber-700">
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
                             Accept Role
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Mark Defaulted Dialog ── */}
+            <Dialog open={actionDialog.type === 'mark_defaulted' && !!actionDialog.offer} onOpenChange={() => closeAction()}>
+                <DialogContent className="bg-slate-900 border-red-500/30 text-white">
+                    <DialogHeader>
+                        <DialogTitle className="text-red-400 flex items-center gap-2">
+                            <ShieldAlert className="w-5 h-5" /> Declare Default
+                        </DialogTitle>
+                        <DialogDescription className="space-y-2">
+                            <span className="block">
+                                You are about to declare <strong className="text-red-300">{actionDialog.offer?.offer_name}</strong> ({actionDialog.offer?.asset_code}) as <strong className="text-red-300">defaulted</strong>.
+                            </span>
+                            <span className="block text-xs text-zinc-400">
+                                This is a formal regulatory act. It unblocks collateral distribution in DefaultCases, notifies all investors via email + in-app, and creates an audit log entry. <strong className="text-amber-300">This cannot be undone via UI.</strong>
+                            </span>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2 py-2">
+                        <p className="text-xs text-zinc-400">
+                            Type the asset code <code className="bg-white/[0.06] px-1.5 py-0.5 rounded text-red-300 font-mono">{actionDialog.offer?.asset_code}</code> to confirm:
+                        </p>
+                        <Input
+                            value={markDefaultedAssetInput}
+                            onChange={(e) => setMarkDefaultedAssetInput(e.target.value)}
+                            placeholder={actionDialog.offer?.asset_code || ''}
+                            className="bg-white/[0.03] border-white/10 font-mono"
+                            autoFocus
+                        />
+                        {error && <p className="text-xs text-red-400">{error}</p>}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeAction} className="border-white/10">Cancel</Button>
+                        <Button
+                            onClick={handleAction}
+                            disabled={isSubmitting || markDefaultedAssetInput !== actionDialog.offer?.asset_code}
+                            className="bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
+                            Declare Default
                         </Button>
                     </DialogFooter>
                 </DialogContent>

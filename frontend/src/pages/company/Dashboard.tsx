@@ -140,6 +140,25 @@ export function CompanyDashboard() {
                 </div>
             )}
 
+            {/* Default Alert - Defaulted Offers (most severe) */}
+            {offers.filter(o => o.status === 'defaulted').length > 0 && (
+                <div className="p-4 bg-red-600/15 border border-red-600/40 rounded-xl animate-fade-in">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="p-2 rounded-lg bg-red-600/25">
+                                <AlertTriangle className="w-5 h-5 text-red-400" />
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-red-400">⚠ Offer(s) in Default</h4>
+                                <p className="text-sm text-red-400/80">
+                                    {offers.filter(o => o.status === 'defaulted').length} offer(s) declared in default by the platform. Collateral distribution to investors is now in admin's hands.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Upcoming Payments Widget */}
             {upcomingPayments.length > 0 && (
                 <Card className="glass-panel p-0 border-white/5 bg-white/5 animate-fade-in-up overflow-hidden">
@@ -471,6 +490,8 @@ function StatusBadge({ status }: { status: string }) {
                 return 'bg-muted text-muted-foreground border border-white/10';
             case 'matured':
                 return 'bg-rose-500/15 text-rose-400 border border-rose-500/30 animate-pulse';
+            case 'defaulted':
+                return 'bg-red-600/20 text-red-300 border border-red-600/40';
             default:
                 return 'bg-muted text-muted-foreground border border-white/10';
         }
@@ -480,6 +501,7 @@ function StatusBadge({ status }: { status: string }) {
         switch (status) {
             case 'pending_review': return 'Pending Review';
             case 'under_review': return 'Under Review';
+            case 'defaulted': return 'Defaulted';
             default: return status.charAt(0).toUpperCase() + status.slice(1);
         }
     };

@@ -33,6 +33,7 @@ enum OfferStatus {
   paused // Emergency pause by admin
   closed
   matured // Bullet offer reached maturity, awaiting company payment
+  defaulted // Bullet offer where company missed payment past grace period — admin declared default; collateral distribution unblocked
 }
 
 enum PaymentType {
@@ -1114,8 +1115,8 @@ model RampWebhookEvent {
 //
 // The keypair is generated server-side at first-off-ramp time, the seed is
 // encrypted with AES-256-GCM using OFFRAMP_KEYRING_SECRET, and the public key
-// is funded + has trustlines established via a sponsored multi-op TX.
-// Key rotation and recovery are handled out-of-band via the operator runbook.
+// is funded + has trustlines established via a sponsored multi-op TX. See
+// the operator runbook for the key-rotation + recovery procedures.
 //
 // `encryptionVersion` allows future re-keying (e.g. v2 = KMS-managed envelope
 // encryption). Migration script reads version, decrypts under the old scheme,

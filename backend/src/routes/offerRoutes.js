@@ -654,9 +654,24 @@ router.post('/admin/offers/:id/deploy-settlement', requirePlatformAdmin, async (
 router.post('/admin/offers/:id/init-settlement', requirePlatformAdmin, async (req, res) => {
     try {
         const { SorobanSettlementService } = await import('../services/sorobanSettlement.service.js');
+        const { default: prisma } = await import('../config/prisma.js');
         const offerId = parseInt(req.params.id);
         const maxFeeBps = req.body.max_fee_bps || 500;
         const result = await SorobanSettlementService.buildInitializeXdr(offerId, maxFeeBps);
+
+        // Clear the requires_settlement_deploy marker now that initialize XDR was built.
+        // (Conservatively cleared at initialize step — deploy alone leaves the contract uninitialized.)
+        const offer = await prisma.offer.findUnique({ where: { id: offerId } });
+        const currentRules = typeof offer?.offerRules === 'string'
+            ? JSON.parse(offer.offerRules)
+            : offer?.offerRules || {};
+        if (currentRules.requires_settlement_deploy) {
+            const { requires_settlement_deploy: _drop, ...rest } = currentRules;
+            await prisma.offer.update({
+                where: { id: offerId },
+                data: { offerRules: rest },
+            });
+        }
         res.json({ success: true, data: result });
     } catch (error) {
         res.status(400).json({ success: false, error: error.message });

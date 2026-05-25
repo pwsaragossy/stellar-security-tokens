@@ -116,18 +116,37 @@ export class AlertRouter {
     }
 
     /**
-     * DB notification (existing system)
+     * DB notification (existing system).
+     *
+     * NotificationService.createNotification is positional and per-user. To broadcast
+     * to "all admins" we fetch active platform_admins and fan out one notification per admin.
+     * `severity` maps to the notification `type` enum (info/warning/error).
      */
     static async _sendDbNotification({ title, message, severity }) {
         try {
             const { NotificationService } = await import('./notification.service.js');
-            await NotificationService.createNotification({
-                userId: null, // all admins
-                type: 'system_alert',
-                title,
-                message,
-                severity,
+            const { default: prisma } = await import('../config/prisma.js');
+
+            // Map severity → notification type (warning/error/info)
+            const type = severity === 'critical' || severity === 'error' ? 'error'
+                : severity === 'warning' ? 'warning'
+                : 'info';
+
+            const admins = await prisma.platformAdmin.findMany({
+                where: { isActive: true },
+                select: { id: true },
             });
+
+            for (const admin of admins) {
+                await NotificationService.createNotification(
+                    admin.id,
+                    'platform_admin',
+                    type,
+                    title,
+                    message,
+                    null, // no actionLink for generic system alerts
+                );
+            }
         } catch (err) {
             log.error(`[DB] Notification failed: ${err.message}`);
         }

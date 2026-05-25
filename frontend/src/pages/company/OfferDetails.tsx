@@ -483,6 +483,8 @@ function StatusBadge({ status }: { status: string }) {
                 return 'bg-muted/50 text-muted-foreground border-white/10';
             case 'matured':
                 return 'bg-rose-500/15 text-rose-400 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.3)] animate-pulse';
+            case 'defaulted':
+                return 'bg-red-600/20 text-red-300 border-red-600/40 shadow-[0_0_15px_rgba(220,38,38,0.4)]';
             default:
                 return 'bg-muted/50 text-muted-foreground border-white/10';
         }
@@ -492,6 +494,7 @@ function StatusBadge({ status }: { status: string }) {
         switch (status) {
             case 'pending_review': return 'Pending Review';
             case 'under_review': return 'Under Review';
+            case 'defaulted': return 'Defaulted';
             default: return status.charAt(0).toUpperCase() + status.slice(1);
         }
     };

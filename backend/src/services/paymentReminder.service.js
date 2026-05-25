@@ -86,9 +86,10 @@ export class PaymentReminderService {
         today.setHours(0, 0, 0, 0);
 
         // Get all active offers with upcoming payments
+        // Includes 'matured' so bullet offers past maturity still get reminded.
         const offers = await prisma.offer.findMany({
             where: {
-                status: 'active',
+                status: { in: ['active', 'matured'] },
                 nextPaymentDue: { not: null },
                 paymentDueStatus: { notIn: ['defaulted'] }
             },
@@ -207,17 +208,18 @@ export class PaymentReminderService {
         }
 
         // Send dashboard notification if configured
+        // (NotificationService.createNotification is positional, not object-style — was a silent bug)
         if (schedule?.sendNotification) {
             for (const user of companyUsers) {
                 try {
-                    await NotificationService.createNotification({
-                        userId: user.id,
-                        userType: 'company_user',
-                        type: schedule.daysBeforeDue <= 3 ? 'warning' : 'info',
-                        title: this.getReminderTitle(reminderType, offer.offerName),
-                        message: this.getReminderMessage(reminderType, amountDue, dueDate),
-                        actionLink: `/company/payments/${offer.id}`
-                    });
+                    await NotificationService.createNotification(
+                        user.id,
+                        'company_user',
+                        schedule.daysBeforeDue <= 3 ? 'warning' : 'info',
+                        this.getReminderTitle(reminderType, offer.offerName),
+                        this.getReminderMessage(reminderType, amountDue, dueDate),
+                        `/company/payments/${offer.id}`,
+                    );
                 } catch (error) {
                     log.error(`[PaymentReminder] Notification failed for user ${user.id}`, error);
                 }
@@ -242,41 +244,106 @@ export class PaymentReminderService {
     }
 
     /**
-     * Send overdue payment reminder with escalating urgency
+     * Send overdue payment reminder with escalating urgency.
+     *
+     * Handles three flavors:
+     *   1. Periodic offer with a missed installment (interest payment).
+     *   2. Bullet offer past maturity (principal + interest due).
+     *   3. Periodic offer past maturity (principal-only return due).
+     *
+     * Cooldown: send max one reminder per day (existing dedup), AND stop entirely
+     * after 30 cumulative overdue reminders (escalate to admin instead).
      */
     static async sendOverdueReminder(offer, daysOverdue, dueDate) {
         const GRACE_PERIOD = 10;
-        const daysUntilDefault = GRACE_PERIOD - daysOverdue;
+        const COOLDOWN_LIMIT = 30; // after 30 daily reminders, stop nagging — escalate to admin
+        const daysUntilDefault = Math.max(0, GRACE_PERIOD - daysOverdue);
 
+        const isBullet = offer.paymentType === 'bullet';
+        const isCollateralAtMaturity = offer.offerType === 'collateral'
+            && offer.maturityDate
+            && new Date(offer.maturityDate) < new Date();
+
+        // Compute amount due correctly for each scenario.
         const totalInvested = offer.investments.reduce(
-            (sum, inv) => sum + parseFloat(inv.usdcAmount),
-            0
+            (sum, inv) => sum + parseFloat(inv.usdcAmount), 0
         );
         const annualRate = parseFloat(offer.annualInterestRate || 0);
-        const periodsPerYear = this.getPeriodsPerYear(offer.paymentType);
-        const baseAmount = totalInvested * (annualRate / 100 / periodsPerYear);
-        const lateFee = baseAmount * 0.001 * daysOverdue; // 0.1% per day
-        const totalDue = baseAmount + lateFee;
+        const investorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
 
-        const companyUsers = await prisma.companyUser.findMany({
-            where: { companyId: offer.companyId, isActive: true }
-        });
+        let amountDue;
+        let reminderContext;
+        if (isBullet && isCollateralAtMaturity) {
+            // Bullet at maturity: principal + accrued interest at investor rate
+            const yearsToMaturity = (new Date(offer.maturityDate) - new Date(offer.createdAt)) / (365 * 24 * 60 * 60 * 1000);
+            const interest = totalInvested * (investorRate / 100) * yearsToMaturity;
+            amountDue = totalInvested + interest;
+            reminderContext = 'principal_plus_interest';
+        } else if (!isBullet && isCollateralAtMaturity) {
+            // Periodic at maturity: principal only (interest already paid via dividends)
+            amountDue = totalInvested;
+            reminderContext = 'principal_only';
+        } else {
+            // Periodic missed installment (interest only)
+            const periodsPerYear = this.getPeriodsPerYear(offer.paymentType);
+            amountDue = totalInvested * (investorRate / 100 / periodsPerYear);
+            reminderContext = 'periodic_interest';
+        }
 
         // Only send one overdue reminder per day
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
 
-        const existingOverdue = await prisma.paymentReminder.findFirst({
-            where: {
-                offerId: offer.id,
-                reminderType: 'overdue',
-                sentAt: { gte: todayStart }
+        const [existingOverdueToday, totalOverdueReminders] = await Promise.all([
+            prisma.paymentReminder.findFirst({
+                where: { offerId: offer.id, reminderType: 'overdue', sentAt: { gte: todayStart } }
+            }),
+            prisma.paymentReminder.count({
+                where: { offerId: offer.id, reminderType: 'overdue' }
+            })
+        ]);
+
+        if (existingOverdueToday) return;
+
+        // Cooldown: after COOLDOWN_LIMIT cumulative overdue reminders, stop spamming
+        // the company and escalate to admin instead (one-time notification).
+        if (totalOverdueReminders >= COOLDOWN_LIMIT) {
+            const escalationKey = `escalation:${offer.id}`;
+            const alreadyEscalated = await prisma.paymentReminder.findFirst({
+                where: { offerId: offer.id, reminderType: escalationKey }
+            });
+            if (!alreadyEscalated) {
+                log.warn(`[PaymentReminder] Cooldown reached for offer ${offer.id} (${totalOverdueReminders} reminders) — escalating to admin`);
+                try {
+                    const admins = await prisma.platformAdmin.findMany({
+                        where: { isActive: true }, select: { id: true, email: true, name: true }
+                    });
+                    for (const admin of admins) {
+                        await NotificationService.createNotification(
+                            admin.id, 'platform_admin', 'error',
+                            `⚠ Company abandoned offer: ${offer.assetCode}`,
+                            `Company "${offer.company.name}" has ignored ${totalOverdueReminders} reminders for offer "${offer.offerName}" (${offer.assetCode}). Consider declaring default via the admin panel.`,
+                            `/admin?tab=offers&id=${offer.id}`,
+                        );
+                    }
+                    await prisma.paymentReminder.create({
+                        data: {
+                            offerId: offer.id, companyId: offer.companyId,
+                            reminderType: escalationKey, dueDate, amountDue, sentVia: 'notification'
+                        }
+                    });
+                } catch (escErr) {
+                    log.error(`[PaymentReminder] Admin escalation failed for offer ${offer.id}`, escErr);
+                }
             }
+            return;
+        }
+
+        const companyUsers = await prisma.companyUser.findMany({
+            where: { companyId: offer.companyId, isActive: true }
         });
 
-        if (existingOverdue) return;
-
-        // Send urgent email
+        // Send urgent email (NO late_fee — late fees are disabled until legal framework is in place)
         for (const user of companyUsers) {
             try {
                 await EmailService.sendOverduePaymentWarning({
@@ -286,11 +353,12 @@ export class PaymentReminderService {
                     offerName: offer.offerName,
                     assetCode: offer.assetCode,
                     daysOverdue,
-                    daysUntilDefault: Math.max(0, daysUntilDefault),
-                    baseAmount,
-                    lateFee,
-                    totalDue,
+                    daysUntilDefault,
+                    baseAmount: amountDue,
+                    lateFee: 0,        // explicit zero — see companyPayment.service.js LATE_FEE_PERCENT_PER_DAY
+                    totalDue: amountDue,
                     collateralAtRisk: daysUntilDefault <= 3,
+                    reminderContext,
                     payInvestorsUrl: `${process.env.FRONTEND_URL}/company/payments/${offer.id}`
                 });
             } catch (error) {
@@ -298,20 +366,25 @@ export class PaymentReminderService {
             }
         }
 
-        // Send urgent notification
+        // Send in-app notification — messaging is honest about what's at stake
+        // (collateral execution upon admin default declaration) without claiming
+        // late fees that the system does not actually charge.
         for (const user of companyUsers) {
-            await NotificationService.createNotification({
-                userId: user.id,
-                userType: 'company_user',
-                type: 'error',
-                title: daysUntilDefault <= 3
-                    ? `⚠️ URGENT: Collateral at risk for ${offer.offerName}`
+            const isPrincipalReturn = reminderContext === 'principal_only' || reminderContext === 'principal_plus_interest';
+            await NotificationService.createNotification(
+                user.id,
+                'company_user',
+                'error',
+                daysUntilDefault <= 3
+                    ? `⚠ URGENT: Collateral at risk for ${offer.offerName}`
                     : `Payment overdue: ${offer.offerName}`,
-                message: daysUntilDefault <= 3
-                    ? `Pay immediately to prevent collateral liquidation. ${daysUntilDefault} days remaining.`
-                    : `Payment ${daysOverdue} days overdue. Late fees accruing at 0.1%/day.`,
-                actionLink: `/company/payments/${offer.id}`
-            });
+                daysUntilDefault <= 3
+                    ? `Pay immediately to prevent admin from declaring default. ${daysUntilDefault} day(s) remaining before declaration is possible.`
+                    : (isPrincipalReturn
+                        ? `Principal return overdue by ${daysOverdue} day(s). Admin may formally declare default after grace period (10 days).`
+                        : `Periodic payment overdue by ${daysOverdue} day(s). Pay to avoid escalation.`),
+                `/company/payments/${offer.id}`,
+            );
         }
 
         // Record overdue reminder
@@ -321,7 +394,7 @@ export class PaymentReminderService {
                 companyId: offer.companyId,
                 reminderType: 'overdue',
                 dueDate,
-                amountDue: totalDue,
+                amountDue,
                 sentVia: 'both'
             }
         });
@@ -334,7 +407,16 @@ export class PaymentReminderService {
         let newStatus;
 
         if (daysUntilDue < -10) {
-            newStatus = 'defaulted';
+            // Past grace period. For any COLLATERAL (debt) offer past maturity,
+            // never auto-escalate to 'defaulted' — admin must declare default
+            // explicitly via /admin/offers/:id/mark-defaulted (regulatory:
+            // execução de garantia requires formal admin act, not a cron flip).
+            // This covers bullet (single payout at maturity) AND periodic
+            // (interest paid during, principal return at maturity).
+            const isCollateralAtMaturity = offer.offerType === 'collateral'
+                && offer.maturityDate
+                && new Date(offer.maturityDate) < new Date();
+            newStatus = isCollateralAtMaturity ? 'overdue' : 'defaulted';
         } else if (daysUntilDue < 0) {
             newStatus = 'overdue';
         } else if (daysUntilDue === 0) {

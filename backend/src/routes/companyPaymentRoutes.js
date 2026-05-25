@@ -386,21 +386,26 @@ router.post('/:offerId/prepare-deposit', authenticateToken, requireCompanyUser, 
             where: { id: parseInt(offerId), companyId }
         });
         if (!offer) return res.status(404).json({ success: false, error: 'Offer not found' });
-        if (offer.paymentType !== 'bullet') {
-            return res.status(400).json({ success: false, error: 'Settlement deposit is only for bullet (maturity) offers' });
+        if (offer.offerType !== 'collateral') {
+            return res.status(400).json({ success: false, error: 'Settlement deposit is only for collateral (debt) offers' });
+        }
+        if (!offer.maturityDate) {
+            return res.status(400).json({ success: false, error: 'Offer has no maturity date — deposit not applicable' });
         }
         if (!offer.sorobanSettlementContractId) {
             return res.status(400).json({ success: false, error: 'No settlement contract deployed. Contact admin.' });
         }
 
-        // Calculate bullet payment server-side (source of truth)
-        const bulletDetails = await CompanyPaymentService.calculateBulletPayment(parseInt(offerId));
+        // Calculate maturity payout server-side (source of truth).
+        // Bullet → principal + interest; Periodic → principal only (interest paid during).
+        const maturityDetails = await CompanyPaymentService.calculateMaturityPayout(parseInt(offerId));
 
-        // Company pays: totalPayout (investor principal + investorRate interest) + spread (company fee)
+        // Company pays: totalPayout (investor principal + interest, if bullet) + spread (yield fee, if bullet)
+        // For periodic at maturity, spread is 0 (already collected during dividends).
         const round7 = v => Math.round(v * 10_000_000) / 10_000_000;
-        const investorPayout = bulletDetails.totalPayout;
-        const companyInterest = bulletDetails.companyTotalInterest || bulletDetails.totalInterest;
-        const investorInterest = bulletDetails.totalInterest;
+        const investorPayout = maturityDetails.totalPayout;
+        const companyInterest = maturityDetails.companyTotalInterest || maturityDetails.totalInterest;
+        const investorInterest = maturityDetails.totalInterest;
         const platformFee = round7(Math.max(0, companyInterest - investorInterest));
         const depositAmount = round7(investorPayout + platformFee);
 
@@ -418,13 +423,14 @@ router.post('/:offerId/prepare-deposit', authenticateToken, requireCompanyUser, 
                 // Breakdown for the company UI (shows what they're paying & why)
                 depositAmount,
                 breakdown: {
-                    investorPrincipal: bulletDetails.totalPrincipal,
+                    investorPrincipal: maturityDetails.totalPrincipal,
                     investorInterest: round7(investorInterest),
                     platformFee,
                     totalOwed: depositAmount,
                 },
-                investorCount: bulletDetails.investorCount,
-                maturityDate: bulletDetails.maturityDate,
+                investorCount: maturityDetails.investorCount,
+                maturityDate: maturityDetails.maturityDate,
+                paymentType: offer.paymentType,
             },
         });
     } catch (error) {

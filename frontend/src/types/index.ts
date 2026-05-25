@@ -57,7 +57,7 @@ export interface Offer {
   investor_rate?: number;
   offer_type: 'collateral' | 'sale';
   offer_rules: Record<string, any>;
-  status: 'pending_review' | 'under_review' | 'approved' | 'rejected' | 'active' | 'paused' | 'closed' | 'matured';
+  status: 'pending_review' | 'under_review' | 'approved' | 'rejected' | 'active' | 'paused' | 'closed' | 'matured' | 'defaulted';
   rejection_reason?: string;
   reviewed_by?: number;
   reviewed_at?: string;

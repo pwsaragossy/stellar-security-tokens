@@ -849,6 +849,26 @@ export class OfferController {
         log.info(`[reviewOffer] Set investorRate=${investor_rate}% for offer ${id}`);
       }
 
+      // Any COLLATERAL offer with a maturityDate requires a MaturitySettlement contract:
+      //   - Bullet: full payout (principal + interest) at maturity, via Settlement contract.
+      //   - Periodic (monthly/quarterly/semi_annual/annual): principal return at maturity,
+      //     via the same Settlement contract (interest already paid during).
+      // We mark it here; UI shows a "Deploy Settlement" call-to-action until completed.
+      // The actual deploy + initialize is admin-driven (uses existing /admin/offers/:id/deploy-settlement
+      // and /admin/offers/:id/init-settlement endpoints). On mark-defaulted, we validate it exists.
+      if (status === 'approved' && updatedOffer && updatedOffer.offerType === 'collateral' && updatedOffer.maturityDate) {
+        const currentRules = typeof updatedOffer.offerRules === 'string'
+          ? JSON.parse(updatedOffer.offerRules)
+          : updatedOffer.offerRules || {};
+        updatedOffer = await prisma.offer.update({
+          where: { id: parseInt(id) },
+          data: {
+            offerRules: { ...currentRules, requires_settlement_deploy: true },
+          },
+        });
+        log.info(`[reviewOffer] Marked offer ${id} as requires_settlement_deploy (${updatedOffer.paymentType} collateral with maturity)`);
+      }
+
       if (!updatedOffer) {
         return res.status(404).json({
           success: false,

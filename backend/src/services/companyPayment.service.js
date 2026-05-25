@@ -21,7 +21,7 @@ const log = logger.scope('CompanyPayment');
 // Spread (company rate - investor rate) → platform treasury revenue.
 // When investorRate is null: no spread, investor gets full company rate.
 const LATE_FEE_PERCENT_PER_DAY = 0;    // Disabled for MVP — no legal framework yet
-const GRACE_PERIOD_DAYS = 10;
+export const GRACE_PERIOD_DAYS = 10;   // Shared with SettlementController for mark-defaulted gating
 const DEFAULT_FEE_PERCENT = 0;         // Disabled for MVP — no legal framework yet
 
 const USDC_ASSET_CODE = 'USDC';
@@ -387,6 +387,118 @@ export class CompanyPaymentService {
             log.error(`Error calculating on-chain bullet payment for offer ${offer.id}:`, error);
             throw new Error(`Failed to calculate on-chain bullet payment: ${error.message}`);
         }
+    }
+
+    /**
+     * Calculate the payout owed at maturity (principal return) — dispatches by paymentType.
+     *
+     * Bullet: full payout = principal + accrued interest (via calculateBulletPayment).
+     * Periodic (monthly/quarterly/semi_annual/annual): principal only — interest
+     * was already paid during the life of the offer via periodic dividends.
+     *
+     * Shape mirrors calculateBulletPayment so SorobanSettlementService.executeFullSettlement
+     * can consume either uniformly.
+     *
+     * @param {number} offerId - Offer ID
+     * @returns {Promise<Object>} Maturity payout breakdown
+     */
+    static async calculateMaturityPayout(offerId) {
+        const offer = await prisma.offer.findUnique({
+            where: { id: offerId },
+            select: { id: true, paymentType: true, maturityDate: true },
+        });
+        if (!offer) throw new Error(`Offer ${offerId} not found`);
+        if (!offer.maturityDate) throw new Error('Offer has no maturityDate — cannot calculate maturity payout');
+
+        if (offer.paymentType === 'bullet') {
+            return this.calculateBulletPayment(offerId);
+        }
+        return this.calculatePrincipalReturn(offerId);
+    }
+
+    /**
+     * Calculate principal-only return for periodic offers reaching maturity.
+     * Interest was already paid out during the offer's lifetime via periodic payments,
+     * so this returns just the original principal per investor.
+     *
+     * @param {number} offerId - Offer ID
+     * @returns {Promise<Object>} Principal return breakdown
+     */
+    static async calculatePrincipalReturn(offerId) {
+        const offer = await prisma.offer.findUnique({
+            where: { id: offerId },
+            include: {
+                investments: {
+                    where: { status: 'distributed' },
+                    include: { investor: true }
+                }
+            }
+        });
+        if (!offer) throw new Error(`Offer ${offerId} not found`);
+        if (offer.paymentType === 'bullet') {
+            throw new Error('Use calculateBulletPayment for bullet offers');
+        }
+
+        // On-chain path for unlocked tokens
+        if (offer.isTokenLocked === false) {
+            const investorsWithBalances = await PaymentService.getInvestorsWithBalancesByOffer(offer.id);
+            const totalTokensHeld = investorsWithBalances.reduce(
+                (sum, inv) => sum + parseFloat(inv.token_balance || 0), 0
+            );
+            const breakdown = investorsWithBalances.map(inv => {
+                const principal = parseFloat(inv.token_balance || 0);
+                return {
+                    investorId: inv.id,
+                    investorName: inv.name,
+                    investorWallet: inv.stellarContractId,
+                    principal,
+                    interest: 0,
+                    totalPayout: round7(principal),
+                };
+            }).filter(b => b.principal > 0);
+            return {
+                offerId: offer.id,
+                assetCode: offer.assetCode,
+                offerName: offer.offerName,
+                maturityDate: offer.maturityDate,
+                totalPrincipal: totalTokensHeld,
+                totalInterest: 0,
+                companyTotalInterest: 0,
+                totalPayout: totalTokensHeld,
+                investorCount: breakdown.length,
+                balanceSource: 'on_chain',
+                breakdown,
+            };
+        }
+
+        // DB path for locked tokens
+        const totalInvested = offer.investments.reduce(
+            (sum, inv) => sum + parseFloat(inv.usdcAmount), 0
+        );
+        const breakdown = offer.investments.map(inv => {
+            const principal = parseFloat(inv.usdcAmount);
+            return {
+                investorId: inv.investorId,
+                investorName: inv.investor.name,
+                investorWallet: inv.investor.stellarContractId,
+                principal,
+                interest: 0,
+                totalPayout: round7(principal),
+            };
+        });
+        return {
+            offerId,
+            assetCode: offer.assetCode,
+            offerName: offer.offerName,
+            maturityDate: offer.maturityDate,
+            totalPrincipal: totalInvested,
+            totalInterest: 0,
+            companyTotalInterest: 0, // periodic: interest already paid via dividends
+            totalPayout: totalInvested,
+            investorCount: breakdown.length,
+            balanceSource: 'database',
+            breakdown,
+        };
     }
 
     /**
@@ -1044,24 +1156,27 @@ export class CompanyPaymentService {
             let penalty = null;
 
             if (daysOverdue > GRACE_PERIOD_DAYS) {
-                // Default triggered
+                // Default triggered (periodic only — bullet is admin-driven via mark-defaulted endpoint).
                 newStatus = 'defaulted';
 
-                // Create default penalty
-                const paymentDetails = await this.calculateOwedAmount(offer.id);
-                const defaultFee = paymentDetails.totalOwed * DEFAULT_FEE_PERCENT;
-
-                penalty = await prisma.companyPenalty.create({
-                    data: {
-                        companyId: offer.companyId,
-                        offerId: offer.id,
-                        penaltyType: 'default_fee',
-                        description: `Default on ${offer.offerName} - ${daysOverdue} days overdue`,
-                        amount: defaultFee,
-                        daysLate: daysOverdue,
-                        status: 'pending'
+                // Only create CompanyPenalty if the fee actually has a value (no zero-amount rows).
+                if (DEFAULT_FEE_PERCENT > 0) {
+                    const paymentDetails = await this.calculateOwedAmount(offer.id);
+                    const defaultFee = paymentDetails.totalOwed * DEFAULT_FEE_PERCENT;
+                    if (defaultFee > 0) {
+                        penalty = await prisma.companyPenalty.create({
+                            data: {
+                                companyId: offer.companyId,
+                                offerId: offer.id,
+                                penaltyType: 'default_fee',
+                                description: `Default on ${offer.offerName} - ${daysOverdue} days overdue`,
+                                amount: defaultFee,
+                                daysLate: daysOverdue,
+                                status: 'pending'
+                            }
+                        });
                     }
-                });
+                }
 
                 log.warn(`DEFAULT: Offer ${offer.id} defaulted after ${daysOverdue} days`);
 
@@ -1069,31 +1184,35 @@ export class CompanyPaymentService {
                 // Apply daily late fee
                 newStatus = 'overdue';
 
-                const paymentDetails = await this.calculateOwedAmount(offer.id);
-                const lateFee = paymentDetails.totalOwed * LATE_FEE_PERCENT_PER_DAY * daysOverdue;
+                if (LATE_FEE_PERCENT_PER_DAY > 0) {
+                    const paymentDetails = await this.calculateOwedAmount(offer.id);
+                    const lateFee = paymentDetails.totalOwed * LATE_FEE_PERCENT_PER_DAY * daysOverdue;
 
-                // Check if late fee already exists for today
-                const existingPenalty = await prisma.companyPenalty.findFirst({
-                    where: {
-                        offerId: offer.id,
-                        penaltyType: 'late_fee',
-                        createdAt: { gte: new Date(now.toDateString()) }
-                    }
-                });
+                    if (lateFee > 0) {
+                        // Check if late fee already exists for today
+                        const existingPenalty = await prisma.companyPenalty.findFirst({
+                            where: {
+                                offerId: offer.id,
+                                penaltyType: 'late_fee',
+                                createdAt: { gte: new Date(now.toDateString()) }
+                            }
+                        });
 
-                if (!existingPenalty) {
-                    penalty = await prisma.companyPenalty.create({
-                        data: {
-                            companyId: offer.companyId,
-                            offerId: offer.id,
-                            penaltyType: 'late_fee',
-                            description: `Late payment fee - ${daysOverdue} days overdue`,
-                            amount: lateFee,
-                            percentageRate: LATE_FEE_PERCENT_PER_DAY,
-                            daysLate: daysOverdue,
-                            status: 'pending'
+                        if (!existingPenalty) {
+                            penalty = await prisma.companyPenalty.create({
+                                data: {
+                                    companyId: offer.companyId,
+                                    offerId: offer.id,
+                                    penaltyType: 'late_fee',
+                                    description: `Late payment fee - ${daysOverdue} days overdue`,
+                                    amount: lateFee,
+                                    percentageRate: LATE_FEE_PERCENT_PER_DAY,
+                                    daysLate: daysOverdue,
+                                    status: 'pending'
+                                }
+                            });
                         }
-                    });
+                    }
                 }
             }
 
@@ -1116,9 +1235,14 @@ export class CompanyPaymentService {
         }
 
         // 2. Check bullet payment maturity dates
+        // Filter includes 'matured' so bullet offers AFTER processBulletPayments flipped
+        // them are still reachable here (was the dead-code bug; now fixed).
+        // IMPORTANT: this section informs paymentDueStatus only ('due'/'overdue').
+        // Transition to 'defaulted' is admin-driven via POST /admin/offers/:id/mark-defaulted
+        // (regulatory: execução de garantia requires formal admin act, not a cron flip).
         const maturingBulletOffers = await prisma.offer.findMany({
             where: {
-                status: 'active',
+                status: { in: ['active', 'matured'] },
                 paymentType: 'bullet',
                 maturityDate: { lt: now },
                 paymentDueStatus: { notIn: ['defaulted'] }
@@ -1130,37 +1254,15 @@ export class CompanyPaymentService {
             const daysOverdue = Math.floor((now - new Date(offer.maturityDate)) / (24 * 60 * 60 * 1000));
 
             let newStatus = offer.paymentDueStatus;
-            let penalty = null;
 
             if (daysOverdue > GRACE_PERIOD_DAYS) {
-                // Default triggered for bullet payment
-                newStatus = 'defaulted';
-
-                const bulletDetails = await this.calculateBulletPayment(offer.id);
-                const defaultFee = bulletDetails.totalPayout * DEFAULT_FEE_PERCENT;
-
-                penalty = await prisma.companyPenalty.create({
-                    data: {
-                        companyId: offer.companyId,
-                        offerId: offer.id,
-                        penaltyType: 'default_fee',
-                        description: `Bullet payment default on ${offer.offerName} - ${daysOverdue} days after maturity`,
-                        amount: defaultFee,
-                        daysLate: daysOverdue,
-                        status: 'pending'
-                    }
-                });
-
-                log.warn(`BULLET DEFAULT: Offer ${offer.id} defaulted ${daysOverdue} days after maturity`);
-
-            } else if (daysOverdue > 0) {
-                // Mark as overdue (maturity passed, grace period active)
+                // Past grace — KEEP 'overdue'; admin must mark-defaulted manually.
                 newStatus = 'overdue';
-
-                // Notify company about matured bullet payment
+                log.warn(`BULLET PAST GRACE: Offer ${offer.id} ${daysOverdue} days overdue — awaiting admin mark-defaulted`);
+            } else if (daysOverdue > 0) {
+                newStatus = 'overdue';
                 log.info(`BULLET DUE: Offer ${offer.id} matured ${daysOverdue} days ago`);
             } else if (daysOverdue === 0) {
-                // Maturity day - mark as due
                 newStatus = 'due';
                 log.info(`BULLET MATURED: Offer ${offer.id} reached maturity today`);
             }
@@ -1183,7 +1285,7 @@ export class CompanyPaymentService {
                 maturityDate: offer.maturityDate,
                 daysOverdue,
                 status: newStatus,
-                penalty
+                penalty: null
             });
         }
 

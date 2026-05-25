@@ -280,5 +280,27 @@ export const offersApi = {
     const response = await api.post(`/admin/settlements/${offerId}/accept-admin`);
     return response.data;
   },
+
+  /**
+   * Formally declare a collateral offer as defaulted.
+   * Requires typed confirmation: confirmAssetCode must exactly match offer.assetCode.
+   * Idempotent: returns {alreadyDefaulted: true} if already in defaulted state.
+   */
+  markDefaulted: async (offerId: number, confirmAssetCode: string): Promise<{
+    success: boolean;
+    alreadyDefaulted?: boolean;
+    offerId: number;
+    assetCode?: string;
+    status: string;
+    paymentDueStatus: string;
+    daysSinceMaturity?: number;
+    investorsNotified?: number;
+    message: string;
+  }> => {
+    const response = await api.post(`/admin/settlements/${offerId}/mark-defaulted`, {
+      confirm_asset_code: confirmAssetCode,
+    });
+    return response.data;
+  },
 };
 

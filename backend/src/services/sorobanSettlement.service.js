@@ -358,21 +358,24 @@ export class SorobanSettlementService {
             throw new Error('Settlement only available for debt offers');
         }
 
-        // Import dynamically to avoid circular dependency
+        // Import dynamically to avoid circular dependency.
+        // Use calculateMaturityPayout — dispatches to bullet (principal+interest)
+        // or periodic (principal-only; interest already paid via dividends).
         const { CompanyPaymentService } = await import('./companyPayment.service.js');
-        const bulletDetails = await CompanyPaymentService.calculateBulletPayment(offerId);
+        const maturityDetails = await CompanyPaymentService.calculateMaturityPayout(offerId);
 
-        // Build investor list from bullet calculation
-        const allInvestors = bulletDetails.breakdown
+        // Build investor list
+        const allInvestors = maturityDetails.breakdown
             .filter(b => b.investorWallet && b.totalPayout > 0)
             .map(b => ({
                 investor: b.investorWallet,
                 payout: b.totalPayout,
             }));
 
-        // Calculate platform fee (yield spread)
+        // Platform fee (yield spread). For periodic offers, companyTotalInterest
+        // is 0 (no spread at maturity — spread was already collected via dividend payments).
         const totalPlatformFee = Math.max(0,
-            (bulletDetails.companyTotalInterest || bulletDetails.totalInterest) - bulletDetails.totalInterest
+            (maturityDetails.companyTotalInterest || maturityDetails.totalInterest) - maturityDetails.totalInterest
         );
 
         // Split into batches of MAX_BATCH_SIZE
@@ -443,10 +446,10 @@ export class SorobanSettlementService {
 
         await CPS._recordPayments(
             offer,
-            bulletDetails.breakdown,
+            maturityDetails.breakdown,
             allTxHashes,
             spreadPct,
-            true  // isBullet
+            offer.paymentType === 'bullet'  // isBullet — only true for bullet; periodic at maturity already paid interest
         );
 
         await prisma.offer.update({

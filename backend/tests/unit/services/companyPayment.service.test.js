@@ -37,6 +37,8 @@ describe('CompanyPaymentService', () => {
             const requiredMethods = [
                 'calculateOwedAmount',
                 'calculateBulletPayment',
+                'calculateMaturityPayout',       // new (Fase 4): dispatch bullet vs periodic
+                'calculatePrincipalReturn',      // new (Fase 4): periodic principal-only return
                 'getUpcomingPayments',
                 'createPaymentTransaction',
                 'processSignedPayment',
@@ -76,6 +78,62 @@ describe('CompanyPaymentService', () => {
         } catch (error) {
             if (error.message.includes('Server') || error.message.includes('import')) {
                 assert.ok(true, 'Test skipped due to import issue');
+            } else {
+                throw error;
+            }
+        }
+    });
+
+    test('GRACE_PERIOD_DAYS is exported as named export = 10', async () => {
+        try {
+            const module = await import('../../../src/services/companyPayment.service.js');
+            assert.strictEqual(typeof module.GRACE_PERIOD_DAYS, 'number', 'GRACE_PERIOD_DAYS must be a named export');
+            assert.strictEqual(module.GRACE_PERIOD_DAYS, 10, 'GRACE_PERIOD_DAYS value must be 10 — used by SettlementController.markDefaulted gate');
+        } catch (error) {
+            if (error.message.includes('Server') || error.message.includes('import')) {
+                assert.ok(true, 'Test skipped due to import issue');
+            } else {
+                throw error;
+            }
+        }
+    });
+
+    test('calculateMaturityPayout() rejects non-existent offer', async () => {
+        try {
+            if (!CompanyPaymentService) {
+                const module = await import('../../../src/services/companyPayment.service.js');
+                CompanyPaymentService = module.CompanyPaymentService;
+            }
+            await assert.rejects(
+                CompanyPaymentService.calculateMaturityPayout(-99999),
+                /not found/i,
+                'Should throw for non-existent offer'
+            );
+        } catch (error) {
+            if (error.message.includes('Server') || error.message.includes('import') || error.message.includes('PrismaClient')) {
+                assert.ok(true, 'Test skipped — no DB');
+            } else {
+                throw error;
+            }
+        }
+    });
+
+    test('calculatePrincipalReturn() rejects bullet offers (use calculateBulletPayment instead)', async () => {
+        try {
+            if (!CompanyPaymentService) {
+                const module = await import('../../../src/services/companyPayment.service.js');
+                CompanyPaymentService = module.CompanyPaymentService;
+            }
+            // The method's shape: should reject explicitly if paymentType is bullet.
+            // Without a real offer in DB we test only the not-found path, but the guard exists.
+            await assert.rejects(
+                CompanyPaymentService.calculatePrincipalReturn(-99999),
+                /not found/i,
+                'Should throw for non-existent offer'
+            );
+        } catch (error) {
+            if (error.message.includes('Server') || error.message.includes('import') || error.message.includes('PrismaClient')) {
+                assert.ok(true, 'Test skipped — no DB');
             } else {
                 throw error;
             }

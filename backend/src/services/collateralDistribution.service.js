@@ -23,10 +23,13 @@ export class CollateralDistributionService {
      * @returns {Promise<Array>} List of defaulted offers with details
      */
     static async getDefaultedOffers() {
+        // New canonical state: status='defaulted' (set by mark-defaulted endpoint).
+        // Also accept status='active' for back-compat with any pre-migration rows
+        // that hit the old auto-default cron path.
         const offers = await prisma.offer.findMany({
             where: {
                 paymentDueStatus: 'defaulted',
-                status: 'active'
+                status: { in: ['active', 'defaulted'] }
             },
             include: {
                 company: true,
@@ -278,17 +281,18 @@ export class CollateralDistributionService {
             });
 
             // Notify investors
+            // (NotificationService.createNotification is positional, not object-style — was a silent bug)
             for (const distribution of offerDetails.distributions) {
                 try {
                     // Create notification
-                    await NotificationService.createNotification({
-                        userId: distribution.investorId,
-                        userType: 'investor',
-                        type: 'info',
-                        title: `Collateral Received: ${offerDetails.assetCode}`,
-                        message: `You have received ${distribution.tokenAmount.toFixed(2)} ${offerDetails.assetCode} tokens as collateral due to company default.`,
-                        actionLink: '/investor/portfolio'
-                    });
+                    await NotificationService.createNotification(
+                        distribution.investorId,
+                        'investor',
+                        'info',
+                        `Collateral Received: ${offerDetails.assetCode}`,
+                        `You have received ${distribution.tokenAmount.toFixed(2)} ${offerDetails.assetCode} tokens as collateral due to company default.`,
+                        '/investor/portfolio',
+                    );
 
                     // Send email
                     await EmailService.sendCollateralReceivedNotification({
@@ -330,7 +334,8 @@ export class CollateralDistributionService {
     static async getDefaultStatistics() {
         const [pendingDefaults, resolvedDefaults, totalPenalties] = await Promise.all([
             prisma.offer.count({
-                where: { paymentDueStatus: 'defaulted', status: 'active' }
+                // Pending = defaulted (admin declared) or active+paymentDueStatus='defaulted' (legacy)
+                where: { paymentDueStatus: 'defaulted', status: { in: ['active', 'defaulted'] } }
             }),
             prisma.offer.count({
                 where: { paymentDueStatus: 'defaulted', status: 'closed' }
