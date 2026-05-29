@@ -3,6 +3,7 @@ import prisma from '../config/prisma.js';
 import { StellarService } from './stellar.service.js';
 import { ConfigService } from './config.service.js';
 import {
+  getSorobanServer,
   getSorobanRpcUrl,
   getUsdcIssuer,
 } from '../config/stellar.js';
@@ -107,7 +108,7 @@ export class PaymentService {
   static async getOnChainTokenBalance(assetCode, investorAddress) {
     try {
       const sorobanUrl = getSorobanRpcUrl();
-      const sorobanServer = new rpc.Server(sorobanUrl);
+      const sorobanServer = getSorobanServer();
 
       // Get the SAC contract ID for this asset
       const issuerPublicKey = keyManager.getIssuerPublicKey();

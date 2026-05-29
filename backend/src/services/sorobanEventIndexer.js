@@ -12,7 +12,7 @@
  *   - Non-blocking: errors are logged, not thrown
  */
 import { rpc, scValToNative, xdr } from '@stellar/stellar-sdk';
-import { getSorobanRpcUrl } from '../config/stellar.js';
+import { getSorobanServer } from '../config/stellar.js';
 import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
 
@@ -96,7 +96,7 @@ export class SorobanEventIndexer {
      */
     static async pollContract(contract) {
         const { contractId, offerId, assetCode } = contract;
-        const rpcServer = new rpc.Server(getSorobanRpcUrl());
+        const rpcServer = getSorobanServer();
 
         // Determine start ledger
         let startLedger = await this.getCursor(contractId);

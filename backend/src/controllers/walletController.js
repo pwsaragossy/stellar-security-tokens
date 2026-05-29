@@ -3,6 +3,7 @@ import {
     createFreshServer,
     createAsset,
     getUsdcIssuer,
+    getSorobanServer,
 } from '../config/stellar.js';
 import { keyManager } from '../services/KeyManager.js';
 import prisma from '../config/prisma.js';
@@ -241,8 +242,7 @@ export const WalletController = {
                     .build();
 
                 // Simulate to get footprint
-                const sorobanRpcUrl = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
-                const server = new rpc.Server(sorobanRpcUrl, { allowHttp: true });
+                const server = getSorobanServer({ allowHttp: true });
 
                 const simResult = await server.simulateTransaction(tx);
 

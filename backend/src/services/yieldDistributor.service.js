@@ -25,12 +25,17 @@ import {
 } from '@stellar/stellar-sdk';
 import {
     getNetworkPassphrase,
-    getSorobanRpcUrl,
+    getSorobanServer,
 } from '../config/stellar.js';
 import { StellarService } from './stellar.service.js';
 import { keyManager } from './KeyManager.js';
 import { getRedisClient } from '../config/redis.js';
 import logger from '../utils/logger.js';
+import {
+    usdcToStroops,
+    round7,
+    validateYieldSpreadRatio,
+} from '../utils/stellarAmount.js';
 
 const log = logger.scope('YieldDistributor');
 
@@ -57,12 +62,9 @@ const DISTRIBUTE_ERRORS = {
     12: { code: 'NoPendingAdmin', message: 'No pending admin proposal — call propose_admin first' },
 };
 
-/** Convert USDC amount (float) to stroops (i128 ScVal) */
-const _usdcToStroops = (amount) =>
-    nativeToScVal(BigInt(Math.round(amount * 10_000_000)), { type: 'i128' });
-
-/** Round to Stellar USDC precision (7 decimal places) */
-const round7 = (v) => Math.round(v * 10_000_000) / 10_000_000;
+/** Convert USDC amount to stroops (i128 ScVal) — see utils/stellarAmount.js */
+const _usdcToScVal = (amount) =>
+    nativeToScVal(usdcToStroops(amount), { type: 'i128' });
 
 export class YieldDistributorService {
 
@@ -93,13 +95,13 @@ export class YieldDistributorService {
 
         // Build Soroban Vec<i128> for amounts
         const amountScVals = investors.map(inv => {
-            const stroops = BigInt(Math.round(Math.max(inv.interestOwed, 0.0000001) * 10_000_000));
+            const stroops = usdcToStroops(Math.max(inv.interestOwed, 0.0000001));
             return nativeToScVal(stroops, { type: 'i128' });
         });
         const amountsVec = xdr.ScVal.scvVec(amountScVals);
 
         // Fee in stroops
-        const feeStroops = BigInt(Math.round(feeAmount * 10_000_000));
+        const feeStroops = usdcToStroops(feeAmount);
 
         const distributeCall = contract.call(
             'distribute',
@@ -114,7 +116,7 @@ export class YieldDistributorService {
         // Use operations keypair as TX source (pays gas)
         const opsKeypair = keyManager.getOperationsKeypair();
         const networkPassphrase = getNetworkPassphrase();
-        const rpcServer = new rpc.Server(getSorobanRpcUrl());
+        const rpcServer = getSorobanServer();
         const sourceAccount = await rpcServer.getAccount(opsKeypair.publicKey());
 
         let tx = new TransactionBuilder(sourceAccount, {
@@ -138,9 +140,16 @@ export class YieldDistributorService {
      * @param {string} payerAddress - Company wallet address
      * @param {Array} breakdown - Full investor breakdown from calculateOwedAmount
      * @param {number} spreadRatio - Fee ratio (spreadPct / investorRate)
+     * @param {{ annualRate?: number, investorRate?: number }} [rateContext] - For error messages
      * @returns {Promise<{batchXDRs: string[], batchDetails: Array}>}
      */
-    static async buildMultiBatchXdrs(payerAddress, breakdown, spreadRatio) {
+    static async buildMultiBatchXdrs(payerAddress, breakdown, spreadRatio, rateContext = {}) {
+        validateYieldSpreadRatio(
+            spreadRatio,
+            rateContext.annualRate,
+            rateContext.investorRate,
+        );
+
         // Filter to valid investors only
         const validInvestors = breakdown.filter(b =>
             b.investorWallet && b.interestOwed > 0
@@ -215,7 +224,7 @@ export class YieldDistributorService {
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             try {
                 const opsKeypair = keyManager.getOperationsKeypair();
-                const rpcServer = new rpc.Server(getSorobanRpcUrl());
+                const rpcServer = getSorobanServer();
 
                 // ── Step 2: Build fresh TX with signed auth ──
                 const sourceAccount = await rpcServer.getAccount(opsKeypair.publicKey());
@@ -499,7 +508,7 @@ export class YieldDistributorService {
         const contractId = this.getContractId();
         try {
             const contract = new Contract(contractId);
-            const rpcServer = new rpc.Server(getSorobanRpcUrl());
+            const rpcServer = getSorobanServer();
 
             const tx = new TransactionBuilder(
                 await StellarService.getAccountRPC(keyManager.getOperationsKeypair().publicKey()),
@@ -606,7 +615,7 @@ export class YieldDistributorService {
 
             const opsKeypair = keyManager.getOperationsKeypair();
             const networkPassphrase = getNetworkPassphrase();
-            const rpcServer = new rpc.Server(getSorobanRpcUrl());
+            const rpcServer = getSorobanServer();
             const sourceAccount = await rpcServer.getAccount(opsKeypair.publicKey());
 
             let tx = new TransactionBuilder(sourceAccount, {

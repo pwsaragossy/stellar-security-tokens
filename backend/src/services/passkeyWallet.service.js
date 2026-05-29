@@ -1,6 +1,6 @@
 import { ChannelsClient } from '@openzeppelin/relayer-plugin-channels';
 import { Client as SmartAccountClient } from 'smart-account-kit-bindings';
-import { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl, isTestnet, getUsdcIssuer } from '../config/stellar.js';
+import { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl, getSorobanServer, isTestnet, getUsdcIssuer } from '../config/stellar.js';
 import prisma from '../config/prisma.js';
 import {
   Contract,
@@ -97,7 +97,7 @@ export class PasskeyWalletService {
    */
   static getRpcServer() {
     if (!this.#rpcServer) {
-      this.#rpcServer = new rpc.Server(getSorobanRpcUrl());
+      this.#rpcServer = getSorobanServer();
     }
     return this.#rpcServer;
   }

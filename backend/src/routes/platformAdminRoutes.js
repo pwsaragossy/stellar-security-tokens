@@ -1251,8 +1251,7 @@ router.post('/companies/:id/sponsor', authenticateToken, requirePlatformAdmin, a
     const { Contract, nativeToScVal, rpc, TransactionBuilder: TxBuilder } = stellarSdk;
 
     // Create Soroban RPC server
-    const sorobanRpcUrl = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
-    const sorobanServer = new rpc.Server(sorobanRpcUrl, { allowHttp: true });
+    const sorobanServer = getSorobanServer({ allowHttp: true });
 
     // Load treasury account
     const treasuryAccount = await sorobanServer.getAccount(treasuryKeypair.publicKey());
@@ -1511,7 +1510,7 @@ router.put('/investors/:id/reject', authenticateToken, requirePlatformAdmin, Pla
 
 // ============ Wallet Sponsorship Routes ============
 
-import { getTreasuryKeypair, getNetworkPassphrase } from '../config/stellar.js';
+import { getTreasuryKeypair, getNetworkPassphrase, getSorobanServer } from '../config/stellar.js';
 import { TransactionBuilder } from '@stellar/stellar-sdk';
 
 /**
@@ -1606,8 +1605,7 @@ router.post('/investors/:id/sponsor', authenticateToken, requirePlatformAdmin, a
     const { Contract, nativeToScVal, rpc } = stellarSdk;
 
     // Create Soroban RPC server
-    const sorobanRpcUrl = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
-    const sorobanServer = new rpc.Server(sorobanRpcUrl, { allowHttp: true });
+    const sorobanServer = getSorobanServer({ allowHttp: true });
 
     // Load treasury account from Soroban RPC (not Horizon!)
     const treasuryAccount = await sorobanServer.getAccount(treasuryKeypair.publicKey());

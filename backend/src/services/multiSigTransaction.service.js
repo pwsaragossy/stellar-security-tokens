@@ -2,6 +2,7 @@ import prisma from '../config/prisma.js';
 import { TransactionBuilder, Keypair } from '@stellar/stellar-sdk';
 import { getNetworkPassphrase, createFreshServer } from '../config/stellar.js';
 import logger from '../utils/logger.js';
+import { decimalSupplyToStroops, usdcToStroops } from '../utils/stellarAmount.js';
 
 // Scoped logger for this service
 const log = logger.scope('MultiSig');
@@ -486,12 +487,12 @@ export class MultiSigTransactionService {
                         buyToken,
                         treasury: km.getTreasuryPublicKey(),
                         company: companyWallet,
-                        fixedFee: BigInt(Math.floor((parseFloat(offer.processingFee) || 5) * 10_000_000)),
+                        fixedFee: usdcToStroops(parseFloat(offer.processingFee) || 5),
                         sellPrice: parseInt(offer.unitPrice * 10000000) || 1,
                         buyPrice: 10000000,
                         deadlineLedger: 0,
-                        minBuyAmount: BigInt(Math.floor((rules.min_investment || 0) * 10000000)),
-                        maxBuyPerBuyer: BigInt(Math.floor((rules.max_investment || 0) * 10000000)),
+                        minBuyAmount: usdcToStroops(rules.min_investment || 0, { allowZero: true }),
+                        maxBuyPerBuyer: usdcToStroops(rules.max_investment || 0, { allowZero: true }),
                     }
                 );
                 break;
@@ -889,12 +890,12 @@ export class MultiSigTransactionService {
                                 buyToken: buyToken,
                                 treasury: treasuryPub,
                                 company: companyWallet,
-                                fixedFee: BigInt(Math.floor((parseFloat(offer.processingFee) || 5) * 10_000_000)),
+                                fixedFee: usdcToStroops(parseFloat(offer.processingFee) || 5),
                                 sellPrice: parseInt(offer.unitPrice * 10000000) || 1,
                                 buyPrice: 10000000,
                                 deadlineLedger: 0,
-                                minBuyAmount: BigInt(Math.floor((rules.min_investment || 0) * 10000000)),
-                                maxBuyPerBuyer: BigInt(Math.floor((rules.max_investment || 0) * 10000000)),
+                                minBuyAmount: usdcToStroops(rules.min_investment || 0, { allowZero: true }),
+                                maxBuyPerBuyer: usdcToStroops(rules.max_investment || 0, { allowZero: true }),
                             }
                         );
 
@@ -968,7 +969,7 @@ export class MultiSigTransactionService {
                         if (!sellToken) {
                             throw new Error(`Token SAC not deployed for offer #${createOfferId}`);
                         }
-                        const depositAmount = BigInt(Math.floor(depositOffer.totalSupply * 10_000_000));
+                        const depositAmount = decimalSupplyToStroops(depositOffer.totalSupply);
 
                         // Step 1/3: Authorize the sale contract on the SAC
                         const authResult = await SorobanSaleService.buildSacAuthorizeXdr(

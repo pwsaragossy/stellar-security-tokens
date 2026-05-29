@@ -6,7 +6,7 @@ import {
   signAndSubmitTransaction,
   getNetworkPassphrase,
   getOperationsKeypair,
-  getSorobanRpcUrl,
+  getSorobanServer,
   getUsdcIssuer,
 } from '../config/stellar.js';
 import { keyManager } from './KeyManager.js';
@@ -41,7 +41,7 @@ export class StellarService {
    */
   static async getAccountRPC(publicKey) {
     try {
-      const server = new rpc.Server(getSorobanRpcUrl());
+      const server = getSorobanServer();
       const account = await server.getAccount(publicKey);
       return account;
     } catch (error) {
@@ -642,7 +642,7 @@ export class StellarService {
 
     // Check if SAC exists on-chain via RPC
     try {
-      const rpcServer = new rpc.Server(getSorobanRpcUrl());
+      const rpcServer = getSorobanServer();
       const instanceKey = xdr.LedgerKey.contractData(new xdr.LedgerKeyContractData({
         contract: Address.fromString(sacContractId).toScAddress(),
         key: xdr.ScVal.scvLedgerKeyContractInstance(),
@@ -1887,7 +1887,7 @@ export class StellarService {
    */
   static async simulateSorobanTransaction(transaction) {
     try {
-      const rpcServer = new rpc.Server(getSorobanRpcUrl());
+      const rpcServer = getSorobanServer();
       const response = await rpcServer.simulateTransaction(transaction);
 
       if (rpc.Api.isSimulationError(response)) {
@@ -1908,7 +1908,7 @@ export class StellarService {
    */
   static async prepareSorobanTransaction(transaction) {
     try {
-      const _rpcServer = new rpc.Server(getSorobanRpcUrl());
+      const _rpcServer = getSorobanServer();
 
       // 1. Simulate
       const simulation = await this.simulateSorobanTransaction(transaction);
@@ -1969,7 +1969,7 @@ export class StellarService {
 
       // 2. Get contract instance and code footprints
       //    (Following canonical pattern from Stellar docs: extending-wasm-ttl.md)
-      const rpcServer = new rpc.Server(getSorobanRpcUrl());
+      const rpcServer = getSorobanServer();
       const instance = contract.getFootprint();
 
       // Fetch the contract instance to extract the WASM hash
@@ -2046,7 +2046,7 @@ export class StellarService {
    */
   static async getContractTTL(contractId) {
     try {
-      const rpcServer = new rpc.Server(getSorobanRpcUrl());
+      const rpcServer = getSorobanServer();
       const instanceKey = xdr.LedgerKey.contractData(new xdr.LedgerKeyContractData({
         contract: Address.fromString(contractId).toScAddress(),
         key: xdr.ScVal.scvLedgerKeyContractInstance(),

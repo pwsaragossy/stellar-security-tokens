@@ -12,6 +12,10 @@ import { Asset, Operation } from '@stellar/stellar-sdk';
 import { getUsdcIssuer } from '../config/stellar.js';
 import { keyManager } from './KeyManager.js';
 import logger from '../utils/logger.js';
+import {
+    round7,
+    validateYieldSpreadRatio,
+} from '../utils/stellarAmount.js';
 
 // Scoped logger for this service
 const log = logger.scope('CompanyPayment');
@@ -26,9 +30,6 @@ const DEFAULT_FEE_PERCENT = 0;         // Disabled for MVP — no legal framewor
 
 const USDC_ASSET_CODE = 'USDC';
 const USDC_ISSUER = getUsdcIssuer();
-
-/** Round to Stellar USDC precision (7 decimal places = 1 stroop = 0.0000001) */
-const round7 = (v) => Math.round(v * 10_000_000) / 10_000_000;
 
 /**
  * Company Payment Service
@@ -631,11 +632,13 @@ export class CompanyPaymentService {
             const effectiveInvestorRate = parseFloat(offer.investorRate ?? offer.annualInterestRate ?? 0);
             const spreadPct = Math.max(0, annualRate - effectiveInvestorRate);
             const spreadRatio = effectiveInvestorRate > 0 ? spreadPct / effectiveInvestorRate : 0;
+            validateYieldSpreadRatio(spreadRatio, annualRate, effectiveInvestorRate);
 
             const { batchXDRs, batchDetails } = await YieldDistributorService.buildMultiBatchXdrs(
                 companyWalletAddress,
                 breakdown,
                 spreadRatio,
+                { annualRate, investorRate: effectiveInvestorRate },
             );
 
             const validInvestorCount = breakdown.filter(b => b.investorWallet && b.interestOwed > 0).length;

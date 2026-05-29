@@ -70,7 +70,7 @@ const { StellarService } = await import('../../src/services/stellar.service.js')
 const { SorobanSaleService } = await import('../../src/services/sorobanSale.service.js');
 const { keyManager } = await import('../../src/services/KeyManager.js');
 const {
-  stellarServer, getNetworkPassphrase, getSorobanRpcUrl,
+  stellarServer, getNetworkPassphrase, getSorobanServer,
 } = await import('../../src/config/stellar.js');
 const { generateToken } = await import('../../src/middleware/auth.js');
 
@@ -161,7 +161,7 @@ async function uploadWasm() {
   tx = await StellarService.prepareSorobanTransaction(tx);
   tx.sign(testIssuer);
 
-  const rpcServer = new rpc.Server(getSorobanRpcUrl());
+  const rpcServer = getSorobanServer();
   const sendResult = await rpcServer.sendTransaction(tx);
 
   let result = sendResult;
@@ -193,7 +193,7 @@ async function signAndSubmitSoroban(xdrString) {
   const tx = new Transaction(xdrString, Networks.TESTNET);
   tx.sign(testIssuer);
 
-  const rpcServer = new rpc.Server(getSorobanRpcUrl());
+  const rpcServer = getSorobanServer();
   const sendResult = await rpcServer.sendTransaction(tx);
 
   let result = sendResult;

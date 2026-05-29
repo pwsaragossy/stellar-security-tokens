@@ -29,6 +29,7 @@ describe('StellarService Unit Tests', async () => {
         '../../../src/config/stellar.js': {
           stellarServer: {},
           getSorobanRpcUrl: () => 'http://mock-rpc',
+          getSorobanServer: () => new (class { })(),
           getIssuerKeypair: () => { },
           getDistributorKeypair: () => { },
           getTreasuryKeypair: () => { },
@@ -97,6 +98,7 @@ describe('StellarService Unit Tests', async () => {
         '../../../src/config/stellar.js': {
           // Mock config dependencies
           getSorobanRpcUrl: () => 'https://soroban-testnet.stellar.org',
+          getSorobanServer: () => new rpcMock.Server('https://soroban-testnet.stellar.org'),
           stellarServer: {
             loadAccount: async () => {
               loadAccountCalled = true;
@@ -157,6 +159,7 @@ describe('StellarService Unit Tests', async () => {
         },
         '../../../src/config/stellar.js': {
           getSorobanRpcUrl: () => 'https://soroban-testnet.stellar.org',
+          getSorobanServer: () => new rpcFailMock.Server(),
           stellarServer: {
             loadAccount: async (key) => {
               loadAccountCalled = true;

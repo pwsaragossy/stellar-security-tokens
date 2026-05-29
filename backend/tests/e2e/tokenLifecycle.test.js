@@ -85,7 +85,7 @@ const { CompanyPaymentService } = await import('../../src/services/companyPaymen
 const { SorobanSettlementService } = await import('../../src/services/sorobanSettlement.service.js');
 const { keyManager } = await import('../../src/services/KeyManager.js');
 const {
-  stellarServer, getNetworkPassphrase, getSorobanRpcUrl,
+  stellarServer, getNetworkPassphrase, getSorobanServer,
 } = await import('../../src/config/stellar.js');
 
 // ═══════════════════════════════════════════════════════════════
@@ -173,7 +173,7 @@ async function uploadWasm() {
  * Generic WASM upload with retry. Fetches fresh sequence on each attempt.
  */
 async function submitWasmUpload(wasmBytes, label, maxRetries = 3) {
-  const rpcServerUpload = new rpc.Server(getSorobanRpcUrl());
+  const rpcServerUpload = getSorobanServer();
   const uploadOp = Operation.uploadContractWasm({ wasm: wasmBytes });
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -236,7 +236,7 @@ async function signAndSubmitSoroban(xdrString) {
   const tx = new Transaction(xdrString, Networks.TESTNET);
   tx.sign(testIssuer);
 
-  const rpcServer = new rpc.Server(getSorobanRpcUrl());
+  const rpcServer = getSorobanServer();
   const sendResult = await rpcServer.sendTransaction(tx);
 
   let result = sendResult;
@@ -567,7 +567,7 @@ async function main() {
     tradeTx.sign(testInvestor);
 
     // Submit trade via RPC
-    const rpcServer = new rpc.Server(getSorobanRpcUrl());
+    const rpcServer = getSorobanServer();
     let tradeSendResult = await rpcServer.sendTransaction(tradeTx);
     let tradeResult = tradeSendResult;
     if (tradeResult.status === 'PENDING') {
@@ -833,7 +833,7 @@ async function main() {
     const depositTx = new Transaction(depositData.xdr, Networks.TESTNET);
     depositTx.sign(testCompany);  // TX source = depositor
 
-    const rpcServerSettle = new rpc.Server(getSorobanRpcUrl());
+    const rpcServerSettle = getSorobanServer();
     let depositSend = await rpcServerSettle.sendTransaction(depositTx);
     let depositRes = depositSend;
     if (depositRes.status === 'PENDING') {
@@ -1081,7 +1081,7 @@ async function main() {
     tradeATx = await StellarService.prepareSorobanTransaction(tradeATx);
     tradeATx.sign(testInvestor);
 
-    const rpcServerMulti = new rpc.Server(getSorobanRpcUrl());
+    const rpcServerMulti = getSorobanServer();
     let tradeASend = await rpcServerMulti.sendTransaction(tradeATx);
     let tradeARes = tradeASend;
     if (tradeARes.status === 'PENDING') {
@@ -1211,7 +1211,7 @@ async function main() {
     const multiDepositTx = new TxSettleMulti(multiDepositData.xdr, Networks.TESTNET);
     multiDepositTx.sign(testCompany);  // TX source = depositor
 
-    const rpcMultiSettle = new rpc.Server(getSorobanRpcUrl());
+    const rpcMultiSettle = getSorobanServer();
     let multiDepSend = await rpcMultiSettle.sendTransaction(multiDepositTx);
     let multiDepRes = multiDepSend;
     if (multiDepRes.status === 'PENDING') {

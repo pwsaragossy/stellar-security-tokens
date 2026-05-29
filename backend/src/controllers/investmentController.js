@@ -545,11 +545,11 @@ export const submitInvestmentTx = async (req, res, _next) => {
     // invalidate them.
     const { TransactionBuilder, xdr: _stellarXdr, Operation, BASE_FEE } = await import('@stellar/stellar-sdk');
     const rpc = await import('@stellar/stellar-sdk/rpc');
-    const { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl } = await import('../config/stellar.js');
+    const { getNetworkPassphrase, getOperationsKeypair, getSorobanServer } = await import('../config/stellar.js');
 
     const networkPassphrase = getNetworkPassphrase();
     const _opsKeypair = getOperationsKeypair();
-    const rpcServer = new rpc.Server(getSorobanRpcUrl());
+    const rpcServer = getSorobanServer();
 
     // Parse the signed TX from frontend to extract the operation + signed auth entries
     const signedTx = TransactionBuilder.fromXDR(signedXdr, networkPassphrase);

@@ -5,12 +5,33 @@ import {
   TransactionBuilder,
   BASE_FEE,
   Memo,
+  rpc,
 } from '@stellar/stellar-sdk';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const network = process.env.STELLAR_NETWORK || 'testnet';
+const isMainnetNetwork = () => network === 'public' || network === 'mainnet';
+
+/**
+ * Resolve Soroban RPC URL. Mainnet requires an explicit SOROBAN_RPC_URL — no public default.
+ * @returns {string}
+ */
+function resolveSorobanRpcUrl() {
+  const explicit = process.env.SOROBAN_RPC_URL?.trim();
+  if (explicit) {
+    return explicit;
+  }
+  if (isMainnetNetwork()) {
+    throw new Error(
+      '[StellarConfig] SOROBAN_RPC_URL is required when STELLAR_NETWORK=public. ' +
+        'Configure a trusted mainnet RPC provider (e.g. gateway.fm) — do not rely on implicit defaults.',
+    );
+  }
+  return 'https://soroban-testnet.stellar.org';
+}
+
 let rawHorizonUrl = (process.env.STELLAR_HORIZON_URL || process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org').trim();
 console.log(`[StellarConfig] Raw Horizon URL from ENV: '${rawHorizonUrl}'`);
 
@@ -20,11 +41,7 @@ console.log(`[StellarConfig] Raw Horizon URL from ENV: '${rawHorizonUrl}'`);
 // \/transactions\/?$ matches /transactions or /transactions/ at the end
 // \/+$ matches one or more slashes at the end
 const horizonUrl = rawHorizonUrl.replace(/\/transactions\/?$/, '').replace(/\/+$/, '');
-const sorobanRpcUrl = process.env.SOROBAN_RPC_URL || (
-  network === 'testnet'
-    ? 'https://soroban-testnet.stellar.org'
-    : 'https://soroban-rpc.mainnet.stellar.org'
-);
+const sorobanRpcUrl = resolveSorobanRpcUrl();
 
 console.log(`[StellarConfig] Using Horizon URL: ${horizonUrl} (${network})`);
 export const stellarServer = new Horizon.Server(horizonUrl);
@@ -38,9 +55,57 @@ export const createFreshServer = () => new Horizon.Server(horizonUrl);
 
 /**
  * Get the Soroban RPC URL for smart contract interactions
- * @returns {string} Soroban RPC URL (testnet or mainnet based on STELLAR_NETWORK)
+ * @returns {string} Soroban RPC URL (testnet default or explicit mainnet URL)
  */
 export const getSorobanRpcUrl = () => sorobanRpcUrl;
+
+/**
+ * Optional HTTP headers for Soroban RPC (mainnet providers often require X-API-Key).
+ * SOROBAN_RPC_API_KEY → X-API-Key header.
+ * SOROBAN_RPC_HEADER → arbitrary header as "Name: value".
+ * @returns {Record<string, string>}
+ */
+export const getSorobanRpcHeaders = () => {
+  const headers = {};
+  const apiKey = process.env.SOROBAN_RPC_API_KEY?.trim();
+  if (apiKey) {
+    headers['X-API-Key'] = apiKey;
+  }
+  const rawHeader = process.env.SOROBAN_RPC_HEADER?.trim();
+  if (rawHeader) {
+    const colonIdx = rawHeader.indexOf(':');
+    if (colonIdx === -1) {
+      throw new Error('[StellarConfig] SOROBAN_RPC_HEADER must be formatted as "Name: value"');
+    }
+    const name = rawHeader.slice(0, colonIdx).trim();
+    const value = rawHeader.slice(colonIdx + 1).trim();
+    if (!name) {
+      throw new Error('[StellarConfig] SOROBAN_RPC_HEADER must include a header name');
+    }
+    headers[name] = value;
+  }
+  return headers;
+};
+
+/**
+ * Create a configured Soroban RPC client (central factory for all backend services).
+ * @param {Object} [options]
+ * @param {boolean} [options.allowHttp] - Allow http:// RPC URLs (auto-detected when unset)
+ * @returns {rpc.Server}
+ */
+export const getSorobanServer = (options = {}) => {
+  const headers = getSorobanRpcHeaders();
+  const allowHttp =
+    options.allowHttp ??
+    (process.env.SOROBAN_RPC_ALLOW_HTTP === 'true' || sorobanRpcUrl.startsWith('http://'));
+
+  /** @type {{ allowHttp: boolean, headers?: Record<string, string> }} */
+  const serverOptions = { allowHttp };
+  if (Object.keys(headers).length > 0) {
+    serverOptions.headers = headers;
+  }
+  return new rpc.Server(sorobanRpcUrl, serverOptions);
+};
 
 /**
  * Check if currently configured for testnet
@@ -57,7 +122,7 @@ export const getNetworkPassphrase = () => {
 };
 
 // Circle USDC Issuer addresses (official)
-// https://developers.circle.com/stablecoins/docs/usdc-on-stellar
+// https://developers.circle.com/stablecoins/usdc-on-stellar
 const USDC_ISSUERS = {
   testnet: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
   mainnet: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
@@ -455,6 +520,9 @@ export default {
   stellarServer,
   createFreshServer,
   getNetworkPassphrase,
+  getSorobanRpcUrl,
+  getSorobanRpcHeaders,
+  getSorobanServer,
   getIssuerKeypair,
   getDistributorKeypair,
   getTreasuryKeypair,

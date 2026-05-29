@@ -28,10 +28,11 @@ import {
 } from '@stellar/stellar-sdk';
 import {
     getNetworkPassphrase,
-    getSorobanRpcUrl,
+    getSorobanServer,
 } from '../config/stellar.js';
 import { StellarService } from './stellar.service.js';
 import logger from '../utils/logger.js';
+import { usdcToStroops } from '../utils/stellarAmount.js';
 
 const log = logger.scope('SorobanSaleService');
 
@@ -134,7 +135,7 @@ export class SorobanSaleService {
      */
     static async contractExistsOnChain(contractId) {
         try {
-            const rpcServer = new rpc.Server(getSorobanRpcUrl());
+            const rpcServer = getSorobanServer();
             const contract = new Contract(contractId);
             const instanceKey = contract.getFootprint();
             const result = await rpcServer.getLedgerEntries(instanceKey);
@@ -238,7 +239,7 @@ export class SorobanSaleService {
         const { keyManager: km } = await import('./KeyManager.js');
         const opsPublicKey = km.getOperationsPublicKey();
         const networkPassphrase = getNetworkPassphrase();
-        const amountStroops = BigInt(Math.floor(parsedAmount * 10_000_000));
+        const amountStroops = usdcToStroops(parsedAmount);
 
         const contract = new Contract(contractId);
         const tradeOp = contract.call(
@@ -372,7 +373,7 @@ export class SorobanSaleService {
      * @private
      */
     static async #simulateReadOnly(contractId, method, args = []) {
-        const rpcServer = new rpc.Server(getSorobanRpcUrl());
+        const rpcServer = getSorobanServer();
         const { keyManager: km } = await import('./KeyManager.js');
         const opsPublicKey = km.getOperationsPublicKey();
         const contract = new Contract(contractId);
@@ -595,7 +596,7 @@ export class SorobanSaleService {
                 .setTimeout(30)
                 .build();
 
-            const rpcServer = new rpc.Server(getSorobanRpcUrl());
+            const rpcServer = getSorobanServer();
             const sim = await rpcServer.simulateTransaction(checkTx);
 
             if (sim.result?.retval) {
@@ -688,7 +689,7 @@ export class SorobanSaleService {
         const maxAttempts = 2;
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                const rpcServer = new rpc.Server(getSorobanRpcUrl());
+                const rpcServer = getSorobanServer();
 
                 // Re-prepare TX on retry (fresh sequence number)
                 let submittable = tx;

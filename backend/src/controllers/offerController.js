@@ -8,6 +8,7 @@ import { ConfigService } from '../services/config.service.js';
 import { ipfsService } from '../services/ipfs.service.js';
 import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
+import { computeSpreadRatio, validateYieldSpreadRatio } from '../utils/stellarAmount.js';
 const log = logger.scope('OfferController');
 
 /**
@@ -827,6 +828,16 @@ export class OfferController {
             return res.status(400).json({
               success: false,
               error: `Investor rate (${parsedInvestorRate}%) cannot exceed annual interest rate (${annualRate}%)`,
+            });
+          }
+          const spreadRatio = computeSpreadRatio(annualRate, parsedInvestorRate);
+          try {
+            validateYieldSpreadRatio(spreadRatio, annualRate, parsedInvestorRate);
+          } catch (spreadErr) {
+            return res.status(spreadErr.httpStatus || 400).json({
+              success: false,
+              error: spreadErr.message,
+              code: spreadErr.code,
             });
           }
         }

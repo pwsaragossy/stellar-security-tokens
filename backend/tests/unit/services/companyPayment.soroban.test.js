@@ -169,6 +169,10 @@ mock.module('../../../src/config/stellar.js', {
         getUsdcIssuer: () => 'GUSDC_ISSUER_MOCK',
         getNetworkPassphrase: () => 'Test SDF Network ; September 2015',
         getSorobanRpcUrl: () => 'https://soroban-testnet.stellar.org',
+        getSorobanServer: () => ({
+            getAccount: async () => ({ sequence: '1' }),
+            simulateTransaction: async () => ({ result: { retval: {} } }),
+        }),
     },
 });
 

@@ -586,9 +586,8 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
     // Verify contract exists on-chain — prevents ghost wallets from fake/failed deploys
     try {
       const { xdr: sdkXdr } = await import('@stellar/stellar-sdk');
-      const sdkRpc = await import('@stellar/stellar-sdk/rpc');
-      const { getSorobanRpcUrl } = await import('../config/stellar.js');
-      const rpcServer = new sdkRpc.Server(getSorobanRpcUrl());
+      const { getSorobanServer } = await import('../config/stellar.js');
+      const rpcServer = getSorobanServer();
       await rpcServer.getContractData(contractId, sdkXdr.ScVal.scvLedgerKeyContractInstance());
     } catch (verifyErr) {
       log.warn(`[Registration] Contract ${contractId} not found on-chain:`, verifyErr.message);
@@ -623,14 +622,13 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
       (async () => {
         try {
           const { Contract, Address, nativeToScVal, TransactionBuilder, BASE_FEE } = await import('@stellar/stellar-sdk');
-          const rpcMod = await import('@stellar/stellar-sdk/rpc');
-          const { getNetworkPassphrase, getOperationsKeypair, getSorobanRpcUrl } = await import('../config/stellar.js');
+          const { getNetworkPassphrase, getOperationsKeypair, getSorobanServer } = await import('../config/stellar.js');
 
           const sacContractId = process.env.USDC_SAC_CONTRACT_ID;
           if (!sacContractId) return;
 
           const opsKeypair = getOperationsKeypair();
-          const rpcServer = new rpcMod.Server(getSorobanRpcUrl());
+          const rpcServer = getSorobanServer();
           const AMOUNT = 12_0000000n; // 12 USDC (7 decimals)
 
           const sac = new Contract(sacContractId);

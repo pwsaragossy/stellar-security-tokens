@@ -32,12 +32,21 @@ import {
 } from '@stellar/stellar-sdk';
 import {
     getNetworkPassphrase,
-    getSorobanRpcUrl,
+    getSorobanServer,
 } from '../config/stellar.js';
 import { StellarService } from './stellar.service.js';
 import { keyManager } from './KeyManager.js';
 import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
+import {
+    usdcToStroops,
+    stroopsToUsdc,
+    round7,
+    sumBreakdownPayouts,
+    validateSettlementFeeCap,
+    validateDepositCoverage,
+    DEFAULT_SETTLEMENT_MAX_FEE_BPS,
+} from '../utils/stellarAmount.js';
 
 const log = logger.scope('SorobanSettlement');
 
@@ -62,11 +71,8 @@ const SETTLE_ERRORS = {
 };
 
 /** Convert USDC amount (float) to stroops (i128 ScVal) */
-const usdcToStroops = (amount) =>
-    nativeToScVal(BigInt(Math.round(amount * 10_000_000)), { type: 'i128' });
-
-/** Convert stroops (bigint) to USDC float */
-const stroopsToUsdc = (stroops) => Number(stroops) / 10_000_000;
+const usdcToStroopsScVal = (amount) =>
+    nativeToScVal(usdcToStroops(amount), { type: 'i128' });
 
 export class SorobanSettlementService {
 
@@ -241,7 +247,7 @@ export class SorobanSettlementService {
         const depositCall = contract.call(
             'deposit',
             new Address(companyWallet).toScVal(),   // depositor
-            usdcToStroops(amount),                  // amount
+            usdcToStroopsScVal(amount),                  // amount
         );
 
         // Company is TX source → require_auth() satisfied via SourceAccount credentials
@@ -296,7 +302,7 @@ export class SorobanSettlementService {
         const items = investors.map(inv => {
             return nativeToScVal({
                 investor: new Address(inv.investor),
-                payout: BigInt(Math.round(inv.payout * 10_000_000)),
+                payout: usdcToStroops(inv.payout),
             }, {
                 type: {
                     investor: ['symbol', 'address'],
@@ -308,7 +314,7 @@ export class SorobanSettlementService {
         const settleCall = contract.call(
             'settle_batch',
             nativeToScVal(items, { type: 'vec' }),
-            usdcToStroops(totalFee),
+            usdcToStroopsScVal(totalFee),
         );
 
         const issuerPublicKey = keyManager.getIssuerPublicKey();
@@ -374,9 +380,19 @@ export class SorobanSettlementService {
 
         // Platform fee (yield spread). For periodic offers, companyTotalInterest
         // is 0 (no spread at maturity — spread was already collected via dividend payments).
-        const totalPlatformFee = Math.max(0,
+        const totalPlatformFee = round7(Math.max(0,
             (maturityDetails.companyTotalInterest || maturityDetails.totalInterest) - maturityDetails.totalInterest
+        ));
+
+        const payoutBreakdown = maturityDetails.breakdown.filter(
+            b => b.investorWallet && b.totalPayout > 0,
         );
+        const breakdownPayoutSum = sumBreakdownPayouts(payoutBreakdown);
+
+        validateSettlementFeeCap(totalPlatformFee, breakdownPayoutSum, DEFAULT_SETTLEMENT_MAX_FEE_BPS);
+
+        const contractBalance = await this.getContractBalance(offerId);
+        validateDepositCoverage(contractBalance, payoutBreakdown, totalPlatformFee);
 
         // Split into batches of MAX_BATCH_SIZE
         const batches = [];
@@ -394,10 +410,14 @@ export class SorobanSettlementService {
 
         for (let bIdx = 0; bIdx < batches.length; bIdx++) {
             const batch = batches[bIdx];
-            const batchPayout = batch.reduce((s, inv) => s + inv.payout, 0);
-            const batchFee = bIdx === batches.length - 1
-                ? totalPlatformFee - results.reduce((s, r) => s + r.fee, 0)  // last batch gets remainder
-                : Math.round(totalPlatformFee * (batchPayout / totalPayout) * 10_000_000) / 10_000_000;
+            const batchPayout = round7(batch.reduce((s, inv) => s + inv.payout, 0));
+            const batchFee = round7(Math.max(0,
+                bIdx === batches.length - 1
+                    ? totalPlatformFee - results.reduce((s, r) => s + r.fee, 0)
+                    : round7(totalPlatformFee * (batchPayout / totalPayout)),
+            ));
+
+            validateSettlementFeeCap(batchFee, batchPayout, DEFAULT_SETTLEMENT_MAX_FEE_BPS);
 
             const { xdr: batchXdr } = await this.buildSettleBatchXdr(offerId, batch, batchFee);
 
@@ -406,7 +426,7 @@ export class SorobanSettlementService {
             const tx = TxBuilder.fromXDR(batchXdr, getNetworkPassphrase());
             tx.sign(issuerKeypair);
 
-            const rpcServer = new rpc.Server(getSorobanRpcUrl());
+            const rpcServer = getSorobanServer();
             const sendResult = await rpcServer.sendTransaction(tx);
 
             // Poll for confirmation
@@ -497,7 +517,7 @@ export class SorobanSettlementService {
         const withdrawCall = contract.call(
             'withdraw',
             new Address(tokenAddress).toScVal(),
-            usdcToStroops(amount),
+            nativeToScVal(usdcToStroops(amount), { type: 'i128' }),
             new Address(destination).toScVal(),
         );
 
@@ -526,7 +546,7 @@ export class SorobanSettlementService {
         if (!offer?.sorobanSettlementContractId) return 0;
 
         const contract = new Contract(offer.sorobanSettlementContractId);
-        const rpcServer = new rpc.Server(getSorobanRpcUrl());
+        const rpcServer = getSorobanServer();
 
         const tx = new TransactionBuilder(
             await StellarService.getAccountRPC(keyManager.getOperationsKeypair().publicKey()),
@@ -611,7 +631,7 @@ export class SorobanSettlementService {
 
         try {
             const contract = new Contract(offer.sorobanSettlementContractId);
-            const rpcServer = new rpc.Server(getSorobanRpcUrl());
+            const rpcServer = getSorobanServer();
 
             const tx = new TransactionBuilder(
                 await StellarService.getAccountRPC(keyManager.getOperationsKeypair().publicKey()),

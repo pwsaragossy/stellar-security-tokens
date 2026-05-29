@@ -10,7 +10,7 @@
  * Runs every 5 minutes via setInterval. Non-blocking — errors are logged, not thrown.
  */
 import { rpc } from '@stellar/stellar-sdk';
-import { getSorobanRpcUrl } from '../config/stellar.js';
+import { getSorobanServer } from '../config/stellar.js';
 import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
 
@@ -46,7 +46,7 @@ export class SorobanReconciler {
             if (orphans.length === 0) return stats;
             log.info(`[reconcile] Found ${orphans.length} investments in trade_submitted`);
 
-            const rpcServer = new rpc.Server(getSorobanRpcUrl());
+            const rpcServer = getSorobanServer();
 
             for (const inv of orphans) {
                 try {

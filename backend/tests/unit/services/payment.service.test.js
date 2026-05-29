@@ -17,7 +17,11 @@ describe('PaymentService Unit Tests', async () => {
         getDistributorKeypair: () => { },
         buildTransaction: () => { },
         buildTransactionWithAccount: () => { },
-        getSorobanRpcUrl: () => { },
+        getSorobanRpcUrl: () => 'http://mock-rpc',
+        getSorobanServer: () => ({
+          getAccount: async () => ({ sequence: '1' }),
+          simulateTransaction: async () => ({ result: { retval: {} } }),
+        }),
         getIssuerKeypair: () => { },
       },
       '../../../src/services/transactionManager.service.js': { TransactionManager: {} }

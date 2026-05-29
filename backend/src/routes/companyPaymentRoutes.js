@@ -8,6 +8,13 @@ import { authenticateToken } from '../middleware/auth.js';
 import { requireCompanyUser } from '../middleware/authorize.js';
 import { CompanyPaymentService } from '../services/companyPayment.service.js';
 import logger from '../utils/logger.js';
+import {
+    round7,
+    sumBreakdownPayouts,
+    computeSettlementDepositAmount,
+    validateSettlementFeeCap,
+    DEFAULT_SETTLEMENT_MAX_FEE_BPS,
+} from '../utils/stellarAmount.js';
 const log = logger.scope('CompanyPayRoutes');
 
 const router = express.Router();
@@ -402,12 +409,16 @@ router.post('/:offerId/prepare-deposit', authenticateToken, requireCompanyUser, 
 
         // Company pays: totalPayout (investor principal + interest, if bullet) + spread (yield fee, if bullet)
         // For periodic at maturity, spread is 0 (already collected during dividends).
-        const round7 = v => Math.round(v * 10_000_000) / 10_000_000;
-        const investorPayout = maturityDetails.totalPayout;
+        const payoutBreakdown = maturityDetails.breakdown.filter(
+            b => b.investorWallet && b.totalPayout > 0,
+        );
         const companyInterest = maturityDetails.companyTotalInterest || maturityDetails.totalInterest;
         const investorInterest = maturityDetails.totalInterest;
         const platformFee = round7(Math.max(0, companyInterest - investorInterest));
-        const depositAmount = round7(investorPayout + platformFee);
+        const investorPayoutSum = sumBreakdownPayouts(payoutBreakdown);
+        const depositAmount = computeSettlementDepositAmount(payoutBreakdown, platformFee);
+
+        validateSettlementFeeCap(platformFee, investorPayoutSum, DEFAULT_SETTLEMENT_MAX_FEE_BPS);
 
         // Build Soroban deposit TX
         const { SorobanSettlementService } = await import('../services/sorobanSettlement.service.js');
@@ -435,7 +446,11 @@ router.post('/:offerId/prepare-deposit', authenticateToken, requireCompanyUser, 
         });
     } catch (error) {
         log.error('[prepare-deposit] Failed', { error: error.message });
-        res.status(400).json({ success: false, error: error.message });
+        res.status(error.httpStatus || 400).json({
+            success: false,
+            error: error.message,
+            code: error.code,
+        });
     }
 });
 
