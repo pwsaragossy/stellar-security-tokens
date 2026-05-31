@@ -621,7 +621,7 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
     if ((process.env.STELLAR_NETWORK || 'testnet') === 'testnet' && contractId) {
       (async () => {
         try {
-          const { Contract, Address, nativeToScVal, TransactionBuilder, BASE_FEE } = await import('@stellar/stellar-sdk');
+          const { Contract, Address, nativeToScVal, TransactionBuilder, BASE_FEE, rpc } = await import('@stellar/stellar-sdk');
           const { getNetworkPassphrase, getOperationsKeypair, getSorobanServer } = await import('../config/stellar.js');
 
           const sacContractId = process.env.USDC_SAC_CONTRACT_ID;
@@ -645,12 +645,12 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
           }).addOperation(op).setTimeout(30).build();
 
           const sim = await rpcServer.simulateTransaction(tx);
-          if (rpcMod.Api.isSimulationError(sim)) {
+          if (rpc.Api.isSimulationError(sim)) {
             log.warn(`[Registration] Testnet auto-fund sim failed: ${sim.error}`);
             return;
           }
 
-          tx = rpcMod.assembleTransaction(tx, sim).build();
+          tx = rpc.assembleTransaction(tx, sim).build();
           tx.sign(opsKeypair);
           const result = await rpcServer.sendTransaction(tx);
           log.info(`[Registration] ✅ Auto-funded 2 USDC to ${contractId} — tx: ${result.hash}`);
