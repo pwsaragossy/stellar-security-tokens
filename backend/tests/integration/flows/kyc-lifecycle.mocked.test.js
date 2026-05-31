@@ -31,10 +31,16 @@ describe('KYC Lifecycle Flow (Mocked)', () => {
                 PasskeyWalletService: MockPasskeyWalletService
             }
         }, {
-            '@stellar/stellar-sdk/rpc': {
-                Server: class MockRpcServer {
-                    constructor() {}
-                    getContractData() { return Promise.resolve({ val: 'mock-contract-data' }); }
+            // config/stellar.js builds the RPC server from `rpc` on the MAIN package
+            // (`import { rpc } from '@stellar/stellar-sdk'`), so the mock must target that —
+            // not the '@stellar/stellar-sdk/rpc' subpath — or the on-chain contract check
+            // (investorController register) runs for real and 400s on the mock contract id.
+            '@stellar/stellar-sdk': {
+                rpc: {
+                    Server: class MockRpcServer {
+                        constructor() {}
+                        getContractData() { return Promise.resolve({ val: 'mock-contract-data' }); }
+                    }
                 }
             }
         });
