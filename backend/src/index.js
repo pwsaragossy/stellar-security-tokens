@@ -315,6 +315,21 @@ app.listen(PORT, async () => {
   } catch (error) {
     console.error('Failed to start dormant alert monitor:', error.message);
   }
+
+  // --- ISSUER SECURITY WATCHER (SAC mint/clawback + issuer config changes) ---
+  // The security token is a raw SAC; the hot Operations key (issuer signer at
+  // med_threshold=2) can mint/clawback as a side effect of investor auth.
+  // Threshold can't separate authorize from mint/clawback, so we DETECT + ALERT.
+  // Detector A: Soroban getEvents on each token SAC (mint/clawback/set_admin).
+  // Detector B: Horizon stream of issuer classic ops (set_options/merge/clawback).
+  // Alerts go to ADMIN_ALERT_EMAIL via EmailService.sendAdminAlert (same as WalletMonitor).
+  try {
+    const { IssuerWatcher } = await import('./services/issuerWatcher.service.js');
+    IssuerWatcher.start();
+    console.log('Issuer security watcher enabled — SAC events every 30s + issuer ops stream');
+  } catch (error) {
+    console.error('Failed to start issuer security watcher:', error.message);
+  }
 });
 
 // ─── GRACEFUL SHUTDOWN ───
@@ -340,6 +355,12 @@ const gracefulShutdown = async (signal) => {
     try {
       const { DormantAlertMonitor } = await import('./services/dormantAlertMonitor.service.js');
       DormantAlertMonitor.stop();
+    } catch (_) { /* not started — safe to ignore */ }
+
+    // Stop issuer security watcher (SAC poller + issuer ops stream)
+    try {
+      const { IssuerWatcher } = await import('./services/issuerWatcher.service.js');
+      IssuerWatcher.stop();
     } catch (_) { /* not started — safe to ignore */ }
 
     if (process.env.ENABLE_SOROBAN_SALE === 'true') {
