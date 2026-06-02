@@ -16,6 +16,9 @@ ARG VITE_SENTRY_DSN
 # Copy dependency files
 COPY package*.json ./
 COPY frontend/package*.json ./frontend/
+# Vendored smart-account-kit (v0.7.1) + bindings are referenced via file:vendor/ in
+# package.json, so they must be present before `npm ci` resolves dependencies.
+COPY frontend/vendor/ ./frontend/vendor/
 
 # Install dependencies
 RUN cd frontend && npm ci --legacy-peer-deps

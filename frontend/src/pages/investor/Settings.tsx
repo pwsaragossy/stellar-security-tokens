@@ -83,8 +83,8 @@ export function Settings() {
             }
 
             // Fetch ALL Default context rules to find recovery signers
-            const rulesResult = await kit.rules.getAll({ tag: 'Default', values: undefined } as any);
-            const allRules = rulesResult?.result || [];
+            // kit v0.7.1: rules.getAll returns the ContextRule[] array directly (no .result wrapper)
+            const allRules = (await kit.rules.getAll({ tag: 'Default', values: undefined } as any)) || [];
 
             const delegatedSigners: BackupSigner[] = [];
             for (const rule of allRules) {

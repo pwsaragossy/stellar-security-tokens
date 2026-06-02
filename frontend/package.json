@@ -19,7 +19,7 @@
     "@sentry/react": "^10.34.0",
     "@simplewebauthn/browser": "^13.2.2",
     "@stellar/freighter-api": "^6.0.1",
-    "@stellar/stellar-sdk": "^14.6.0",
+    "@stellar/stellar-sdk": "^15.1.0",
     "@types/qrcode": "^1.5.6",
     "axios": "^1.13.2",
     "class-variance-authority": "^0.7.1",
@@ -32,7 +32,7 @@
     "react-is": "^19.2.4",
     "react-router-dom": "^7.9.5",
     "recharts": "^3.4.1",
-    "smart-account-kit": "^0.2.10",
+    "smart-account-kit": "file:vendor/smart-account-kit-0.3.0.tgz",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0"
   },
@@ -60,5 +60,8 @@
     "typescript-eslint": "^8.46.3",
     "vite": "^8.0.2",
     "vitest": "^4.1.1"
+  },
+  "overrides": {
+    "smart-account-kit-bindings": "file:vendor/smart-account-kit-bindings-0.1.0.tgz"
   }
 }

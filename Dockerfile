@@ -15,6 +15,9 @@ WORKDIR /app
 
 # Copy backend dependency files
 COPY --chown=nodeapp:nodeapp backend/package*.json ./backend/
+# Vendored smart-account-kit-bindings (v0.7.1) is referenced via file:vendor/ in
+# package.json, so it must be present before `npm ci` resolves dependencies.
+COPY --chown=nodeapp:nodeapp backend/vendor/ ./backend/vendor/
 
 # Install backend dependencies (including devDependencies for build)
 WORKDIR /app/backend
