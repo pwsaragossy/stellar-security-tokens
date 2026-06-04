@@ -30,7 +30,7 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-is": "^19.2.4",
-    "react-router-dom": "^7.9.5",
+    "react-router-dom": "^7.16.0",
     "recharts": "^3.4.1",
     "smart-account-kit": "file:vendor/smart-account-kit-0.3.0.tgz",
     "sonner": "^2.0.7",
