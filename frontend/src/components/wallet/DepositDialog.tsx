@@ -50,6 +50,12 @@ export function DepositDialog({ investorId, walletAddress, resumeOrderId }: Depo
     const [error, setError] = useState<string | null>(null);
     const [source, setSource] = useState<DepositSource>(resumeOrderId ? 'pix' : null);
 
+    // PIX (on-ramp) is only available when the EtherFuse anchor is enabled on the
+    // backend (ENABLE_ETHERFUSE_ANCHOR=true → ramp routes mounted → readiness
+    // resolves). When off, getReadiness 404s and `readiness` stays null → grey out PIX.
+    const { readiness } = useRampReadiness();
+    const pixAvailable = !!readiness;
+
     const handleCopy = async (text: string, id: string) => {
         await navigator.clipboard.writeText(text);
         setCopied(id);
@@ -143,10 +149,11 @@ export function DepositDialog({ investorId, walletAddress, resumeOrderId }: Depo
                     />
                     <SourceCard
                         onClick={() => setSource('pix')}
+                        disabled={!pixAvailable}
                         icon={<span className="text-xl leading-none">🇧🇷</span>}
                         iconBg="bg-[hsl(43_45%_55%/0.12)] group-hover:bg-[hsl(43_45%_55%/0.22)]"
                         title="PIX (BRL)"
-                        subtitle="Deposit BRL, receive yield-bearing TESOURO"
+                        subtitle={pixAvailable ? 'Deposit BRL, receive yield-bearing TESOURO' : 'Em breve'}
                         colSpan={2}
                     />
                 </div>
@@ -254,6 +261,7 @@ function SourceCard({
     title,
     subtitle,
     colSpan,
+    disabled,
 }: {
     onClick: () => void;
     icon: React.ReactNode;
@@ -261,12 +269,15 @@ function SourceCard({
     title: string;
     subtitle: string;
     colSpan?: 2;
+    disabled?: boolean;
 }) {
     return (
         <button
-            onClick={onClick}
+            onClick={disabled ? undefined : onClick}
+            disabled={disabled}
             className={
-                'flex flex-col items-center gap-3 p-5 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/20 transition-all group ' +
+                'flex flex-col items-center gap-3 p-5 rounded-xl border border-white/10 bg-white/[0.03] transition-all group ' +
+                (disabled ? 'opacity-40 cursor-not-allowed ' : 'hover:bg-white/[0.06] hover:border-white/20 ') +
                 (colSpan === 2 ? 'col-span-2' : '')
             }
         >
