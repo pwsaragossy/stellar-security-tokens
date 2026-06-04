@@ -45,7 +45,7 @@ export function Settings() {
                         authStorage.setUser(updatedUser, 'investor');
                         setUser(updatedUser);
                         return;
-                    } catch (err) {
+                    } catch {
                         console.log('Could not fetch fresh user data, using cached');
                     }
                 }

@@ -351,7 +351,7 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
             } else {
                 setOpen(false);
             }
-        } catch (e) {
+        } catch {
             // Error handled by hook
         }
     };

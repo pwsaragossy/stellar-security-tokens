@@ -148,7 +148,7 @@ export function CreateOffer() {
     // Save draft to sessionStorage whenever formData or step changes
     useEffect(() => {
         if (offerType && step < 5) {
-            const { legal_documents, ...formDataWithoutFiles } = formData;
+            const { legal_documents: _legal_documents, ...formDataWithoutFiles } = formData;
             const draft: StoredDraft = {
                 formData: formDataWithoutFiles,
                 step,

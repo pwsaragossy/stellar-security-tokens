@@ -202,7 +202,7 @@ export function Wallet() {
                             currentValue: Number(inv.totalDistributed || inv.total_distributed || 0) * Number(inv.unitPrice || inv.unit_price || 1),
                             issuerPublicKey: inv.issuerPublicKey || inv.issuer_public_key || null,
                         })));
-                    } catch (err) {
+                    } catch {
                         console.log('Could not fetch tokenized assets');
                     }
                 }

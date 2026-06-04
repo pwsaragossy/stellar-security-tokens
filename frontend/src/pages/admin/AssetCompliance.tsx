@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { HELP_CONTENT } from '@/constants/help-content';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -79,7 +81,7 @@ export function AssetCompliance() {
             if (data.length > 0 && !selectedAsset) {
                 setSelectedAsset(data[0].assetCode);
             }
-        } catch (err: any) {
+        } catch {
             setError('Failed to load assets');
         } finally {
             setLoadingTokens(false);
@@ -106,7 +108,7 @@ export function AssetCompliance() {
                     .filter((a: any) => a.key);
                 setPendingActions(pending);
             }
-        } catch (err: any) {
+        } catch {
             setError('Failed to refresh data');
         } finally {
             setLoadingHolders(false);
@@ -359,6 +361,7 @@ export function AssetCompliance() {
                         <div>
                             <CardTitle className="flex items-center gap-1.5">
                                 Asset Holders
+                                <InfoTooltip content={HELP_CONTENT.tokens.distributionControls.content} side="right" />
                             </CardTitle>
                             <CardDescription>Accounts with trustlines for {selectedAsset}</CardDescription>
                         </div>
@@ -431,6 +434,7 @@ export function AssetCompliance() {
                                                                 <Lock className="w-3 h-3 mr-1" />
                                                             )}
                                                             {pendingActions.some(a => a.key === holder.publicKey && a.type === 'freeze_account') ? 'Pending' : 'Freeze'}
+                                                            <InfoTooltip content={HELP_CONTENT.assetCompliance.freezeAccount.content} side="top" />
                                                         </Button>
                                                     ) : (
                                                         <Button
@@ -458,6 +462,7 @@ export function AssetCompliance() {
                                                     >
                                                         <ArrowDownToLine className="w-3 h-3 mr-1" />
                                                         {pendingActions.some(a => a.key === holder.publicKey && a.type === 'clawback') ? 'Pending' : 'Clawback'}
+                                                        <InfoTooltip content={HELP_CONTENT.assetCompliance.clawback.content} side="top" />
                                                     </Button>
 
                                                     {holder.clawbackEnabled && (
@@ -471,6 +476,7 @@ export function AssetCompliance() {
                                                         >
                                                             <ShieldCheck className="w-3 h-3 mr-1" />
                                                             {pendingActions.some(a => a.key === holder.publicKey && a.type === 'disable_clawback') ? 'Pending' : 'Finality'}
+                                                            <InfoTooltip content={HELP_CONTENT.assetCompliance.finalityOfOwnership.content} side="top" />
                                                         </Button>
                                                     )}
                                                 </div>
