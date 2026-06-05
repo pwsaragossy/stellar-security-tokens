@@ -12,6 +12,13 @@ soroban-sdk = "25.3.0"
 [dev-dependencies]
 soroban-sdk = { version = "25.3.0", features = ["testutils"] }
 
+[features]
+# Opt-in: runs the worst-case suite against the EXACT compiled mainnet WASM
+# (deploy/mainnet-wasm/yield_distributor.wasm) for true VM-accurate CPU/memory
+# numbers. Off by default so a plain `cargo test` never depends on that artifact.
+#   cargo test --features wasm-tests worst_case_30_investors_fits_mainnet_wasm -- --nocapture
+wasm-tests = []
+
 [profile.release]
 opt-level = "z"
 overflow-checks = true

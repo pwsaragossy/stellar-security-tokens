@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+extern crate std;
+
 use super::*;
 use soroban_sdk::{
     testutils::Address as _,
@@ -1028,4 +1030,293 @@ fn test_get_pending_admin_default_none() {
     let (client, _usdc, _token, _sac, _payer, _treasury, _admin) = setup(&env);
 
     assert_eq!(client.get_pending_admin(), None);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  WORST-CASE STRESS SIMULATION  (added 2026-06-05 — pre-mainnet hardening)
+//
+//  These tests do NOT exercise the happy path. They push distribute() to the
+//  ABSOLUTE MAXIMUM the code permits and check it survives a *real* Stellar
+//  transaction's resource ceilings — fully off-chain, deterministic, no
+//  network, no funding.
+//
+//  "Maximum the code permits":
+//    • MAX_BATCH_SIZE (30) distinct recipients  — the hard cap (lib.rs:27)
+//    • fee sitting EXACTLY on the 70% cap        — the boundary (lib.rs:295)
+//    • distinct, non-round stroop amounts        — stress the running sum + leak
+//
+//  The ceilings below are copied verbatim from the SDK's own
+//  `InvocationResourceLimits::mainnet()` (soroban-sdk 25.3.0,
+//  src/testutils/cost_estimate.rs:139). The default test Env already ENFORCES
+//  these — which is precisely why the older batch tests had to call
+//  `disable_resource_limits()` to pass. Here we MEASURE instead of hiding.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Real mainnet per-transaction ceilings (verbatim from mainnet()).
+const MAINNET_MAX_INSTRUCTIONS: i64 = 600_000_000;
+const MAINNET_MAX_MEM_BYTES: i64 = 41_943_040; // 40 MiB
+const MAINNET_MAX_DISK_READ_ENTRIES: u32 = 100;
+const MAINNET_MAX_WRITE_ENTRIES: u32 = 50;
+const MAINNET_MAX_DISK_READ_BYTES: u32 = 200_000;
+const MAINNET_MAX_WRITE_BYTES: u32 = 132_096;
+const MAINNET_MAX_EVENT_BYTES: u32 = 16_384;
+
+/// Build the worst case distribute() will accept: MAX_BATCH_SIZE distinct
+/// recipients, distinct non-round amounts (~1000 USDC each), and a fee sitting
+/// exactly on the 70% cap. Returns (recipients, amounts, total_payout, fee).
+fn build_worst_case(env: &Env) -> (Vec<Address>, Vec<i128>, i128, i128) {
+    let mut recipients: Vec<Address> = Vec::new(env);
+    let mut amounts: Vec<i128> = Vec::new(env);
+    let mut total: i128 = 0;
+    for i in 0..MAX_BATCH_SIZE {
+        recipients.push_back(Address::generate(env));
+        // ~1000 USDC + i stroops: distinct per investor, deliberately non-round
+        // to stress the zero-stroop-leak invariant at full batch width.
+        let amt = 1_000_0000001i128 + i as i128;
+        amounts.push_back(amt);
+        total += amt;
+    }
+    let fee = total * 7 / 10; // exactly the cap checked at lib.rs:295
+    (recipients, amounts, total, fee)
+}
+
+/// WORST CASE #1 — does a full 30-investor batch fit inside ONE real Stellar
+/// transaction? Measures every resource dimension and asserts it against the
+/// real mainnet ceiling. This is the single most important pre-mainnet check:
+/// the existing batch tests disable the resource limiter, so nobody has ever
+/// verified the batch actually fits.
+///
+/// ⚠ NATIVE flavour: the Rust contract runs host-native, so CPU/memory are
+/// UNDER-counted (the SDK cannot see WASM VM instantiation or guest
+/// execution). A PASS here is necessary-but-not-sufficient; a FAIL is a hard
+/// "won't fit on mainnet". For the mainnet-accurate number, run the
+/// `wasm-tests` flavour: `worst_case_30_investors_fits_mainnet_wasm`.
+#[test]
+fn worst_case_30_investors_fits_mainnet_native() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, usdc, token, sac, payer, treasury, _admin) = setup(&env);
+    // Fund the payer well beyond a ~30k USDC batch + fee.
+    sac.mint(&payer, &1_000_000_000_000_000i128); // +100M USDC headroom
+
+    let (recipients, amounts, total, fee) = build_worst_case(&env);
+
+    // Meter with unlimited headroom and enforcement off, so we capture the
+    // numbers even if a dimension is over the line (rather than panicking).
+    env.cost_estimate().budget().reset_unlimited();
+    env.cost_estimate().disable_resource_limits();
+
+    client.distribute(&payer, &usdc, &recipients, &amounts, &treasury, &fee);
+
+    let res = env.cost_estimate().resources();
+    let cpu = env.cost_estimate().budget().cpu_instruction_cost();
+    let mem = env.cost_estimate().budget().memory_bytes_cost();
+
+    std::eprintln!("\n── WORST CASE: 30 investors + fee@70% cap (NATIVE — under-counts CPU) ──");
+    std::eprintln!("{:#?}", res);
+    std::eprintln!("budget: cpu_insns={} mem_bytes={}", cpu, mem);
+    std::eprintln!("fee estimate: {:#?}", env.cost_estimate().fee());
+    std::eprintln!(
+        "mainnet ceilings: insns<={} mem<={} write_entries<={} write_bytes<={} events<={}\n",
+        MAINNET_MAX_INSTRUCTIONS, MAINNET_MAX_MEM_BYTES, MAINNET_MAX_WRITE_ENTRIES,
+        MAINNET_MAX_WRITE_BYTES, MAINNET_MAX_EVENT_BYTES,
+    );
+
+    // Assert EVERY dimension against the real mainnet ceiling.
+    assert!(res.instructions <= MAINNET_MAX_INSTRUCTIONS,
+        "CPU {} over mainnet cap {}", res.instructions, MAINNET_MAX_INSTRUCTIONS);
+    assert!(res.mem_bytes <= MAINNET_MAX_MEM_BYTES,
+        "mem {} over mainnet cap {}", res.mem_bytes, MAINNET_MAX_MEM_BYTES);
+    assert!(res.write_entries <= MAINNET_MAX_WRITE_ENTRIES,
+        "write_entries {} over mainnet cap {} — 30 investors would NOT fit in one tx",
+        res.write_entries, MAINNET_MAX_WRITE_ENTRIES);
+    assert!(res.disk_read_entries <= MAINNET_MAX_DISK_READ_ENTRIES,
+        "disk_read_entries {} over cap {}", res.disk_read_entries, MAINNET_MAX_DISK_READ_ENTRIES);
+    assert!(res.disk_read_bytes <= MAINNET_MAX_DISK_READ_BYTES,
+        "disk_read_bytes {} over cap {}", res.disk_read_bytes, MAINNET_MAX_DISK_READ_BYTES);
+    assert!(res.write_bytes <= MAINNET_MAX_WRITE_BYTES,
+        "write_bytes {} over cap {}", res.write_bytes, MAINNET_MAX_WRITE_BYTES);
+    assert!(res.contract_events_size_bytes <= MAINNET_MAX_EVENT_BYTES,
+        "event bytes {} over cap {}", res.contract_events_size_bytes, MAINNET_MAX_EVENT_BYTES);
+
+    // Financial integrity at maximum width: zero stroop leak.
+    let mut received: i128 = token.balance(&treasury);
+    for i in 0..recipients.len() {
+        received += token.balance(&recipients.get(i).unwrap());
+    }
+    assert_eq!(received, total + fee, "zero stroop leak across 30 investors + fee");
+}
+
+/// WORST CASE #2 — the contract's entire reason to exist: ONE signature must
+/// authorise ALL transfers. A 30-investor batch + fee is 31 SAC.transfer
+/// sub-invocations under a single `payer.require_auth()`. This asserts the auth
+/// TREE SHAPE — exactly what `mock_all_auths()` normally hides. If the tree is
+/// not what we expect, the production passkey would have to sign something
+/// different from what we think.
+#[test]
+fn worst_case_one_signature_covers_all_31_transfers() {
+    use soroban_sdk::testutils::AuthorizedFunction;
+    use soroban_sdk::Symbol;
+
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, usdc, _token, sac, payer, treasury, _admin) = setup(&env);
+    sac.mint(&payer, &1_000_000_000_000_000i128);
+
+    let (recipients, amounts, _total, fee) = build_worst_case(&env);
+
+    env.cost_estimate().budget().reset_unlimited();
+    env.cost_estimate().disable_resource_limits();
+    client.distribute(&payer, &usdc, &recipients, &amounts, &treasury, &fee);
+
+    let auths = env.auths();
+    std::eprintln!("\n── WORST CASE: auth tree for 30 investors + fee ──\n{:#?}\n", auths);
+
+    // Exactly ONE address authorises the whole batch: the payer.
+    assert_eq!(auths.len(), 1, "exactly one signer (payer) authorises the batch");
+    let (who, root) = &auths[0];
+    assert_eq!(who, &payer, "the single signer must be the payer");
+
+    // Root is the distribute() call on the distributor contract.
+    match &root.function {
+        AuthorizedFunction::Contract((addr, fname, _args)) => {
+            assert_eq!(addr, &client.address, "root auth must be on the distributor contract");
+            assert_eq!(fname, &Symbol::new(&env, "distribute"));
+        }
+        _ => panic!("root auth must be the distribute contract call"),
+    }
+
+    // 31 sub-invocations: 30 investor transfers + 1 fee transfer, ALL under the
+    // single root signature. THIS is "one passkey prompt = N investor payments".
+    assert_eq!(root.sub_invocations.len(), 31,
+        "one signature must cover all 30 investor transfers + 1 fee transfer");
+
+    // Every sub-invocation is a USDC SAC transfer.
+    let transfer = Symbol::new(&env, "transfer");
+    for sub in root.sub_invocations.iter() {
+        match &sub.function {
+            AuthorizedFunction::Contract((addr, fname, _)) => {
+                assert_eq!(addr, &usdc, "sub-invocation must be on the USDC SAC");
+                assert_eq!(fname, &transfer, "sub-invocation must be a transfer");
+            }
+            _ => panic!("sub-invocation must be a SAC transfer"),
+        }
+    }
+}
+
+/// WORST CASE #3 — the 70% fee cap is EXACT at full batch width: a fee equal to
+/// floor(total * 7 / 10) is accepted; one stroop more is rejected. Guards the
+/// FeeTooHigh boundary (lib.rs:295) at the maximum total the batch allows.
+#[test]
+fn worst_case_fee_cap_is_exact_at_max_batch() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, usdc, _token, sac, payer, treasury, _admin) = setup(&env);
+    sac.mint(&payer, &1_000_000_000_000_000i128);
+
+    let (recipients, amounts, _total, fee_at_cap) = build_worst_case(&env);
+    env.cost_estimate().budget().reset_unlimited();
+    env.cost_estimate().disable_resource_limits();
+
+    // fee == floor(total * 7 / 10) → accepted.
+    client.distribute(&payer, &usdc, &recipients, &amounts, &treasury, &fee_at_cap);
+
+    // fee == cap + 1 stroop → rejected with FeeTooHigh, even at max width.
+    let (recipients2, amounts2, _t2, _f2) = build_worst_case(&env);
+    let result = client.try_distribute(
+        &payer, &usdc, &recipients2, &amounts2, &treasury, &(fee_at_cap + 1),
+    );
+    assert_eq!(result, Err(Ok(DistributeError::FeeTooHigh)),
+        "one stroop over the 70% cap must be rejected at max batch width");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  WASM-ACCURATE WORST CASE  (feature-gated: `--features wasm-tests`)
+//
+//  Imports the EXACT bytes staged for mainnet —
+//    deploy/mainnet-wasm/yield_distributor.wasm
+//    sha256 d3f23a9fe1a38f675e4e712ad92eb3093d039ec8d94ed4785b331f6d4b62a240
+//    (matches the deployments record)
+//  — and runs the 30-investor worst case through the real WASM VM. Unlike the
+//  native test, this COUNTS VM instantiation + guest execution, i.e. the true
+//  mainnet CPU/memory cost. write_entries/bytes/events are identical to native
+//  (they are ledger ops, not guest compute), so only CPU/mem differ here.
+//
+//  Run (no build needed — uses the committed mainnet artifact):
+//    cargo test --features wasm-tests \
+//      worst_case_30_investors_fits_mainnet_wasm -- --nocapture
+// ═══════════════════════════════════════════════════════════════════════════
+#[cfg(feature = "wasm-tests")]
+mod wasm_accurate {
+    use super::*;
+
+    mod imported {
+        soroban_sdk::contractimport!(
+            file = "../../deploy/mainnet-wasm/yield_distributor.wasm"
+        );
+    }
+
+    #[test]
+    fn worst_case_30_investors_fits_mainnet_wasm() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        // USDC SAC — host built-in, identical to the native test setup.
+        let sac_admin = Address::generate(&env);
+        let (usdc, token, sac) = create_usdc(&env, &sac_admin);
+
+        // Register and initialize the REAL mainnet WASM.
+        let contract_id = env.register(imported::WASM, ());
+        let client = imported::Client::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+
+        let payer = Address::generate(&env);
+        sac.mint(&payer, &1_000_000_000_000_000i128);
+        let treasury = Address::generate(&env);
+
+        let (recipients, amounts, total, fee) = build_worst_case(&env);
+
+        env.cost_estimate().budget().reset_unlimited();
+        env.cost_estimate().disable_resource_limits();
+        client.distribute(&payer, &usdc, &recipients, &amounts, &treasury, &fee);
+
+        let res = env.cost_estimate().resources();
+        let cpu = env.cost_estimate().budget().cpu_instruction_cost();
+        let mem = env.cost_estimate().budget().memory_bytes_cost();
+
+        std::eprintln!("\n── WORST CASE: 30 investors + fee@70% cap (REAL MAINNET WASM) ──");
+        std::eprintln!("{:#?}", res);
+        std::eprintln!("budget: cpu_insns={} mem_bytes={}", cpu, mem);
+        std::eprintln!("fee estimate: {:#?}", env.cost_estimate().fee());
+        std::eprintln!(
+            "mainnet ceilings: insns<={} mem<={} write_entries<={} write_bytes<={} events<={}\n",
+            MAINNET_MAX_INSTRUCTIONS, MAINNET_MAX_MEM_BYTES, MAINNET_MAX_WRITE_ENTRIES,
+            MAINNET_MAX_WRITE_BYTES, MAINNET_MAX_EVENT_BYTES,
+        );
+
+        // The headline assertion: the REAL WASM CPU cost fits one mainnet tx.
+        assert!(res.instructions <= MAINNET_MAX_INSTRUCTIONS,
+            "REAL WASM CPU {} over mainnet cap {} — 30-investor batch would NOT fit in one tx",
+            res.instructions, MAINNET_MAX_INSTRUCTIONS);
+        assert!(res.mem_bytes <= MAINNET_MAX_MEM_BYTES,
+            "mem {} over mainnet cap {}", res.mem_bytes, MAINNET_MAX_MEM_BYTES);
+        assert!(res.write_entries <= MAINNET_MAX_WRITE_ENTRIES,
+            "write_entries {} over mainnet cap {}", res.write_entries, MAINNET_MAX_WRITE_ENTRIES);
+        assert!(res.disk_read_entries <= MAINNET_MAX_DISK_READ_ENTRIES,
+            "disk_read_entries {} over cap {}", res.disk_read_entries, MAINNET_MAX_DISK_READ_ENTRIES);
+        assert!(res.disk_read_bytes <= MAINNET_MAX_DISK_READ_BYTES,
+            "disk_read_bytes {} over cap {}", res.disk_read_bytes, MAINNET_MAX_DISK_READ_BYTES);
+        assert!(res.write_bytes <= MAINNET_MAX_WRITE_BYTES,
+            "write_bytes {} over cap {}", res.write_bytes, MAINNET_MAX_WRITE_BYTES);
+        assert!(res.contract_events_size_bytes <= MAINNET_MAX_EVENT_BYTES,
+            "event bytes {} over cap {}", res.contract_events_size_bytes, MAINNET_MAX_EVENT_BYTES);
+
+        // Zero stroop leak at maximum width, through the real WASM.
+        let mut received: i128 = token.balance(&treasury);
+        for i in 0..recipients.len() {
+            received += token.balance(&recipients.get(i).unwrap());
+        }
+        assert_eq!(received, total + fee, "zero stroop leak across 30 investors + fee");
+    }
 }
