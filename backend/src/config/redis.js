@@ -382,6 +382,55 @@ export async function deleteChallenge(key) {
     challengeFallbackMap.delete(key);
 }
 
+/**
+ * Atomically consume an auth challenge: return its data AND delete it in one
+ * step, so a challenge can be used at most once even under concurrent requests
+ * (closes a get-then-delete replay race). Uses Redis GETDEL when available, with
+ * a get+del fallback for older servers, and an in-memory fallback (naturally
+ * atomic in a single Node process).
+ * @param {string} key - Challenge key
+ * @returns {Promise<object|null>} Challenge data, or null if absent/expired
+ */
+export async function consumeChallenge(key) {
+    const redisKey = `${CHALLENGE_PREFIX}${key}`;
+    const client = await getRedisClient();
+
+    if (client) {
+        try {
+            let raw;
+            if (typeof client.getDel === 'function') {
+                try {
+                    raw = await client.getDel(redisKey); // atomic get-and-delete
+                } catch {
+                    // Redis server without GETDEL — degrade to get + del
+                    raw = await client.get(redisKey);
+                    if (raw) await client.del(redisKey);
+                }
+            } else {
+                raw = await client.get(redisKey);
+                if (raw) await client.del(redisKey);
+            }
+            challengeFallbackMap.delete(key); // clear any stray fallback copy
+            if (!raw) return null;
+            try {
+                return JSON.parse(raw);
+            } catch {
+                return null;
+            }
+        } catch (err) {
+            console.warn('[Redis] Challenge consume failed, using fallback:', err.message);
+        }
+    }
+
+    // In-memory fallback: read + delete with no await between → atomic in the event loop.
+    const entry = challengeFallbackMap.get(key);
+    if (!entry) return null;
+    challengeFallbackMap.delete(key);
+    if (Date.now() > entry._expiresAt) return null;
+    const { _expiresAt, ...data } = entry;
+    return data;
+}
+
 export default {
     getRedisClient,
     isRedisAvailable,
@@ -394,4 +443,5 @@ export default {
     storeChallenge,
     getChallenge,
     deleteChallenge,
+    consumeChallenge,
 };

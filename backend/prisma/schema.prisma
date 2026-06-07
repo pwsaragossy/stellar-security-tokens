@@ -165,7 +165,7 @@ model Investor {
 
   // Smart Wallet (Passkey Kit) fields - REQUIRED for all new investors
   stellarContractId   String  @map("stellar_contract_id") @db.VarChar(56)
-  passkeyCredentialId String  @map("passkey_credential_id") @db.Text
+  passkeyCredentialId String  @unique @map("passkey_credential_id") @db.Text
   passkeyPublicKey    Bytes?  @map("passkey_public_key")
   passkeyEcosystem    String? @map("passkey_ecosystem") @db.VarChar(20) // apple, google, windows_local, other
 
@@ -333,7 +333,7 @@ model Company {
   stellarPublicKey    String?       @map("stellar_public_key") @db.VarChar(56)
   // Passkey/Smart Wallet fields
   stellarContractId   String?       @map("stellar_contract_id") @db.VarChar(56)
-  passkeyCredentialId String?       @map("passkey_credential_id") @db.Text
+  passkeyCredentialId String?       @unique @map("passkey_credential_id") @db.Text
   passkeyPublicKey    Bytes?        @map("passkey_public_key")
   createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamp
   updatedAt           DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamp
@@ -366,7 +366,7 @@ model CompanyUser {
 
   // Smart Wallet (Passkey Kit) fields
   stellarContractId   String? @map("stellar_contract_id") @db.VarChar(56)
-  passkeyCredentialId String? @map("passkey_credential_id") @db.Text
+  passkeyCredentialId String? @unique @map("passkey_credential_id") @db.Text
   passkeyPublicKey    Bytes?  @map("passkey_public_key")
 
   // Email verification fields

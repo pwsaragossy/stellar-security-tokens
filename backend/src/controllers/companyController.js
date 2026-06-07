@@ -152,6 +152,18 @@ export class CompanyController {
       // Prepare passkey data if provided
       let passkeyData = {};
       if (credentialId && contractId) {
+        // Reject a duplicate passkey credential (the DB also enforces @unique).
+        const existingCredential = await prisma.company.findFirst({
+          where: { passkeyCredentialId: credentialId },
+          select: { id: true },
+        });
+        if (existingCredential) {
+          return res.status(409).json({
+            success: false,
+            error: 'This passkey is already registered.',
+          });
+        }
+
         let publicKeyBuffer = null;
         if (publicKey) {
           if (typeof publicKey === 'string') {
@@ -159,6 +171,15 @@ export class CompanyController {
           } else if (Buffer.isBuffer(publicKey)) {
             publicKeyBuffer = publicKey;
           }
+        }
+
+        // The passkey public key is required so logins can be verified server-side
+        // (a credentialId alone is a public identifier, not proof of possession).
+        if (!publicKeyBuffer || publicKeyBuffer.length !== 65 || publicKeyBuffer[0] !== 0x04) {
+          return res.status(400).json({
+            success: false,
+            error: 'A valid passkey public key is required. Please update the app and try again.',
+          });
         }
 
         passkeyData = {

@@ -1231,6 +1231,251 @@ fn worst_case_fee_cap_is_exact_at_max_batch() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+//  SMART-WALLET (PASSKEY) APPROVAL SIMULATION  (added 2026-06-05)
+//
+//  The off-chain batch sim above uses a plain generated payer, so it does NOT
+//  include the cost of the production payer being a passkey SMART WALLET whose
+//  `__check_auth` runs a WebAuthn (secp256r1) signature check. This block closes
+//  that gap: a representative passkey wallet that performs a REAL secp256r1
+//  verification (the same primitive the OZ WebAuthn account uses).
+//
+//  The cheat the user authorised: we skip the human (no Touch ID). The test
+//  holds a P-256 key and signs in-process. The CRYPTO stays real, so the
+//  measured cost is honest. `__check_auth` runs ONCE per distribute() tree, so
+//  this approval cost is additive on top of the 7.1M batch.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Representative passkey smart-wallet. `approve()` models the costly part of an
+/// OZ WebAuthn account's `__check_auth`: hash the challenge, then verify a real
+/// secp256r1 signature over it. (`env.crypto().sha256` returns `Hash<32>`, which
+/// `secp256r1_verify` requires; signing `sk.sign(msg)` hashes the same way, so
+/// the digests match.)
+#[contract]
+pub struct MockPasskeyWallet;
+
+#[contractimpl]
+impl MockPasskeyWallet {
+    pub fn approve(
+        env: Env,
+        message: soroban_sdk::Bytes,
+        pubkey: BytesN<65>,
+        sig: BytesN<64>,
+    ) {
+        let digest = env.crypto().sha256(&message);
+        env.crypto().secp256r1_verify(&pubkey, &digest, &sig);
+    }
+}
+
+/// Measures the cost a passkey approval adds to a distribute() transaction:
+/// one real secp256r1 verification. Reports it against the 7.1M batch and the
+/// 600M mainnet CPU ceiling.
+#[test]
+fn smart_wallet_passkey_approval_cost() {
+    use p256::ecdsa::{signature::Signer, Signature, SigningKey};
+
+    let env = Env::default();
+    let wallet_id = env.register(MockPasskeyWallet, ());
+    let wallet = MockPasskeyWalletClient::new(&env, &wallet_id);
+
+    // Test-side "passkey": a fixed P-256 key signed programmatically (no biometric).
+    let sk = SigningKey::from_slice(&[0x42u8; 32]).expect("valid P-256 scalar");
+    let pk_arr: [u8; 65] = sk
+        .verifying_key()
+        .to_encoded_point(false) // uncompressed SEC-1
+        .as_bytes()
+        .try_into()
+        .expect("65-byte uncompressed pubkey");
+    let pubkey = BytesN::<65>::from_array(&env, &pk_arr);
+
+    // The challenge a real wallet would sign (Signer::sign hashes with SHA-256,
+    // matching env.crypto().sha256 in the contract).
+    let message_bytes: &[u8] = b"radox yield distribution: 30 investors + fee";
+    let sig: Signature = sk.sign(message_bytes);
+    let sig = sig.normalize_s().unwrap_or(sig); // Soroban requires low-S
+    let sb = sig.to_bytes();
+    let sig_arr: [u8; 64] = (&sb[..]).try_into().expect("64-byte sig");
+    let sig_bytes = BytesN::<64>::from_array(&env, &sig_arr);
+    let message = soroban_sdk::Bytes::from_slice(&env, message_bytes);
+
+    env.cost_estimate().budget().reset_unlimited();
+    env.cost_estimate().disable_resource_limits();
+    wallet.approve(&message, &pubkey, &sig_bytes); // real secp256r1 verify
+
+    let res = env.cost_estimate().resources();
+    let cpu = env.cost_estimate().budget().cpu_instruction_cost();
+    let mem = env.cost_estimate().budget().memory_bytes_cost();
+
+    const BATCH_WASM_CPU: i64 = 7_111_724; // measured: worst_case_..._wasm
+    std::eprintln!("\n── SMART-WALLET PASSKEY APPROVAL (real secp256r1 verify) ──");
+    std::eprintln!("{:#?}", res);
+    std::eprintln!("budget: cpu_insns={} mem_bytes={}", cpu, mem);
+    std::eprintln!(
+        "→ approval ≈ {} CPU; batch+approval ≈ {} / {} mainnet cap ({}%)\n",
+        res.instructions,
+        res.instructions + BATCH_WASM_CPU,
+        MAINNET_MAX_INSTRUCTIONS,
+        (res.instructions + BATCH_WASM_CPU) * 100 / MAINNET_MAX_INSTRUCTIONS,
+    );
+
+    // A passkey approval must be cheap relative to the mainnet CPU ceiling.
+    assert!(res.instructions <= MAINNET_MAX_INSTRUCTIONS,
+        "approval CPU {} over mainnet cap {}", res.instructions, MAINNET_MAX_INSTRUCTIONS);
+    // And batch + approval together must still fit one transaction with wide margin.
+    assert!(res.instructions + BATCH_WASM_CPU <= MAINNET_MAX_INSTRUCTIONS,
+        "batch+approval {} over mainnet cap {}", res.instructions + BATCH_WASM_CPU, MAINNET_MAX_INSTRUCTIONS);
+}
+
+/// Runs the FULL 30-investor worst-case batch with the passkey smart-wallet
+/// CONTRACT as the payer (production uses a C... smart-wallet address, not a
+/// classic G... account). Confirms a contract-address payer drives all 31
+/// transfers and measures the batch footprint in that configuration.
+#[test]
+fn worst_case_smart_wallet_is_payer() {
+    let env = Env::default();
+    env.mock_all_auths(); // mock_all_auths covers the wallet's __check_auth here;
+                          // the standalone secp256r1 cost is measured separately above.
+    let (client, usdc, token, sac, _payer, treasury, _admin) = setup(&env);
+
+    // The payer is the smart-wallet contract address.
+    let wallet_id = env.register(MockPasskeyWallet, ());
+    sac.mint(&wallet_id, &1_000_000_000_000_000i128);
+
+    let (recipients, amounts, total, fee) = build_worst_case(&env);
+
+    env.cost_estimate().budget().reset_unlimited();
+    env.cost_estimate().disable_resource_limits();
+    client.distribute(&wallet_id, &usdc, &recipients, &amounts, &treasury, &fee);
+
+    let res = env.cost_estimate().resources();
+    std::eprintln!("\n── WORST CASE: 30 investors, payer = SMART-WALLET CONTRACT ──");
+    std::eprintln!("write_entries={} instructions={} (vs classic-payer 33 / 7.1M)\n",
+        res.write_entries, res.instructions);
+
+    // Same ledger-write ceiling holds with a contract payer.
+    assert!(res.write_entries <= MAINNET_MAX_WRITE_ENTRIES,
+        "write_entries {} over mainnet cap {}", res.write_entries, MAINNET_MAX_WRITE_ENTRIES);
+
+    // Zero stroop leak with a smart-wallet payer.
+    let mut received: i128 = token.balance(&treasury);
+    for i in 0..recipients.len() {
+        received += token.balance(&recipients.get(i).unwrap());
+    }
+    assert_eq!(received, total + fee, "zero stroop leak, smart-wallet payer");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  FULL-SCHEDULE LIFECYCLE SIMULATION  (added 2026-06-05)
+//
+//  The question that matters most: do holders keep receiving the CORRECT amount,
+//  every month, for the whole term, until the end — with nothing drifting,
+//  leaking, or double-paying? This simulates a 1-year offer paying monthly
+//  investor yield (10% APY) to 3 holders of different sizes, advancing the
+//  calendar and bumping the contract TTL each month like the maintenance cron.
+//
+//  Scope: this proves the CONTRACT faithfully executes the schedule period after
+//  period (no drift/leak, survives the term). The per-period AMOUNT computation
+//  is the backend's job (companyPayment.service.js) and is covered by the E2E
+//  tokenLifecycle.test.js — which today exercises a SINGLE period, not a full
+//  term. The amounts here are computed independently in-test (dual computation,
+//  the same round7 model) so this is a real correctness check, not a tautology.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Round-half-up integer division — mirrors the backend's round7 in stroops.
+fn round_div(numer: i128, denom: i128) -> i128 {
+    (numer + denom / 2) / denom
+}
+
+#[test]
+fn lifecycle_monthly_yield_full_term_correct() {
+    use soroban_sdk::testutils::Ledger as _;
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, usdc, token, sac, payer, treasury, admin) = setup(&env);
+    sac.mint(&payer, &10_000_000_000_000i128); // fund the company for the year
+
+    // 3 holders, distinct principals chosen to force rounding in BOTH directions.
+    let holders = [
+        (Address::generate(&env), 50_000_000_000i128), // 5,000 USDC
+        (Address::generate(&env), 10_000_000_000i128), // 1,000 USDC
+        (Address::generate(&env), 1_000_000_000i128),  //   100 USDC
+    ];
+    let investor_rate: i128 = 10; // % APY the investor receives
+    let company_rate: i128 = 12; //  % APY the company pays (2% platform spread)
+    let months: i128 = 12;
+
+    // Independent monthly amounts (NOT from any service):
+    //   investorMonthly_i = round7(principal × investorRate/100 / 12)  [stroops]
+    let inv_monthly: std::vec::Vec<i128> = holders
+        .iter()
+        .map(|(_, p)| round_div(p * investor_rate, 100 * months))
+        .collect();
+    let comp_monthly: std::vec::Vec<i128> = holders
+        .iter()
+        .map(|(_, p)| round_div(p * company_rate, 100 * months))
+        .collect();
+    let fee_monthly: i128 = (0..holders.len()).map(|i| comp_monthly[i] - inv_monthly[i]).sum();
+    let payout_monthly: i128 = inv_monthly.iter().sum();
+
+    // Build the soroban Vec args the company signs each month.
+    let mut recipients: Vec<Address> = Vec::new(&env);
+    let mut amounts: Vec<i128> = Vec::new(&env);
+    for (i, (addr, _)) in holders.iter().enumerate() {
+        recipients.push_back(addr.clone());
+        amounts.push_back(inv_monthly[i]);
+    }
+
+    let payer_start = token.balance(&payer);
+    let mut seq: u32 = 100_000;
+    let mut ts: u64 = 1_700_000_000; // arbitrary start time
+
+    // ── Run the full schedule, month by month, to the end of the term ──
+    for month in 1..=months {
+        // A month passes; the maintenance cron bumps the contract's TTL.
+        ts += 30 * 24 * 60 * 60; // +30 days (calendar)
+        seq += 5_000; // modest ledger advance (distribute has no time logic)
+        env.ledger().set_timestamp(ts);
+        env.ledger().set_sequence_number(seq);
+        client.extend_ttl();
+
+        client.distribute(&payer, &usdc, &recipients, &amounts, &treasury, &fee_monthly);
+
+        // Every holder has received EXACTLY month × their monthly amount — no drift.
+        for (i, (addr, _)) in holders.iter().enumerate() {
+            assert_eq!(token.balance(addr), inv_monthly[i] * month,
+                "holder {} wrong cumulative balance after month {}", i, month);
+        }
+        assert_eq!(token.balance(&treasury), fee_monthly * month,
+            "treasury cumulative drift after month {}", month);
+        assert_eq!(payer_start - token.balance(&payer), (payout_monthly + fee_monthly) * month,
+            "company debit drift after month {}", month);
+    }
+
+    // ── End of term: cumulative correctness + monthly-vs-annual rounding drift ──
+    std::eprintln!("\n── 12-MONTH YIELD SCHEDULE — per-holder result ──");
+    for (i, (addr, principal)) in holders.iter().enumerate() {
+        let received = token.balance(addr);
+        let monthly_sum = inv_monthly[i] * months;
+        let annual = round_div(principal * investor_rate, 100); // one annual payment
+        std::eprintln!(
+            "holder {}: principal={} stroops | 12×monthly={} | annual_equiv={} | drift={} stroops",
+            i, principal, received, annual, monthly_sum - annual);
+
+        // Exact: 12 monthly payments == 12 × the monthly amount, to the stroop.
+        assert_eq!(received, monthly_sum, "holder {} cumulative != 12 × monthly", i);
+        // Monthly accrual lands within a handful of stroops of the annual figure
+        // (the unavoidable, sub-cent consequence of rounding each month).
+        assert!((monthly_sum - annual).abs() <= months,
+            "holder {} monthly-vs-annual drift {} exceeds {} stroops",
+            i, monthly_sum - annual, months);
+    }
+    std::eprintln!("(drift is in STROOPS: 1 stroop = 0.0000001 USDC)\n");
+
+    // The contract is still alive, unpaused, and correctly owned after the term.
+    assert_eq!(client.get_paused(), false, "contract must survive the full term");
+    assert_eq!(client.get_admin(), admin, "admin unchanged across the term");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 //  WASM-ACCURATE WORST CASE  (feature-gated: `--features wasm-tests`)
 //
 //  Imports the EXACT bytes staged for mainnet —
@@ -1318,5 +1563,153 @@ mod wasm_accurate {
             received += token.balance(&recipients.get(i).unwrap());
         }
         assert_eq!(received, total + fee, "zero stroop leak across 30 investors + fee");
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  BIRTH-TO-DEATH LIFECYCLE  (feature-gated: `--features wasm-tests`)
+//
+//  The complete arc across BOTH contracts: an investor holds tokens, receives
+//  12 monthly yield payments via the yield_distributor, then at maturity the
+//  MaturitySettlement contract returns their principal AND burns their tokens,
+//  closing the offer. Proves the two contracts compose and every holder ends up
+//  whole, to the stroop, with zero tokens left.
+//
+//  Imports the real (testing-feature) settlement WASM. Build it first:
+//    cargo build --manifest-path ../maturity_settlement/Cargo.toml \
+//      --target wasm32v1-none --release
+//  Then: cargo test --features wasm-tests full_lifecycle -- --nocapture
+//
+//  Product model assumed: monthly coupons (interest paid each month) + principal
+//  returned at maturity (a coupon bond). The settlement fee is 0 on the principal
+//  return — the platform spread was already taken on each monthly coupon.
+// ═══════════════════════════════════════════════════════════════════════════
+#[cfg(feature = "wasm-tests")]
+mod birth_to_death {
+    use super::*;
+    use soroban_sdk::testutils::{IssuerFlags, Ledger as _};
+    use soroban_sdk::token::{StellarAssetClient, TokenClient};
+
+    mod settlement {
+        soroban_sdk::contractimport!(
+            file = "../maturity_settlement/target/wasm32v1-none/release/maturity_settlement.wasm"
+        );
+    }
+
+    #[test]
+    fn full_lifecycle_yield_12_months_then_maturity_burn() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        // ── Actors ──
+        let issuer = Address::generate(&env); // token SAC admin (clawback) + settlement admin
+        let usdc_admin = Address::generate(&env);
+        let company = Address::generate(&env); // pays monthly yield, deposits principal
+        let treasury = Address::generate(&env);
+
+        // ── USDC SAC ──
+        let usdc_sac = env.register_stellar_asset_contract_v2(usdc_admin.clone());
+        let usdc_addr = usdc_sac.address();
+        let usdc = TokenClient::new(&env, &usdc_addr);
+        let usdc_mint = StellarAssetClient::new(&env, &usdc_addr);
+
+        // ── Security token SAC — clawback enabled BEFORE any mint ──
+        let sec = env.register_stellar_asset_contract_v2(issuer.clone());
+        sec.issuer().set_flag(IssuerFlags::RevocableFlag);
+        sec.issuer().set_flag(IssuerFlags::ClawbackEnabledFlag);
+        let sec_addr = sec.address();
+        let sec_token = TokenClient::new(&env, &sec_addr);
+        let sec_mint = StellarAssetClient::new(&env, &sec_addr);
+
+        // ── Holders (address, principal_stroops); 1 token = 1 USDC ──
+        let holders = [
+            (Address::generate(&env), 50_000_000_000i128), // 5,000 USDC
+            (Address::generate(&env), 10_000_000_000i128), // 1,000 USDC
+            (Address::generate(&env), 1_000_000_000i128),  //   100 USDC
+        ];
+        for (addr, p) in holders.iter() {
+            sec_mint.mint(addr, p); // each holds tokens == their principal
+        }
+
+        // Independent yield math (round7 model, in stroops).
+        let investor_rate: i128 = 10;
+        let company_rate: i128 = 12;
+        let months: i128 = 12;
+        let inv_monthly: std::vec::Vec<i128> = holders
+            .iter()
+            .map(|(_, p)| round_div(p * investor_rate, 100 * months))
+            .collect();
+        let comp_monthly: std::vec::Vec<i128> = holders
+            .iter()
+            .map(|(_, p)| round_div(p * company_rate, 100 * months))
+            .collect();
+        let yield_fee_monthly: i128 =
+            (0..holders.len()).map(|i| comp_monthly[i] - inv_monthly[i]).sum();
+        let total_principal: i128 = holders.iter().map(|(_, p)| *p).sum();
+
+        usdc_mint.mint(&company, &1_000_000_000_000i128); // 100k USDC — ample
+
+        // ── PHASE 1: 12 monthly yield payments via yield_distributor ──
+        let yd_id = env.register(YieldDistributor, ());
+        let yd = YieldDistributorClient::new(&env, &yd_id);
+        yd.initialize(&issuer);
+
+        let mut recipients: Vec<Address> = Vec::new(&env);
+        let mut amounts: Vec<i128> = Vec::new(&env);
+        for (i, (addr, _)) in holders.iter().enumerate() {
+            recipients.push_back(addr.clone());
+            amounts.push_back(inv_monthly[i]);
+        }
+
+        let mut seq: u32 = 100_000;
+        let mut ts: u64 = 1_700_000_000;
+        for _m in 1..=months {
+            ts += 30 * 24 * 60 * 60;
+            seq += 5_000;
+            env.ledger().set_timestamp(ts);
+            env.ledger().set_sequence_number(seq);
+            yd.extend_ttl();
+            yd.distribute(&company, &usdc_addr, &recipients, &amounts, &treasury, &yield_fee_monthly);
+        }
+
+        // After the coupon term: yield accrued, tokens still held.
+        for (i, (addr, p)) in holders.iter().enumerate() {
+            assert_eq!(usdc.balance(addr), inv_monthly[i] * months, "holder {} coupon accrual", i);
+            assert_eq!(sec_token.balance(addr), *p, "holder {} tokens intact pre-maturity", i);
+        }
+
+        // ── PHASE 2: Maturity — deposit principal, settle (pay + burn), close ──
+        let ms_id = env.register(settlement::WASM, ());
+        let ms = settlement::Client::new(&env, &ms_id);
+        ms.initialize(&issuer, &usdc_addr, &sec_addr, &treasury, &200u32); // max_fee 2%
+
+        ms.deposit(&company, &total_principal);
+        assert_eq!(ms.get_balance(), total_principal, "deposit funds the settlement");
+
+        let mut items: Vec<settlement::SettleItem> = Vec::new(&env);
+        for (addr, p) in holders.iter() {
+            items.push_back(settlement::SettleItem { investor: addr.clone(), payout: *p });
+        }
+        ms.settle_batch(&items, &0i128); // principal return, no fee
+
+        // ── END OF LIFE: everyone whole, all tokens burned, offer closed ──
+        std::eprintln!("\n── FULL LIFECYCLE: 12 monthly coupons → maturity → principal + burn ──");
+        for (i, (addr, p)) in holders.iter().enumerate() {
+            let total = usdc.balance(addr);
+            let expected = inv_monthly[i] * months + p;
+            std::eprintln!(
+                "holder {}: principal={} | lifetime_USDC={} (coupons {} + principal {}) | tokens_left={}",
+                i, p, total, inv_monthly[i] * months, p, sec_token.balance(addr));
+            assert_eq!(total, expected, "holder {} lifetime total wrong", i);
+            assert_eq!(sec_token.balance(addr), 0, "holder {} tokens must be burned at maturity", i);
+        }
+        assert_eq!(ms.get_balance(), 0, "settlement contract fully drained");
+
+        // Offer is CLOSED: re-settling a holder is rejected (no double-pay).
+        let mut again: Vec<settlement::SettleItem> = Vec::new(&env);
+        again.push_back(settlement::SettleItem { investor: holders[0].0.clone(), payout: holders[0].1 });
+        assert!(ms.try_settle_batch(&again, &0i128).is_err(),
+            "double-settlement must be rejected — offer is closed");
+        std::eprintln!("✓ every holder paid coupons for the full term + principal at maturity; tokens burned; closed\n");
     }
 }

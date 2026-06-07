@@ -106,7 +106,7 @@ export class CompanyUserController {
         role = 'user',
         // New fields for single-step registration
         credentialId,
-        _publicKey,
+        publicKey,
         contractId
       } = req.body;
 
@@ -149,6 +149,33 @@ export class CompanyUserController {
 
       // Single-step flow (frontend already created passkey and deployed wallet)
       if (credentialId && contractId) {
+        // Reject a duplicate passkey credential (the DB also enforces @unique).
+        const existingCredential = await prisma.companyUser.findFirst({
+          where: { passkeyCredentialId: credentialId },
+          select: { id: true },
+        });
+        if (existingCredential) {
+          return res.status(409).json({
+            success: false,
+            error: 'This passkey is already registered.',
+          });
+        }
+
+        // The passkey public key is required so logins can be verified server-side
+        // (a credentialId alone is a public identifier, not proof of possession).
+        let publicKeyBuffer;
+        try {
+          publicKeyBuffer = Buffer.from(publicKey || '', 'base64');
+        } catch {
+          publicKeyBuffer = Buffer.alloc(0);
+        }
+        if (publicKeyBuffer.length !== 65 || publicKeyBuffer[0] !== 0x04) {
+          return res.status(400).json({
+            success: false,
+            error: 'A valid passkey public key is required. Please update the app and try again.',
+          });
+        }
+
         // Wallet is already deployed by frontend via smart-account-kit
         log.info(`[CompanyRegistration] Creating company user for ${email} with wallet ${contractId}`);
 
@@ -165,7 +192,7 @@ export class CompanyUserController {
             role,
             stellarContractId: contractId, // Use the contract ID from frontend
             passkeyCredentialId: credentialId,
-            passkeyPublicKey: null, // No longer tracked separately - embedded in wallet contract
+            passkeyPublicKey: publicKeyBuffer, // raw 65-byte secp256r1 — verifies login assertions
             emailVerified: false,
             emailVerificationToken: verificationToken,
             emailVerificationExpiry: verificationExpiry,

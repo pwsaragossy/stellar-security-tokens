@@ -12,8 +12,9 @@ import {
 } from '../middleware/auth.js';
 import prisma from '../config/prisma.js';
 import { PasskeyWalletService } from '../services/passkeyWallet.service.js';
-import { WebAuthnService } from '../services/webauthn.service.js';
-import { blocklistToken } from '../config/redis.js';
+import crypto from 'crypto';
+import { blocklistToken, storeChallenge, consumeChallenge } from '../config/redis.js';
+import { verifyAssertion } from '../utils/webauthnAssertion.js';
 import logger from '../utils/logger.js';
 const log = logger.scope('AuthRoutes');
 
@@ -119,16 +120,17 @@ router.get('/config', (req, res) => {
  */
 router.get('/passkey-login/discover', async (req, res, next) => {
   try {
-    const options = await WebAuthnService.generateDiscoverableAuthOptions();
+    // Issue a one-time challenge AND persist it server-side so the POST step can
+    // verify the assertion was signed over a challenge we actually issued.
+    const challenge = crypto.randomBytes(32).toString('base64url');
+    await storeChallenge(`discover:${challenge}`, { issuedAt: Date.now() });
 
-    // Store challenge in memory or session for verification
-    // For simplicity, we'll include it in the response and verify client-side
     res.json({
       success: true,
-      challenge: Buffer.from(options.challenge).toString('base64'),
-      rpId: options.rpId,
-      timeout: options.timeout,
-      userVerification: options.userVerification,
+      challenge,
+      rpId: process.env.WEBAUTHN_RP_ID || 'localhost',
+      timeout: 60000,
+      userVerification: 'required',
     });
   } catch (error) {
     next(error);
@@ -163,18 +165,22 @@ router.get('/passkey-login/discover', async (req, res, next) => {
  *         description: Authentication failed
  */
 router.post('/passkey-login/discover', [
-  body('credentialId').notEmpty().withMessage('Credential ID is required'),
+  body('assertion').notEmpty().withMessage('Assertion is required'),
   validate,
 ], async (req, res, next) => {
   try {
-    const { credentialId } = req.body;
+    const { assertion } = req.body;
+    const credentialId = assertion?.id;
+    if (!credentialId || !assertion?.response?.clientDataJSON) {
+      return res.status(400).json({ success: false, error: 'Malformed passkey assertion' });
+    }
 
 
     // Find user by credentialId (smart-account-kit doesn't set userHandle properly)
     // Look up in investors first
     let user = await prisma.investor.findFirst({
       where: { passkeyCredentialId: credentialId },
-      select: { id: true, name: true, email: true, kycStatus: true, stellarContractId: true }
+      select: { id: true, name: true, email: true, kycStatus: true, stellarContractId: true, passkeyPublicKey: true }
     });
 
 
@@ -184,7 +190,7 @@ router.post('/passkey-login/discover', [
       // Try company users (employees/representatives)
       user = await prisma.companyUser.findFirst({
         where: { passkeyCredentialId: credentialId },
-        select: { id: true, name: true, email: true, role: true, companyId: true, stellarContractId: true }
+        select: { id: true, name: true, email: true, role: true, companyId: true, stellarContractId: true, passkeyPublicKey: true }
       });
 
 
@@ -194,7 +200,7 @@ router.post('/passkey-login/discover', [
         // Try companies directly (for new company registration flow)
         const company = await prisma.company.findFirst({
           where: { passkeyCredentialId: credentialId },
-          select: { id: true, name: true, email: true, status: true, stellarContractId: true }
+          select: { id: true, name: true, email: true, status: true, stellarContractId: true, passkeyPublicKey: true }
         });
 
 
@@ -212,6 +218,7 @@ router.post('/passkey-login/discover', [
             email: company.email,
             status: company.status,
             stellarContractId: company.stellarContractId,
+            passkeyPublicKey: company.passkeyPublicKey,
             companyId: company.id,
             role: 'admin', // Company owner is admin
             userType: 'company'
@@ -224,6 +231,63 @@ router.post('/passkey-login/discover', [
       return res.status(401).json({
         success: false,
         error: 'User not found',
+      });
+    }
+
+    // ─── SECURITY: verify the WebAuthn assertion signature server-side ───
+    // A credentialId is a PUBLIC identifier, never a bearer token. We require a
+    // valid passkey signature over a one-time, server-issued challenge before
+    // issuing any session.
+    if (!user.passkeyPublicKey) {
+      // Pre-fix accounts have no stored public key — they must register again.
+      return res.status(401).json({
+        success: false,
+        error: 'This account predates a security update and must be re-registered. Please sign up again.',
+      });
+    }
+
+    let challenge;
+    try {
+      const clientData = JSON.parse(
+        Buffer.from(assertion.response.clientDataJSON, 'base64url').toString('utf8')
+      );
+      challenge = clientData.challenge;
+    } catch {
+      return res.status(400).json({ success: false, error: 'Invalid clientDataJSON' });
+    }
+
+    // FRESHNESS GATE: atomically consume the challenge. This is the single source
+    // of truth for "we issued this challenge and it has not been used" — it must
+    // run, and must be atomic, to prevent replay. The signature (verified below)
+    // covers this same challenge, binding the two together.
+    const consumed = await consumeChallenge(`discover:${challenge}`);
+    if (!consumed) {
+      return res.status(401).json({
+        success: false,
+        error: 'Login challenge expired or already used. Please try again.',
+      });
+    }
+
+    const expectedOrigins = (process.env.WEBAUTHN_ORIGIN || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const { verified, reason } = verifyAssertion({
+      publicKey: Buffer.from(user.passkeyPublicKey),
+      assertion,
+      // Freshness is enforced by consumeChallenge above (the store is authoritative
+      // for discoverable login); this is a belt-and-suspenders equality check.
+      expectedChallenge: challenge,
+      expectedOrigin: expectedOrigins,
+      expectedRpId: process.env.WEBAUTHN_RP_ID || 'localhost',
+    });
+
+    if (!verified) {
+      log.warn(`[Login] Passkey assertion rejected for ${user.userType} ${user.id}: ${reason}`);
+      return res.status(401).json({
+        success: false,
+        error: 'Passkey verification failed.',
       });
     }
 

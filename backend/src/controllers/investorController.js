@@ -575,6 +575,21 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
       });
     }
 
+    // Reject a duplicate passkey credential (the DB also enforces @unique). Login
+    // resolves accounts by credentialId, so a colliding row must never exist.
+    if (credentialId) {
+      const existingCredential = await prisma.investor.findFirst({
+        where: { passkeyCredentialId: credentialId },
+        select: { id: true },
+      });
+      if (existingCredential) {
+        return res.status(409).json({
+          success: false,
+          error: 'This passkey is already registered.',
+        });
+      }
+    }
+
     // Validate that contractId was provided (wallet deployed by frontend via smart-account-kit)
     if (!contractId) {
       return res.status(400).json({
@@ -597,6 +612,21 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
       });
     }
 
+    // Store the passkey public key so logins can be verified server-side.
+    // A credentialId alone is a public identifier, not proof of key possession.
+    let passkeyPublicKeyBuffer;
+    try {
+      passkeyPublicKeyBuffer = Buffer.from(publicKey || '', 'base64');
+    } catch {
+      passkeyPublicKeyBuffer = Buffer.alloc(0);
+    }
+    if (passkeyPublicKeyBuffer.length !== 65 || passkeyPublicKeyBuffer[0] !== 0x04) {
+      return res.status(400).json({
+        success: false,
+        error: 'A valid passkey public key is required. Please update the app and try again.',
+      });
+    }
+
     log.info(`[Registration] Creating investor for ${verifiedEmail} with wallet ${contractId}`);
 
     // Create investor with wallet contract ID from frontend - wallet already deployed!
@@ -607,7 +637,7 @@ export const registerInvestorWithPasskey = async (req, res, next) => {
         document,
         stellarContractId: contractId, // Use the contract ID from frontend
         passkeyCredentialId: credentialId,
-        passkeyPublicKey: null, // No longer tracked separately - embedded in wallet contract
+        passkeyPublicKey: passkeyPublicKeyBuffer, // raw 65-byte secp256r1 — verifies login assertions
         passkeyEcosystem: passkeyEcosystem || null, // apple, google, windows_local, other
         kycStatus: isTestnet() ? 'approved' : 'pending',
         emailVerified: true, // Email was verified before passkey creation!

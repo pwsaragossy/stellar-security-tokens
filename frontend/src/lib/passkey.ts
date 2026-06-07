@@ -17,6 +17,12 @@ export interface AuthResponse {
 
 const CRED_STORAGE_KEY = 'radox_passkey_credential';
 
+function bytesToBase64(bytes: Uint8Array): string {
+    let bin = '';
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin);
+}
+
 export class PasskeyClient {
     private kit: SmartAccountKit | null = null;
     private baseUrl: string;
@@ -134,7 +140,7 @@ export class PasskeyClient {
      */
     async discoverLogin(): Promise<AuthResponse> {
         try {
-            // 1. Get challenge from backend
+            // 1. Get a one-time challenge from the backend.
             const challengeResponse = await fetch(`${this.baseUrl}/auth/passkey-login/discover`);
 
             if (!challengeResponse.ok) {
@@ -143,40 +149,31 @@ export class PasskeyClient {
 
             const { challenge, rpId } = await challengeResponse.json();
 
-            // 2. Trigger WebAuthn with empty allowCredentials
-            // This prompts the browser to show all discoverable credentials for this RP
-            // CRITICAL: rpId must match the value used during registration ('radox.net').
-            // Without it, the browser defaults to the current hostname ('app.radox.net')
-            // and won't find any credentials registered under the parent domain.
-            const credential = await navigator.credentials.get({
-                publicKey: {
-                    challenge: Uint8Array.from(atob(challenge), c => c.charCodeAt(0)),
+            // 2. Produce a WebAuthn assertion (biometric). Empty allowCredentials =
+            // the browser shows all discoverable passkeys for this RP.
+            // CRITICAL: rpId must match the value used during registration, or the
+            // browser won't find credentials registered under the parent domain.
+            const { startAuthentication } = await import('@simplewebauthn/browser');
+            const assertion = await startAuthentication({
+                optionsJSON: {
+                    challenge,
                     rpId,
-                    allowCredentials: [], // Empty = show all discoverable credentials
-                    timeout: 60000,
+                    allowCredentials: [],
                     userVerification: 'required',
+                    timeout: 60000,
                 },
-            }) as PublicKeyCredential;
+            });
 
-            if (!credential) {
-                throw new Error('No passkey selected');
-            }
+            // Cache the credential id for silent transaction signing later.
+            this.lastCredentialId = assertion.id;
 
-            // Get credential ID as base64url
-            const credentialIdBase64 = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)))
-                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-
-            // Cache for later use in signTransaction (avoids double prompt)
-            this.lastCredentialId = credentialIdBase64;
-
-            // 3. Authenticate with Backend using discover endpoint
-            // Backend looks up user by credentialId
+            // 3. Send the FULL assertion. The backend verifies the signature
+            // server-side — the credentialId alone is NOT proof of possession.
             const authResponse = await fetch(`${this.baseUrl}/auth/passkey-login/discover`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    credentialId: credentialIdBase64,
-                }),
+                credentials: 'include',
+                body: JSON.stringify({ assertion }),
             });
 
             const data = await authResponse.json();
@@ -203,7 +200,7 @@ export class PasskeyClient {
      *  - Signs with deployer keypair
      *  - Optionally auto-submits
      */
-    async register(username: string): Promise<{ credentialId: string; contractId: string }> {
+    async register(username: string): Promise<{ credentialId: string; contractId: string; publicKey: string }> {
         await this.init();
         if (!this.kit) throw new Error('SmartAccountKit not initialized');
 
@@ -218,7 +215,7 @@ export class PasskeyClient {
                 },
             });
 
-            if (!result || !result.credentialId || !result.contractId) {
+            if (!result || !result.credentialId || !result.contractId || !result.publicKey) {
                 throw new Error('Failed to create wallet - missing required data');
             }
 
@@ -237,6 +234,9 @@ export class PasskeyClient {
             return {
                 credentialId: result.credentialId,
                 contractId: result.contractId,
+                // Raw 65-byte secp256r1 public key — the backend stores this to
+                // verify login assertions server-side.
+                publicKey: bytesToBase64(result.publicKey),
             };
         } catch (error: any) {
             console.error('Registration error:', error);

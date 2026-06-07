@@ -196,13 +196,14 @@ export function Register() {
         setError('');
 
         try {
-            const { credentialId, contractId } = await passkeyClient.register(formData.name);
+            const { credentialId, contractId, publicKey } = await passkeyClient.register(formData.name);
 
             const response = await api.post('/investors/register', {
                 ...formData,
                 registrationToken,
                 credentialId,
                 contractId,
+                publicKey,
                 passkeyEcosystem: detectedEcosystem,
             });
 
