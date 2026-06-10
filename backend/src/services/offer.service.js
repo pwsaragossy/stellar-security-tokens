@@ -389,7 +389,6 @@ export class OfferService {
    * @private
    */
   static async #initSorobanDeploy(offer, token) {
-    const { createHash } = await import('crypto');
     const { keyManager } = await import('../services/KeyManager.js');
     const { getSaleWasmHash } = await import('../config/stellar.js');
     const { SorobanSaleService } = await import('../services/sorobanSale.service.js');
@@ -398,16 +397,29 @@ export class OfferService {
     const issuerPublicKey = keyManager.getIssuerPublicKey();
     const wasmHash = getSaleWasmHash();
 
-    // Deterministic salt: sha256("radox:sale:{offerId}")
-    const salt = createHash('sha256')
-      .update(`radox:sale:${offer.id}`)
-      .digest();
+    // WASM-version-aware deterministic salt (see SorobanSaleService.saleSalt)
+    const salt = SorobanSaleService.saleSalt(offer.id, wasmHash);
 
-    // Check for crash recovery: contract may already exist on-chain
+    // Check for crash recovery: contract may already exist on-chain.
+    // Only resume from it when it runs the WASM we expect — a stale-WASM instance
+    // at this address would reject create() with MismatchingParameterLen, so we
+    // fall through to a fresh deploy instead. (The WASM-aware salt already keeps
+    // new versions on fresh addresses; this is defense in depth.)
     const precomputedId = SorobanSaleService.precomputeContractId(issuerPublicKey, salt);
     const alreadyDeployed = await SorobanSaleService.contractExistsOnChain(precomputedId);
 
+    let wasmMatches = false;
     if (alreadyDeployed) {
+      const onChainWasm = await SorobanSaleService.getDeployedWasmHash(precomputedId);
+      wasmMatches = onChainWasm === wasmHash;
+      if (!wasmMatches) {
+        log.warn(
+          `[activateOffer] Contract ${precomputedId} exists but runs WASM ${onChainWasm} ≠ expected ${wasmHash}; redeploying fresh.`,
+        );
+      }
+    }
+
+    if (alreadyDeployed && wasmMatches) {
       log.info(`[activateOffer] Contract ${precomputedId} already deployed, skipping to create step`);
       // Update DB and return — the sale_create chain must be triggered
       // manually via retrySorobanInit or processEffects when the original TX is re-processed.

@@ -127,6 +127,24 @@ export class SorobanSaleService {
     }
 
     /**
+     * Deterministic 32-byte salt for an offer's sale contract.
+     *
+     * WASM-version-aware: the salt folds in the deploy WASM hash so a contract built
+     * from a different WASM version lands on a *fresh* address. This prevents the
+     * deploy pipeline from reusing a stale-WASM instance left at the old salt-derived
+     * address — e.g. a pre-upgrade contract (or one from a prior DB run that reused the
+     * same offer ID) whose create() arity no longer matches, which would fail with
+     * `Func(MismatchingParameterLen)`. Self-heals on every future WASM upgrade.
+     *
+     * @param {number|string} offerId
+     * @param {string} wasmHash - deploy WASM hash (hex, 64 chars)
+     * @returns {Buffer} 32-byte salt (sha256)
+     */
+    static saleSalt(offerId, wasmHash) {
+        return hash(Buffer.from(`radox:sale:${offerId}:${wasmHash}`));
+    }
+
+    /**
      * Check if a contract exists on-chain via getLedgerEntries.
      * Used for crash-safe resumption of the deploy pipeline.
      *
@@ -143,6 +161,35 @@ export class SorobanSaleService {
         } catch (err) {
             log.warn(`[contractExistsOnChain] Check failed for ${contractId}: ${err.message}`);
             return false;
+        }
+    }
+
+    /**
+     * Read the on-chain executable WASM hash of a deployed contract instance.
+     * Returns null when the contract is absent or its executable is not a WASM
+     * (e.g. a Stellar Asset Contract). Used to confirm an existing on-chain
+     * instance runs the WASM we expect before resuming the deploy pipeline.
+     *
+     * @param {string} contractId - Contract address (C...)
+     * @returns {Promise<string|null>} WASM hash (hex) or null
+     */
+    static async getDeployedWasmHash(contractId) {
+        try {
+            const rpcServer = getSorobanServer();
+            const instanceKey = new Contract(contractId).getFootprint();
+            const result = await rpcServer.getLedgerEntries(instanceKey);
+            for (const entry of (result.entries || [])) {
+                try {
+                    const wasmHashRaw = entry.val.contractData().val().instance().executable().wasmHash();
+                    if (wasmHashRaw) return Buffer.from(wasmHashRaw).toString('hex');
+                } catch (_) {
+                    // executable is not a WASM (e.g. SAC token) — skip
+                }
+            }
+            return null;
+        } catch (err) {
+            log.warn(`[getDeployedWasmHash] Failed for ${contractId}: ${err.message}`);
+            return null;
         }
     }
 

@@ -163,7 +163,9 @@ async function mintTestUSDC(targetKeypair, amount) {
  * Upload WASM to testnet and return the hash. Includes retry logic for testnet flakiness.
  */
 async function uploadWasm() {
-  const wasmPath = path.resolve(__dirname, '../../../contracts/token_sale/target/wasm32v1-none/release/token_sale.wasm');
+  // Testing-feature build so the e2e's own
+  // generated USDC SAC is accepted. Regenerate with `npm run build:e2e-wasm`.
+  const wasmPath = path.resolve(__dirname, '../../../contracts/token_sale/target/e2e/wasm32v1-none/release/token_sale.wasm');
   const wasmBytes = fs.readFileSync(wasmPath);
   console.log(`  WASM size: ${wasmBytes.length} bytes`);
   return submitWasmUpload(wasmBytes, 'Sale');
@@ -222,7 +224,8 @@ async function submitWasmUpload(wasmBytes, label, maxRetries = 3) {
  * Upload MaturitySettlement WASM to testnet and return the hash.
  */
 async function uploadSettlementWasm() {
-  const wasmPath = path.resolve(__dirname, '../../../contracts/maturity_settlement/target/wasm32-unknown-unknown/release/maturity_settlement.wasm');
+  // Testing-feature build; regenerate with `npm run build:e2e-wasm`.
+  const wasmPath = path.resolve(__dirname, '../../../contracts/maturity_settlement/target/e2e/wasm32v1-none/release/maturity_settlement.wasm');
   const wasmBytes = fs.readFileSync(wasmPath);
   console.log(`  Settlement WASM size: ${wasmBytes.length} bytes`);
   return submitWasmUpload(wasmBytes, 'Settlement');
@@ -432,7 +435,9 @@ async function main() {
 
     // 2b. Deploy sale contract
     console.log('\n--- Deploying sale contract ---');
-    const salt = crypto.createHash('sha256').update(`radox:sale:${offer.id}`).digest();
+    // WASM-version-aware salt — use the canonical impl so the predicted address can
+    // never drift from production (sha256("radox:sale:{offerId}:{wasmHash}")).
+    const salt = SorobanSaleService.saleSalt(offer.id, wasmHash);
     const deployResult = await SorobanSaleService.buildDeployXdr(
       testIssuer.publicKey(), wasmHash, salt,
     );
@@ -987,7 +992,8 @@ async function main() {
     });
 
     console.log('\n--- Deploying multi-investor sale contract ---');
-    const multiSalt = crypto.createHash('sha256').update(`radox:multi:${multiOffer.id}`).digest();
+    // Same WASM-aware salt as production — distinct multiOffer.id yields a distinct address.
+    const multiSalt = SorobanSaleService.saleSalt(multiOffer.id, wasmHash);
     const multiDeployResult = await SorobanSaleService.buildDeployXdr(
       testIssuer.publicKey(), wasmHash, multiSalt,
     );
@@ -1782,12 +1788,13 @@ async function main() {
     assert(overdueOffer.paymentDueStatus === 'overdue',
       `DB paymentDueStatus: ${overdueOffer.paymentDueStatus} === overdue`);
 
-    // Late fee penalty created (amount = 0 because LATE_FEE_PERCENT_PER_DAY = 0)
+    // No late-fee penalty is created while LATE_FEE_PERCENT_PER_DAY = 0 — companyPayment.service.js
+    // guards penalty creation on `LATE_FEE_PERCENT_PER_DAY > 0` (disabled for MVP). When late fees
+    // are enabled, restore an assertion on latePenalty.amount here.
     const latePenalty = await prisma.companyPenalty.findFirst({
       where: { offerId: defaultOffer.id, penaltyType: 'late_fee' },
     });
-    assert(latePenalty !== null, 'Late fee penalty record created');
-    assert(parseFloat(latePenalty.amount) === 0, `Late fee amount: ${latePenalty.amount} === 0 (MVP disabled)`);
+    assert(latePenalty === null, 'No late-fee penalty while late fee disabled (MVP, rate=0)');
 
     console.log('  ✅ Overdue transition verified');
 
@@ -1817,12 +1824,13 @@ async function main() {
     assert(defaultedOffer.paymentDueStatus === 'defaulted',
       `DB paymentDueStatus: ${defaultedOffer.paymentDueStatus} === defaulted`);
 
-    // Default penalty created
+    // No default-fee penalty is created while DEFAULT_FEE_PERCENT = 0 — companyPayment.service.js
+    // guards penalty creation on `DEFAULT_FEE_PERCENT > 0` (disabled for MVP). When enabled,
+    // restore an assertion on defaultPenalty.amount here.
     const defaultPenalty = await prisma.companyPenalty.findFirst({
       where: { offerId: defaultOffer.id, penaltyType: 'default_fee' },
     });
-    assert(defaultPenalty !== null, 'Default fee penalty record created');
-    assert(parseFloat(defaultPenalty.amount) === 0, `Default fee amount: ${defaultPenalty.amount} === 0 (MVP disabled)`);
+    assert(defaultPenalty === null, 'No default-fee penalty while default fee disabled (MVP, rate=0)');
 
     console.log('  ✅ Default transition verified');
 
@@ -1904,13 +1912,16 @@ async function main() {
     const bulletEntry = bulletDefaultResult.bulletMaturities.find(p => p.offerId === bulletDefaultOffer.id);
 
     assert(bulletEntry !== undefined, 'Bullet default found in bulletMaturities');
-    assert(bulletEntry.status === 'defaulted', `Bullet default status: ${bulletEntry.status} === defaulted`);
+    // A bullet past grace stays 'overdue' — defaulting is admin-driven via mark-defaulted, NOT the
+    // cron (companyPayment.service.js:1261-1264; regulatory: execução de garantia needs a formal admin act).
+    assert(bulletEntry.status === 'overdue',
+      `Bullet past-grace status: ${bulletEntry.status} === overdue (awaiting admin mark-defaulted)`);
 
     const bulletDefaulted = await prisma.offer.findUnique({ where: { id: bulletDefaultOffer.id } });
-    assert(bulletDefaulted.paymentDueStatus === 'defaulted',
-      `Bullet DB paymentDueStatus: ${bulletDefaulted.paymentDueStatus} === defaulted`);
+    assert(bulletDefaulted.paymentDueStatus === 'overdue',
+      `Bullet DB paymentDueStatus: ${bulletDefaulted.paymentDueStatus} === overdue`);
 
-    console.log('  ✅ Bullet maturity default verified');
+    console.log('  ✅ Bullet past-grace stays overdue (awaiting admin mark-defaulted) verified');
 
     // --- 6f: On-chain collateral distribution ---
     console.log('\n--- 6f: On-chain collateral distribution ---');

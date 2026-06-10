@@ -535,15 +535,14 @@ export class MultiSigTransactionService {
                 );
                 break;
             case 'sale_deploy': {
-                const { createHash } = await import('crypto');
                 const { keyManager: km2 } = await import('./KeyManager.js');
                 const { getSaleWasmHash } = await import('../config/stellar.js');
-                const salt = createHash('sha256')
-                    .update(`radox:sale:${metadata.offerId}`)
-                    .digest();
+                const wasmHash2 = getSaleWasmHash();
+                // WASM-version-aware salt — must match offer.service #initSorobanDeploy
+                const salt = SorobanSaleService.saleSalt(metadata.offerId, wasmHash2);
                 result = await SorobanSaleService.buildDeployXdr(
                     km2.getIssuerPublicKey(),
-                    getSaleWasmHash(),
+                    wasmHash2,
                     salt,
                 );
                 break;
