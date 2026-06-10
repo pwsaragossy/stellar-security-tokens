@@ -31,6 +31,9 @@ export interface Offer {
     legal_documents?: Record<string, { hash?: string; url?: string; fileName?: string }>;
     offer_rules?: Record<string, any>;
 
+    // Collateral photos (ordered; first = cover)
+    collateral_photos?: { hash: string; url: string; fileName?: string; caption?: string | null; order?: number }[];
+
     // Timestamps
     created_at?: string;
     reviewed_at?: string;

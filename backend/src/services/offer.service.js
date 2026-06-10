@@ -241,6 +241,7 @@ export class OfferService {
         paymentFrequency: offerData.payment_frequency || 1,
         offerRules: offerData.offer_rules || {},
         legalDocuments: offerData.legal_documents || {},
+        collateralPhotos: offerData.collateral_photos || [],
         collateralType: offerData.collateral_type || 'real_estate',
         collateralDescription: offerData.collateral_description,
         collateralValue: offerData.collateral_value,

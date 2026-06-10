@@ -18,10 +18,12 @@ import {
     Building2,
     Briefcase,
     Shield,
-    UserCheck
+    UserCheck,
+    Camera
 } from "lucide-react";
 import { offersApi } from "@/api/offers";
 import type { Offer } from '@/types';
+import { CollateralPhotoGallery } from '@/components/CollateralPhotoGallery';
 import { cn } from "@/lib/utils";
 
 interface CapTableEntry {
@@ -346,6 +348,24 @@ export function OfferDetails() {
                             )}
                         </CardContent>
                     </Card>
+
+                    {/* Collateral Photos */}
+                    {offer.collateral_photos && offer.collateral_photos.length > 0 && (
+                        <Card className="glass-panel border-white/5 bg-white/5">
+                            <CardHeader>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                    <Camera className="w-4 h-4 text-muted-foreground" />
+                                    Asset Photos
+                                </CardTitle>
+                                <CardDescription>
+                                    Photos of the collateral asset shown to investors on the marketplace.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <CollateralPhotoGallery photos={offer.collateral_photos} offerName={offer.offer_name} />
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
 
                 {/* Right Column: Documents & Stats */}

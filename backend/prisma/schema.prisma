@@ -462,6 +462,9 @@ model Offer {
   collateralDescription String?  @map("collateral_description") @db.Text
   collateralValue       Decimal? @map("collateral_value") @db.Decimal(20, 2)
   collateralLTV         Decimal? @map("collateral_ltv") @db.Decimal(5, 2)
+  // Photos of the collateral asset, shown on marketplace + offer detail.
+  // Array of { hash, url, fileName, caption, order, uploadedAt } — IPFS-backed, ordered.
+  collateralPhotos      Json     @default("[]") @map("collateral_photos")
   totalSupply           Decimal  @map("total_supply") @db.Decimal(20, 7)
   unitPrice             Decimal  @default(1.0) @map("unit_price") @db.Decimal(20, 7)
   annualInterestRate    Decimal? @map("annual_interest_rate") @db.Decimal(10, 7)

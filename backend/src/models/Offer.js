@@ -336,6 +336,9 @@ export class Offer {
       total_supply,
       annual_interest_rate,
       offer_rules,
+      legal_documents,
+      collateral_photos,
+      status,
       // Phase 2: Asset Intelligence
       rental_yield_rate,
       value_growth_rate,
@@ -353,6 +356,9 @@ export class Offer {
     if (total_supply !== undefined) updateData.totalSupply = total_supply;
     if (annual_interest_rate !== undefined) updateData.annualInterestRate = annual_interest_rate;
     if (offer_rules !== undefined) updateData.offerRules = offer_rules;
+    if (legal_documents !== undefined) updateData.legalDocuments = legal_documents;
+    if (collateral_photos !== undefined) updateData.collateralPhotos = collateral_photos;
+    if (status !== undefined) updateData.status = status;
     // Phase 2: Asset Intelligence
     if (rental_yield_rate !== undefined) updateData.rentalYieldRate = rental_yield_rate;
     if (value_growth_rate !== undefined) updateData.valueGrowthRate = value_growth_rate;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -101,6 +101,64 @@ export function CreateOffer() {
     const [formData, setFormData] = useState<OfferFormData>(initialFormData);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Collateral photos live outside formData: File objects don't survive the
+    // sessionStorage draft round-trip, so they are not draftable by design.
+    const [collateralPhotos, setCollateralPhotos] = useState<{ file: File; preview: string }[]>([]);
+    const [photoError, setPhotoError] = useState<string | null>(null);
+    const collateralPhotosRef = useRef(collateralPhotos);
+    collateralPhotosRef.current = collateralPhotos;
+    useEffect(() => () => {
+        collateralPhotosRef.current.forEach(p => URL.revokeObjectURL(p.preview));
+    }, []);
+
+    const MAX_PHOTOS = 10;
+    const MAX_PHOTO_MB = 5;
+
+    const handleAddPhotos = (files: FileList | null) => {
+        if (!files || files.length === 0) return;
+        setPhotoError(null);
+        const accepted: { file: File; preview: string }[] = [];
+        const rejected: string[] = [];
+        for (const file of Array.from(files)) {
+            if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+                rejected.push(`${file.name}: not a JPEG/PNG/WebP image`);
+                continue;
+            }
+            if (file.size > MAX_PHOTO_MB * 1024 * 1024) {
+                rejected.push(`${file.name}: over ${MAX_PHOTO_MB}MB`);
+                continue;
+            }
+            accepted.push({ file, preview: URL.createObjectURL(file) });
+        }
+        setCollateralPhotos(prev => {
+            const merged = [...prev, ...accepted];
+            if (merged.length > MAX_PHOTOS) {
+                merged.slice(MAX_PHOTOS).forEach(p => URL.revokeObjectURL(p.preview));
+                rejected.push(`Offers support at most ${MAX_PHOTOS} photos`);
+                return merged.slice(0, MAX_PHOTOS);
+            }
+            return merged;
+        });
+        if (rejected.length > 0) setPhotoError(rejected.join(' · '));
+    };
+
+    const handleRemovePhoto = (index: number) => {
+        setCollateralPhotos(prev => {
+            URL.revokeObjectURL(prev[index].preview);
+            return prev.filter((_, i) => i !== index);
+        });
+    };
+
+    const handleMovePhoto = (index: number, direction: -1 | 1) => {
+        setCollateralPhotos(prev => {
+            const target = index + direction;
+            if (target < 0 || target >= prev.length) return prev;
+            const next = [...prev];
+            [next[index], next[target]] = [next[target], next[index]];
+            return next;
+        });
+    };
 
     // Get offer type from URL params
     const offerType = searchParams.get('type') as 'collateral' | 'sale' | null;
@@ -246,6 +304,7 @@ export function CreateOffer() {
                 contract: formData.legal_documents.contract?.file,
                 terms: formData.legal_documents.terms?.file,
                 prospectus: formData.legal_documents.prospectus?.file,
+                collateral_photos: collateralPhotos.map(p => p.file),
             });
 
             if (response.success) {
@@ -1006,6 +1065,53 @@ export function CreateOffer() {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Collateral Photos */}
+                            <div className="space-y-3 pt-4 border-t border-white/5">
+                                <label className="text-sm font-medium text-white">Asset Photos (optional)</label>
+                                <p className="text-xs text-muted-foreground -mt-1">
+                                    Photos of the collateral asset, shown to investors on the marketplace. JPEG, PNG or WebP, up to {MAX_PHOTO_MB}MB each, max {MAX_PHOTOS}. The first photo is the cover.
+                                </p>
+                                <input
+                                    type="file"
+                                    id="collateral-photos"
+                                    className="hidden"
+                                    multiple
+                                    accept="image/jpeg,image/png,image/webp"
+                                    onChange={(e) => { handleAddPhotos(e.target.files); e.target.value = ''; }}
+                                />
+                                <label
+                                    htmlFor="collateral-photos"
+                                    className="flex items-center justify-center gap-2 h-24 rounded-lg border border-dashed border-white/15 bg-black/20 cursor-pointer hover:border-primary/50 transition-colors text-sm text-muted-foreground"
+                                >
+                                    <Upload className="w-4 h-4" />
+                                    Click to add photos
+                                </label>
+                                {photoError && (
+                                    <p className="text-xs text-red-400 flex items-center gap-1.5">
+                                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {photoError}
+                                    </p>
+                                )}
+                                {collateralPhotos.length > 0 && (
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                                        {collateralPhotos.map((photo, index) => (
+                                            <div key={photo.preview} className="relative group rounded-lg overflow-hidden border border-white/10 bg-black/20">
+                                                <img src={photo.preview} alt={photo.file.name} className="w-full h-24 object-cover" />
+                                                {index === 0 && (
+                                                    <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/70 text-[10px] uppercase tracking-wide text-emerald-400 font-medium">Cover</span>
+                                                )}
+                                                <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 px-1.5 py-1 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button type="button" onClick={() => handleMovePhoto(index, -1)} disabled={index === 0} className="text-white/80 hover:text-white disabled:opacity-30 text-xs px-1" aria-label="Move photo earlier">←</button>
+                                                    <button type="button" onClick={() => handleMovePhoto(index, 1)} disabled={index === collateralPhotos.length - 1} className="text-white/80 hover:text-white disabled:opacity-30 text-xs px-1" aria-label="Move photo later">→</button>
+                                                    <button type="button" onClick={() => handleRemovePhoto(index)} className="text-red-400 hover:text-red-300 px-1" aria-label="Remove photo">
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
 
                             {/* Phase 3: Asset Stage */}
                             <div className="space-y-1.5 pt-4 border-t border-white/5">

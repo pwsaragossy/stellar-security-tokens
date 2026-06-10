@@ -10,8 +10,10 @@ import {
     ArrowLeft, Calendar, FileText, TrendingUp, Loader2, AlertCircle,
     DollarSign, ExternalLink, ShieldCheck, Clock, Building2,
     Hash, CheckCircle2, Copy, ChevronDown, Info, MapPin, Home, Ruler, BedDouble,
+    Camera,
 } from 'lucide-react';
 import { AddressDisplay } from '@/components/ui/AddressDisplay';
+import { CollateralPhotoGallery } from '@/components/CollateralPhotoGallery';
 import { useState } from 'react';
 import { useInvestmentFees } from '@/hooks/useInvestmentFees';
 import { PAYMENT_LABELS } from '@/utils/offerCalculations';
@@ -336,6 +338,14 @@ export function OfferDetails() {
                             )}
                         </div>
                     )}
+                </>
+            )}
+
+            {/* Collateral Photos */}
+            {offer.collateral_photos && offer.collateral_photos.length > 0 && (
+                <>
+                    <SectionDivider label="Asset Photos" icon={<Camera className="h-3.5 w-3.5" />} />
+                    <CollateralPhotoGallery photos={offer.collateral_photos} offerName={offer.offer_name} />
                 </>
             )}
 

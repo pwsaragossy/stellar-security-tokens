@@ -48,8 +48,22 @@ export function OfferCard({ offer, onInvest }: OfferCardProps) {
     const theme = TYPE_THEME[offer.offer_type as keyof typeof TYPE_THEME] || TYPE_THEME.sale;
     const TypeIcon = theme.icon;
 
+    const coverPhoto = offer.collateral_photos?.[0];
+
     return (
-        <Card className={`flex flex-col h-full glass-panel border-white/5 bg-white/[0.04] hover:bg-white/[0.06] transition-all duration-300 group hover:scale-[1.02] hover:shadow-lg ${theme.glow}`}>
+        <Card className={`flex flex-col h-full glass-panel border-white/5 bg-white/[0.04] hover:bg-white/[0.06] transition-all duration-300 group hover:scale-[1.02] hover:shadow-lg overflow-hidden ${theme.glow}`}>
+            {coverPhoto && (
+                <div className="relative w-full h-40 overflow-hidden">
+                    <img
+                        src={coverPhoto.url}
+                        alt={coverPhoto.caption || `${offer.offer_name} asset`}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        loading="lazy"
+                    />
+                    {/* readability scrim into the card body */}
+                    <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/50 to-transparent" />
+                </div>
+            )}
             <CardHeader className="pb-3">
                 {/* Type badge + LTV */}
                 <div className="flex justify-between items-start">

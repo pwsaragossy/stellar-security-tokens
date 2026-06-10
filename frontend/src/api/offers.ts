@@ -61,6 +61,7 @@ export const offersApi = {
     terms?: File;
     prospectus?: File;
     other_docs?: File[];
+    collateral_photos?: File[];
     // Phase 2: Asset Intelligence
     rental_yield_rate?: number;
     value_growth_rate?: number;
@@ -111,6 +112,13 @@ export const offersApi = {
     if (data.contract) formData.append('contract', data.contract);
     if (data.terms) formData.append('terms', data.terms);
     if (data.prospectus) formData.append('prospectus', data.prospectus);
+
+    // Collateral photos: order in the array IS the display order (backend indexes them)
+    if (data.collateral_photos) {
+      for (const photo of data.collateral_photos) {
+        formData.append('collateral_photos', photo);
+      }
+    }
 
     // Phase 2: Asset Intelligence fields
     if (data.rental_yield_rate !== undefined) {

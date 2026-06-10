@@ -9,6 +9,7 @@ import { ipfsService } from '../services/ipfs.service.js';
 import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
 import { computeSpreadRatio, validateYieldSpreadRatio } from '../utils/stellarAmount.js';
+import { validatePhotoUpload, validatePhotoCount, InvalidImageError } from '../utils/imageValidation.js';
 const log = logger.scope('OfferController');
 
 /**
@@ -64,6 +65,13 @@ export class OfferController {
     const offerRules = typeof offer.offerRules === 'string'
       ? JSON.parse(offer.offerRules)
       : offer.offerRules || {};
+
+    const collateralPhotosRaw = typeof offer.collateralPhotos === 'string'
+      ? JSON.parse(offer.collateralPhotos)
+      : offer.collateralPhotos || [];
+    const collateralPhotos = Array.isArray(collateralPhotosRaw)
+      ? [...collateralPhotosRaw].sort((a, b) => (a?.order ?? 0) - (b?.order ?? 0))
+      : [];
 
     // Map database camelCase to API snake_case
     return {
@@ -134,6 +142,8 @@ export class OfferController {
       // Formatted JSONB fields
       legalDocuments: OfferController.formatLegalDocuments(legalDocuments),
       legal_documents: OfferController.formatLegalDocuments(legalDocuments),
+      collateralPhotos: collateralPhotos,
+      collateral_photos: collateralPhotos,
       offerRules: offerRules,
       offer_rules: offerRules,
       // Supply tracking (computed, attached by controller)
@@ -314,10 +324,45 @@ export class OfferController {
 
       // Processar uploads de arquivos para IPFS
       let legal_documents = {};
+      const collateral_photos = [];
 
-      // Se vieram arquivos via multipart/form-data
-      if (req.files && req.files.length > 0) {
-        for (const file of req.files) {
+      // Fotos do colateral chegam sob o fieldname fixo 'collateral_photos';
+      // qualquer outro fieldname é tratado como documento legal (ex: 'contract').
+      const allFiles = req.files || [];
+      const photoFiles = allFiles.filter(f => f.fieldname === 'collateral_photos');
+      const documentFiles = allFiles.filter(f => f.fieldname !== 'collateral_photos');
+
+      if (photoFiles.length > 0) {
+        // Validar tudo ANTES de subir qualquer foto para o IPFS (sem upload parcial)
+        validatePhotoCount(0, photoFiles.length);
+        for (const file of photoFiles) {
+          validatePhotoUpload(file.buffer, file.originalname);
+        }
+
+        for (const [index, file] of photoFiles.entries()) {
+          const uploadResult = await ipfsService.uploadFile(
+            file.buffer,
+            file.originalname,
+            {
+              companyId,
+              assetCode: asset_code,
+              type: 'collateral_photo'
+            }
+          );
+
+          collateral_photos.push({
+            hash: uploadResult.ipfsHash,
+            url: uploadResult.url,
+            fileName: file.originalname,
+            caption: null,
+            order: index,
+            uploadedAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      if (documentFiles.length > 0) {
+        for (const file of documentFiles) {
           // O campo do formulário define o tipo (ex: 'matricula', 'laudo', 'contract')
           const docType = file.fieldname;
 
@@ -368,6 +413,7 @@ export class OfferController {
         payment_frequency,
         offer_rules,
         legal_documents,
+        collateral_photos,
         // Collateral
         collateral_type,
         collateral_description,
@@ -390,7 +436,7 @@ export class OfferController {
       log.error('Error creating offer:', error);
 
       // Return 400 for known validation errors from OfferService
-      const validationPrefixes = ['Invalid payment fields', 'Invalid offer rules', 'Invalid asset_code', 'Total supply', 'Unit price', 'Asset code already'];
+      const validationPrefixes = ['Invalid payment fields', 'Invalid offer rules', 'Invalid asset_code', 'Total supply', 'Unit price', 'Asset code already', 'Invalid photo', 'Too many photos'];
       const isValidationError = validationPrefixes.some(p => error.message.startsWith(p));
 
       res.status(isValidationError ? 400 : 500).json({
@@ -524,8 +570,61 @@ export class OfferController {
         ? JSON.parse(offer.legalDocuments)
         : offer.legalDocuments || {};
 
-      if (req.files && req.files.length > 0) {
-        for (const file of req.files) {
+      // ── Collateral photos ──
+      const storedPhotos = typeof offer.collateralPhotos === 'string'
+        ? JSON.parse(offer.collateralPhotos)
+        : offer.collateralPhotos || [];
+      let currentPhotos = Array.isArray(storedPhotos) ? [...storedPhotos] : [];
+
+      // Authoritative list for EXISTING photos (reorder / caption / remove).
+      // Only hash-matching entries survive — clients cannot inject arbitrary URLs.
+      if (req.body.collateral_photos !== undefined) {
+        const incoming = typeof req.body.collateral_photos === 'string'
+          ? JSON.parse(req.body.collateral_photos)
+          : req.body.collateral_photos;
+        const byHash = new Map(currentPhotos.map(p => [p.hash, p]));
+        currentPhotos = (Array.isArray(incoming) ? incoming : [])
+          .filter(p => p && byHash.has(p.hash))
+          .map((p, index) => ({
+            ...byHash.get(p.hash),
+            caption: typeof p.caption === 'string' ? p.caption : (byHash.get(p.hash).caption ?? null),
+            order: index,
+          }));
+      }
+
+      const updatePhotoFiles = (req.files || []).filter(f => f.fieldname === 'collateral_photos');
+      if (updatePhotoFiles.length > 0) {
+        // Validar tudo ANTES de subir qualquer foto para o IPFS (sem upload parcial)
+        validatePhotoCount(currentPhotos.length, updatePhotoFiles.length);
+        for (const file of updatePhotoFiles) {
+          validatePhotoUpload(file.buffer, file.originalname);
+        }
+
+        for (const file of updatePhotoFiles) {
+          const uploadResult = await ipfsService.uploadFile(
+            file.buffer,
+            file.originalname,
+            {
+              companyId: offer.companyId,
+              assetCode: offer.assetCode,
+              type: 'collateral_photo'
+            }
+          );
+
+          currentPhotos.push({
+            hash: uploadResult.ipfsHash,
+            url: uploadResult.url,
+            fileName: file.originalname,
+            caption: null,
+            order: currentPhotos.length,
+            uploadedAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      const updateDocumentFiles = (req.files || []).filter(f => f.fieldname !== 'collateral_photos');
+      if (updateDocumentFiles.length > 0) {
+        for (const file of updateDocumentFiles) {
           const docType = file.fieldname;
           try {
             const uploadResult = await ipfsService.uploadFile(
@@ -585,6 +684,7 @@ export class OfferController {
         annual_interest_rate: updatedInterestRate,
         offer_rules: updatedRules,
         legal_documents: currentDocuments,
+        collateral_photos: currentPhotos,
         status: newStatus,
         updatedAt: new Date(),
         // Phase 2 + 3
@@ -603,9 +703,10 @@ export class OfferController {
       });
     } catch (error) {
       log.error('Error fetching file uploads:', error);
-      res.status(500).json({
+      const isValidationError = error instanceof InvalidImageError;
+      res.status(isValidationError ? 400 : 500).json({
         success: false,
-        error: 'Failed to update offer',
+        error: isValidationError ? error.message : 'Failed to update offer',
         details: error.message,
       });
     }

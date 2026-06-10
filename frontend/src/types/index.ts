@@ -45,6 +45,15 @@ export interface LegalDocument {
   uploadedAt?: string;
 }
 
+export interface CollateralPhoto {
+  hash: string;
+  url: string;
+  fileName?: string;
+  caption?: string | null;
+  order?: number;
+  uploadedAt?: string;
+}
+
 export interface Offer {
   id: number;
   company_id: number;
@@ -68,6 +77,7 @@ export interface Offer {
     kyc?: LegalDocument;
     other?: LegalDocument;
   };
+  collateral_photos?: CollateralPhoto[];
   due_diligence_notes?: string;
   token?: Token;
   company?: Company;
