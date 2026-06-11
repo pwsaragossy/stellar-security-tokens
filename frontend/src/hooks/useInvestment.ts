@@ -22,7 +22,7 @@ export function useInvestment() {
             });
 
             if (!response.success) {
-                throw new Error(response.message || 'Investment failed');
+                throw new Error(response.error || 'Investment failed');
             }
 
             return response.data;
@@ -53,7 +53,7 @@ export function useInvestment() {
             });
 
             if (!response.success) {
-                throw new Error(response.message || 'Transaction submission failed');
+                throw new Error(response.error || 'Transaction submission failed');
             }
 
             return response.data;

@@ -131,6 +131,11 @@ export class ApiClient {
     // Allow void returns for 204
     if (response.status === 204) return null;
 
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API Error: ${response.statusText}`);
+    }
+
     return response.json();
   }
 
