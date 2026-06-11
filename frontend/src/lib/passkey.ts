@@ -28,13 +28,6 @@ export class PasskeyClient {
     private baseUrl: string;
     /** Deduplicates concurrent init() calls — critical for Chrome activation window */
     private initPromise: Promise<void> | null = null;
-    /**
-     * Cached context rule IDs for the currently connected smart wallet.
-     * Required by SmartAccountKit.signAuthEntry when the auth payload's
-     * signature is scvVoid (which is the case for Recording-Mode sim output).
-     * Invalidated whenever the connected contract may have changed.
-     */
-    private cachedContextRuleIds: number[] | null = null;
 
     constructor() {
         this.baseUrl = API_URL;
@@ -61,55 +54,6 @@ export class PasskeyClient {
         this.lastCredentialId = null;
         this.kit = null;
         this.initPromise = null;
-        this.cachedContextRuleIds = null;
-    }
-
-    /**
-     * Invalidate the cached context rule IDs.
-     * Call this whenever the connected smart-wallet contract may have
-     * changed (after createWallet, after a fresh connectWallet, on logout).
-     */
-    invalidateRulesCache(): void {
-        this.cachedContextRuleIds = null;
-    }
-
-    /**
-     * Fetch the active context rule IDs for the connected smart wallet.
-     * Cached per-session per-contract to avoid an RPC round-trip on every sign.
-     *
-     * The smart-account kit's signAuthEntry() refuses to sign when the auth
-     * payload's context_rule_ids is empty (which is the case for transactions
-     * produced by Recording-Mode simulation, including our backend's
-     * buildTradeXdr). The kit expects the caller to supply the rule IDs
-     * explicitly when the payload is empty — this is that supply.
-     *
-     * We use rules.list() (returns ALL active rules of ALL types) rather
-     * than a per-tag filter so the same helper works for trade, transfer,
-     * offramp, withdraw, and any other contract call the user signs.
-     */
-    async getContextRuleIds(): Promise<number[]> {
-        if (this.cachedContextRuleIds !== null) {
-            return this.cachedContextRuleIds;
-        }
-        await this.init();
-        if (!this.kit) throw new Error('SmartAccountKit not initialized');
-        if (!this.kit.contractId) {
-            throw new Error('Cannot fetch context rules: no smart wallet connected');
-        }
-        try {
-            const rules = await (this.kit.rules as any).list();
-            const ids: number[] = Array.isArray(rules)
-                ? rules
-                      .map((r: any) => r?.id)
-                      .filter((n: unknown): n is number => typeof n === 'number' && Number.isFinite(n))
-                : [];
-            this.cachedContextRuleIds = ids;
-            return ids;
-        } catch (error: any) {
-            throw new Error(
-                `Failed to fetch context rules for signing: ${error?.message || error}`
-            );
-        }
     }
 
     /**
@@ -183,9 +127,6 @@ export class PasskeyClient {
                 // Both adapters patched: registration forces platform, auth forces UV=required
                 webAuthn: { startRegistration: wrappedStartRegistration, startAuthentication: wrappedStartAuthentication },
             });
-            // Fresh kit instance — any previously cached rules are for an
-            // older contract and must not be reused.
-            this.invalidateRulesCache();
         } catch (error) {
             console.error('Failed to initialize SmartAccountKit:', error);
             this.initPromise = null; // Reset on failure so retry works
@@ -290,10 +231,6 @@ export class PasskeyClient {
             console.log('[SmartAccount] Contract ID:', result.contractId);
             console.log('[SmartAccount] Credential ID:', result.credentialId);
 
-            // Brand new wallet — any rule cache from a previous contract
-            // (or from a stale state of this one) must be discarded.
-            this.invalidateRulesCache();
-
             return {
                 credentialId: result.credentialId,
                 contractId: result.contractId,
@@ -331,9 +268,6 @@ export class PasskeyClient {
                 console.log('[SmartAccount] No cached credential, prompting passkey...');
                 await this.kit.connectWallet({ prompt: true });
             }
-            // A fresh connect may have switched contracts — drop any cached
-            // rule IDs from a previous wallet before fetching new ones.
-            this.invalidateRulesCache();
         }
 
         try {
@@ -353,13 +287,6 @@ export class PasskeyClient {
             const contractId = this.kit.contractId!;
             const signedAuth: typeof op.auth = [];
 
-            // Resolve the on-chain context rule IDs ONCE per sign and pass
-            // them explicitly to signAuthEntry. The backend's buildTradeXdr
-            // runs Recording-Mode simulation, which leaves the auth entry's
-            // signature as scvVoid and context_rule_ids as []. The kit
-            // refuses to sign in that state unless the caller supplies
-            // contextRuleIds — this is that supply.
-            const contextRuleIds = await this.getContextRuleIds();
             const credentialId = this.kit.credentialId ?? this.lastCredentialId ?? undefined;
 
             for (const entry of op.auth) {
@@ -373,6 +300,21 @@ export class PasskeyClient {
                     if (addrType === 'scAddressTypeContract') {
                         const entryContractId = (await import('@stellar/stellar-sdk')).StrKey.encodeContract(addr.contractId());
                         if (entryContractId === contractId) {
+                            // Resolve ONE context-rule id per auth context in THIS
+                            // entry's invocation tree. A `trade` nests a USDC
+                            // `transfer`, so the smart account authorizes 2 contexts;
+                            // the contract enforces context_rule_ids.length ===
+                            // auth_contexts.length and otherwise traps with
+                            // Error(Contract,#3014) ContextRuleIdsLengthMismatch.
+                            // The kit walks the tree (root + subInvocations,
+                            // pre-order — same order the host presents contexts) and
+                            // maps each context to its matching rule. A flat
+                            // wallet-rule list would only ever be correct for
+                            // single-context entries.
+                            const contextRuleIds = await (this.kit as any).resolveConnectedContextRuleIds(
+                                entry,
+                                credentialId,
+                            );
                             const signedEntry = await this.kit.signAuthEntry(entry, {
                                 contextRuleIds,
                                 ...(credentialId ? { credentialId } : {}),
