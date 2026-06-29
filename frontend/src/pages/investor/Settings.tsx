@@ -191,7 +191,7 @@ export function Settings() {
         return (
             <div className="flex items-center justify-center h-[50vh]">
                 <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="w-10 h-10 animate-spin text-[hsl(43_45%_55%)]" />
+                    <Loader2 className="w-10 h-10 animate-spin text-[hsl(76_86%_63%)]" />
                     <p className="text-muted-foreground text-sm">Loading settings...</p>
                 </div>
             </div>
@@ -211,7 +211,7 @@ export function Settings() {
                 <CardHeader>
                     <div>
                         <CardTitle className="text-xl flex items-center gap-2">
-                            <User className="w-5 h-5 text-[hsl(43_45%_55%)]" />
+                            <User className="w-5 h-5 text-[hsl(76_86%_63%)]" />
                             Account Information
                         </CardTitle>
                         <CardDescription>Your verified personal details</CardDescription>
@@ -254,7 +254,7 @@ export function Settings() {
                 <CardHeader>
                     <div>
                         <CardTitle className="text-xl flex items-center gap-2">
-                            <ShieldCheck className="w-5 h-5 text-[hsl(43_45%_55%)]" />
+                            <ShieldCheck className="w-5 h-5 text-[hsl(76_86%_63%)]" />
                             Wallet Recovery
                         </CardTitle>
                         <CardDescription>Your on-chain identity and backup signers</CardDescription>
@@ -290,7 +290,7 @@ export function Settings() {
                                 href={`https://stellar.expert/explorer/testnet/contract/${user.stellarContractId}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-[hsl(43_45%_55%)] hover:underline"
+                                className="inline-flex items-center gap-1 text-xs text-[hsl(76_86%_63%)] hover:underline"
                             >
                                 View on Stellar Expert <ExternalLink className="w-3 h-3" />
                             </a>
@@ -377,7 +377,7 @@ export function Settings() {
                                 <p className="text-sm font-medium">Emergency Recovery</p>
                                 <p className="text-xs text-muted-foreground">
                                     If you lose access to all devices, your backup signer can move funds independently using the{' '}
-                                    <a href="https://developers.stellar.org/docs/tools/developer-tools/cli/stellar-cli" target="_blank" rel="noopener noreferrer" className="text-[hsl(43_45%_55%)] hover:underline">
+                                    <a href="https://developers.stellar.org/docs/tools/developer-tools/cli/stellar-cli" target="_blank" rel="noopener noreferrer" className="text-[hsl(76_86%_63%)] hover:underline">
                                         Stellar CLI
                                     </a>{' '}
                                     or a compatible rescue tool — no Radox servers required.
@@ -402,7 +402,7 @@ export function Settings() {
                 <DialogContent className="sm:max-w-md rounded-2xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <KeyRound className="w-5 h-5 text-[hsl(43_45%_55%)]" />
+                            <KeyRound className="w-5 h-5 text-[hsl(76_86%_63%)]" />
                             Add Backup Signer
                         </DialogTitle>
                         <DialogDescription>
@@ -519,7 +519,7 @@ function StepIndicator({ label, status }: { label: string; status: 'pending' | '
                 <div className="w-3.5 h-3.5 rounded-full border border-border/50" />
             )}
             {status === 'active' && (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[hsl(43_45%_55%)]" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[hsl(76_86%_63%)]" />
             )}
             {status === 'done' && (
                 <CheckCircle2 className="w-3.5 h-3.5 text-[hsl(160_60%_40%)]" />

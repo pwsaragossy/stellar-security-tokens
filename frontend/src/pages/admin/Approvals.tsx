@@ -799,7 +799,7 @@ export function Approvals() {
 
             {/* ── Signing progress overlay ── */}
             {signingProgress && signingProgress.step !== 'done' && signingProgress.step !== 'error' && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
                     <div className="bg-slate-900 border border-white/10 rounded-xl p-8 flex flex-col items-center gap-6 min-w-[340px] shadow-2xl">
                         {/* Step indicators */}
                         <div className="flex flex-col gap-3 w-full">

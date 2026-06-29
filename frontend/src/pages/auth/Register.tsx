@@ -242,7 +242,7 @@ export function Register() {
                         <p className="text-muted-foreground">Create your Smart Wallet in seconds</p>
                     </div>
 
-                    <Card className="border-slate-800 bg-slate-900/90 backdrop-blur-xl">
+                    <Card className="border-slate-800 bg-slate-900/90">
                         <CardHeader>
                             <CardTitle className="text-white flex items-center gap-2">
                                 <Mail className="w-5 h-5" />
@@ -309,7 +309,7 @@ export function Register() {
                         <p className="text-muted-foreground">We sent a code to <span className="text-blue-400">{email}</span></p>
                     </div>
 
-                    <Card className="border-slate-800 bg-slate-900/90 backdrop-blur-xl">
+                    <Card className="border-slate-800 bg-slate-900/90">
                         <CardHeader>
                             <CardTitle className="text-white flex items-center gap-2">
                                 <CheckCircle2 className="w-5 h-5 text-green-400" />
@@ -398,7 +398,7 @@ export function Register() {
                         <p className="text-muted-foreground">Now let's set up your profile</p>
                     </div>
 
-                    <Card className="border-slate-800 bg-slate-900/90 backdrop-blur-xl">
+                    <Card className="border-slate-800 bg-slate-900/90">
                         <CardHeader>
                             <CardTitle className="text-white">Your Details</CardTitle>
                             <CardDescription className="text-slate-400">
@@ -482,7 +482,7 @@ export function Register() {
                     <p className="text-muted-foreground">Your passkey is your wallet key — keep it safe</p>
                 </div>
 
-                <Card className="border-slate-800 bg-slate-900/90 backdrop-blur-xl">
+                <Card className="border-slate-800 bg-slate-900/90">
                     <CardHeader>
                         <CardTitle className="text-white flex items-center gap-2">
                             <Fingerprint className="w-5 h-5" />

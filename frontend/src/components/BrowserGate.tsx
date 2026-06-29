@@ -49,7 +49,7 @@ export function BrowserGate({ children }: BrowserGateProps) {
                     <p className="text-muted-foreground">Institutional-Grade Digital Asset Platform</p>
                 </div>
 
-                <Card className="border-amber-500/30 bg-slate-900/90 backdrop-blur-xl">
+                <Card className="border-amber-500/30 bg-slate-900/90">
                     <CardHeader className="text-center pb-2">
                         <div className="flex justify-center mb-3">
                             <div className="p-3 bg-amber-500/20 rounded-full">

@@ -589,7 +589,7 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
                             {purchaseDetails && (
                                 <p className="text-2xl font-bold text-white">
                                     {purchaseDetails.tokensReceived.toFixed(2)}{' '}
-                                    <span className="text-[hsl(43_45%_55%)]">{purchaseDetails.assetCode}</span>
+                                    <span className="text-[hsl(76_86%_63%)]">{purchaseDetails.assetCode}</span>
                                 </p>
                             )}
                             <p className="text-sm text-slate-400">Tokens delivered to your wallet</p>
@@ -717,7 +717,7 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
                             <Button
                                 onClick={handleRetry}
                                 disabled={loading}
-                                className="w-full bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_50%)] text-slate-900 font-medium"
+                                className="w-full bg-[hsl(76_86%_63%)] hover:bg-[hsl(76_86%_58%)] text-slate-900 font-medium"
                             >
                                 {loading ? (
                                     <>
@@ -749,7 +749,7 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
                         {/* WALLET BALANCE STRIP */}
                         <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/10">
                             <div className="flex items-center gap-2">
-                                <Wallet className="h-4 w-4 text-[hsl(43_45%_55%)]" />
+                                <Wallet className="h-4 w-4 text-[hsl(76_86%_63%)]" />
                                 <span className="text-sm text-muted-foreground">USDC Balance</span>
                             </div>
                             <div className="flex items-center gap-2">
@@ -761,14 +761,14 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
                                             <span className="animate-pulse" style={{ animationDelay: '300ms' }}>•</span>
                                         </span>
                                     ) : usdcBalance !== null ? (
-                                        <span className="text-[hsl(43_45%_55%)]">${usdcBalance.toFixed(2)}</span>
+                                        <span className="text-[hsl(76_86%_63%)]">${usdcBalance.toFixed(2)}</span>
                                     ) : (
                                         <span className="text-muted-foreground">—</span>
                                     )}
                                 </span>
                                 <button
                                     onClick={() => { handleClose(); window.location.href = '/wallet'; }}
-                                    className="text-xs text-muted-foreground hover:text-[hsl(43_45%_55%)] transition-colors flex items-center gap-0.5"
+                                    className="text-xs text-muted-foreground hover:text-[hsl(76_86%_63%)] transition-colors flex items-center gap-0.5"
                                 >
                                     <ExternalLink className="h-3 w-3" />
                                 </button>
@@ -793,7 +793,7 @@ export function InvestmentDialog({ offer, trigger }: InvestmentDialogProps) {
                                         key={qa}
                                         onClick={() => setAmount(qa.toString())}
                                         className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all ${amount === qa.toString()
-                                            ? 'bg-[hsl(43_45%_55%/0.2)] text-[hsl(43_45%_55%)] border-[hsl(43_45%_55%/0.4)]'
+                                            ? 'bg-[hsl(76_86%_63%/0.2)] text-[hsl(76_86%_63%)] border-[hsl(76_86%_63%/0.4)]'
                                             : 'bg-white/[0.03] text-muted-foreground border-white/10 hover:bg-white/[0.06]'
                                             }`}
                                     >

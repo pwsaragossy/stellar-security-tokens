@@ -267,7 +267,7 @@ export function NotificationBell() {
                                                     )}>
                                                         {isComplete ? <Check className="w-3 h-3 text-[hsl(160_60%_55%)]" />
                                                             : isFailed ? <X className="w-3 h-3 text-red-400" />
-                                                                : <Loader2 className="w-3 h-3 animate-spin text-[hsl(43_45%_70%)]" />}
+                                                                : <Loader2 className="w-3 h-3 animate-spin text-[hsl(76_86%_78%)]" />}
                                                     </div>
                                                     <div className="min-w-0">
                                                         <p className="text-[12px] font-medium text-white flex items-center gap-1">
@@ -290,7 +290,7 @@ export function NotificationBell() {
                                                         href={order.statusPage}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="text-[10px] text-[hsl(43_45%_70%)] hover:text-[hsl(43_45%_85%)] inline-flex items-center gap-1 transition-colors"
+                                                        className="text-[10px] text-[hsl(76_86%_78%)] hover:text-[hsl(76_86%_93%)] inline-flex items-center gap-1 transition-colors"
                                                         onClick={(e) => e.stopPropagation()}
                                                     >
                                                         EtherFuse <ExternalLink className="w-2.5 h-2.5" />

@@ -242,7 +242,7 @@ export function Wallet() {
         return (
             <div className="flex items-center justify-center h-[50vh]">
                 <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="w-10 h-10 animate-spin text-[hsl(43_45%_55%)]" />
+                    <Loader2 className="w-10 h-10 animate-spin text-[hsl(76_86%_63%)]" />
                     <p className="text-muted-foreground text-sm">Loading wallet...</p>
                 </div>
             </div>
@@ -297,27 +297,27 @@ export function Wallet() {
                     </div>
 
                     {/* TESOURO — BR yield-bearing treasury position */}
-                    <div className="relative rounded-xl bg-gradient-to-br from-[hsl(43_45%_55%/0.10)] to-[hsl(43_45%_55%/0.02)] border border-[hsl(43_45%_55%/0.25)] p-5 overflow-hidden">
+                    <div className="relative rounded-xl bg-gradient-to-br from-[hsl(76_86%_63%/0.10)] to-[hsl(76_86%_63%/0.02)] border border-[hsl(76_86%_63%/0.25)] p-5 overflow-hidden">
                         <div
                             className="absolute inset-0 pointer-events-none opacity-30"
                             style={{
                                 background:
-                                    'radial-gradient(120% 60% at 100% 0%, hsl(43 45% 55% / 0.12), transparent 60%)',
+                                    'radial-gradient(120% 60% at 100% 0%, hsl(76 86% 63% / 0.12), transparent 60%)',
                             }}
                             aria-hidden
                         />
                         <div className="relative">
-                            <p className="text-[11px] uppercase tracking-wider text-[hsl(43_45%_70%)] mb-1 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[hsl(43_45%_55%)]" /> TESOURO
+                            <p className="text-[11px] uppercase tracking-wider text-[hsl(76_86%_78%)] mb-1 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[hsl(76_86%_63%)]" /> TESOURO
                                 {walletStatus.tesouroMarket?.yieldPctYear != null ? (
                                     <span
-                                        className="text-[9px] px-1.5 py-0.5 rounded bg-[hsl(43_45%_55%/0.15)] border border-[hsl(43_45%_55%/0.3)] text-[hsl(43_45%_75%)] ml-auto uppercase tracking-wider"
+                                        className="text-[9px] px-1.5 py-0.5 rounded bg-[hsl(76_86%_63%/0.15)] border border-[hsl(76_86%_63%/0.3)] text-[hsl(76_86%_83%)] ml-auto uppercase tracking-wider"
                                         title={`Selic meta · BCB · ${new Date(walletStatus.tesouroMarket.asOf).toLocaleDateString('pt-BR')}`}
                                     >
                                         ~{walletStatus.tesouroMarket.yieldPctYear.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% a.a.
                                     </span>
                                 ) : (
-                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-[hsl(43_45%_55%/0.15)] border border-[hsl(43_45%_55%/0.3)] text-[hsl(43_45%_75%)] ml-auto uppercase tracking-wider">
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-[hsl(76_86%_63%/0.15)] border border-[hsl(76_86%_63%/0.3)] text-[hsl(76_86%_83%)] ml-auto uppercase tracking-wider">
                                         Yield-bearing
                                     </span>
                                 )}
@@ -347,7 +347,7 @@ export function Wallet() {
                 <div className="flex gap-3 animate-fade-in-up">
                     <Dialog open={depositOpen} onOpenChange={setDepositOpen}>
                         <DialogTrigger asChild>
-                            <Button className="flex-1 h-12 rounded-xl font-medium bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_45%)] text-white shadow-lg shadow-amber-900/10">
+                            <Button className="flex-1 h-12 rounded-xl font-medium bg-[hsl(76_86%_63%)] hover:bg-[hsl(76_86%_53%)] text-white shadow-lg shadow-amber-900/10">
                                 <ArrowDownLeft className="w-4 h-4 mr-2" />
                                 Deposit
                             </Button>
@@ -403,7 +403,7 @@ export function Wallet() {
                         <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Holdings</h3>
                         <button
                             onClick={() => navigate('/portfolio')}
-                            className="text-xs text-[hsl(43_45%_55%)] hover:text-[hsl(43_45%_65%)] flex items-center gap-1 transition-colors"
+                            className="text-xs text-[hsl(76_86%_63%)] hover:text-[hsl(76_86%_73%)] flex items-center gap-1 transition-colors"
                         >
                             View portfolio <ArrowRight className="h-3 w-3" />
                         </button>
@@ -416,7 +416,7 @@ export function Wallet() {
                                     className="flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors"
                                 >
                                     <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[hsl(43_45%_55%)] to-[hsl(43_45%_35%)] flex items-center justify-center text-white font-bold text-[10px] shrink-0">
+                                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[hsl(76_86%_63%)] to-[hsl(76_86%_43%)] flex items-center justify-center text-white font-bold text-[10px] shrink-0">
                                             {asset.assetCode.slice(0, 2)}
                                         </div>
                                         <div>

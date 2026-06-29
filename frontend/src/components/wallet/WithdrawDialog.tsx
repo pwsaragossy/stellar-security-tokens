@@ -141,7 +141,7 @@ export function WithdrawDialog({
                             <DestinationCard
                                 onClick={() => setDestination('pix')}
                                 icon={<span className="text-xl leading-none">🇧🇷</span>}
-                                iconBg="bg-[hsl(43_45%_55%/0.12)] group-hover:bg-[hsl(43_45%_55%/0.22)]"
+                                iconBg="bg-[hsl(76_86%_63%/0.12)] group-hover:bg-[hsl(76_86%_63%/0.22)]"
                                 title="PIX (BRL)"
                                 subtitle="Convert TESOURO or USDC to BRL — paid to your PIX key"
                             />
@@ -580,7 +580,7 @@ function PixOfframpPanel({
     if (readinessLoading) {
         return (
             <div className="flex flex-col items-center justify-center py-10 space-y-3">
-                <Loader2 className="w-6 h-6 animate-spin text-[hsl(43_45%_55%)]" />
+                <Loader2 className="w-6 h-6 animate-spin text-[hsl(76_86%_63%)]" />
                 <p className="text-xs text-gray-400">Checking onboarding status…</p>
             </div>
         );
@@ -600,8 +600,8 @@ function PixOfframpPanel({
             'Start onboarding';
         return (
             <div className="py-5 space-y-5">
-                <div className="px-5 py-6 rounded-xl border border-[hsl(43_45%_55%/0.3)] bg-[hsl(43_45%_55%/0.06)]">
-                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-[hsl(43_45%_70%)]">
+                <div className="px-5 py-6 rounded-xl border border-[hsl(76_86%_63%/0.3)] bg-[hsl(76_86%_63%/0.06)]">
+                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-[hsl(76_86%_78%)]">
                         <Sparkles className="w-3 h-3" /> One-time setup
                     </div>
                     <p className="mt-3 text-[15px] text-white leading-snug max-w-[36ch]" style={{ fontFamily: 'var(--font-heading)' }}>
@@ -613,7 +613,7 @@ function PixOfframpPanel({
                 </div>
                 <Button
                     onClick={() => navigate(reason === 'no_active_bank_account' ? '/bank-accounts' : '/ramp-kyc')}
-                    className="w-full h-11 rounded-xl bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_62%)] text-[hsl(220_60%_8%)] font-semibold"
+                    className="w-full h-11 rounded-xl bg-[hsl(76_86%_63%)] hover:bg-[hsl(76_86%_70%)] text-[hsl(220_60%_8%)] font-semibold"
                 >
                     {cta} <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
@@ -640,7 +640,7 @@ function PixOfframpPanel({
                             type="button"
                             onClick={() => setAmount(String(availableBalance))}
                             disabled={availableBalance <= 0}
-                            className="text-[10px] uppercase tracking-wider text-[hsl(43_45%_70%)] hover:text-[hsl(43_45%_85%)] disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="text-[10px] uppercase tracking-wider text-[hsl(76_86%_78%)] hover:text-[hsl(76_86%_93%)] disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                             Max · {availableBalance.toFixed(4)}
                         </button>
@@ -666,7 +666,7 @@ function PixOfframpPanel({
                 <Button
                     onClick={handlePreview}
                     disabled={busy || !amount || Number(amount) <= 0}
-                    className="w-full h-11 rounded-xl bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_62%)] text-[hsl(220_60%_8%)] font-semibold disabled:opacity-50"
+                    className="w-full h-11 rounded-xl bg-[hsl(76_86%_63%)] hover:bg-[hsl(76_86%_70%)] text-[hsl(220_60%_8%)] font-semibold disabled:opacity-50"
                 >
                     {busy ? (
                         <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Quoting…</>
@@ -702,7 +702,7 @@ function PixOfframpPanel({
                     <Button
                         onClick={handleConfirm}
                         disabled={busy || selectedBankId == null}
-                        className="flex-1 h-11 rounded-xl bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_62%)] text-[hsl(220_60%_8%)] font-semibold disabled:opacity-50"
+                        className="flex-1 h-11 rounded-xl bg-[hsl(76_86%_63%)] hover:bg-[hsl(76_86%_70%)] text-[hsl(220_60%_8%)] font-semibold disabled:opacity-50"
                     >
                         {busy ? (
                             <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating order…</>
@@ -723,7 +723,7 @@ function PixOfframpPanel({
                     <p className="text-[10px] uppercase tracking-[0.16em] text-white/45">Next step</p>
                     <p className="text-[14px] text-white leading-snug" style={{ fontFamily: 'var(--font-heading)' }}>
                         Sign with your passkey to release{' '}
-                        <span className="text-[hsl(43_45%_70%)] font-mono">
+                        <span className="text-[hsl(76_86%_78%)] font-mono">
                             {order.amountInTokens ? Number(order.amountInTokens).toFixed(4) : '—'} {asset}
                         </span>{' '}
                         to the EtherFuse anchor.
@@ -737,7 +737,7 @@ function PixOfframpPanel({
                     </p>
                 </div>
 
-                <div className="flex items-center gap-2 p-3 bg-[hsl(43_45%_55%/0.10)] text-[hsl(43_45%_70%)] rounded-xl text-[12px]">
+                <div className="flex items-center gap-2 p-3 bg-[hsl(76_86%_63%/0.10)] text-[hsl(76_86%_78%)] rounded-xl text-[12px]">
                     <Shield className="w-4 h-4 shrink-0" />
                     You will be asked to sign with your Passkey.
                 </div>
@@ -757,7 +757,7 @@ function PixOfframpPanel({
                     <Button
                         onClick={handleSign}
                         disabled={signing}
-                        className="flex-1 h-11 rounded-xl bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_62%)] text-[hsl(220_60%_8%)] font-semibold disabled:opacity-50"
+                        className="flex-1 h-11 rounded-xl bg-[hsl(76_86%_63%)] hover:bg-[hsl(76_86%_70%)] text-[hsl(220_60%_8%)] font-semibold disabled:opacity-50"
                     >
                         {signing ? (
                             <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Signing…</>
@@ -849,7 +849,7 @@ function AssetTile({
                 (disabled
                     ? 'border-white/8 bg-white/[0.015] opacity-50 cursor-not-allowed'
                     : selected
-                        ? 'border-[hsl(43_45%_55%/0.5)] bg-[hsl(43_45%_55%/0.08)]'
+                        ? 'border-[hsl(76_86%_63%/0.5)] bg-[hsl(76_86%_63%/0.08)]'
                         : 'border-white/8 bg-white/[0.03] hover:bg-white/[0.05]')
             }
         >
@@ -887,7 +887,7 @@ function BankAccountList({
                 <span className="text-[10px] uppercase tracking-wider text-gray-500">To PIX key</span>
                 <button
                     onClick={() => navigate('/bank-accounts')}
-                    className="text-[11px] text-[hsl(43_45%_70%)] hover:text-[hsl(43_45%_85%)]"
+                    className="text-[11px] text-[hsl(76_86%_78%)] hover:text-[hsl(76_86%_93%)]"
                 >
                     Manage
                 </button>
@@ -909,14 +909,14 @@ function BankAccountList({
                             className={
                                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors text-left ' +
                                 (selected
-                                    ? 'border-[hsl(43_45%_55%/0.5)] bg-[hsl(43_45%_55%/0.08)]'
+                                    ? 'border-[hsl(76_86%_63%/0.5)] bg-[hsl(76_86%_63%/0.08)]'
                                     : 'border-white/8 bg-white/[0.03] hover:bg-white/[0.05]') +
                                 (blocked ? ' opacity-50 cursor-not-allowed' : '')
                             }
                         >
                             <div className={
                                 'w-3.5 h-3.5 rounded-full border-2 shrink-0 transition-colors ' +
-                                (selected ? 'border-[hsl(43_45%_55%)] bg-[hsl(43_45%_55%)]' : 'border-white/30')
+                                (selected ? 'border-[hsl(76_86%_63%)] bg-[hsl(76_86%_63%)]' : 'border-white/30')
                             } />
                             <div className="flex-1 min-w-0">
                                 <div className="text-[12px] font-mono text-white/85 truncate">
@@ -956,7 +956,7 @@ function OfframpQuoteCard({ quote, asset }: { quote: RampQuote; asset: OfframpAs
                 </div>
                 <ArrowRight className="w-4 h-4 text-white/30 shrink-0" />
                 <div className="text-right">
-                    <div className="text-[1.6rem] font-mono text-[hsl(43_45%_70%)] tabular-nums" style={{ letterSpacing: '-0.01em' }}>
+                    <div className="text-[1.6rem] font-mono text-[hsl(76_86%_78%)] tabular-nums" style={{ letterSpacing: '-0.01em' }}>
                         R$ {dest != null ? dest.toFixed(2) : '—'}
                     </div>
                     <div className="text-[10px] uppercase tracking-wider text-white/45 mt-0.5">BRL · PIX</div>
@@ -1008,10 +1008,10 @@ function OfframpTracker({ order, asset }: { order: RampOrder; asset: OfframpAsse
                 <div className="flex items-baseline justify-between gap-4">
                     <div className="text-[1.4rem] font-mono text-white tabular-nums">
                         {order.amountInTokens ? Number(order.amountInTokens).toFixed(4) : '—'}
-                        <span className="text-[hsl(43_45%_70%)] text-[1rem] ml-2">{asset}</span>
+                        <span className="text-[hsl(76_86%_78%)] text-[1rem] ml-2">{asset}</span>
                     </div>
                     <ArrowRight className="w-4 h-4 text-white/30 shrink-0" />
-                    <div className="text-[1.4rem] font-mono text-[hsl(43_45%_70%)] tabular-nums">
+                    <div className="text-[1.4rem] font-mono text-[hsl(76_86%_78%)] tabular-nums">
                         R$ {order.amountInFiat ? Number(order.amountInFiat).toFixed(2) : '—'}
                     </div>
                 </div>
@@ -1028,7 +1028,7 @@ function OfframpTracker({ order, asset }: { order: RampOrder; asset: OfframpAsse
                                 className={
                                     'flex items-center gap-3 px-3 py-2.5 rounded-lg border ' +
                                     (current
-                                        ? 'border-[hsl(43_45%_55%/0.5)] bg-[hsl(43_45%_55%/0.08)]'
+                                        ? 'border-[hsl(76_86%_63%/0.5)] bg-[hsl(76_86%_63%/0.08)]'
                                         : reached
                                             ? 'border-[hsl(160_60%_40%/0.3)] bg-[hsl(160_60%_40%/0.04)]'
                                             : 'border-white/8 bg-white/[0.02]')
@@ -1039,7 +1039,7 @@ function OfframpTracker({ order, asset }: { order: RampOrder; asset: OfframpAsse
                                     (reached
                                         ? 'border-[hsl(160_60%_55%)] bg-[hsl(160_60%_40%/0.2)]'
                                         : current
-                                            ? 'border-[hsl(43_45%_55%)] bg-[hsl(43_45%_55%/0.2)] animate-pulse'
+                                            ? 'border-[hsl(76_86%_63%)] bg-[hsl(76_86%_63%/0.2)] animate-pulse'
                                             : 'border-white/20')
                                 }>
                                     {reached && <Check className="w-2.5 h-2.5 text-[hsl(160_60%_55%)]" />}
@@ -1063,7 +1063,7 @@ function OfframpTracker({ order, asset }: { order: RampOrder; asset: OfframpAsse
                     href={order.statusPage}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block w-full text-center text-[11px] text-[hsl(43_45%_70%)] hover:text-[hsl(43_45%_85%)] underline-offset-4 hover:underline transition-colors"
+                    className="block w-full text-center text-[11px] text-[hsl(76_86%_78%)] hover:text-[hsl(76_86%_93%)] underline-offset-4 hover:underline transition-colors"
                 >
                     View order on EtherFuse →
                 </a>
@@ -1077,7 +1077,7 @@ function OfframpStatusPill({ status }: { status: RampOrder['status'] }) {
         status === 'completed' || status === 'finalized'
             ? 'text-[hsl(160_60%_55%)] bg-[hsl(160_60%_40%/0.12)] border-[hsl(160_60%_40%/0.3)]'
             : status === 'funded'
-            ? 'text-[hsl(43_45%_70%)] bg-[hsl(43_45%_55%/0.12)] border-[hsl(43_45%_55%/0.3)]'
+            ? 'text-[hsl(76_86%_78%)] bg-[hsl(76_86%_63%/0.12)] border-[hsl(76_86%_63%/0.3)]'
             : status === 'failed' || status === 'refunded' || status === 'canceled' || status === 'expired'
             ? 'text-red-400 bg-red-500/10 border-red-500/30'
             : 'text-white/60 bg-white/[0.04] border-white/10';

@@ -133,7 +133,7 @@ export function CompanyLayout() {
     return (
         <div className="min-h-screen bg-slate-950 flex">
             {/* Desktop Sidebar */}
-            <aside className="w-64 border-r border-white/5 bg-card/50 backdrop-blur-xl hidden md:flex flex-col">
+            <aside className="w-64 border-r border-white/5 bg-card/50 hidden md:flex flex-col">
                 <SidebarContent />
             </aside>
 
@@ -144,7 +144,7 @@ export function CompanyLayout() {
 
             {/* Main Content */}
             <main className="flex-1 flex flex-col">
-                <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-6 bg-card/50 backdrop-blur-sm relative z-30">
+                <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-6 bg-card/50 relative z-30">
                     <div className="flex items-center gap-3">
                         <MenuToggleButton onClick={open} />
                         <h1 className="text-lg font-semibold text-white">

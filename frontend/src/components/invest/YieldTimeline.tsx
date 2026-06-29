@@ -111,7 +111,7 @@ export function YieldTimeline({ offerId }: YieldTimelineProps) {
                                         href={`${EXPLORER_BASE}/${payment.txHash}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-[hsl(43_45%_55%)] transition-colors shrink-0"
+                                        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-[hsl(76_86%_63%)] transition-colors shrink-0"
                                     >
                                         View tx
                                         <ExternalLink className="h-2.5 w-2.5" />

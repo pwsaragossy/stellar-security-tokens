@@ -48,8 +48,8 @@ export function InvestmentCalculator({ offer }: InvestmentCalculatorProps) {
         return (
             <div className="rounded-xl bg-white/[0.02] border border-white/8 p-5 animate-fade-in-up">
                 <div className="flex items-center gap-2.5 mb-3">
-                    <div className="p-2 rounded-lg bg-[hsl(43_45%_55%/0.1)]">
-                        <Calculator className="h-4 w-4 text-[hsl(43_45%_55%)]" />
+                    <div className="p-2 rounded-lg bg-[hsl(76_86%_63%/0.1)]">
+                        <Calculator className="h-4 w-4 text-[hsl(76_86%_63%)]" />
                     </div>
                     <h3 className="text-sm font-semibold text-white">Investment Calculator</h3>
                 </div>
@@ -65,8 +65,8 @@ export function InvestmentCalculator({ offer }: InvestmentCalculatorProps) {
         return (
             <div className="rounded-xl bg-white/[0.02] border border-white/8 p-5 animate-fade-in-up">
                 <div className="flex items-center gap-2.5 mb-3">
-                    <div className="p-2 rounded-lg bg-[hsl(43_45%_55%/0.1)]">
-                        <Calculator className="h-4 w-4 text-[hsl(43_45%_55%)]" />
+                    <div className="p-2 rounded-lg bg-[hsl(76_86%_63%/0.1)]">
+                        <Calculator className="h-4 w-4 text-[hsl(76_86%_63%)]" />
                     </div>
                     <h3 className="text-sm font-semibold text-white">Investment Calculator</h3>
                 </div>
@@ -96,8 +96,8 @@ export function InvestmentCalculator({ offer }: InvestmentCalculatorProps) {
         <div className="rounded-xl bg-white/[0.02] border border-white/8 p-5 animate-fade-in-up">
             {/* Header */}
             <div className="flex items-center gap-2.5 mb-4">
-                <div className="p-2 rounded-lg bg-[hsl(43_45%_55%/0.1)]">
-                    <Calculator className="h-4 w-4 text-[hsl(43_45%_55%)]" />
+                <div className="p-2 rounded-lg bg-[hsl(76_86%_63%/0.1)]">
+                    <Calculator className="h-4 w-4 text-[hsl(76_86%_63%)]" />
                 </div>
                 <h3 className="text-sm font-semibold text-white">Investment Calculator</h3>
                 <span className="ml-auto text-xs text-muted-foreground">{effectiveRate}% APY</span>
@@ -112,7 +112,7 @@ export function InvestmentCalculator({ offer }: InvestmentCalculatorProps) {
                     placeholder="Enter amount"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    className="w-full pl-7 pr-16 py-2.5 rounded-lg bg-white/[0.04] border border-white/10 text-white text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:border-[hsl(43_45%_55%/0.5)] focus:ring-1 focus:ring-[hsl(43_45%_55%/0.2)] transition-colors"
+                    className="w-full pl-7 pr-16 py-2.5 rounded-lg bg-white/[0.04] border border-white/10 text-white text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:border-[hsl(76_86%_63%/0.5)] focus:ring-1 focus:ring-[hsl(76_86%_63%/0.2)] transition-colors"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">USDC</span>
             </div>
@@ -125,7 +125,7 @@ export function InvestmentCalculator({ offer }: InvestmentCalculatorProps) {
                         onClick={() => setAmount(qa.toString())}
                         className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                             parsedAmount === qa
-                                ? 'bg-[hsl(43_45%_55%/0.2)] text-[hsl(43_45%_55%)] border border-[hsl(43_45%_55%/0.3)]'
+                                ? 'bg-[hsl(76_86%_63%/0.2)] text-[hsl(76_86%_63%)] border border-[hsl(76_86%_63%/0.3)]'
                                 : 'bg-white/[0.04] text-muted-foreground border border-white/8 hover:bg-white/[0.06] hover:text-white'
                         }`}
                     >

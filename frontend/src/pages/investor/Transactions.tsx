@@ -65,8 +65,8 @@ const TYPE_CONFIG: Record<string, { icon: typeof ArrowDownLeft; color: string; b
     },
     'BRL → TESOURO': {
         icon: Banknote,
-        color: 'text-[hsl(43_45%_70%)]',
-        bg: 'bg-[hsl(43_45%_55%/0.15)]',
+        color: 'text-[hsl(76_86%_78%)]',
+        bg: 'bg-[hsl(76_86%_63%/0.15)]',
         sign: '+',
     },
     'BRL → USDC': {
@@ -216,7 +216,7 @@ export function Transactions() {
         return (
             <div className="flex items-center justify-center h-[50vh]">
                 <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="w-10 h-10 animate-spin text-[hsl(43_45%_55%)]" />
+                    <Loader2 className="w-10 h-10 animate-spin text-[hsl(76_86%_63%)]" />
                     <p className="text-muted-foreground text-sm">Loading transactions...</p>
                 </div>
             </div>
@@ -248,7 +248,7 @@ export function Transactions() {
                         className={`
                             px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200
                             ${activeFilter === opt.value
-                                ? 'bg-[hsl(43_45%_55%)] text-white shadow-md'
+                                ? 'bg-[hsl(76_86%_63%)] text-white shadow-md'
                                 : 'bg-muted/40 text-muted-foreground hover:bg-muted/60 border border-white/10'
                             }
                         `}

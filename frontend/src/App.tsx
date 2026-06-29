@@ -7,6 +7,8 @@ import { CompanyRegister } from './pages/auth/CompanyRegister';
 import { CompanyPendingApproval } from './pages/auth/CompanyPendingApproval';
 import { RegistrationSuccess } from './pages/auth/RegistrationSuccess';
 import { BrowserGate } from './components/BrowserGate';
+import { RequireInvestorAuth } from './components/SignInGate';
+import { OfferingPreview } from './pages/__OfferingPreview'; // TEMP preview — remove before merge
 
 import { DashboardLayout } from './layouts/DashboardLayout';
 
@@ -67,6 +69,7 @@ function App() {
       {isDevTools && <Suspense><DevTimeTool /></Suspense>}
       <BrowserRouter>
         <Routes>
+          <Route path="/__preview/offering" element={<OfferingPreview />} />
           <Route path="/login" element={<BrowserGate><Login /></BrowserGate>} />
           <Route path="/register" element={<BrowserGate><Register /></BrowserGate>} />
           <Route path="/company/register" element={<BrowserGate><CompanyRegister /></BrowserGate>} />
@@ -74,18 +77,22 @@ function App() {
           <Route path="/registration-success" element={<RegistrationSuccess />} />
 
 
-          {/* Investor Dashboard Routes */}
+          {/* Investor Dashboard Routes.
+              The shell + Marketplace are guest-browseable (no auth); personal
+              screens and the invest/detail flow are wrapped in RequireInvestorAuth,
+              which renders a SignInGate for guests so the gated screen (and its
+              data hooks) never mount. The backend stays fully gated regardless. */}
           <Route path="/" element={<DashboardLayout />}>
             <Route index element={<Navigate to="/market" replace />} />
             <Route path="dashboard" element={<Navigate to="/market" replace />} />
-            <Route path="portfolio" element={<Portfolio />} />
             <Route path="market" element={<Marketplace />} />
-            <Route path="market/:id" element={<OfferDetails />} />
-            <Route path="transactions" element={<Transactions />} />
-            <Route path="wallet" element={<Wallet />} />
-            <Route path="ramp-kyc" element={<RampKyc />} />
-            <Route path="bank-accounts" element={<BankAccounts />} />
-            <Route path="settings" element={<Settings />} />
+            <Route path="market/:id" element={<RequireInvestorAuth title="Sign in to invest"><OfferDetails /></RequireInvestorAuth>} />
+            <Route path="portfolio" element={<RequireInvestorAuth title="Sign in to view your portfolio"><Portfolio /></RequireInvestorAuth>} />
+            <Route path="transactions" element={<RequireInvestorAuth title="Sign in to view your transactions"><Transactions /></RequireInvestorAuth>} />
+            <Route path="wallet" element={<RequireInvestorAuth title="Sign in to view your wallet"><Wallet /></RequireInvestorAuth>} />
+            <Route path="ramp-kyc" element={<RequireInvestorAuth title="Sign in to start KYC"><RampKyc /></RequireInvestorAuth>} />
+            <Route path="bank-accounts" element={<RequireInvestorAuth title="Sign in to manage bank accounts"><BankAccounts /></RequireInvestorAuth>} />
+            <Route path="settings" element={<RequireInvestorAuth title="Sign in to view settings"><Settings /></RequireInvestorAuth>} />
           </Route>
 
           {/* Company Routes */}

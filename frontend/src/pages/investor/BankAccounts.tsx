@@ -96,8 +96,8 @@ export function BankAccounts() {
 
       <header className="flex items-end justify-between gap-4 mb-8">
         <div>
-          <div className="inline-flex items-center gap-2 mb-3 text-[10px] uppercase tracking-[0.18em] text-[hsl(43_45%_55%)]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[hsl(43_45%_55%)]" />
+          <div className="inline-flex items-center gap-2 mb-3 text-[10px] uppercase tracking-[0.18em] text-[hsl(76_86%_63%)]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[hsl(76_86%_63%)]" />
             Brazil — PIX
           </div>
           <h1
@@ -114,7 +114,7 @@ export function BankAccounts() {
         {!addOpen && (
           <Button
             onClick={() => setAddOpen(true)}
-            className="h-10 px-4 rounded-xl bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_62%)] text-[hsl(220_60%_8%)] font-medium"
+            className="h-10 px-4 rounded-xl bg-[hsl(76_86%_63%)] hover:bg-[hsl(76_86%_70%)] text-[hsl(220_60%_8%)] font-medium"
           >
             <Plus className="w-4 h-4 mr-1.5" /> Add key
           </Button>
@@ -140,7 +140,7 @@ export function BankAccounts() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-[hsl(43_45%_55%)]" />
+          <Loader2 className="w-6 h-6 animate-spin text-[hsl(76_86%_63%)]" />
         </div>
       ) : accounts.length === 0 ? (
         <EmptyState onAdd={() => setAddOpen(true)} hidden={addOpen} />
@@ -151,8 +151,8 @@ export function BankAccounts() {
               key={a.id}
               className="group flex items-center gap-4 px-4 py-4 rounded-xl bg-white/[0.03] border border-white/8 hover:bg-white/[0.05] transition-colors"
             >
-              <div className="w-9 h-9 rounded-lg bg-[hsl(43_45%_55%/0.12)] border border-[hsl(43_45%_55%/0.25)] flex items-center justify-center shrink-0">
-                <KeyRound className="w-4 h-4 text-[hsl(43_45%_55%)]" />
+              <div className="w-9 h-9 rounded-lg bg-[hsl(76_86%_63%/0.12)] border border-[hsl(76_86%_63%/0.25)] flex items-center justify-center shrink-0">
+                <KeyRound className="w-4 h-4 text-[hsl(76_86%_63%)]" />
               </div>
 
               <div className="flex-1 min-w-0">
@@ -211,7 +211,7 @@ function EmptyState({ onAdd, hidden }: { onAdd: () => void; hidden: boolean }) {
       </p>
       <Button
         onClick={onAdd}
-        className="mt-5 h-9 px-4 rounded-lg bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_62%)] text-[hsl(220_60%_8%)] font-medium"
+        className="mt-5 h-9 px-4 rounded-lg bg-[hsl(76_86%_63%)] hover:bg-[hsl(76_86%_70%)] text-[hsl(220_60%_8%)] font-medium"
       >
         <Plus className="w-4 h-4 mr-1.5" /> Add PIX key
       </Button>
@@ -336,7 +336,7 @@ function AddPixKeyForm({
         <Button
           type="submit"
           disabled={submitting}
-          className="h-9 px-5 rounded-lg bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_62%)] text-[hsl(220_60%_8%)] font-medium disabled:opacity-50"
+          className="h-9 px-5 rounded-lg bg-[hsl(76_86%_63%)] hover:bg-[hsl(76_86%_70%)] text-[hsl(220_60%_8%)] font-medium disabled:opacity-50"
         >
           {submitting ? (
             <>

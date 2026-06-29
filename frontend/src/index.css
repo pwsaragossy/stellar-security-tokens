@@ -1,33 +1,78 @@
 @import "tailwindcss";
 
-/* Google Fonts - Premium Typography */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+/* Signal typography — single family, tabular numerals for financial figures */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ── Tailwind v4 token bridge ──
+   Maps the runtime CSS custom properties (defined in :root below) onto the
+   Tailwind color namespace so utilities like `bg-primary`, `text-accent`,
+   `text-muted-foreground`, `bg-card`, `border-border` actually generate.
+   Without this, those classes are no-ops (this project had NO @theme/@config).
+   `inline` = the utility references var(--background) at use-site, so a future
+   per-tenant reskin is a token swap. THIS is what makes the design token-driven. */
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-faint: hsl(var(--faint));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --font-sans: var(--font-body);
+}
 
 @layer base {
   :root {
-    /* Typography */
-    --font-heading: 'Outfit', sans-serif;
-    --font-body: 'DM Sans', sans-serif;
+    /* Typography — Signal uses one family (Inter) */
+    --font-heading: 'Inter', system-ui, sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
 
-    /* Core Colors */
-    --background: 222.2 47.4% 3.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    /* ── Signal palette (dark graphite + one lime signal) ──
+       Values are the exact Signal hexes so token swaps are lossless:
+       #0E0F11 bg · #131517 card · #16181B panel · #1F2329 border
+       #E7E8EA text · #8A8F98 muted · #6B7079 faint · #C6F24E signal */
 
-    /* Accent - Gold for premium feel */
-    --accent: 43 45% 55%;
-    --accent-foreground: 220 60% 8%;
+    --background: 220 10% 6%;        /* #0E0F11 */
+    --foreground: 220 7% 91%;        /* #E7E8EA */
+    --card: 210 10% 8%;              /* #131517 */
+    --card-foreground: 220 7% 91%;
+    --popover: 216 10% 10%;          /* #16181B */
+    --popover-foreground: 220 7% 91%;
 
-    /* Semantic Colors */
+    /* Primary = the lime signal (reserved for primary CTA / emphasis) */
+    --primary: 76 86% 63%;           /* #C6F24E */
+    --primary-foreground: 220 10% 6%;/* #0E0F11 — dark text on lime */
+
+    /* Secondary / muted = elevated graphite panels */
+    --secondary: 216 10% 10%;        /* #16181B */
+    --secondary-foreground: 220 7% 91%;
+    --muted: 216 10% 10%;            /* #16181B */
+    --muted-foreground: 219 7% 57%;  /* #8A8F98 */
+    --faint: 219 7% 45%;             /* #6B7079 — captions / least-emphasis */
+
+    /* Accent = the same lime signal (this codebase uses --accent as the
+       emphasis colour, not a hover surface) */
+    --accent: 76 86% 63%;            /* #C6F24E */
+    --accent-foreground: 220 10% 6%; /* #0E0F11 */
+
+    /* Semantic status colours (hues legitimately retained) */
     --success: 160 60% 40%;
     --success-foreground: 160 60% 98%;
     --warning: 35 90% 50%;
@@ -35,32 +80,10 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 43 45% 55%;
+    --border: 216 14% 14%;           /* #1F2329 */
+    --input: 216 14% 14%;
+    --ring: 76 86% 63%;              /* lime focus ring */
     --radius: 0.625rem;
-  }
-
-  .light {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 43 45% 55%;
-    --accent-foreground: 220 60% 8%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 43 45% 55%;
   }
 }
 
@@ -102,11 +125,11 @@
 
     0%,
     100% {
-      box-shadow: 0 0 0 2px hsl(43 45% 55% / 0.5);
+      box-shadow: 0 0 0 2px hsl(76 86% 63% / 0.5);
     }
 
     50% {
-      box-shadow: 0 0 0 4px hsl(43 45% 55% / 0.25);
+      box-shadow: 0 0 0 4px hsl(76 86% 63% / 0.25);
     }
   }
 
@@ -144,7 +167,7 @@
     line-height: 1.6;
   }
 
-  /* Premium Typography */
+  /* Signal Typography — same family, tight tracking, no display serif */
   h1,
   h2,
   h3,
@@ -209,34 +232,28 @@
     animation-delay: 300ms;
   }
 
-  /* Glass Panel - Enhanced */
+  /* Panel — flat Signal surface (replaces the old glassmorphism).
+     No backdrop-blur, no gradient, no glow — solid graphite + 1px border. */
   .glass-panel {
-    background: hsl(var(--card) / 0.6);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid hsl(var(--border) / 0.6);
-    transition: all 0.2s ease;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    transition: border-color 0.2s ease;
   }
 
   .glass-panel:hover {
-    border-color: hsl(var(--accent) / 0.3);
-    box-shadow: 0 8px 32px hsl(0 0% 0% / 0.2);
+    border-color: hsl(216 14% 22%);
   }
 
-  /* Stat Card - Interactive */
+  /* Stat Card — flat panel with a restrained lift on hover (no gradient/blur/glow) */
   .stat-card {
-    background: linear-gradient(135deg, hsl(var(--card) / 0.8) 0%, hsl(var(--card) / 0.4) 100%);
-    backdrop-filter: blur(12px);
-    border: 1px solid hsl(var(--border) / 0.5);
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    transition: transform 0.2s ease, border-color 0.2s ease;
   }
 
   .stat-card:hover {
-    transform: translateY(-2px);
-    border-color: hsl(var(--accent) / 0.4);
-    box-shadow:
-      0 12px 40px hsl(0 0% 0% / 0.25),
-      0 0 0 1px hsl(var(--accent) / 0.1);
+    transform: translateY(-1px);
+    border-color: hsl(216 14% 22%);
   }
 
   /* Icon Background */
@@ -270,13 +287,13 @@
   /* Activity Item */
   .activity-item {
     background: hsl(var(--muted) / 0.3);
-    border: 1px solid hsl(var(--border) / 0.4);
+    border: 1px solid hsl(var(--border));
     transition: all 0.2s ease;
   }
 
   .activity-item:hover {
     background: hsl(var(--muted) / 0.5);
-    border-color: hsl(var(--accent) / 0.3);
+    border-color: hsl(216 14% 22%);
   }
 
   /* Minimal Shadow (legacy) */
@@ -289,41 +306,26 @@
     border-color: hsl(var(--border));
   }
 
-  /* Premium text */
+  /* Emphasis text — solid lime signal (was a gold gradient) */
   .text-gradient-accent {
-    background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(43 50% 70%) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: hsl(var(--accent));
   }
 
-  /* Premium Button Effects */
+  /* Button container — glow effect removed for Signal (kept as a no-op so
+     existing .btn-glow consumers don't break) */
   .btn-glow {
     position: relative;
     overflow: hidden;
   }
 
-  .btn-glow::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
-    transform: translateX(-100%);
-    transition: transform 0.5s ease;
-  }
-
-  .btn-glow:hover::before {
-    transform: translateX(100%);
-  }
-
   /* Interactive button states for custom buttons */
   .btn-interactive {
     transition: all 0.2s ease-out;
-    border: 1px solid hsl(var(--border) / 0.5);
+    border: 1px solid hsl(var(--border));
   }
 
   .btn-interactive:hover {
-    border-color: hsl(var(--accent) / 0.5);
+    border-color: hsl(var(--ring) / 0.5);
     box-shadow: 0 4px 12px hsl(0 0% 0% / 0.15);
   }
 
@@ -334,7 +336,7 @@
 
   .btn-interactive:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px hsl(var(--accent) / 0.5);
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.5);
   }
 }
 

@@ -22,7 +22,7 @@ export function RegistrationSuccess() {
                     <p className="text-muted-foreground">Your smart wallet is ready to use.</p>
                 </div>
 
-                <Card className="border-slate-800 bg-slate-900/90 backdrop-blur-xl">
+                <Card className="border-slate-800 bg-slate-900/90">
                     <CardHeader>
                         <CardTitle className="text-white">Welcome to Radox</CardTitle>
                         <CardDescription className="text-slate-400">

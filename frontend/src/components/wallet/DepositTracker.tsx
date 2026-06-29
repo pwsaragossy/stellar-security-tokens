@@ -117,7 +117,7 @@ export function DepositTracker() {
                 <>
                 <button
                     onClick={() => setMinimized(!minimized)}
-                    className="self-end flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-800/90 border border-white/10 text-[10px] text-gray-400 hover:text-white transition-colors backdrop-blur-xl"
+                    className="self-end flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-800/90 border border-white/10 text-[10px] text-gray-400 hover:text-white transition-colors"
                 >
                     {minimized ? (
                         <>
@@ -133,7 +133,7 @@ export function DepositTracker() {
                 </button>
                 <button
                     onClick={fetchDeposits}
-                    className="self-end flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-800/90 border border-white/10 text-[10px] text-gray-400 hover:text-white transition-colors backdrop-blur-xl"
+                    className="self-end flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-800/90 border border-white/10 text-[10px] text-gray-400 hover:text-white transition-colors"
                 >
                     <RefreshCw className="w-3 h-3" />
                     Refresh
@@ -151,7 +151,7 @@ export function DepositTracker() {
                     <div
                         key={deposit.id}
                         className={cn(
-                            "rounded-xl border bg-slate-900/95 backdrop-blur-xl shadow-2xl shadow-black/50 p-4 space-y-2 animate-in slide-in-from-bottom-4 duration-300",
+                            "rounded-xl border bg-slate-900/95 shadow-2xl shadow-black/50 p-4 space-y-2 animate-in slide-in-from-bottom-4 duration-300",
                             isComplete ? "border-emerald-500/30" : "border-white/10"
                         )}
                     >

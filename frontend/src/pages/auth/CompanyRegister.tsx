@@ -250,7 +250,7 @@ export function CompanyRegister() {
                         <p className="text-muted-foreground">Register your company on the platform</p>
                     </div>
 
-                    <Card className="border-slate-800 bg-slate-900/90 backdrop-blur-xl">
+                    <Card className="border-slate-800 bg-slate-900/90">
                         <CardHeader>
                             <CardTitle className="text-white flex items-center gap-2">
                                 <Mail className="w-5 h-5" />
@@ -320,7 +320,7 @@ export function CompanyRegister() {
                         <p className="text-muted-foreground">We sent a code to <span className="text-teal-400">{email}</span></p>
                     </div>
 
-                    <Card className="border-slate-800 bg-slate-900/90 backdrop-blur-xl">
+                    <Card className="border-slate-800 bg-slate-900/90">
                         <CardHeader>
                             <CardTitle className="text-white flex items-center gap-2">
                                 <CheckCircle2 className="w-5 h-5 text-green-400" />
@@ -408,7 +408,7 @@ export function CompanyRegister() {
                     <p className="text-muted-foreground">Now complete your company registration</p>
                 </div>
 
-                <Card className="border-slate-800 bg-slate-900/90 backdrop-blur-xl">
+                <Card className="border-slate-800 bg-slate-900/90">
                     <CardHeader>
                         <CardTitle className="text-white">Company Details</CardTitle>
                         <CardDescription className="text-slate-400">

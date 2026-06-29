@@ -197,7 +197,7 @@ export function RampKyc() {
   if (readinessLoading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-7 h-7 animate-spin text-[hsl(43_45%_55%)]" />
+        <Loader2 className="w-7 h-7 animate-spin text-[hsl(76_86%_63%)]" />
       </div>
     );
   }
@@ -209,7 +209,7 @@ export function RampKyc() {
         className="absolute -top-32 left-1/2 -translate-x-1/2 w-[640px] h-[320px] rounded-full pointer-events-none"
         style={{
           background:
-            'radial-gradient(closest-side, hsl(43 45% 55% / 0.18), hsl(43 45% 55% / 0.04), transparent 70%)',
+            'radial-gradient(closest-side, hsl(76 86% 63% / 0.18), hsl(76 86% 63% / 0.04), transparent 70%)',
           filter: 'blur(40px)',
         }}
         aria-hidden
@@ -217,8 +217,8 @@ export function RampKyc() {
 
       {/* Editorial hero */}
       <header className="relative">
-        <div className="inline-flex items-center gap-2 mb-4 text-[10px] uppercase tracking-[0.18em] text-[hsl(43_45%_55%)]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[hsl(43_45%_55%)]" />
+        <div className="inline-flex items-center gap-2 mb-4 text-[10px] uppercase tracking-[0.18em] text-[hsl(76_86%_63%)]">
+          <span className="w-1.5 h-1.5 rounded-full bg-[hsl(76_86%_63%)]" />
           Brazil — PIX on-ramp
         </div>
         <h1
@@ -435,7 +435,7 @@ export function RampKyc() {
             type="submit"
             disabled={submitting}
             className={
-              'h-11 px-6 rounded-xl bg-[hsl(43_45%_55%)] hover:bg-[hsl(43_45%_62%)] text-[hsl(220_60%_8%)] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ' +
+              'h-11 px-6 rounded-xl bg-[hsl(76_86%_63%)] hover:bg-[hsl(76_86%_70%)] text-[hsl(220_60%_8%)] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ' +
               (successPulse ? 'animate-[pulse_0.5s_ease-out_1]' : '')
             }
           >
@@ -473,7 +473,7 @@ function SectionHeader({ index, title }: { index: string; title: string }) {
   return (
     <div className="flex items-baseline gap-4">
       <span
-        className="text-[10px] tracking-[0.2em] text-[hsl(43_45%_55%)]"
+        className="text-[10px] tracking-[0.2em] text-[hsl(76_86%_63%)]"
         style={{ fontFamily: 'var(--font-heading)' }}
       >
         {index}
@@ -506,7 +506,7 @@ function FieldRow({
     <div className={className}>
       <Label className="text-[10px] uppercase tracking-[0.14em] text-white/50 flex items-center gap-1.5">
         {label}
-        {required && <span className="text-[hsl(43_45%_55%)]">•</span>}
+        {required && <span className="text-[hsl(76_86%_63%)]">•</span>}
       </Label>
       <div className="mt-1.5">{children}</div>
       {hint && <p className="mt-1.5 text-[11px] text-white/35">{hint}</p>}

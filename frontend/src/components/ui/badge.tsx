@@ -8,8 +8,12 @@ const badgeVariants = cva(
     {
         variants: {
             variant: {
+                // Neutral chip by default — lime is reserved for CTA/yield/active.
+                // Use variant="signal" (or className) to opt into the lime accent.
                 default:
-                    "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
+                    "border border-border bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                signal:
+                    "border-transparent bg-primary text-primary-foreground hover:bg-primary/90",
                 secondary:
                     "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
                 destructive:

@@ -19,7 +19,7 @@ export function CompanyPendingApproval() {
                     <p className="text-muted-foreground">Your company account is under review</p>
                 </div>
 
-                <Card className="border-slate-800 bg-slate-900/90 backdrop-blur-xl">
+                <Card className="border-slate-800 bg-slate-900/90">
                     <CardHeader className="text-center">
                         <CardTitle className="text-white flex items-center justify-center gap-2">
                             <Building2 className="w-5 h-5 text-teal-400" />

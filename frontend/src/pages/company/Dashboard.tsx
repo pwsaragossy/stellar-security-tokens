@@ -288,8 +288,8 @@ export function CompanyDashboard() {
                             <AreaChart data={dashboardData?.capitalFormation || []}>
                                 <defs>
                                     <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#C6A87C" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#C6A87C" stopOpacity={0} />
+                                        <stop offset="5%" stopColor="#C6F24E" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#C6F24E" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <XAxis
@@ -315,7 +315,7 @@ export function CompanyDashboard() {
                                     itemStyle={{ color: '#fff' }}
                                     formatter={(val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val)}
                                 />
-                                <Area type="monotone" dataKey="amount" stroke="#C6A87C" fillOpacity={1} fill="url(#colorAmount)" strokeWidth={2} />
+                                <Area type="monotone" dataKey="amount" stroke="#C6F24E" fillOpacity={1} fill="url(#colorAmount)" strokeWidth={2} />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>

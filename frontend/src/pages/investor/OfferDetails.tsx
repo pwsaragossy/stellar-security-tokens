@@ -65,11 +65,11 @@ function DetailRow({ label, value, mono, copyable }: {
         <div className="flex justify-between items-center py-2.5">
             <span className="text-muted-foreground text-sm">{label}</span>
             <div className="flex items-center gap-2">
-                <span className={`text-sm ${mono ? 'font-mono text-[hsl(43_45%_55%)]' : 'font-medium text-white'}`}>
+                <span className={`text-sm ${mono ? 'font-mono text-[hsl(76_86%_63%)]' : 'font-medium text-white'}`}>
                     {value}
                 </span>
                 {copyable && (
-                    <button onClick={handleCopy} className="text-muted-foreground hover:text-[hsl(43_45%_55%)] transition-colors">
+                    <button onClick={handleCopy} className="text-muted-foreground hover:text-[hsl(76_86%_63%)] transition-colors">
                         {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                     </button>
                 )}
@@ -103,7 +103,7 @@ export function OfferDetails() {
         return (
             <div className="flex items-center justify-center h-[50vh]">
                 <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="w-10 h-10 animate-spin text-[hsl(43_45%_55%)]" />
+                    <Loader2 className="w-10 h-10 animate-spin text-[hsl(76_86%_63%)]" />
                     <p className="text-muted-foreground text-sm">Loading offer details...</p>
                 </div>
             </div>
@@ -119,7 +119,7 @@ export function OfferDetails() {
                     </div>
                     <p className="text-lg font-medium">Offer not found</p>
                     <Button variant="outline" onClick={() => navigate('/market')} className="rounded-xl">
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Marketplace
+                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to offerings
                     </Button>
                 </div>
             </div>
@@ -167,7 +167,7 @@ export function OfferDetails() {
                 className="text-muted-foreground hover:text-white pl-0 mb-6"
                 onClick={() => navigate('/market')}
             >
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Marketplace
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to offerings
             </Button>
 
             {/* ═══ HERO ═══ */}
@@ -177,7 +177,7 @@ export function OfferDetails() {
                 {/* Issuer — inline */}
                 {company?.name && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Building2 className="h-4 w-4 text-[hsl(43_45%_55%)]" />
+                        <Building2 className="h-4 w-4 text-[hsl(76_86%_63%)]" />
                         <span className="font-medium">{company.name}</span>
                         {company.kycStatus === 'approved' && (
                             <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] px-1.5 py-0">
@@ -189,7 +189,7 @@ export function OfferDetails() {
 
                 {/* Badges */}
                 <div className="flex flex-wrap gap-2">
-                    <Badge className="bg-[hsl(43_45%_55%/0.15)] text-[hsl(43_45%_55%)] border border-[hsl(43_45%_55%/0.3)]">
+                    <Badge className="bg-[hsl(76_86%_63%/0.15)] text-[hsl(76_86%_63%)] border border-[hsl(76_86%_63%/0.3)]">
                         {offer.offer_type === 'sale' ? 'Equity Sale' : 'Debt / Collateral'}
                     </Badge>
                     <Badge className="bg-muted text-muted-foreground border border-white/10 capitalize">
@@ -245,7 +245,7 @@ export function OfferDetails() {
                                     background: supplyPercent >= 90
                                         ? 'hsl(0 70% 55%)'
                                         : supplyPercent >= 60
-                                            ? 'hsl(43 45% 55%)'
+                                            ? 'hsl(76 86% 63%)'
                                             : 'hsl(160 60% 40%)',
                                 }}
                             />
@@ -355,7 +355,7 @@ export function OfferDetails() {
                     <SectionDivider label="Location" icon={<MapPin className="h-3.5 w-3.5" />} />
                     {offer.location_address && (
                         <p className="text-muted-foreground text-sm mb-3">
-                            <MapPin className="h-3.5 w-3.5 inline mr-1.5 text-[hsl(43_45%_55%)]" />
+                            <MapPin className="h-3.5 w-3.5 inline mr-1.5 text-[hsl(76_86%_63%)]" />
                             {offer.location_address}
                         </p>
                     )}
@@ -430,7 +430,7 @@ export function OfferDetails() {
                         <div className="rounded-xl bg-white/[0.03] border border-white/8 p-4 mb-4">
                             <div className="flex justify-between text-sm mb-2">
                                 <span className="text-muted-foreground">Loan-to-Value Ratio</span>
-                                <span className="font-semibold text-[hsl(43_45%_55%)]">{Number(offer.collateral_ltv).toFixed(0)}%</span>
+                                <span className="font-semibold text-[hsl(76_86%_63%)]">{Number(offer.collateral_ltv).toFixed(0)}%</span>
                             </div>
                             <div className="w-full bg-white/5 rounded-full h-2.5">
                                 <div
@@ -440,7 +440,7 @@ export function OfferDetails() {
                                         background: Number(offer.collateral_ltv) <= 60
                                             ? 'hsl(160 60% 40%)'
                                             : Number(offer.collateral_ltv) <= 80
-                                                ? 'hsl(43 45% 55%)'
+                                                ? 'hsl(76 86% 63%)'
                                                 : 'hsl(0 70% 55%)',
                                     }}
                                 />
@@ -511,12 +511,12 @@ export function OfferDetails() {
                                     className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] transition-colors group"
                                 >
                                     <div className="flex items-center gap-3">
-                                        <div className="p-2 rounded-lg bg-[hsl(43_45%_55%/0.1)]">
-                                            <FileText className="h-4 w-4 text-[hsl(43_45%_55%)]" />
+                                        <div className="p-2 rounded-lg bg-[hsl(76_86%_63%/0.1)]">
+                                            <FileText className="h-4 w-4 text-[hsl(76_86%_63%)]" />
                                         </div>
                                         <span className="text-sm font-medium capitalize">{docName}</span>
                                     </div>
-                                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-[hsl(43_45%_55%)] transition-colors" />
+                                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-[hsl(76_86%_63%)] transition-colors" />
                                 </a>
                             );
                         })}
@@ -538,15 +538,15 @@ export function OfferDetails() {
                             className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] border border-white/8 transition-colors group mb-3"
                         >
                             <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-[hsl(43_45%_55%/0.1)]">
-                                    <ExternalLink className="h-4 w-4 text-[hsl(43_45%_55%)]" />
+                                <div className="p-2 rounded-lg bg-[hsl(76_86%_63%/0.1)]">
+                                    <ExternalLink className="h-4 w-4 text-[hsl(76_86%_63%)]" />
                                 </div>
                                 <div>
                                     <span className="text-sm font-medium">View on Stellar Expert</span>
                                     <p className="text-[11px] text-muted-foreground">Token metadata, IPFS documents & on-chain activity</p>
                                 </div>
                             </div>
-                            <span className="font-mono text-xs text-muted-foreground group-hover:text-[hsl(43_45%_55%)] transition-colors">
+                            <span className="font-mono text-xs text-muted-foreground group-hover:text-[hsl(76_86%_63%)] transition-colors">
                                 {offer.asset_code}
                             </span>
                         </a>
@@ -574,7 +574,7 @@ export function OfferDetails() {
                                                 truncate={[6, 6]}
                                                 kind="account"
                                             />
-                                            <a href={`${stellarExplorerBase}/account/${token.issuerPublicKey}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-[hsl(43_45%_55%)] transition-colors" aria-label="View on Stellar Expert">
+                                            <a href={`${stellarExplorerBase}/account/${token.issuerPublicKey}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-[hsl(76_86%_63%)] transition-colors" aria-label="View on Stellar Expert">
                                                 <ExternalLink className="h-3 w-3" />
                                             </a>
                                         </span>
@@ -594,7 +594,7 @@ export function OfferDetails() {
                                                 truncate={[6, 6]}
                                                 kind="contract"
                                             />
-                                            <a href={`${stellarExplorerBase}/contract/${token.sacContractId}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-[hsl(43_45%_55%)] transition-colors" aria-label="View on Stellar Expert">
+                                            <a href={`${stellarExplorerBase}/contract/${token.sacContractId}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-[hsl(76_86%_63%)] transition-colors" aria-label="View on Stellar Expert">
                                                 <ExternalLink className="h-3 w-3" />
                                             </a>
                                         </span>
@@ -608,7 +608,7 @@ export function OfferDetails() {
                                 <DetailRow
                                     label="Issuance Tx"
                                     value={
-                                        <a href={`${stellarExplorerBase}/tx/${token.issuanceTransactionHash}`} target="_blank" rel="noopener noreferrer" className="hover:text-[hsl(43_45%_55%)] transition-colors flex items-center gap-1">
+                                        <a href={`${stellarExplorerBase}/tx/${token.issuanceTransactionHash}`} target="_blank" rel="noopener noreferrer" className="hover:text-[hsl(76_86%_63%)] transition-colors flex items-center gap-1">
                                             {truncateAddress(token.issuanceTransactionHash)}
                                             <ExternalLink className="h-3 w-3" />
                                         </a>

@@ -45,7 +45,7 @@ const STATUS_LABEL: Record<RampOrder['status'], string> = {
 
 const STATUS_TONE: Record<RampOrder['status'], string> = {
     created: 'text-white/60',
-    funded: 'text-[hsl(43_45%_70%)]',
+    funded: 'text-[hsl(76_86%_78%)]',
     completed: 'text-[hsl(160_60%_55%)]',
     finalized: 'text-[hsl(160_60%_55%)]',
     failed: 'text-red-400',
@@ -122,7 +122,7 @@ export function RampOrderTracker() {
             <div className="flex items-center gap-2">
                 <button
                     onClick={() => setMinimized(!minimized)}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-900/95 border border-white/10 text-[10px] text-gray-400 hover:text-white transition-colors backdrop-blur-xl"
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-900/95 border border-white/10 text-[10px] text-gray-400 hover:text-white transition-colors"
                 >
                     {minimized ? (
                         <>
@@ -138,7 +138,7 @@ export function RampOrderTracker() {
                 </button>
                 <button
                     onClick={fetch}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-900/95 border border-white/10 text-[10px] text-gray-400 hover:text-white transition-colors backdrop-blur-xl"
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-900/95 border border-white/10 text-[10px] text-gray-400 hover:text-white transition-colors"
                     aria-label="Refresh"
                 >
                     <RefreshCw className="w-3 h-3" />
@@ -146,7 +146,7 @@ export function RampOrderTracker() {
                 {overflowCount > 0 && !minimized && (
                     <button
                         onClick={() => setExpanded(!expanded)}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-900/95 border border-white/10 text-[10px] text-amber-300/80 hover:text-white transition-colors backdrop-blur-xl ml-auto"
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-900/95 border border-white/10 text-[10px] text-amber-300/80 hover:text-white transition-colors ml-auto"
                     >
                         {expanded ? `Show ${VISIBLE_CAP}` : `+${overflowCount} more`}
                     </button>
@@ -169,7 +169,7 @@ export function RampOrderTracker() {
                     <div
                         key={order.id}
                         className={cn(
-                            'rounded-xl border bg-slate-900/95 backdrop-blur-xl shadow-2xl shadow-black/50 p-3.5 space-y-2 animate-in slide-in-from-bottom-4 duration-300',
+                            'rounded-xl border bg-slate-900/95 shadow-2xl shadow-black/50 p-3.5 space-y-2 animate-in slide-in-from-bottom-4 duration-300',
                             isComplete ? 'border-[hsl(160_60%_40%/0.3)]'
                                 : isFailed ? 'border-red-500/30'
                                     : 'border-white/10',
@@ -187,7 +187,7 @@ export function RampOrderTracker() {
                                         ? <Check className="w-3.5 h-3.5 text-[hsl(160_60%_55%)]" />
                                         : isFailed
                                             ? <X className="w-3.5 h-3.5 text-red-400" />
-                                            : <Loader2 className="w-3.5 h-3.5 animate-spin text-[hsl(43_45%_70%)]" />}
+                                            : <Loader2 className="w-3.5 h-3.5 animate-spin text-[hsl(76_86%_78%)]" />}
                                 </div>
                                 <div className="min-w-0">
                                     <p className="text-[12px] font-medium text-white truncate flex items-center gap-1.5">
@@ -214,7 +214,7 @@ export function RampOrderTracker() {
                                     href={order.statusPage}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-[10px] text-[hsl(43_45%_70%)] hover:text-[hsl(43_45%_85%)] inline-flex items-center gap-1 transition-colors"
+                                    className="text-[10px] text-[hsl(76_86%_78%)] hover:text-[hsl(76_86%_93%)] inline-flex items-center gap-1 transition-colors"
                                 >
                                     EtherFuse <ExternalLink className="w-2.5 h-2.5" />
                                 </a>

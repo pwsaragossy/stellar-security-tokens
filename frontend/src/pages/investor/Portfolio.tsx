@@ -92,7 +92,7 @@ function PendingInvestmentCard({ investment }: { investment: PendingInvestment }
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[hsl(43_45%_55%)] to-[hsl(43_45%_35%)] flex items-center justify-center text-white font-bold text-sm">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[hsl(76_86%_63%)] to-[hsl(76_86%_43%)] flex items-center justify-center text-white font-bold text-sm">
                         {investment.assetCode.slice(0, 2)}
                     </div>
                     <div>
@@ -165,7 +165,7 @@ function HoldingCard({ holding, index }: { holding: PortfolioHolding; index: num
             <div className="p-5 pb-4">
                 <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[hsl(43_45%_55%)] to-[hsl(43_45%_35%)] flex items-center justify-center text-white font-bold text-sm shrink-0">
+                        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[hsl(76_86%_63%)] to-[hsl(76_86%_43%)] flex items-center justify-center text-white font-bold text-sm shrink-0">
                             {holding.assetCode.slice(0, 2)}
                         </div>
                         <div>
@@ -440,7 +440,7 @@ export function Portfolio() {
         return (
             <div className="flex items-center justify-center h-[50vh]">
                 <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="w-10 h-10 animate-spin text-[hsl(43_45%_55%)]" />
+                    <Loader2 className="w-10 h-10 animate-spin text-[hsl(76_86%_63%)]" />
                     <p className="text-muted-foreground text-sm">Loading your portfolio…</p>
                 </div>
             </div>
@@ -485,7 +485,7 @@ export function Portfolio() {
                         {(usdcBalance === null || Number(usdcBalance) === 0) && (
                             <button
                                 onClick={() => navigate('/wallet')}
-                                className="text-[11px] text-[hsl(43_45%_55%)] hover:text-[hsl(43_45%_65%)] mt-1 flex items-center gap-1 transition-colors"
+                                className="text-[11px] text-[hsl(76_86%_63%)] hover:text-[hsl(76_86%_73%)] mt-1 flex items-center gap-1 transition-colors"
                             >
                                 Deposit <ArrowRight className="h-2.5 w-2.5" />
                             </button>
