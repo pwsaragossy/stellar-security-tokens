@@ -359,7 +359,7 @@ export class OfferService {
       throw new Error('Soroban contract already deployed — awaiting sale_create step');
     }
 
-    // All offer types need a Soroban sale contract for the crowdfunding flow
+    // All offer types need a Soroban sale contract for the private sale flow
     return await this.#initSorobanDeploy(offer, token);
   }
 
