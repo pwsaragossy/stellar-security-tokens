@@ -61,14 +61,16 @@ pub enum DataKey {
 /// - `admin`: cold key / multisig — controls upgrade, withdraw, drain, freeze, admin transfer, fee updates
 /// - `seller`: hot key — controls pause, price updates (day-to-day operations)
 ///
-/// Fixed fee model:
+/// Additive fee model: Investor pays buy_amount + fixed_fee. Company receives the
+/// full buy_amount (100% capital); treasury receives fixed_fee on top.
+/// (Investor paying $100 of tokens + $5 fee pulls $105; company gets $100.)
 /// ```text
-///   Investor ──$100──▶ trade()
-///                        ├── fixed_fee ($5)  → treasury (processing fee)
-///                        └── remainder ($95) → company (full capital)
+///   Investor ──$105──▶ trade()
+///                        ├── buy_amount ($100) → company (full capital)
+///                        └── fixed_fee  ($5)   → treasury (processing fee, on top)
 /// ```
 /// - `fixed_fee = 50_000_000`: $5 USDC per trade (1 USDC = 10^7 stroops)
-/// - `fixed_fee = 0`:          no fee, company gets 100%
+/// - `fixed_fee = 0`:          no fee, investor pays only buy_amount
 ///
 /// Compliance fields:
 /// - `deadline_ledger`: sale closes after this ledger (0 = no deadline)

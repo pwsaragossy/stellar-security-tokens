@@ -394,9 +394,9 @@ export const getFeeSchedule = async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        processingFee: 5.0,    // $5 USDC per trade (globally configurable)
+        processingFee: 5.0,    // $5 USDC per trade — set per-offer at create(), immutable once deployed
         yieldFee: 'Spread-based (company rate - investor rate)',
-        description: 'A fixed $5 processing fee is deducted per trade on-chain. Yield revenue is earned via the spread between company cost of capital and investor advertised return.',
+        description: 'A fixed $5 processing fee is added per trade on-chain (investor pays amount + fee; company receives 100%). Yield revenue is earned via the spread between company cost of capital and investor advertised return.',
       },
     });
   } catch (error) {
