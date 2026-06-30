@@ -28,18 +28,21 @@ fn setup<'a>(
     Address,                     // treasury
     Address,                     // contract admin
 ) {
+    // v4: the contract is initialized atomically by its __constructor at
+    // registration time, which runs admin.require_auth() — mock it here so every
+    // setup()-based test deploys cleanly regardless of caller ordering.
+    env.mock_all_auths();
+
     let sac_admin = Address::generate(env);
     let (usdc_addr, token_client, sac_client) = create_usdc(env, &sac_admin);
 
-    let contract_id = env.register(YieldDistributor, ());
+    // admin must exist before register — it is the constructor argument.
+    let admin = Address::generate(env);
+    let contract_id = env.register(YieldDistributor, (admin.clone(),));
     let client = YieldDistributorClient::new(env, &contract_id);
 
     let payer = Address::generate(env);
     let treasury = Address::generate(env);
-    let admin = Address::generate(env);
-
-    // Initialize the contract
-    client.initialize(&admin);
 
     // Fund payer with 100,000 USDC
     sac_client.mint(&payer, &1_000_000_000_000i128); // 100,000 USDC in stroops
@@ -404,39 +407,26 @@ fn t2_upgrade_requires_admin_auth() {
 #[test]
 fn t3_upgrade_non_admin_fails() {
     let env = Env::default();
-    // Do NOT mock auth — we want real auth checks
     let sac_admin = Address::generate(&env);
     let (_usdc_addr, _token_client, _sac_client) = create_usdc(&env, &sac_admin);
 
-    let contract_id = env.register(YieldDistributor, ());
+    let real_admin = Address::generate(&env);
+    // The __constructor runs admin.require_auth(); mock it for the deploy only.
+    env.mock_all_auths();
+    let contract_id = env.register(YieldDistributor, (real_admin.clone(),));
     let client = YieldDistributorClient::new(&env, &contract_id);
 
-    let real_admin = Address::generate(&env);
-    client.initialize(&real_admin);
-
-    // Try upgrade without any auth — should fail
+    // Now clear all auths — upgrade() must reject without admin authorization.
+    env.mock_auths(&[]);
     let fake_hash = BytesN::from_array(&env, &[0u8; 32]);
     let result = client.try_upgrade(&fake_hash);
     assert!(result.is_err(), "upgrade without auth must fail");
 }
 
-// ─── T4: initialize() double call → reject (P0) ─────────────
-
-#[test]
-fn t4_double_initialize_rejected() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(YieldDistributor, ());
-    let client = YieldDistributorClient::new(&env, &contract_id);
-
-    let admin = Address::generate(&env);
-    client.initialize(&admin);
-
-    // Second call must fail
-    let admin2 = Address::generate(&env);
-    let result = client.try_initialize(&admin2);
-    assert_eq!(result, Err(Ok(DistributeError::AlreadyInitialized)));
-}
+// ─── T4: REMOVED in v4 — initialize() replaced by __constructor, which the host
+//     invokes exactly once at deploy. A "double initialize" is no longer
+//     expressible (there is no initialize entrypoint), so the case is gone.
+//     Constructor state-init is covered by test_v4_constructor_initializes_state.
 
 // ─── T5, T6: pause blocks, resume restores (P1) ─────────────
 
@@ -548,7 +538,10 @@ fn t10_non_usdc_token_works_if_authed() {
     let recipients = Vec::from_array(&env, [r1.clone()]);
     let amounts = Vec::from_array(&env, [50_0000000i128]);
 
-    // Contract doesn't restrict which token — auth tree covers it
+    // Under the `testing` feature (default for unit tests) the canonical-USDC
+    // check is a no-op, so any SAC distributes. Production builds
+    // (--features testnet|mainnet) reject a non-canonical token with
+    // UnauthorizedToken — see validate_canonical_usdc + the testnet smoke test.
     client.distribute(&payer2, &other_token_addr, &recipients, &amounts, &treasury, &0i128);
     assert_eq!(other_token.balance(&r1), 50_0000000);
 }
@@ -593,26 +586,27 @@ fn t12_tiny_fee_rounding() {
 #[test]
 fn t13_extend_ttl_no_auth_required() {
     let env = Env::default();
-    // Do NOT mock auth
-    let contract_id = env.register(YieldDistributor, ());
+    let admin = Address::generate(&env);
+    // __constructor needs admin auth at deploy time.
+    env.mock_all_auths();
+    let contract_id = env.register(YieldDistributor, (admin.clone(),));
     let client = YieldDistributorClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
-    env.mock_all_auths();
-    client.initialize(&admin);
-
-    // extend_ttl should work without any auth
+    // extend_ttl should work without any auth — clear auths to prove it.
+    env.mock_auths(&[]);
     client.extend_ttl(); // Should not panic
 }
 
 // ─── T14: version increments (P0) ───────────────────────────
 
 #[test]
-fn t14_version_is_3() {
+fn t14_version_is_4() {
     let env = Env::default();
-    let contract_id = env.register(YieldDistributor, ());
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let contract_id = env.register(YieldDistributor, (admin.clone(),));
     let client = YieldDistributorClient::new(&env, &contract_id);
-    assert_eq!(client.version(), 3);
+    assert_eq!(client.version(), 4);
 }
 
 // ─── T15: distribute without auth → fails (P0) ──────────────
@@ -620,17 +614,14 @@ fn t14_version_is_3() {
 #[test]
 fn t15_distribute_without_auth_fails() {
     let env = Env::default();
-    // Mock auth ONLY for initialize
     env.mock_all_auths();
 
     let sac_admin = Address::generate(&env);
     let (usdc_addr, _token_client, sac_client) = create_usdc(&env, &sac_admin);
 
-    let contract_id = env.register(YieldDistributor, ());
-    let client = YieldDistributorClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let contract_id = env.register(YieldDistributor, (admin.clone(),));
+    let client = YieldDistributorClient::new(&env, &contract_id);
 
     let payer = Address::generate(&env);
     sac_client.mint(&payer, &1_000_000_000_000i128);
@@ -701,30 +692,10 @@ fn t17_batch_29_succeeds() {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  Additional: distribute before initialize → NotInitialized
+//  Removed in v4: "distribute before initialize → NotInitialized".
+//  __constructor guarantees the contract is initialized at deploy, so the
+//  uninitialized state is unreachable on-chain (no initialize entrypoint exists).
 // ═══════════════════════════════════════════════════════════
-
-#[test]
-fn test_distribute_before_initialize() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let sac_admin = Address::generate(&env);
-    let (usdc_addr, _token, _sac) = create_usdc(&env, &sac_admin);
-
-    let contract_id = env.register(YieldDistributor, ());
-    let client = YieldDistributorClient::new(&env, &contract_id);
-    // Do NOT call initialize
-
-    let payer = Address::generate(&env);
-    let treasury = Address::generate(&env);
-    let r1 = Address::generate(&env);
-    let recipients = Vec::from_array(&env, [r1]);
-    let amounts = Vec::from_array(&env, [10_0000000i128]);
-
-    let result = client.try_distribute(&payer, &usdc_addr, &recipients, &amounts, &treasury, &0i128);
-    assert_eq!(result, Err(Ok(DistributeError::NotInitialized)));
-}
 
 // ═══════════════════════════════════════════════════════════
 //  Additional: get_admin / get_paused read-only
@@ -794,11 +765,13 @@ fn test_negative_fee_rejected() {
 // ═══════════════════════════════════════════════════════════
 
 #[test]
-fn test_v3_version_returns_3() {
+fn test_v4_version_returns_4() {
     let env = Env::default();
-    let contract_id = env.register(YieldDistributor, ());
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let contract_id = env.register(YieldDistributor, (admin.clone(),));
     let client = YieldDistributorClient::new(&env, &contract_id);
-    assert_eq!(client.version(), 3);
+    assert_eq!(client.version(), 4);
 }
 
 #[test]
@@ -979,17 +952,18 @@ fn test_self_transfer_rejected() {
 }
 
 #[test]
-fn test_initialize_twice_fails() {
+fn test_v4_constructor_initializes_state() {
+    // v4: __constructor sets admin + unpaused atomically at deploy — no separate
+    // initialize() exists, so the front-run / double-init window is closed.
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
 
-    let contract_id = env.register(YieldDistributor, ());
+    let contract_id = env.register(YieldDistributor, (admin.clone(),));
     let client = YieldDistributorClient::new(&env, &contract_id);
-    client.initialize(&admin);
 
-    let result = client.try_initialize(&admin);
-    assert_eq!(result, Err(Ok(DistributeError::AlreadyInitialized)));
+    assert_eq!(client.get_admin(), admin);
+    assert_eq!(client.get_paused(), false);
 }
 
 #[test]
@@ -1013,10 +987,9 @@ fn test_extend_ttl_no_auth_required() {
     // extend_ttl is intentionally permissionless (cron jobs)
     let env = Env::default();
     let admin = Address::generate(&env);
-    let contract_id = env.register(YieldDistributor, ());
-    let client = YieldDistributorClient::new(&env, &contract_id);
     env.mock_all_auths();
-    client.initialize(&admin);
+    let contract_id = env.register(YieldDistributor, (admin.clone(),));
+    let client = YieldDistributorClient::new(&env, &contract_id);
 
     // No auths needed — even an empty mock list should let this through.
     env.mock_auths(&[]);
@@ -1650,9 +1623,9 @@ mod birth_to_death {
         usdc_mint.mint(&company, &1_000_000_000_000i128); // 100k USDC — ample
 
         // ── PHASE 1: 12 monthly yield payments via yield_distributor ──
-        let yd_id = env.register(YieldDistributor, ());
+        // v4: issuer is the constructor admin; init is atomic at register time.
+        let yd_id = env.register(YieldDistributor, (issuer.clone(),));
         let yd = YieldDistributorClient::new(&env, &yd_id);
-        yd.initialize(&issuer);
 
         let mut recipients: Vec<Address> = Vec::new(&env);
         let mut amounts: Vec<i128> = Vec::new(&env);

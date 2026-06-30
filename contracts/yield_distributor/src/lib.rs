@@ -4,6 +4,25 @@ use soroban_sdk::{
     symbol_short, token, Address, BytesN, Env, Map, Vec,
 };
 
+// v3: 2-step admin rotation.
+// v4 (Jun 2026, security review F-SOR-001 / F-SOR-011 follow-up):
+//   - canonical USDC SAC hardcoded per network + validated in distribute()
+//   - initialize() replaced by __constructor — init is now atomic with deploy,
+//     closing the front-run / unauthorized-init gap (F-SOR-011).
+//   The `testing` feature disables the USDC check so unit tests can use
+//   generated SACs; production WASMs build with
+//   `--no-default-features --features testnet|mainnet`.
+//   See soroban_security_review_2026-06.md.
+const CONTRACT_VERSION: u32 = 4;
+
+// Canonical USDC Stellar Asset Contract (must match token_sale /
+// maturity_settlement). IMPORTANT: when changing, also update
+// the deployments record.
+#[cfg(feature = "testnet")]
+const USDC_SAC: &str = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
+#[cfg(feature = "mainnet")]
+const USDC_SAC: &str = "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75";
+
 // ═══════════════════════════════════════════════════════════════
 //  Storage layout — flat keys (no Config struct = easier upgrades)
 //
@@ -59,6 +78,8 @@ pub enum DistributeError {
     SelfTransfer = 11,
     /// v3: accept_admin() called but no propose_admin() is pending
     NoPendingAdmin = 12,
+    /// v4 (F-SOR-001): supplied token is not the canonical USDC SAC for this network.
+    UnauthorizedToken = 13,
 }
 
 #[contract]
@@ -82,6 +103,22 @@ fn is_paused(env: &Env) -> bool {
         .instance()
         .get(&DataKey::Paused)
         .unwrap_or(false)
+}
+
+/// v4 (F-SOR-001) — verify the supplied token matches the canonical USDC SAC
+/// for this network. In `testing` feature builds the check is a no-op so unit
+/// tests can use generated SACs. Production builds (testnet / mainnet feature)
+/// enforce the check.
+#[allow(unused_variables)]
+fn validate_canonical_usdc(env: &Env, token: &Address) -> Result<(), DistributeError> {
+    #[cfg(not(feature = "testing"))]
+    {
+        let canonical = Address::from_string(&soroban_sdk::String::from_str(env, USDC_SAC));
+        if *token != canonical {
+            return Err(DistributeError::UnauthorizedToken);
+        }
+    }
+    Ok(())
 }
 
 /// Emit helper — wraps the deprecated API with a suppression.
@@ -110,15 +147,21 @@ fn emit<D: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(
 impl YieldDistributor {
     // ─── Admin lifecycle ──────────────────────────────────────
 
-    /// One-time initialization. Sets the admin address.
-    /// Must be called once after deployment before any distribute() calls.
-    pub fn initialize(env: Env, admin: Address) -> Result<(), DistributeError> {
-        if is_initialized(&env) {
-            return Err(DistributeError::AlreadyInitialized);
-        }
+    /// v4 (F-SOR-011) — Contract constructor. Runs exactly once, atomically, as
+    /// part of the deploy operation. This closes the front-run / unauthorized-init
+    /// gap a separate `initialize()` had: there is no window in which an attacker
+    /// can set the admin before the deployer does.
+    ///
+    /// `admin.require_auth()` ensures the admin address consents to being set
+    /// (prevents installing an admin the deployer does not control). The deploy
+    /// transaction must therefore carry the admin's authorization.
+    pub fn __constructor(env: Env, admin: Address) {
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
-        Ok(())
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
     }
 
     /// Upgrade contract WASM. Admin only (high-privilege).
@@ -247,6 +290,10 @@ impl YieldDistributor {
             return Err(DistributeError::ContractPaused);
         }
 
+        // v4 (F-SOR-001): only the canonical USDC SAC may be distributed —
+        // a fake/typo'd token would otherwise pay investors in a worthless asset.
+        validate_canonical_usdc(&env, &token)?;
+
         // ── Validation ──────────────────────────────────────────
         let count = recipients.len();
 
@@ -327,7 +374,7 @@ impl YieldDistributor {
 
     /// Returns the contract version.
     pub fn version(_env: Env) -> u32 {
-        3 // v3: 2-step admin rotation via propose_admin / accept_admin
+        CONTRACT_VERSION // v4 (F-SOR-001/011): canonical USDC + __constructor
     }
 
     /// Returns the admin address.
