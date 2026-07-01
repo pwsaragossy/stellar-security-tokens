@@ -1,16 +1,19 @@
 /**
- * YieldDistributorService — Backend wrapper for the YieldDistributor Soroban contract (v2).
+ * YieldDistributorService — Backend wrapper for the YieldDistributor Soroban contract (v4).
  *
  * Handles: building multi-batch distribute() XDRs, submitting with retry,
  * error classification, Redis job tracking, and concurrency locking.
  *
  * Contract is STATEFUL-MINIMAL — stores admin + paused flag only.
- * Entry points: initialize, distribute, upgrade, pause, resume, set_admin, extend_ttl
+ * Entry points: distribute, upgrade, pause, resume, set_admin, propose_admin,
+ *   accept_admin, extend_ttl. v4: init is via the contract __constructor at
+ *   deploy (no initialize() entry point — see scripts/deploy-yield-distributor.mjs).
  *
  * Contract error codes (mirrors DistributeError enum in lib.rs):
  *   1=EmptyBatch, 2=BatchTooLarge, 3=InvalidAmount, 4=Overflow,
  *   5=MismatchedArrays, 6=FeeTooHigh, 7=AlreadyInitialized,
- *   8=NotInitialized, 9=ContractPaused, 10=DuplicateRecipient, 11=SelfTransfer
+ *   8=NotInitialized, 9=ContractPaused, 10=DuplicateRecipient, 11=SelfTransfer,
+ *   12=NoPendingAdmin, 13=UnauthorizedToken (v4: non-canonical USDC SAC)
  */
 import {
     Contract,
@@ -60,6 +63,18 @@ const DISTRIBUTE_ERRORS = {
     11: { code: 'SelfTransfer', message: 'Payer cannot be a recipient' },
     // v3
     12: { code: 'NoPendingAdmin', message: 'No pending admin proposal — call propose_admin first' },
+    // v4 — F-SOR-001: distribute() rejects any token that is not the canonical USDC SAC
+    13: { code: 'UnauthorizedToken', message: 'Token is not the canonical USDC SAC for this network' },
+};
+
+// Canonical USDC SAC per network — MUST match the hardcoded USDC_SAC in
+// contracts/yield_distributor/src/lib.rs (and token_sale / maturity_settlement).
+// The v4 contract enforces this on-chain (UnauthorizedToken); this backend guard
+// fails fast at config time with a clear message instead of an opaque on-chain
+// rejection. Keep in sync with contracts/*/src/lib.rs + the deployments record.
+const CANONICAL_USDC_SAC = {
+    testnet: 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA',
+    public: 'CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75',
 };
 
 /** Convert USDC amount to stroops (i128 ScVal) — see utils/stellarAmount.js */
@@ -456,6 +471,18 @@ export class YieldDistributorService {
     static getUsdcSacId() {
         const id = process.env.USDC_SAC_CONTRACT_ID;
         if (!id) throw new Error('USDC_SAC_CONTRACT_ID not configured');
+        // v4 (F-SOR-001): distribute() only accepts the canonical USDC SAC. Assert
+        // the configured SAC matches so a misconfig fails here with a clear message
+        // instead of an opaque on-chain UnauthorizedToken at distribute() time.
+        const network = process.env.STELLAR_NETWORK || 'testnet';
+        const canonical = CANONICAL_USDC_SAC[network];
+        if (canonical && id !== canonical) {
+            throw new Error(
+                `USDC_SAC_CONTRACT_ID (${id}) does not match the canonical USDC SAC ` +
+                `for network "${network}" (${canonical}). YieldDistributor v4 rejects ` +
+                `distribute() with UnauthorizedToken — fix the env var.`,
+            );
+        }
         return id;
     }
 
