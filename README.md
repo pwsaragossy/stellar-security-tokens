@@ -1,6 +1,6 @@
 # Radox — Stellar Security Tokens
 
-Radox is a private rail for cross-border real-world asset tokenization on Stellar. An investment office — or two partner offices — uses Radox to run tokenized offerings for its own KYC-gated clients, settling in dollar-denominated security tokens over Stellar/Soroban. Radox provides the rail and creates/tokenizes the offering (KYC + light due diligence); it is not the issuer — the contracting office is. Funds move only within each office's KYC list.
+Radox is the internal rail an investment office — or two partner offices — uses to run private, tokenized, cross-border (Brazil↔US) offerings for its own KYC-gated clients, built on Stellar. Radox provides the rail and creates/tokenizes the offering (KYC + light due diligence); it is not the issuer — the contracting office is. Settlement is in dollar-denominated security tokens over Stellar/Soroban, and funds move only within each office's KYC list.
 
 ## What's here
 
